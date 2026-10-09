@@ -54,7 +54,15 @@ export const currencyCodeSchema = z
   .length(3, "Currency must be a 3-letter ISO 4217 code")
   .regex(/^[A-Z]{3}$/, "Currency must be uppercase letters, e.g. USD or PHP");
 
-export const weekStartSchema = z.coerce.number().int().min(0).max(6) as z.ZodType<WeekStartDay>;
+export const weekStartSchema = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+  z.literal(5),
+  z.literal(6),
+]);
 
 export const roleSchema = z.enum(ROLES);
 export const timeFormatSchema = z.enum(TIME_FORMATS);

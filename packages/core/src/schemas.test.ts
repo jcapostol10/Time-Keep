@@ -40,15 +40,20 @@ describe("slug", () => {
 });
 
 describe("workspace settings", () => {
-  it("coerces week start from form strings", () => {
+  it("accepts a full valid payload", () => {
     const parsed = workspaceSettingsSchema.parse({
       timezone: "Asia/Manila",
-      weekStart: "1",
+      weekStart: 1,
       timeFormat: "12h",
       durationFormat: "decimal",
       currency: "PHP",
     });
     expect(parsed.weekStart).toBe(1);
+  });
+  it("rejects a week start outside 0–6 or given as a string", () => {
+    const base = { timezone: "UTC", timeFormat: "24h", durationFormat: "hh:mm", currency: "USD" };
+    expect(workspaceSettingsSchema.safeParse({ ...base, weekStart: 7 }).success).toBe(false);
+    expect(workspaceSettingsSchema.safeParse({ ...base, weekStart: "1" }).success).toBe(false);
   });
 });
 
