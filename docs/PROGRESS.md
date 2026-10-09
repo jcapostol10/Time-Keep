@@ -18,9 +18,10 @@ Goal: an empty but deployable app where a user signs up, creates or joins a work
 
 Acceptance checks:
 
-- [ ] `docker compose up` + `pnpm dev` runs the app locally; CI is green
-- [ ] Sign up, verify email in Mailpit, see workspace, invite a second user, accept, switch workspaces
-- [ ] Tenant-isolation tests pass
+- [x] CI is green (lint, typecheck, unit + integration, build, seed, e2e against Postgres, Mailpit and RustFS): https://github.com/jcapostol10/Time-Keep/actions/runs/37971795190
+- [ ] `docker compose up` + `pnpm dev` clicked through locally (Docker Desktop was not installed on the dev machine when Phase 0 was built)
+- [x] Sign up, verify email in Mailpit, see workspace, invite a second user, accept, switch workspaces — covered by `apps/web/e2e/auth.spec.ts` and `apps/web/e2e/workspace.spec.ts`
+- [x] Tenant-isolation tests pass (`workspace-access.test.ts`, `e2e/tenant-isolation.spec.ts`)
 
 Decisions and deviations from the prompt:
 
