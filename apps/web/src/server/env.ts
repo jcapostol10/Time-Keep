@@ -21,6 +21,11 @@ const schema = z.object({
 
   GOOGLE_CLIENT_ID: optionalString,
   GOOGLE_CLIENT_SECRET: optionalString,
+  /** Better Auth rate limiting. Defaults to on in production, off elsewhere (e2e hammers sign-in). */
+  AUTH_RATE_LIMIT_ENABLED: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? process.env.NODE_ENV === "production" : v === "true")),
 
   SMTP_HOST: z.string().default("localhost"),
   SMTP_PORT: z.coerce.number().int().default(1025),

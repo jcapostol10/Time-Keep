@@ -23,7 +23,8 @@
     "S3_SECRET_ACCESS_KEY",
     "S3_PUBLIC_URL",
     "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_SECRET"
+    "GOOGLE_CLIENT_SECRET",
+    "AUTH_RATE_LIMIT_ENABLED"
   ],
   "tasks": {
     "build": {

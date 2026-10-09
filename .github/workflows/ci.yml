@@ -21,6 +21,8 @@ jobs:
       BETTER_AUTH_SECRET: ci-only-secret-not-for-production-0123456789abcdef
       BETTER_AUTH_URL: http://localhost:3000
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      # e2e signs in dozens of times from one IP; the limiter is covered by unit config, not CI.
+      AUTH_RATE_LIMIT_ENABLED: "false"
       SMTP_HOST: localhost
       SMTP_PORT: "1025"
       SMTP_SECURE: "false"

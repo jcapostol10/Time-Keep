@@ -8,20 +8,14 @@ test.describe("tenant isolation", () => {
 
     // The owner's personal workspace (seeded) has no other members.
     await page.goto("/w/olivia-s-workspace/tracker");
-    await expect(
-      page.getByRole("heading", { name: "We couldn't find that workspace" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "We couldn't find that page" })).toBeVisible();
 
     await page.goto("/w/olivia-s-workspace/team");
-    await expect(
-      page.getByRole("heading", { name: "We couldn't find that workspace" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "We couldn't find that page" })).toBeVisible();
 
     // Nonexistent slugs are indistinguishable from forbidden ones.
     await page.goto("/w/does-not-exist/tracker");
-    await expect(
-      page.getByRole("heading", { name: "We couldn't find that workspace" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "We couldn't find that page" })).toBeVisible();
   });
 
   test("the switcher only lists the user's own workspaces", async ({ page }) => {

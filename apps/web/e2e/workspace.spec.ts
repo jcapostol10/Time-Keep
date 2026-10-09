@@ -62,7 +62,7 @@ test.describe("workspaces", () => {
   test("members cannot invite; admins can", async ({ page }) => {
     await signIn(page, "member1@demo.test");
     await page.goto("/w/demo/team");
-    await expect(page.getByRole("heading", { name: "Team" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Team", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Invite member" })).toHaveCount(0);
   });
 

@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { initials } from "@/components/shell/user-menu";
+import { initials } from "@/lib/initials";
 import { removeAvatarAction, uploadAvatarAction } from "@/server/actions/profile";
 
 export function AvatarUploader({ name, image }: { name: string; image: string | null }) {

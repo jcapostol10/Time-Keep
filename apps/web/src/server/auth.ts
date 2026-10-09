@@ -42,6 +42,9 @@ function buildAuth() {
       cookieCache: { enabled: true, maxAge: 5 * 60 },
     },
 
+    // On by default in production; CI and local dev turn it off via AUTH_RATE_LIMIT_ENABLED.
+    rateLimit: { enabled: e.AUTH_RATE_LIMIT_ENABLED },
+
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 8,

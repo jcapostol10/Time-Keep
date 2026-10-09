@@ -17,7 +17,7 @@ test.describe("authentication", () => {
 
     await signOut(page);
     await signIn(page, email);
-    await expect(page.getByRole("heading", { name: "Time Tracker" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Time Tracker", exact: true })).toBeVisible();
   });
 
   test("unverified users cannot sign in and can resend the verification email", async ({

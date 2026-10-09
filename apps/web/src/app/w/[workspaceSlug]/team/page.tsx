@@ -13,7 +13,7 @@ import {
 import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/page-header";
-import { initials } from "@/components/shell/user-menu";
+import { initials } from "@/lib/initials";
 import { InviteDialog } from "@/components/team/invite-dialog";
 import { PendingInvites } from "@/components/team/pending-invites";
 import { listMembers, listPendingInvitations } from "@/server/queries/team";
