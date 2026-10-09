@@ -8,7 +8,7 @@ import { resolveHomeWorkspace } from "@/server/workspace-access";
  * everyone else to sign-in.
  */
 export default async function RootPage() {
-  const session = await getSession();
+  const session = await getSession({ fresh: true });
   if (!session) redirect("/sign-in");
 
   const home = await resolveHomeWorkspace(session);

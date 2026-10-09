@@ -29,8 +29,8 @@ jobs:
       S3_ENDPOINT: http://localhost:9000
       S3_REGION: us-east-1
       S3_BUCKET: timekeep
-      S3_ACCESS_KEY_ID: minioadmin
-      S3_SECRET_ACCESS_KEY: minioadmin
+      S3_ACCESS_KEY_ID: rustfsadmin
+      S3_SECRET_ACCESS_KEY: rustfsadmin
       S3_PUBLIC_URL: http://localhost:9000/timekeep
     steps:
       - uses: actions/checkout@v4
@@ -45,10 +45,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Start Postgres, Mailpit and MinIO
-        run: |
-          docker compose up -d --wait postgres mailpit minio
-          docker compose run --rm minio-init
+      - name: Start Postgres, Mailpit and object storage
+        run: docker compose up -d --wait
+
+      - name: Prepare storage bucket
+        run: pnpm storage:init
 
       - name: Migrate database
         run: pnpm db:migrate

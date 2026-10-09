@@ -6,13 +6,13 @@ The full phase prompts live in `Clockify Clone — Phased Claude Code Prompt Pac
 
 Goal: an empty but deployable app where a user signs up, creates or joins a workspace and lands on a placeholder tracker page.
 
-- [x] 1. Repo scaffold: pnpm workspaces + Turborepo, scripts (`dev`, `build`, `lint`, `typecheck`, `test`, `e2e`, `db:migrate`, `db:seed`), `.env.example`, README, Docker Compose (Postgres, Mailpit, MinIO), GitHub Actions CI
+- [x] 1. Repo scaffold: pnpm workspaces + Turborepo, scripts (`dev`, `build`, `lint`, `typecheck`, `test`, `e2e`, `db:migrate`, `db:seed`), `.env.example`, README, Docker Compose (Postgres, Mailpit, RustFS), GitHub Actions CI
 - [x] 2. Schema: user, workspace, membership (role + status enums), invitation, workspace_settings; every tenant table has an indexed `workspace_id`
 - [x] 3. Auth: sign up, sign in, sign out, forgot/reset password, email verification, magic link, Google (hidden until credentials set); personal workspace auto-created as OWNER
 - [x] 4. Workspace switcher; invite by email (Mailpit); accept invite link; create workspace
 - [x] 5. App shell: sidebar with all nav items (unbuilt pages show empty states), top bar with switcher, help, profile menu; responsive to 375px; light/dark
 - [x] 6. `requireWorkspaceAccess(slug, minRole)` for every server action and route handler; tenant-isolation tests (`apps/web/src/server/workspace-access.test.ts`, `apps/web/e2e/tenant-isolation.spec.ts`)
-- [x] 7. Profile settings: name, avatar upload to MinIO, timezone, date/time format, week start
+- [x] 7. Profile settings: name, avatar upload to S3-compatible storage, timezone, date/time format, week start
 - [x] 8. Seed: demo workspace `demo` with owner@demo.test / password123, admin, manager, two members
 - [x] 9. Docs: CLAUDE.md, docs/PRD.md, docs/DATA_MODEL.md, docs/PROGRESS.md
 
@@ -29,6 +29,7 @@ Decisions and deviations from the prompt:
 - `cacheComponents` is off in Next 16: every page is auth-gated and dynamic.
 - A minimal Team page and workspace Settings page were built in Phase 0 because invites and settings needed a UI; Phase 4 expands both.
 - Emails are sent directly from the web app; Phase 5 moves sending into the pg-boss worker.
+- Local object storage is RustFS instead of MinIO: MinIO's community images were pulled from Docker Hub during this phase. Same S3 API and ports; bucket setup is a Node script (`pnpm storage:init`) rather than the `mc` CLI.
 
 ## Phase 1 — Time tracker
 

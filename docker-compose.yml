@@ -34,41 +34,33 @@ services:
       timeout: 5s
       retries: 10
 
-  minio:
-    # MinIO publishes its images on quay.io; the Docker Hub mirrors are gone.
-    image: quay.io/minio/minio:latest
+  # S3-compatible object storage (MinIO drop-in; MinIO no longer publishes
+  # community images). Bucket + public-read policy are created by
+  # `pnpm storage:init`, which works against any S3 implementation.
+  storage:
+    image: rustfs/rustfs:1.0.1
     restart: unless-stopped
-    command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+      RUSTFS_OBS_LOGGER_LEVEL: warn
     ports:
       - "9000:9000" # S3 API
       - "9001:9001" # console
     volumes:
-      - miniodata:/data
+      - storagedata:/data
+      - storagelogs:/logs
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
       interval: 5s
       timeout: 5s
-      retries: 10
-
-  # One-shot: create the bucket and allow anonymous downloads (avatars, logos).
-  # `pnpm setup` runs it with `docker compose run --rm minio-init`.
-  minio-init:
-    image: quay.io/minio/mc:latest
-    profiles: ["init"]
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 minioadmin minioadmin &&
-      mc mb --ignore-existing local/timekeep &&
-      mc anonymous set download local/timekeep &&
-      echo 'bucket ready'
-      "
+      retries: 20
+      start_period: 20s
 
 volumes:
   pgdata:
-  miniodata:
+  storagedata:
+  storagelogs:

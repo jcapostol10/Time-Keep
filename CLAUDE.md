@@ -8,9 +8,10 @@ TimeKeep is a web-based time tracking and timesheet SaaS for teams (functionally
 | --- | --- |
 | `pnpm install` | Install everything (pnpm 10, Node 22+) |
 | `cp .env.example .env` | One root `.env`; every app/package loads it via `dotenv -e ../../.env` |
-| `docker compose up -d --wait` | Postgres 16 (`:5432`), Mailpit (`:8025` UI, `:1025` SMTP), MinIO (`:9000` S3, `:9001` console) |
+| `docker compose up -d --wait` | Postgres 16 (`:5432`), Mailpit (`:8025` UI, `:1025` SMTP), RustFS S3 (`:9000` API, `:9001` console) |
+| `pnpm storage:init` | Create the bucket + public-read policy for `avatars/*`, `logos/*` (any S3-compatible backend) |
 | `pnpm db:migrate` / `pnpm db:generate` / `pnpm db:seed` / `pnpm db:studio` | Drizzle migrations, generate from schema, demo data, studio |
-| `pnpm setup` | compose up + migrate + seed |
+| `pnpm setup` | compose up + storage:init + migrate + seed |
 | `pnpm dev` | Web (`http://localhost:3000`) and worker, via Turborepo |
 | `pnpm lint && pnpm typecheck && pnpm test && pnpm e2e` | The full gate. Run it before saying a phase is done |
 | `pnpm --filter @timekeep/web e2e -- --ui` | Playwright UI mode |
@@ -55,7 +56,7 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md
 - Auth is Better Auth. Its organization plugin is renamed: `organization → workspace`, `member → membership` (+ `status`), `invitation`, `session.activeOrganizationId → activeWorkspaceId`. Roles are stored lowercase (`owner | admin | manager | member`); `packages/core/src/roles.ts` is the single source of truth for ranking.
 - Workspaces are created only through `createWorkspace()` in `apps/web/src/server/workspaces.ts` (row + settings + owner membership in one transaction). Pending invites live in `invitation`; a `membership` row appears on acceptance.
 - Email goes through `sendEmail()` in `apps/web/src/server/mail.ts` (SMTP; Mailpit locally). Phase 5 moves sending into the worker.
-- Files go to S3-compatible storage via `apps/web/src/server/storage.ts`; the local bucket `timekeep` is public-read for avatars/logos. Validate MIME + magic bytes + size before uploading.
+- Files go to S3-compatible storage via `apps/web/src/server/storage.ts` (RustFS locally — MinIO stopped publishing community images; the API is identical). `apps/web/scripts/storage-init.ts` creates the bucket and makes `avatars/*` and `logos/*` public-read. Validate MIME + magic bytes + size before uploading.
 - UI: shadcn/ui components from `@timekeep/ui/components/*`, icons from `lucide-react`, toasts via `sonner`. Theme tokens are in `packages/ui/src/styles/globals.css` (our own teal palette; light + dark via `.dark` class and `next-themes`). Every page must work at 375px.
 - Next.js: `cacheComponents` is **off** (all pages are dynamic and auth-gated). `PageProps<"/route">` / `LayoutProps<"/route">` global types come from `next typegen` (run by `pnpm typecheck`).
 - Commit after each numbered part of a phase prompt; message body explains what and why. Tag `phase-N` when a phase's acceptance checks pass.

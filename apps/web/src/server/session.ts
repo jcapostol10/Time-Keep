@@ -5,10 +5,17 @@ import { redirect } from "next/navigation";
 
 import { getAuth, type AuthSession } from "./auth";
 
-/** Current session from the request cookies, or null. */
-export async function getSession(): Promise<AuthSession | null> {
+/**
+ * Current session from the request cookies, or null. Pass `fresh: true` to
+ * bypass the short-lived session cookie cache (e.g. right after the active
+ * workspace changed).
+ */
+export async function getSession(options: { fresh?: boolean } = {}): Promise<AuthSession | null> {
   const auth = getAuth();
-  return auth.api.getSession({ headers: await headers() });
+  return auth.api.getSession({
+    headers: await headers(),
+    query: options.fresh ? { disableCookieCache: true } : undefined,
+  });
 }
 
 /** Current session, or redirect to sign-in (remembering where the user was going). */

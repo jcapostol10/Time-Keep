@@ -12,7 +12,7 @@ function getClient(): S3Client {
     client = new S3Client({
       endpoint: e.S3_ENDPOINT,
       region: e.S3_REGION,
-      // MinIO and most self-hosted S3 implementations need path-style URLs.
+      // RustFS, MinIO and most self-hosted S3 implementations need path-style URLs.
       forcePathStyle: true,
       credentials: { accessKeyId: e.S3_ACCESS_KEY_ID, secretAccessKey: e.S3_SECRET_ACCESS_KEY },
     });

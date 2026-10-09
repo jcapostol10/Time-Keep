@@ -153,7 +153,13 @@ export async function resolveHomeWorkspace(session: AuthSession) {
   const all = await listUserWorkspaces(db, session.user.id);
   if (all.length === 0) return null;
 
-  const activeId = (session.session as { activeWorkspaceId?: string | null }).activeWorkspaceId;
+  // Better Auth keeps the plugin's logical field name on the session object
+  // even though the column is `active_workspace_id`.
+  const active = session.session as {
+    activeOrganizationId?: string | null;
+    activeWorkspaceId?: string | null;
+  };
+  const activeId = active.activeOrganizationId ?? active.activeWorkspaceId ?? null;
   return all.find((w) => w.id === activeId) ?? all[0] ?? null;
 }
 
