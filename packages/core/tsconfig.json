@@ -1,0 +1,4 @@
+{
+  "extends": "@timekeep/config/tsconfig/base.json",
+  "include": ["src/**/*.ts", "vitest.config.ts", "eslint.config.js"]
+}

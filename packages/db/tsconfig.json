@@ -1,0 +1,4 @@
+{
+  "extends": "@timekeep/config/tsconfig/node.json",
+  "include": ["src/**/*.ts", "drizzle.config.ts", "eslint.config.js"]
+}

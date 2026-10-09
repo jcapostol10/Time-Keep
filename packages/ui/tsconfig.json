@@ -1,0 +1,10 @@
+{
+  "extends": "@timekeep/config/tsconfig/react-library.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@timekeep/ui/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "eslint.config.js"]
+}

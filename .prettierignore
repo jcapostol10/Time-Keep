@@ -1,0 +1,10 @@
+node_modules
+.next
+.turbo
+dist
+coverage
+playwright-report
+test-results
+pnpm-lock.yaml
+packages/db/migrations/meta
+*.md

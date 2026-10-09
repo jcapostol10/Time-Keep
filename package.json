@@ -1,0 +1,31 @@
+{
+  "name": "timekeep",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "e2e": "turbo run e2e",
+    "db:generate": "pnpm --filter @timekeep/db db:generate",
+    "db:migrate": "pnpm --filter @timekeep/db db:migrate",
+    "db:seed": "pnpm --filter @timekeep/db db:seed",
+    "db:studio": "pnpm --filter @timekeep/db db:studio",
+    "setup": "docker compose up -d --wait && pnpm db:migrate && pnpm db:seed",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "dotenv-cli": "^10.0.0",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.6.14",
+    "turbo": "^2.11.7",
+    "typescript": "^5.9.3"
+  }
+}
