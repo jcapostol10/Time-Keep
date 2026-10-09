@@ -7,7 +7,7 @@
     "build": "dotenv -e ../../.env -- next build",
     "start": "dotenv -e ../../.env -- next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "dotenv -e ../../.env -- vitest run",
     "e2e": "dotenv -e ../../.env -- playwright test"
   },
@@ -30,6 +30,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-hook-form": "^7.89.0",
+    "server-only": "^0.0.1",
     "sonner": "^2.0.8",
     "zod": "^4.1.0"
   },
