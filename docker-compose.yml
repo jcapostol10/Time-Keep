@@ -35,7 +35,8 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    # MinIO publishes its images on quay.io; the Docker Hub mirrors are gone.
+    image: quay.io/minio/minio:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -53,8 +54,10 @@ services:
       retries: 10
 
   # One-shot: create the bucket and allow anonymous downloads (avatars, logos).
+  # `pnpm setup` runs it with `docker compose run --rm minio-init`.
   minio-init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
+    profiles: ["init"]
     depends_on:
       minio:
         condition: service_healthy

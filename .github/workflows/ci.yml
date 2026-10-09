@@ -46,7 +46,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Start Postgres, Mailpit and MinIO
-        run: docker compose up -d --wait postgres mailpit minio minio-init
+        run: |
+          docker compose up -d --wait postgres mailpit minio
+          docker compose run --rm minio-init
 
       - name: Migrate database
         run: pnpm db:migrate

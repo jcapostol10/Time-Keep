@@ -17,7 +17,7 @@
     "db:migrate": "pnpm --filter @timekeep/db db:migrate",
     "db:seed": "pnpm --filter @timekeep/db db:seed",
     "db:studio": "pnpm --filter @timekeep/db db:studio",
-    "setup": "docker compose up -d --wait && pnpm db:migrate && pnpm db:seed",
+    "setup": "docker compose up -d --wait postgres mailpit minio && docker compose run --rm minio-init && pnpm db:migrate && pnpm db:seed",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
