@@ -25,7 +25,7 @@ test.describe("workspaces", () => {
     await owner.getByLabel("Email").fill(inviteeEmail);
     await owner.getByRole("button", { name: "Send invitation" }).click();
     await expect(owner.getByText(`Invitation sent to ${inviteeEmail}`)).toBeVisible();
-    await expect(owner.getByRole("cell", { name: inviteeEmail })).toBeVisible();
+    await expect(owner.getByRole("cell", { name: inviteeEmail, exact: true })).toBeVisible();
 
     // Invitee signs up with the invited address, then opens the invite link.
     const inviteMessage = await waitForEmail(inviteeEmail, { subject: /invited you/i });
