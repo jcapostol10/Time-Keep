@@ -63,14 +63,16 @@ export default async function TeamPage({ params }: PageProps<"/w/[workspaceSlug]
                       <p className="truncate font-medium">
                         {m.name}
                         {m.userId === ctx.user.id ? (
-                          <span className="ml-1 text-xs text-muted-foreground">(you)</span>
+                          <span className="text-muted-foreground ml-1 text-xs">(you)</span>
                         ) : null}
                       </p>
-                      <p className="truncate text-xs text-muted-foreground sm:hidden">{m.email}</p>
+                      <p className="text-muted-foreground truncate text-xs sm:hidden">{m.email}</p>
                     </div>
                   </div>
                 </TableCell>
-                <TableCell className="hidden text-muted-foreground sm:table-cell">{m.email}</TableCell>
+                <TableCell className="text-muted-foreground hidden sm:table-cell">
+                  {m.email}
+                </TableCell>
                 <TableCell>
                   <Badge variant={m.role === "owner" ? "default" : "secondary"}>
                     {ROLE_LABELS[m.role]}

@@ -1,6 +1,10 @@
 "use server";
 
-import { createWorkspaceSchema, workspaceNameSchema, workspaceSettingsSchema } from "@timekeep/core";
+import {
+  createWorkspaceSchema,
+  workspaceNameSchema,
+  workspaceSettingsSchema,
+} from "@timekeep/core";
 import { eq, getDb, workspace, workspaceSettings } from "@timekeep/db";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -14,7 +18,9 @@ import { requireSession } from "@/server/session";
 import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
 import { createWorkspace } from "@/server/workspaces";
 
-export async function createWorkspaceAction(input: unknown): Promise<ActionResult<{ slug: string }>> {
+export async function createWorkspaceAction(
+  input: unknown,
+): Promise<ActionResult<{ slug: string }>> {
   const session = await requireSession("/workspaces/new");
   const parsed = createWorkspaceSchema.safeParse(input);
   if (!parsed.success) return fromZodError(parsed.error);

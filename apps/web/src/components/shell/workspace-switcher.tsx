@@ -62,17 +62,17 @@ export function WorkspaceSwitcher({
         >
           <WorkspaceAvatar name={current.name} />
           <span className="truncate">{current.name}</span>
-          <ChevronsUpDownIcon className="size-4 shrink-0 text-muted-foreground" />
+          <ChevronsUpDownIcon className="text-muted-foreground size-4 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Workspaces</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-muted-foreground text-xs">Workspaces</DropdownMenuLabel>
         {workspaces.map((ws) => (
           <DropdownMenuItem key={ws.id} onSelect={() => void select(ws)} className="gap-2">
             <WorkspaceAvatar name={ws.name} />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-sm">{ws.name}</span>
-              <span className="text-xs text-muted-foreground">{ROLE_LABELS[ws.role]}</span>
+              <span className="text-muted-foreground text-xs">{ROLE_LABELS[ws.role]}</span>
             </span>
             {ws.id === current.id ? <CheckIcon className="size-4" /> : null}
           </DropdownMenuItem>
@@ -92,7 +92,7 @@ function WorkspaceAvatar({ name, className }: { name: string; className?: string
     <span
       aria-hidden
       className={cn(
-        "flex size-6 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground",
+        "bg-primary text-primary-foreground flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-bold",
         className,
       )}
     >

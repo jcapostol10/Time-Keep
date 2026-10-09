@@ -13,7 +13,7 @@ export default async function NewWorkspacePage() {
   await requireSession("/workspaces/new");
 
   return (
-    <div className="flex min-h-svh flex-col bg-muted/40">
+    <div className="bg-muted/40 flex min-h-svh flex-col">
       <header className="flex items-center justify-between px-4 py-4 sm:px-8">
         <Link href="/" aria-label="TimeKeep home">
           <Logo />

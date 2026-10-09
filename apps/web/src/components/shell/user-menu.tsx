@@ -22,7 +22,11 @@ export function initials(name: string): string {
   return (first + last).toUpperCase() || "?";
 }
 
-export function UserMenu({ user }: { user: { name: string; email: string; image: string | null } }) {
+export function UserMenu({
+  user,
+}: {
+  user: { name: string; email: string; image: string | null };
+}) {
   const router = useRouter();
 
   async function handleSignOut() {
@@ -44,7 +48,7 @@ export function UserMenu({ user }: { user: { name: string; email: string; image:
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel className="font-normal">
           <p className="truncate text-sm font-medium">{user.name}</p>
-          <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+          <p className="text-muted-foreground truncate text-xs">{user.email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => router.push("/account")}>

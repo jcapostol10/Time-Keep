@@ -90,11 +90,21 @@ export function SignInForm({ googleEnabled, next }: { googleEnabled: boolean; ne
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input type="email" autoComplete="email" placeholder="you@company.com" {...field} />
+                  <Input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@company.com"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
                 {unverifiedEmail ? (
-                  <Button type="button" variant="link" className="h-auto p-0" onClick={resendVerification}>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0"
+                    onClick={resendVerification}
+                  >
                     Resend verification email
                   </Button>
                 ) : null}
@@ -108,7 +118,10 @@ export function SignInForm({ googleEnabled, next }: { googleEnabled: boolean; ne
               <FormItem>
                 <div className="flex items-center justify-between">
                   <FormLabel>Password</FormLabel>
-                  <Link href="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground">
+                  <Link
+                    href="/forgot-password"
+                    className="text-muted-foreground hover:text-foreground text-xs"
+                  >
                     Forgot password?
                   </Link>
                 </div>
@@ -128,13 +141,19 @@ export function SignInForm({ googleEnabled, next }: { googleEnabled: boolean; ne
 
       <div className="relative">
         <Separator />
-        <span className="absolute inset-x-0 -top-2.5 mx-auto w-fit bg-card px-2 text-xs text-muted-foreground">
+        <span className="bg-card text-muted-foreground absolute inset-x-0 -top-2.5 mx-auto w-fit px-2 text-xs">
           or
         </span>
       </div>
 
       <div className="space-y-2">
-        <Button type="button" variant="outline" className="w-full" onClick={sendMagicLink} disabled={magicLoading}>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={sendMagicLink}
+          disabled={magicLoading}
+        >
           {magicLoading ? <Loader2Icon className="animate-spin" /> : null}
           Email me a sign-in link
         </Button>

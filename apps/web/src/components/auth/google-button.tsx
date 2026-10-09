@@ -30,7 +30,13 @@ export function GoogleButton({ callbackURL = "/" }: { callbackURL?: string }) {
   }
 
   return (
-    <Button type="button" variant="outline" className="w-full" onClick={handleClick} disabled={loading}>
+    <Button
+      type="button"
+      variant="outline"
+      className="w-full"
+      onClick={handleClick}
+      disabled={loading}
+    >
       <GoogleIcon />
       Continue with Google
     </Button>

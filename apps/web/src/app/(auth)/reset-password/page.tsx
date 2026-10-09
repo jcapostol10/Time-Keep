@@ -22,7 +22,7 @@ export default async function ResetPasswordPage({ searchParams }: PageProps<"/re
           </Link>
         }
       >
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           Ask for a fresh link and try again. If the problem persists, contact your workspace admin.
         </p>
       </AuthCard>

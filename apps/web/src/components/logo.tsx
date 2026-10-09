@@ -6,9 +6,15 @@ export function Logo({ className, compact = false }: { className?: string; compa
     <span className={cn("inline-flex items-center gap-2 font-semibold tracking-tight", className)}>
       <span
         aria-hidden
-        className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground"
+        className="bg-primary text-primary-foreground flex size-7 items-center justify-center rounded-md"
       >
-        <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5">
+        <svg
+          viewBox="0 0 24 24"
+          className="size-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+        >
           <circle cx="12" cy="12" r="8.5" />
           <path d="M12 7.5V12l3 2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

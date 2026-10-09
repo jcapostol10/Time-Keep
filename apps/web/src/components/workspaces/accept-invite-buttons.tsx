@@ -9,7 +9,13 @@ import { toast } from "sonner";
 import { authClient, authErrorMessage } from "@/lib/auth-client";
 import { workspaceRoutes } from "@/lib/routes";
 
-export function AcceptInviteButtons({ invitationId, slug }: { invitationId: string; slug: string }) {
+export function AcceptInviteButtons({
+  invitationId,
+  slug,
+}: {
+  invitationId: string;
+  slug: string;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState<"accept" | "reject" | null>(null);
 

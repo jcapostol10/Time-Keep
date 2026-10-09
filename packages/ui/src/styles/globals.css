@@ -138,7 +138,7 @@
     @apply h-full;
   }
   body {
-    @apply min-h-full bg-background text-foreground antialiased;
+    @apply bg-background text-foreground min-h-full antialiased;
     font-feature-settings: "tnum" 1; /* tabular numbers: timers and totals line up */
   }
 }

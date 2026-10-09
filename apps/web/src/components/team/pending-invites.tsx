@@ -70,12 +70,14 @@ export function PendingInvites({
               <TableRow key={invite.id}>
                 <TableCell className="font-medium">{invite.email}</TableCell>
                 <TableCell>
-                  <Badge variant="secondary">{ROLE_LABELS[invite.role as Role] ?? invite.role}</Badge>
+                  <Badge variant="secondary">
+                    {ROLE_LABELS[invite.role as Role] ?? invite.role}
+                  </Badge>
                 </TableCell>
-                <TableCell className="hidden text-muted-foreground sm:table-cell">
+                <TableCell className="text-muted-foreground hidden sm:table-cell">
                   {invite.inviterName}
                 </TableCell>
-                <TableCell className="hidden text-muted-foreground sm:table-cell">
+                <TableCell className="text-muted-foreground hidden sm:table-cell">
                   {invite.expiresAt ? new Date(invite.expiresAt).toLocaleDateString() : "—"}
                 </TableCell>
                 {canManage ? (

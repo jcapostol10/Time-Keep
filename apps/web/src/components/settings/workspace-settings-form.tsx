@@ -106,7 +106,10 @@ export function WorkspaceSettingsForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Week starts on</FormLabel>
-                  <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                  <Select
+                    value={String(field.value)}
+                    onValueChange={(v) => field.onChange(Number(v))}
+                  >
                     <FormControl>
                       <SelectTrigger className="w-full">
                         <SelectValue />
@@ -198,7 +201,9 @@ export function WorkspaceSettingsForm({
         </fieldset>
 
         {readOnly ? (
-          <p className="text-sm text-muted-foreground">Only admins and the owner can change these settings.</p>
+          <p className="text-muted-foreground text-sm">
+            Only admins and the owner can change these settings.
+          </p>
         ) : (
           <Button type="submit" disabled={form.formState.isSubmitting || !form.formState.isDirty}>
             {form.formState.isSubmitting ? <Loader2Icon className="animate-spin" /> : null}

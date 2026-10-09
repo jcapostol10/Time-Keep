@@ -29,7 +29,7 @@ export function AppShell({ user, workspace, workspaces, children }: AppShellProp
   return (
     <div className="flex min-h-svh">
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-svh w-60 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground md:flex">
+      <aside className="bg-sidebar text-sidebar-foreground sticky top-0 hidden h-svh w-60 shrink-0 flex-col border-r md:flex">
         <div className="flex h-14 items-center border-b px-5">
           <Link href={home} aria-label="TimeKeep home">
             <Logo />
@@ -41,7 +41,7 @@ export function AppShell({ user, workspace, workspaces, children }: AppShellProp
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur sm:px-4">
+        <header className="bg-background/95 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 backdrop-blur sm:px-4">
           {/* Mobile menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
@@ -49,7 +49,7 @@ export function AppShell({ user, workspace, workspaces, children }: AppShellProp
                 <MenuIcon className="size-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-72 bg-sidebar p-0 text-sidebar-foreground">
+            <SheetContent side="left" className="bg-sidebar text-sidebar-foreground w-72 p-0">
               <SheetTitle className="sr-only">Navigation</SheetTitle>
               <div className="flex h-14 items-center border-b px-5">
                 <Logo />

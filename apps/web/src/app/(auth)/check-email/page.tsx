@@ -26,7 +26,9 @@ const COPY = {
 
 export default async function CheckEmailPage({ searchParams }: PageProps<"/check-email">) {
   const params = await searchParams;
-  const type = (typeof params.type === "string" && params.type in COPY ? params.type : "verify") as keyof typeof COPY;
+  const type = (
+    typeof params.type === "string" && params.type in COPY ? params.type : "verify"
+  ) as keyof typeof COPY;
   const email = typeof params.email === "string" ? params.email : "";
   const copy = COPY[type];
 
@@ -40,15 +42,16 @@ export default async function CheckEmailPage({ searchParams }: PageProps<"/check
       }
     >
       <div className="flex flex-col items-center gap-3 text-center">
-        <span className="flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground">
+        <span className="bg-accent text-accent-foreground flex size-12 items-center justify-center rounded-full">
           <MailCheckIcon className="size-6" />
         </span>
         <p className="text-sm">
-          {copy.body} {email ? <strong className="font-medium">{email}</strong> : "your email address"}.
+          {copy.body}{" "}
+          {email ? <strong className="font-medium">{email}</strong> : "your email address"}.
         </p>
-        <p className="text-sm text-muted-foreground">{copy.hint}</p>
+        <p className="text-muted-foreground text-sm">{copy.hint}</p>
         {process.env.NODE_ENV !== "production" ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             Local dev: emails land in{" "}
             <a href="http://localhost:8025" target="_blank" rel="noreferrer" className="underline">
               Mailpit

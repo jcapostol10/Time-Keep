@@ -2,8 +2,7 @@ import type { ZodError } from "zod";
 
 /** Uniform return type for server actions so clients never need try/catch. */
 export type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
+  { ok: true; data: T } | { ok: false; error: string; fieldErrors?: Record<string, string[]> };
 
 export function ok<T>(data: T): ActionResult<T> {
   return { ok: true, data };

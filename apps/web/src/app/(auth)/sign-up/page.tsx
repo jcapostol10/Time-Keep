@@ -19,7 +19,10 @@ export default async function SignUpPage({ searchParams }: PageProps<"/sign-up">
       footer={
         <span>
           Already have an account?{" "}
-          <Link href="/sign-in" className="text-foreground underline underline-offset-4">
+          <Link
+            href={next === "/" ? "/sign-in" : `/sign-in?next=${encodeURIComponent(next)}`}
+            className="text-foreground underline underline-offset-4"
+          >
             Sign in
           </Link>
         </span>

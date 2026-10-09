@@ -26,7 +26,7 @@ export function AuthCard({
       </CardHeader>
       <CardContent>{children}</CardContent>
       {footer ? (
-        <CardFooter className="justify-center text-sm text-muted-foreground">{footer}</CardFooter>
+        <CardFooter className="text-muted-foreground justify-center text-sm">{footer}</CardFooter>
       ) : null}
     </Card>
   );

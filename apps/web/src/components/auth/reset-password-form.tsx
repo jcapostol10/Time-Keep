@@ -24,7 +24,10 @@ const schema = z
     password: z.string().min(8, "At least 8 characters").max(128),
     confirm: z.string(),
   })
-  .refine((v) => v.password === v.confirm, { path: ["confirm"], message: "Passwords do not match" });
+  .refine((v) => v.password === v.confirm, {
+    path: ["confirm"],
+    message: "Passwords do not match",
+  });
 type Values = z.infer<typeof schema>;
 
 export function ResetPasswordForm({ token }: { token: string }) {

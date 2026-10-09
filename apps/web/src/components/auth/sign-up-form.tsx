@@ -70,7 +70,12 @@ export function SignUpForm({ googleEnabled, next }: { googleEnabled: boolean; ne
               <FormItem>
                 <FormLabel>Email</FormLabel>
                 <FormControl>
-                  <Input type="email" autoComplete="email" placeholder="you@company.com" {...field} />
+                  <Input
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@company.com"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -101,7 +106,7 @@ export function SignUpForm({ googleEnabled, next }: { googleEnabled: boolean; ne
         <>
           <div className="relative">
             <Separator />
-            <span className="absolute inset-x-0 -top-2.5 mx-auto w-fit bg-card px-2 text-xs text-muted-foreground">
+            <span className="bg-card text-muted-foreground absolute inset-x-0 -top-2.5 mx-auto w-fit px-2 text-xs">
               or
             </span>
           </div>

@@ -5,7 +5,10 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 
-const migrationsFolder = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../migrations");
+const migrationsFolder = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../migrations",
+);
 
 /** Apply all pending migrations in ./migrations to the given database. */
 export async function runMigrations(connectionString: string): Promise<void> {

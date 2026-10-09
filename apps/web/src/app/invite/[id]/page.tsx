@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Invitation" };
 
 function Frame({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-svh flex-col bg-muted/40">
+    <div className="bg-muted/40 flex min-h-svh flex-col">
       <header className="flex items-center justify-between px-4 py-4 sm:px-8">
         <Link href="/" aria-label="TimeKeep home">
           <Logo />
@@ -57,9 +57,9 @@ export default async function InvitePage({ params }: PageProps<"/invite/[id]">) 
             </Link>
           }
         >
-          <p className="text-sm text-muted-foreground">
-            You are signed in as <strong>{session.user.email}</strong>. Invitations can only be accepted
-            by the email address they were sent to.
+          <p className="text-muted-foreground text-sm">
+            You are signed in as <strong>{session.user.email}</strong>. Invitations can only be
+            accepted by the email address they were sent to.
           </p>
         </AuthCard>
       </Frame>

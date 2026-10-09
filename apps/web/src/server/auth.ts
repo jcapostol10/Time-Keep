@@ -53,7 +53,8 @@ function buildAuth() {
           title: "Reset your password",
           intro: `Hi ${user.name}, we received a request to reset the password for ${user.email}.`,
           cta: { label: "Choose a new password", url },
-          outro: "If you did not ask for this, you can safely ignore this email. The link expires in 1 hour.",
+          outro:
+            "If you did not ask for this, you can safely ignore this email. The link expires in 1 hour.",
         });
       },
     },

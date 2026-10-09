@@ -1,6 +1,10 @@
 "use client";
 
-import { inferAdditionalFields, magicLinkClient, organizationClient } from "better-auth/client/plugins";
+import {
+  inferAdditionalFields,
+  magicLinkClient,
+  organizationClient,
+} from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
 import type { Auth } from "@/server/auth";
@@ -8,11 +12,7 @@ import type { Auth } from "@/server/auth";
 import { ac, roles } from "./permissions";
 
 export const authClient = createAuthClient({
-  plugins: [
-    inferAdditionalFields<Auth>(),
-    magicLinkClient(),
-    organizationClient({ ac, roles }),
-  ],
+  plugins: [inferAdditionalFields<Auth>(), magicLinkClient(), organizationClient({ ac, roles })],
 });
 
 export const { useSession, signIn, signUp, signOut } = authClient;
