@@ -30,6 +30,8 @@ Decisions and deviations from the prompt:
 - `cacheComponents` is off in Next 16: every page is auth-gated and dynamic.
 - A minimal Team page and workspace Settings page were built in Phase 0 because invites and settings needed a UI; Phase 4 expands both.
 - Emails are sent directly from the web app; Phase 5 moves sending into the pg-boss worker.
+- Google OAuth verified end to end on 2026-10-12 (user + `google` account row + auto-created personal workspace). OAuth flows must start and finish on the `NEXT_PUBLIC_APP_URL` host; failures land on `/auth-error`.
+- Known gap for Phase 1: sign-up via Google does not capture the browser timezone (email sign-up does), so the personal workspace defaults to UTC. Detect it client-side on first visit and save it when `user.timezone` is null.
 - Local object storage is RustFS instead of MinIO: MinIO's community images were pulled from Docker Hub during this phase. Same S3 API and ports; bucket setup is a Node script (`pnpm storage:init`) rather than the `mc` CLI.
 
 ## Phase 1 — Time tracker
