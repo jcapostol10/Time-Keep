@@ -39,6 +39,12 @@ Local services started by `docker compose`:
 
 Demo login after seeding: `owner@demo.test` / `password123` (plus admin, manager and two members — see `packages/db/src/seed.ts`).
 
+### Google sign-in (optional)
+
+1. In [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials), create an **OAuth client ID** of type **Web application** (configure the OAuth consent screen first if prompted; External + your email as a test user is enough for development).
+2. Authorized JavaScript origin: `http://localhost:3000`. Authorized redirect URI: `http://localhost:3000/api/auth/callback/google`. For production add the same two entries with your real domain.
+3. Put the client ID and secret in `.env` as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and restart `pnpm dev`. The "Continue with Google" button appears on the sign-in and sign-up pages. A Google login with the same address as an existing verified email/password account links to it; brand-new Google users get a personal workspace just like email sign-ups.
+
 ## Scripts
 
 | Command           | What it does                                           |

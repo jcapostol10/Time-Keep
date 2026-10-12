@@ -83,6 +83,8 @@ function buildAuth() {
             google: {
               clientId: e.GOOGLE_CLIENT_ID,
               clientSecret: e.GOOGLE_CLIENT_SECRET,
+              // Always show the account chooser; people often have work + personal accounts.
+              prompt: "select_account",
             },
           }
         : {},
