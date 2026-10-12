@@ -11,7 +11,7 @@ TimeKeep is a web-based time tracking and timesheet SaaS for teams (functionally
 | `docker compose up -d --wait` | Postgres 16 (`:5432`), Mailpit (`:8025` UI, `:1025` SMTP), RustFS S3 (`:9000` API, `:9001` console) |
 | `pnpm storage:init` | Create the bucket + public-read policy for `avatars/*`, `logos/*` (any S3-compatible backend) |
 | `pnpm db:migrate` / `pnpm db:generate` / `pnpm db:seed` / `pnpm db:studio` | Drizzle migrations, generate from schema, demo data, studio |
-| `pnpm setup` | compose up + storage:init + migrate + seed |
+| `pnpm bootstrap` | compose up + storage:init + migrate + seed (not `setup`: that is a pnpm built-in and silently shadows package scripts) |
 | `pnpm dev` | Web (`http://localhost:3000`) and worker, via Turborepo |
 | `pnpm lint && pnpm typecheck && pnpm test && pnpm e2e` | The full gate. Run it before saying a phase is done |
 | `pnpm --filter @timekeep/web e2e -- --ui` | Playwright UI mode |

@@ -17,10 +17,10 @@
     "db:migrate": "pnpm --filter @timekeep/db db:migrate",
     "db:seed": "pnpm --filter @timekeep/db db:seed",
     "db:studio": "pnpm --filter @timekeep/db db:studio",
-    "setup": "docker compose up -d --wait && pnpm storage:init && pnpm db:migrate && pnpm db:seed",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "storage:init": "pnpm --filter @timekeep/web storage:init"
+    "storage:init": "pnpm --filter @timekeep/web storage:init",
+    "bootstrap": "docker compose up -d --wait && pnpm storage:init && pnpm db:migrate && pnpm db:seed"
   },
   "devDependencies": {
     "dotenv-cli": "^10.0.0",

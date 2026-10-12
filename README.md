@@ -25,7 +25,7 @@ Prerequisites: Node 22+ (`.nvmrc` says 24), [pnpm](https://pnpm.io) 10, Docker D
 git clone https://github.com/jcapostol10/Time-Keep.git && cd Time-Keep
 pnpm install
 cp .env.example .env            # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
-pnpm setup                      # docker compose up, create bucket, migrate, seed demo workspace
+pnpm bootstrap                  # docker compose up, create bucket, migrate, seed demo workspace
 pnpm dev                        # web on http://localhost:3000, worker alongside
 ```
 
