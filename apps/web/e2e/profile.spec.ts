@@ -2,12 +2,12 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
-import { signIn } from "./helpers/app";
+import { openUserMenu, signIn } from "./helpers/app";
 
 test.describe("profile settings", () => {
   test("update name and timezone, upload and remove an avatar", async ({ page }) => {
     await signIn(page, "member2@demo.test");
-    await page.getByRole("button", { name: "Account menu" }).click();
+    await openUserMenu(page);
     await page.getByRole("menuitem", { name: "Profile settings" }).click();
     await expect(page).toHaveURL(/\/account/);
 

@@ -44,6 +44,7 @@ Demo login after seeding: `owner@demo.test` / `password123` (plus admin, manager
 1. In [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials), create an **OAuth client ID** of type **Web application** (configure the OAuth consent screen first if prompted; External + your email as a test user is enough for development).
 2. Authorized JavaScript origin: `http://localhost:3000`. Authorized redirect URI: `http://localhost:3000/api/auth/callback/google`. For production add the same two entries with your real domain.
 3. Put the client ID and secret in `.env` as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and restart `pnpm dev`. The "Continue with Google" button appears on the sign-in and sign-up pages. A Google login with the same address as an existing verified email/password account links to it; brand-new Google users get a personal workspace just like email sign-ups.
+4. Always open the app at the host in `NEXT_PUBLIC_APP_URL` (`http://localhost:3000`, not `127.0.0.1`). The OAuth state cookie is host-scoped, so a flow that starts on one alias and returns to another fails with `state_mismatch`. The state cookie lasts 10 minutes; a slower consent flow also ends in `state_mismatch` — just start again.
 
 ## Scripts
 

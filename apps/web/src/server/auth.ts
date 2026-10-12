@@ -25,6 +25,16 @@ function buildAuth() {
     secret: e.BETTER_AUTH_SECRET,
     trustedOrigins: [e.NEXT_PUBLIC_APP_URL],
 
+    // Send auth failures (OAuth state mismatch, denied consent, …) to our own page.
+    onAPIError: { errorURL: "/auth-error" },
+
+    advanced: {
+      cookies: {
+        // OAuth state lives 5 minutes by default; first-time consent screens can take longer.
+        state: { attributes: { maxAge: 60 * 10 } },
+      },
+    },
+
     database: drizzleAdapter(db, { provider: "pg", schema }),
 
     user: {

@@ -5,6 +5,11 @@ import { type NextRequest, NextResponse } from "next/server";
  * Optimistic auth gate. Only checks that a session cookie exists; real
  * authorization happens in requireSession / requireWorkspaceAccess on the
  * server, where the session is validated against the database.
+ *
+ * Note: cookies are host-scoped, so OAuth flows must start and finish on the
+ * host in NEXT_PUBLIC_APP_URL (open the app at localhost, not 127.0.0.1).
+ * Canonicalising loopback aliases here is not possible: the dev server
+ * rewrites same-origin redirect Locations back to the incoming host.
  */
 const PROTECTED_PREFIXES = ["/w/", "/account", "/workspaces"];
 const AUTH_PAGES = ["/sign-in", "/sign-up", "/forgot-password"];

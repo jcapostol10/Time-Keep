@@ -16,8 +16,21 @@ export async function signIn(page: Page, email: string, password = DEMO_PASSWORD
   await expect(page).toHaveURL(/\/w\/[^/]+\/tracker/);
 }
 
+/**
+ * Open the account dropdown. Retries because a click that lands before React
+ * has hydrated the page is swallowed and the menu never opens.
+ */
+export async function openUserMenu(page: Page) {
+  await expect(async () => {
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await expect(page.getByRole("menuitem", { name: "Profile settings" })).toBeVisible({
+      timeout: 1_500,
+    });
+  }).toPass({ timeout: 15_000 });
+}
+
 export async function signOut(page: Page) {
-  await page.getByRole("button", { name: "Account menu" }).click();
+  await openUserMenu(page);
   await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/sign-in/);
 }
