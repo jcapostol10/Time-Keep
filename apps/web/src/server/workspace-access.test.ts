@@ -56,7 +56,9 @@ describe("tenant isolation: resolveWorkspaceAccess", () => {
 
     expect(existing).toBeInstanceOf(WorkspaceAccessError);
     expect(missing).toBeInstanceOf(WorkspaceAccessError);
-    expect((existing as WorkspaceAccessError).status).toBe((missing as WorkspaceAccessError).status);
+    expect((existing as WorkspaceAccessError).status).toBe(
+      (missing as WorkspaceAccessError).status,
+    );
     expect((existing as Error).message).toBe((missing as Error).message);
   });
 

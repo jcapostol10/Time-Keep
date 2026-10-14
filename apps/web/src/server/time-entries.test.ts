@@ -322,7 +322,13 @@ describe("time entries service", () => {
   });
 
   describe("concurrent writes", () => {
-    const details = { description: "Work", projectId: null, taskId: null, tagIds: [], billable: false };
+    const details = {
+      description: "Work",
+      projectId: null,
+      taskId: null,
+      tagIds: [],
+      billable: false,
+    };
 
     /**
      * Another connection locks the running row, stops it, and commits only
