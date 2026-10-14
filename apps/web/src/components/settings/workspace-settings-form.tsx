@@ -40,8 +40,8 @@ const schema = workspaceSettingsSchema.extend({ name: workspaceNameSchema });
 type Values = z.infer<typeof schema>;
 
 const DURATION_LABELS: Record<(typeof DURATION_FORMATS)[number], string> = {
-  "hh:mm:ss": "Full (01:30:00)",
-  "hh:mm": "Compact (01:30)",
+  "hh:mm:ss": "Full (1:30:00)",
+  "hh:mm": "Compact (1:30)",
   decimal: "Decimal (1.50)",
 };
 

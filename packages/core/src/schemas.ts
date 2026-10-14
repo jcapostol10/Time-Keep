@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { hexColorSchema } from "./colors";
 import { ROLES } from "./roles";
 
 // --- Enumerations shared by DB, server and UI ---------------------------------
@@ -133,3 +134,94 @@ export type SignInInput = z.infer<typeof signInSchema>;
 
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 export const AVATAR_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+
+// --- Time tracker ----------------------------------------------------------------
+
+export const ENTRY_DESCRIPTION_MAX = 3000;
+
+/** ISO 8601 instant (with offset or Z) → Date. Every action/route payload uses this. */
+export const isoInstantSchema = z.iso.datetime({ offset: true }).transform((s) => new Date(s));
+
+export const entryDetailsSchema = z.object({
+  description: z.string().max(ENTRY_DESCRIPTION_MAX).default(""),
+  projectId: z.string().min(1).nullable().default(null),
+  /** Carried for Phase 2; no task picker exists yet. */
+  taskId: z.string().min(1).nullable().default(null),
+  tagIds: z.array(z.string().min(1)).max(50).default([]),
+  billable: z.boolean().default(false),
+});
+export type EntryDetails = z.infer<typeof entryDetailsSchema>;
+
+export const startTimerSchema = entryDetailsSchema;
+export type StartTimerInput = z.infer<typeof startTimerSchema>;
+
+export const stopTimerSchema = z.object({
+  entryId: z.string().min(1),
+  end: isoInstantSchema.optional(),
+});
+export type StopTimerInput = z.infer<typeof stopTimerSchema>;
+
+export const createManualEntrySchema = entryDetailsSchema.extend({
+  start: isoInstantSchema,
+  end: isoInstantSchema,
+});
+export type CreateManualEntryInput = z.infer<typeof createManualEntrySchema>;
+
+/** Partial patch; absent keys are left untouched. */
+export const updateEntrySchema = z.object({
+  description: z.string().max(ENTRY_DESCRIPTION_MAX).optional(),
+  projectId: z.string().min(1).nullable().optional(),
+  taskId: z.string().min(1).nullable().optional(),
+  tagIds: z.array(z.string().min(1)).max(50).optional(),
+  billable: z.boolean().optional(),
+  start: isoInstantSchema.optional(),
+  end: isoInstantSchema.optional(),
+});
+export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
+
+export const entryIdsSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(500),
+});
+export type EntryIdsInput = z.infer<typeof entryIdsSchema>;
+
+export const createProjectSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(100),
+  color: hexColorSchema.optional(),
+});
+export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+
+export const createTagSchema = createProjectSchema;
+export type CreateTagInput = z.infer<typeof createTagSchema>;
+
+export const trackerSettingsSchema = z
+  .object({
+    /** null = idle detection off */
+    idleDetectionMinutes: z.number().int().min(1).max(240).nullable(),
+    pomodoroEnabled: z.boolean(),
+    pomodoroFocusMinutes: z.number().int().min(1).max(180),
+    pomodoroBreakMinutes: z.number().int().min(1).max(60),
+    remindersEnabled: z.boolean(),
+    /** 0 = Sunday … 6 = Saturday */
+    reminderDays: z.array(weekStartSchema).max(7),
+    /** Minutes since local midnight. */
+    reminderStartMinutes: z.number().int().min(0).max(1439),
+    reminderEndMinutes: z.number().int().min(1).max(1440),
+  })
+  .refine((s) => s.reminderEndMinutes > s.reminderStartMinutes, {
+    path: ["reminderEndMinutes"],
+    message: "End must be after start",
+  });
+export type TrackerSettingsInput = z.infer<typeof trackerSettingsSchema>;
+
+export const DEFAULT_IDLE_DETECTION_MINUTES = 15;
+
+export const DEFAULT_TRACKER_SETTINGS: TrackerSettingsInput = {
+  idleDetectionMinutes: null,
+  pomodoroEnabled: false,
+  pomodoroFocusMinutes: 25,
+  pomodoroBreakMinutes: 5,
+  remindersEnabled: false,
+  reminderDays: [1, 2, 3, 4, 5],
+  reminderStartMinutes: 9 * 60,
+  reminderEndMinutes: 17 * 60,
+};
