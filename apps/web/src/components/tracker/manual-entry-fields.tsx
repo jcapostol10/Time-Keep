@@ -144,17 +144,20 @@ export function CommitInput({
   onCommit,
   className,
   disabled,
+  placeholder,
 }: {
   label: string;
   value: string;
   onCommit: (text: string) => void;
   className?: string;
   disabled?: boolean;
+  placeholder?: string;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   return (
     <Input
       aria-label={label}
+      placeholder={placeholder}
       value={editing ?? value}
       disabled={disabled}
       autoComplete="off"

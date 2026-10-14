@@ -1,11 +1,31 @@
 import { randomUUID } from "node:crypto";
 
-import { personalWorkspaceName, slugify, uniqueSlug } from "@timekeep/core";
+import {
+  addDaysInZone,
+  computeDurationSeconds,
+  localDateKey,
+  localWeekday,
+  personalWorkspaceName,
+  pickColor,
+  slugify,
+  uniqueSlug,
+  zonedDateTimeToInstant,
+} from "@timekeep/core";
 import { hashPassword } from "better-auth/crypto";
 import { eq, inArray, like } from "drizzle-orm";
 
 import { createDb, type Database } from "./client";
-import { account, membership, user, workspace, workspaceSettings } from "./schema";
+import {
+  account,
+  membership,
+  project,
+  tag,
+  timeEntry,
+  timeEntryTag,
+  user,
+  workspace,
+  workspaceSettings,
+} from "./schema";
 
 /**
  * Demo workspace used for local development, e2e tests and screenshots.
@@ -113,7 +133,133 @@ export async function seed(db: Database) {
     });
   }
 
+  await seedTrackerData(db, demo.id, ids);
+
   return { workspaceSlug: demo.slug };
+}
+
+/** Deterministic PRNG so every seed run produces the same demo entries. */
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hash(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
+  return h;
+}
+
+const DEMO_PROJECTS = ["Website redesign", "Mobile app", "Internal"] as const;
+const DEMO_TAGS = ["design", "dev", "meeting", "review"] as const;
+const DEMO_TASKS: { description: string; project: number | null; tags: number[]; billable: boolean }[] = [
+  { description: "Design review", project: 0, tags: [0, 3], billable: true },
+  { description: "Homepage layout", project: 0, tags: [0], billable: true },
+  { description: "API integration", project: 1, tags: [1], billable: true },
+  { description: "Bug fixes", project: 1, tags: [1], billable: true },
+  { description: "Team standup", project: 2, tags: [2], billable: false },
+  { description: "Planning", project: 2, tags: [2], billable: false },
+  { description: "Code review", project: 1, tags: [1, 3], billable: true },
+  { description: "Email", project: null, tags: [], billable: false },
+];
+
+/**
+ * Two weeks of stopped entries (weekdays, 09:00–18:00 Manila) for every demo
+ * user, plus one entry for member1 that crosses midnight. No running timers.
+ */
+async function seedTrackerData(db: Database, workspaceId: string, ids: Map<string, string>) {
+  const tz = DEMO_WORKSPACE.timezone;
+  const projectIds = DEMO_PROJECTS.map(() => randomUUID());
+  await db.insert(project).values(
+    DEMO_PROJECTS.map((name, i) => ({
+      id: projectIds[i] ?? randomUUID(),
+      workspaceId,
+      name,
+      color: pickColor(name),
+    })),
+  );
+  const tagIds = DEMO_TAGS.map(() => randomUUID());
+  await db.insert(tag).values(
+    DEMO_TAGS.map((name, i) => ({
+      id: tagIds[i] ?? randomUUID(),
+      workspaceId,
+      name,
+      color: pickColor(name),
+    })),
+  );
+
+  const now = new Date();
+  const today = localDateKey(now, tz);
+  const todayStart = zonedDateTimeToInstant({ date: today, hours: 0, minutes: 0 }, tz);
+
+  for (const [email, userId] of ids) {
+    const random = mulberry32(hash(email));
+    const entries: (typeof timeEntry.$inferInsert)[] = [];
+    const links: (typeof timeEntryTag.$inferInsert)[] = [];
+
+    for (let back = 13; back >= 0; back--) {
+      const dayStart = addDaysInZone(todayStart, -back, tz);
+      const weekday = localWeekday(dayStart, tz);
+      if (weekday === 0 || weekday === 6) continue;
+      const date = localDateKey(dayStart, tz);
+      let minutes = 9 * 60 + Math.floor(random() * 4) * 15;
+      const count = 2 + Math.floor(random() * 3);
+      for (let i = 0; i < count && minutes < 17 * 60; i++) {
+        const task = DEMO_TASKS[Math.floor(random() * DEMO_TASKS.length)] ?? DEMO_TASKS[0]!;
+        const length = 30 + Math.floor(random() * 7) * 15;
+        const start = zonedDateTimeToInstant(
+          { date, hours: Math.floor(minutes / 60), minutes: minutes % 60 },
+          tz,
+        );
+        const end = new Date(start.getTime() + length * 60_000);
+        if (end > now) break;
+        const id = randomUUID();
+        entries.push({
+          id,
+          workspaceId,
+          userId,
+          description: task.description,
+          projectId: task.project === null ? null : (projectIds[task.project] ?? null),
+          billable: task.billable,
+          start,
+          end,
+          durationSeconds: computeDurationSeconds(start, end),
+        });
+        for (const t of task.tags) {
+          const tagId = tagIds[t];
+          if (tagId) links.push({ timeEntryId: id, tagId });
+        }
+        minutes += length + Math.floor(random() * 3) * 15;
+      }
+    }
+
+    if (email === "member1@demo.test") {
+      // 23:30 -> 00:30 two days ago: one entry, listed under its start date.
+      const date = localDateKey(addDaysInZone(todayStart, -2, tz), tz);
+      const start = zonedDateTimeToInstant({ date, hours: 23, minutes: 30 }, tz);
+      const end = new Date(start.getTime() + 60 * 60_000);
+      entries.push({
+        id: randomUUID(),
+        workspaceId,
+        userId,
+        description: "Release deploy",
+        projectId: projectIds[1] ?? null,
+        billable: true,
+        start,
+        end,
+        durationSeconds: 3600,
+      });
+    }
+
+    if (entries.length > 0) await db.insert(timeEntry).values(entries);
+    if (links.length > 0) await db.insert(timeEntryTag).values(links);
+  }
 }
 
 const isDirectRun = process.argv[1]?.endsWith("seed.ts") ?? false;
