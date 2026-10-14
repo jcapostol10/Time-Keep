@@ -62,6 +62,12 @@ describe("entry cache helpers", () => {
     expect(insertEntry(data, dto("n", "2026-03-09T10:00:00.000Z")).placed).toBe(true);
   });
 
+  it("insertEntry puts entries after the current week on the first page", () => {
+    const result = insertEntry(data, dto("future", "2026-03-20T05:00:00.000Z"));
+    expect(result.placed).toBe(true);
+    expect(ids(result.data)).toEqual([["future", "b", "a"], ["c"]]);
+  });
+
   it("insertEntry reports when no loaded week contains the entry", () => {
     const result = insertEntry(data, dto("old", "2026-01-01T00:00:00.000Z"));
     expect(result.placed).toBe(false);

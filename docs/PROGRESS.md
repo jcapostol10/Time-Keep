@@ -61,6 +61,9 @@ Decisions and deviations from the prompt:
 - Idle detection uses the Idle Detection API only when the user granted it from the settings toggle; otherwise a last-input + visibility heuristic that also detects a sleeping machine. Pomodoro and reminders use browser notifications when permitted and fall back to in-app toasts. Reminders run only while TimeKeep is open and fire at most once an hour.
 - The timer-bar draft survives navigation inside a workspace but not a full reload.
 - The timezone-gap fix sets `user.timezone` only; it does not change any workspace's settings.
+- Manual entries may be dated in the future (the prompt limits only timer stops). The first page of the list holds everything from the current week onward and shows later-dated entries under "Upcoming".
+- Stops and edits lock the entry row (`SELECT ... FOR UPDATE`) and edits only write the times when the patch changes them, so concurrent tabs or devices cannot restart a stopped timer or drop each other's changes.
+- Non-members now get the same 404 "Workspace not found" as an unknown slug from `resolveWorkspaceAccess` (it used to be 403), so neither the new API routes nor server actions reveal whether a workspace exists. 403 remains only for members whose role is too low.
 - Duration-format labels in workspace settings now read `1:30:00` / `1:30` (hours are not zero-padded), matching the formatter.
 
 ## Phase 2 — Projects, clients, tasks, tags, timesheet, calendar

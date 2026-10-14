@@ -134,6 +134,7 @@ Indexes:
 Rules (enforced in `apps/web/src/server/time-entries.ts`, the only write path):
 
 - Starting a timer takes `pg_advisory_xact_lock(hashtext(workspace_id || ':' || user_id))`, stops the running entry and inserts the new one in one transaction. The unique index is the backstop and surfaces as a `CONFLICT` error.
+- Stops and edits lock the row with `SELECT ... FOR UPDATE`; an edit writes `start`/`end`/`duration_seconds` only when the patch changes a time.
 - `end > start`; at most 999 hours; a timer cannot stop more than one minute in the future. A forgotten timer that passes 999 hours is clamped at 999 hours when stopped.
 - An entry that crosses midnight stays one row and is listed under its start date in the viewer's timezone.
 

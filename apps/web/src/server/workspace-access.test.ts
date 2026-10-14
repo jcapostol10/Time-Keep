@@ -34,8 +34,30 @@ describe("tenant isolation: resolveWorkspaceAccess", () => {
 
     await expectAccessError(
       resolveWorkspaceAccess(db, { userId: alice.id, workspaceSlug: wsB.slug, minRole: "member" }),
-      403,
+      404,
     );
+  });
+
+  it("a non-member gets exactly the same error as for a workspace that does not exist", async () => {
+    const alice = await createTestUser(db, "Alice A");
+    const bob = await createTestUser(db, "Bob B");
+    const wsB = await createTestWorkspace(db, "Workspace B", bob.id);
+
+    const existing = await resolveWorkspaceAccess(db, {
+      userId: alice.id,
+      workspaceSlug: wsB.slug,
+      minRole: "member",
+    }).catch((e: WorkspaceAccessError) => e);
+    const missing = await resolveWorkspaceAccess(db, {
+      userId: alice.id,
+      workspaceSlug: "does-not-exist",
+      minRole: "member",
+    }).catch((e: WorkspaceAccessError) => e);
+
+    expect(existing).toBeInstanceOf(WorkspaceAccessError);
+    expect(missing).toBeInstanceOf(WorkspaceAccessError);
+    expect((existing as WorkspaceAccessError).status).toBe((missing as WorkspaceAccessError).status);
+    expect((existing as Error).message).toBe((missing as Error).message);
   });
 
   it("a member can read their own workspace and gets their role and settings", async () => {
@@ -85,7 +107,7 @@ describe("tenant isolation: resolveWorkspaceAccess", () => {
 
     await expectAccessError(
       resolveWorkspaceAccess(db, { userId: gone.id, workspaceSlug: ws.slug, minRole: "member" }),
-      403,
+      404,
     );
   });
 

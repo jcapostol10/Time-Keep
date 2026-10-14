@@ -51,7 +51,12 @@ export function insertEntry(
   if (data.pages.some((p) => p.entries.some((e) => e.id === entry.id))) {
     return { data, placed: true };
   }
-  const index = data.pages.findIndex((p) => inWeek(p, entry.start));
+  // The first (cursor-less) page also holds everything after the current week.
+  const index = data.pages.findIndex((p, i) =>
+    i === 0 && data.pageParams[0] === null
+      ? Date.parse(entry.start) >= Date.parse(p.weekStart)
+      : inWeek(p, entry.start),
+  );
   if (index === -1) return { data, placed: false };
   return {
     placed: true,

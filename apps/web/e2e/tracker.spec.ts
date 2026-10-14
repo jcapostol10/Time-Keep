@@ -135,6 +135,30 @@ test.describe.serial("time tracker", () => {
     await expect(entry(page, "Design review")).toHaveCount(0);
   });
 
+  test("a double Enter or S starts only one timer", async ({ page }) => {
+    await start(page);
+    const description = timer(page).getByRole("combobox", { name: "Description" });
+    await description.fill("Double start");
+    await description.press("Enter");
+    await description.press("Enter");
+    await expect(timer(page).getByRole("button", { name: "Stop" })).toBeVisible();
+    await page.waitForTimeout(1_500);
+    await timer(page).getByRole("button", { name: "Stop" }).click();
+    await expect(timer(page).getByRole("button", { name: "Start" })).toBeVisible();
+
+    // Ask the server, not the cache: a second start would have stopped the first after 1 s.
+    await expect
+      .poll(async () => {
+        const response = await page.request.get(`/api/w/${slug}/time-entries`);
+        const body = (await response.json()) as { entries: { description: string }[] };
+        return body.entries.filter((e) => e.description === "Double start").length;
+      })
+      .toBe(1);
+
+    await openTracker(page);
+    await expect(entry(page, "Double start")).toHaveCount(1);
+  });
+
   test("two tabs never show two running timers", async ({ page }) => {
     await start(page);
     const second = await page.context().newPage();

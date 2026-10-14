@@ -46,7 +46,7 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md
 
 1. **Timestamps are UTC.** Every column is `timestamptz`; render in the viewer's timezone (`user.timezone` → `workspace_settings.timezone` → UTC).
 2. **Money is integer minor units + ISO 4217 currency code.** Never floats. (From Phase 4.)
-3. **Every query is scoped by `workspaceId` and role-checked.** Server actions and route handlers call `requireWorkspaceAccess(slug, minRole)` from `apps/web/src/server/workspace-access.ts` first; pages/layouts use `requireWorkspacePage`. Cross-tenant access must render not-found, never leak existence.
+3. **Every query is scoped by `workspaceId` and role-checked.** Server actions and route handlers call `requireWorkspaceAccess(slug, minRole)` from `apps/web/src/server/workspace-access.ts` first; pages/layouts use `requireWorkspacePage`. Cross-tenant access must render not-found, never leak existence: non-members get the same 404 as an unknown slug; 403 is only for members whose role is too low.
 4. **At most one running timer per user per workspace**, enforced by the partial unique index `time_entry_one_running_uq` (`WHERE "end" IS NULL AND deleted_at IS NULL`) plus a per-user advisory lock in `startTimer`. Starting a timer stops the running one in the same transaction.
 5. **Rates are snapshotted on the entry** so historical reports never shift. (Phase 4.)
 6. **No feature merges without tests.** Pure logic → Vitest in `packages/core`; DB behaviour → Vitest integration tests in `apps/web/src/**/*.test.ts` against `TEST_DATABASE_URL`; user flows → Playwright in `apps/web/e2e`.

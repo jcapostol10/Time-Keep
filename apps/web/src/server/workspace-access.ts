@@ -39,6 +39,8 @@ export interface WorkspaceContext {
   settings: WorkspaceSettings;
 }
 
+const WORKSPACE_NOT_FOUND = "Workspace not found";
+
 interface ResolveArgs {
   userId: string;
   workspaceSlug: string;
@@ -48,21 +50,22 @@ interface ResolveArgs {
 /**
  * Pure data-access check: does `userId` hold an ACTIVE membership in the
  * workspace with this slug, at or above `minRole`? Throws WorkspaceAccessError
- * otherwise. Takes the db so tests can run it against the test database.
+ * otherwise: 404 for an unknown slug and for non-members alike, 403 only for
+ * members whose role is too low. Takes the db so tests can run it against the test database.
  */
 export async function resolveWorkspaceAccess(
   db: Database,
   { userId, workspaceSlug, minRole }: ResolveArgs,
 ): Promise<Omit<WorkspaceContext, "session" | "user">> {
   const ws = await db.query.workspace.findFirst({ where: eq(workspace.slug, workspaceSlug) });
-  if (!ws) throw new WorkspaceAccessError(404, "Workspace not found");
+  if (!ws) throw new WorkspaceAccessError(404, WORKSPACE_NOT_FOUND);
 
   const m = await db.query.membership.findFirst({
     where: and(eq(membership.workspaceId, ws.id), eq(membership.userId, userId)),
   });
-  if (!m || m.status !== "ACTIVE") {
-    throw new WorkspaceAccessError(403, "You are not a member of this workspace");
-  }
+  // Same status and message as an unknown slug, so a non-member cannot tell
+  // whether a workspace exists (invariant 3).
+  if (!m || m.status !== "ACTIVE") throw new WorkspaceAccessError(404, WORKSPACE_NOT_FOUND);
   if (!hasMinRole(m.role, minRole)) {
     throw new WorkspaceAccessError(403, `This action requires the ${minRole} role`);
   }

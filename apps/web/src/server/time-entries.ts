@@ -123,6 +123,19 @@ async function findOwned(db: Executor, scope: EntryScope, id: string): Promise<E
   return row;
 }
 
+/**
+ * Locks an owned row for the rest of the transaction so a concurrent stop or
+ * edit cannot interleave between our read and our write.
+ */
+async function lockOwned(db: Executor, scope: EntryScope, id: string): Promise<void> {
+  const [row] = await db
+    .select({ id: timeEntry.id })
+    .from(timeEntry)
+    .where(and(eq(timeEntry.id, id), scopeWhere(scope)))
+    .for("update");
+  if (!row) throw new TimeEntryError("NOT_FOUND", "Time entry not found.");
+}
+
 /** Project and tags must belong to the workspace; anything else is INVALID (never leaks). */
 async function assertDetailsBelongToWorkspace(
   db: Executor,
@@ -183,7 +196,7 @@ export async function getRunningEntry(
 
 /**
  * One week of stopped entries in the viewer's timezone. With no `before`, the
- * week containing `now`; otherwise the week of the newest entry older than
+ * week containing `now` plus anything dated later; otherwise the week of the newest entry older than
  * `before` (so empty weeks are skipped). The running entry is never included.
  */
 export async function listEntriesPage(
@@ -215,7 +228,13 @@ export async function listEntriesPage(
 
   const { weekStart, weekEnd } = weekBounds(anchor, opts.tz, opts.weekStart);
   const rows = await db.query.timeEntry.findMany({
-    where: and(stoppedWhere, gte(timeEntry.start, weekStart), lt(timeEntry.start, weekEnd)),
+    // The first page is open-ended so manual entries dated after this week stay
+    // visible (the list shows them as "Upcoming"); older pages are one week each.
+    where: and(
+      stoppedWhere,
+      gte(timeEntry.start, weekStart),
+      opts.before ? lt(timeEntry.start, weekEnd) : undefined,
+    ),
     orderBy: [desc(timeEntry.start), desc(timeEntry.id)],
     with: withRelations,
   });
@@ -322,26 +341,29 @@ export async function startTimer(
 
 /** Stops a running entry at `end` (default now). Idempotent for stopped entries. */
 export async function stopTimer(
-  db: Executor,
+  db: Database,
   scope: EntryScope,
   input: { entryId: string; end?: Date },
   now: Date = new Date(),
 ): Promise<TimeEntryDTO> {
-  const row = await findOwned(db, scope, input.entryId);
-  if (row.end) return toDTO(row);
+  return db.transaction(async (tx) => {
+    await lockOwned(tx, scope, input.entryId);
+    const row = await findOwned(tx, scope, input.entryId);
+    if (row.end) return toDTO(row);
 
-  let end = input.end ?? now;
-  const max = row.start.getTime() + MAX_ENTRY_SECONDS * 1000;
-  if (end.getTime() > max) end = new Date(max); // a forgotten timer must still stop
+    let end = input.end ?? now;
+    const max = row.start.getTime() + MAX_ENTRY_SECONDS * 1000;
+    if (end.getTime() > max) end = new Date(max); // a forgotten timer must still stop
 
-  const check = validateEntryRange({ start: row.start, end, now, mode: "timer-stop" });
-  if (!check.ok) throw new TimeEntryError("INVALID", check.error);
+    const check = validateEntryRange({ start: row.start, end, now, mode: "timer-stop" });
+    if (!check.ok) throw new TimeEntryError("INVALID", check.error);
 
-  await db
-    .update(timeEntry)
-    .set({ end, durationSeconds: computeDurationSeconds(row.start, end) })
-    .where(eq(timeEntry.id, row.id));
-  return loadDTO(db, scope, row.id);
+    await tx
+      .update(timeEntry)
+      .set({ end, durationSeconds: computeDurationSeconds(row.start, end) })
+      .where(and(eq(timeEntry.id, row.id), isNull(timeEntry.end)));
+    return loadDTO(tx, scope, row.id);
+  });
 }
 
 export async function createManualEntry(
@@ -390,21 +412,27 @@ export async function updateEntry(
   now: Date = new Date(),
 ): Promise<TimeEntryDTO> {
   return db.transaction(async (tx) => {
+    await lockOwned(tx, scope, entryId);
     const row = await findOwned(tx, scope, entryId);
     await assertDetailsBelongToWorkspace(tx, scope.workspaceId, patch);
 
-    const start = patch.start ?? row.start;
-    const end = patch.end !== undefined ? patch.end : row.end;
-    let durationSeconds: number | null;
-    if (end) {
-      const check = validateEntryRange({ start, end, now, mode: "manual" });
-      if (!check.ok) throw new TimeEntryError("INVALID", check.error);
-      durationSeconds = computeDurationSeconds(start, end);
-    } else {
-      if (start.getTime() > now.getTime() + TIMER_STOP_FUTURE_GRACE_MS) {
-        throw new TimeEntryError("INVALID", "A running timer cannot start in the future.");
+    // Only touch the times when the patch does, so a details edit never
+    // rewrites (or un-stops) times changed elsewhere.
+    const touchesTimes = patch.start !== undefined || patch.end !== undefined;
+    let times: { start: Date; end: Date | null; durationSeconds: number | null } | null = null;
+    if (touchesTimes) {
+      const start = patch.start ?? row.start;
+      const end = patch.end !== undefined ? patch.end : row.end;
+      if (end) {
+        const check = validateEntryRange({ start, end, now, mode: "manual" });
+        if (!check.ok) throw new TimeEntryError("INVALID", check.error);
+        times = { start, end, durationSeconds: computeDurationSeconds(start, end) };
+      } else {
+        if (start.getTime() > now.getTime() + TIMER_STOP_FUTURE_GRACE_MS) {
+          throw new TimeEntryError("INVALID", "A running timer cannot start in the future.");
+        }
+        times = { start, end: null, durationSeconds: null };
       }
-      durationSeconds = null;
     }
 
     await tx
@@ -414,9 +442,7 @@ export async function updateEntry(
         ...(patch.projectId !== undefined ? { projectId: patch.projectId } : {}),
         ...(patch.taskId !== undefined ? { taskId: patch.taskId } : {}),
         ...(patch.billable !== undefined ? { billable: patch.billable } : {}),
-        start,
-        end,
-        durationSeconds,
+        ...(times ?? {}),
       })
       .where(eq(timeEntry.id, row.id));
     if (patch.tagIds !== undefined) await replaceTags(tx, row.id, patch.tagIds);

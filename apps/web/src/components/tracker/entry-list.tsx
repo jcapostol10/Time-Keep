@@ -48,20 +48,75 @@ function useRunningContribution(contains: (start: string) => boolean): number {
   return running && contains(running.start) ? elapsedSeconds : 0;
 }
 
-function WeekTotal({ page }: { page: EntriesPage }) {
+/** Total of a block of entries, plus the running timer's live seconds when it started in [from, to). */
+function BlockTotal({
+  entries,
+  from,
+  to,
+  label,
+}: {
+  entries: TimeEntryDTO[];
+  from: string;
+  to: string | null;
+  label: string;
+}) {
   const { viewer } = useTracker();
   const live = useRunningContribution((start) => {
     const t = Date.parse(start);
-    return t >= Date.parse(page.weekStart) && t < Date.parse(page.weekEnd);
+    return t >= Date.parse(from) && (to === null || t < Date.parse(to));
   });
   return (
     <span className="text-sm">
-      <span className="text-muted-foreground">Week total: </span>
+      <span className="text-muted-foreground">{label}: </span>
       <span className="font-semibold tabular-nums">
-        {formatDuration(sumDuration(page.entries) + live, viewer.durationFormat)}
+        {formatDuration(sumDuration(entries) + live, viewer.durationFormat)}
       </span>
     </span>
   );
+}
+
+interface Block {
+  key: string;
+  label: string;
+  totalLabel: string;
+  entries: TimeEntryDTO[];
+  from: string;
+  to: string | null;
+}
+
+/** Each page is one week; the first page can also hold entries dated after it ("Upcoming"). */
+function toBlocks(
+  pages: EntriesPage[],
+  tz: string,
+  weekStartsOn: Parameters<typeof weekBounds>[2],
+): Block[] {
+  const blocks: Block[] = [];
+  for (const page of pages) {
+    const end = Date.parse(page.weekEnd);
+    const upcoming = page.entries.filter((e) => Date.parse(e.start) >= end);
+    const inWeek = page.entries.filter((e) => Date.parse(e.start) < end);
+    if (upcoming.length > 0) {
+      blocks.push({
+        key: `upcoming-${page.weekEnd}`,
+        label: "Upcoming",
+        totalLabel: "Total",
+        entries: upcoming,
+        from: page.weekEnd,
+        to: null,
+      });
+    }
+    if (inWeek.length > 0) {
+      blocks.push({
+        key: page.weekStart,
+        label: weekLabel(page, tz, weekStartsOn),
+        totalLabel: "Week total",
+        entries: inWeek,
+        from: page.weekStart,
+        to: page.weekEnd,
+      });
+    }
+  }
+  return blocks;
 }
 
 function DayTotal({ dateKey, seconds }: { dateKey: string; seconds: number }) {
@@ -219,30 +274,31 @@ export function EntryList() {
 
   return (
     <div className="space-y-8 pb-20">
-      {pages.map((page) =>
-        page.entries.length === 0 ? null : (
-          <div key={page.weekStart} className="space-y-3">
-            <div className="flex items-baseline justify-between gap-2 px-1">
-              <h2 className="text-muted-foreground text-sm font-medium">
-                {weekLabel(page, tz, viewer.weekStart)}
-              </h2>
-              <WeekTotal page={page} />
-            </div>
-            {groupByDay(page.entries, tz).map((day) => (
-              <DaySection
-                key={day.dateKey}
-                dateKey={day.dateKey}
-                todayKey={todayKey}
-                entries={day.entries}
-                totalSeconds={day.totalSeconds}
-                selection={selection}
-                expandedGroups={expandedGroups}
-                onToggleGroup={toggleGroup}
-              />
-            ))}
+      {toBlocks(pages, tz, viewer.weekStart).map((block) => (
+        <div key={block.key} className="space-y-3">
+          <div className="flex items-baseline justify-between gap-2 px-1">
+            <h2 className="text-muted-foreground text-sm font-medium">{block.label}</h2>
+            <BlockTotal
+              entries={block.entries}
+              from={block.from}
+              to={block.to}
+              label={block.totalLabel}
+            />
           </div>
-        ),
-      )}
+          {groupByDay(block.entries, tz).map((day) => (
+            <DaySection
+              key={day.dateKey}
+              dateKey={day.dateKey}
+              todayKey={todayKey}
+              entries={day.entries}
+              totalSeconds={day.totalSeconds}
+              selection={selection}
+              expandedGroups={expandedGroups}
+              onToggleGroup={toggleGroup}
+            />
+          ))}
+        </div>
+      ))}
 
       <div ref={sentinel} className="flex justify-center">
         {hasNextPage ? (

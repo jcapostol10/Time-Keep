@@ -29,6 +29,7 @@ import {
 
 import { trackerKeys, trackerUrls } from "./query-keys";
 import { IdleDialog } from "./idle-dialog";
+import { activeIdlePrompt, type IdlePrompt } from "./idle-prompt";
 import { createTrackerChannel, type TrackerChannel } from "./tracker-channel";
 import { useTrackerCache } from "./use-tracker-cache";
 import { useIdleDetection, usePomodoro, useReminders } from "./use-tracker-helpers";
@@ -170,6 +171,20 @@ export function TrackerProvider({
 
   const [draft, setDraftState] = useState<EntryDraft>(EMPTY_DRAFT);
   const [pending, setPending] = useState(false);
+  // Synchronous in-flight guard: `pending` state lags a render behind, so a
+  // double Enter or S could otherwise send two starts (the second would stop
+  // the first after 1 s and leave a stray entry).
+  const inFlight = useRef(false);
+  const begin = useCallback(() => {
+    if (inFlight.current) return false;
+    inFlight.current = true;
+    setPending(true);
+    return true;
+  }, []);
+  const finish = useCallback(() => {
+    inFlight.current = false;
+    setPending(false);
+  }, []);
   const channelRef = useRef<TrackerChannel | null>(null);
   const descriptionInput = useRef<HTMLInputElement | null>(null);
 
@@ -213,7 +228,7 @@ export function TrackerProvider({
 
   const start = useCallback(
     async (details?: EntryDraft) => {
-      setPending(true);
+      if (!begin()) return false;
       try {
         const result = await startTimerAction(slug, details ?? draft);
         if (!result.ok) {
@@ -224,17 +239,16 @@ export function TrackerProvider({
         setDraftState(EMPTY_DRAFT);
         return true;
       } finally {
-        setPending(false);
+        finish();
       }
     },
-    [slug, draft, applyStart],
+    [slug, draft, applyStart, begin, finish],
   );
 
   const stop = useCallback(
     async (end?: Date) => {
       const current = qc.getQueryData<TimeEntryDTO | null>(runningKey);
-      if (!current) return false;
-      setPending(true);
+      if (!current || !begin()) return false;
       qc.setQueryData(runningKey, null);
       try {
         const result = await stopTimerAction(slug, {
@@ -251,10 +265,10 @@ export function TrackerProvider({
         channelRef.current?.post({ type: "running", running: null });
         return true;
       } finally {
-        setPending(false);
+        finish();
       }
     },
-    [qc, runningKey, slug, cache],
+    [qc, runningKey, slug, cache, begin, finish],
   );
 
   const toggle = useCallback(
@@ -264,7 +278,7 @@ export function TrackerProvider({
 
   const continueEntry = useCallback(
     async (entryId: string) => {
-      setPending(true);
+      if (!begin()) return false;
       try {
         const result = await continueEntryAction(slug, entryId);
         if (!result.ok) {
@@ -274,10 +288,10 @@ export function TrackerProvider({
         applyStart(result.data);
         return true;
       } finally {
-        setPending(false);
+        finish();
       }
     },
-    [slug, applyStart],
+    [slug, applyStart, begin, finish],
   );
 
   const updateRunning = useCallback(
@@ -324,11 +338,15 @@ export function TrackerProvider({
   useDocumentTitle(running, elapsedSeconds, now > 0);
   usePomodoro(running, elapsedSeconds, settings, now > 0);
   useReminders(workspaceId, viewer.timezone, running, settings, focusDescription);
-  const [idleSince, setIdleSince] = useState<Date | null>(null);
+  const [idlePrompt, setIdlePrompt] = useState<IdlePrompt | null>(null);
+  const activePrompt = activeIdlePrompt(idlePrompt, running);
   useIdleDetection(
-    Boolean(running) && idleSince === null,
+    Boolean(running) && activePrompt === null,
     settings.idleDetectionMinutes,
-    setIdleSince,
+    (since) => {
+      const current = qc.getQueryData<TimeEntryDTO | null>(runningKey);
+      if (current) setIdlePrompt({ entryId: current.id, since });
+    },
   );
 
   const value = useMemo<TrackerContextValue>(
@@ -375,7 +393,7 @@ export function TrackerProvider({
     <TrackerContext.Provider value={value}>
       <TrackerClockContext.Provider value={clock}>
         {children}
-        <IdleDialog idleSince={idleSince} onClose={() => setIdleSince(null)} />
+        <IdleDialog idleSince={activePrompt?.since ?? null} onClose={() => setIdlePrompt(null)} />
       </TrackerClockContext.Provider>
     </TrackerContext.Provider>
   );

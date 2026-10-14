@@ -321,6 +321,58 @@ describe("time entries service", () => {
     });
   });
 
+  describe("concurrent writes", () => {
+    const details = { description: "Work", projectId: null, taskId: null, tagIds: [], billable: false };
+
+    /**
+     * Another connection locks the running row, stops it, and commits only
+     * after `write` has been issued. `write` must not undo the stop.
+     */
+    async function stopElsewhereWhile(entryId: string, write: () => Promise<unknown>) {
+      const other = connectTestDb();
+      const client = await other.pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(`SELECT id FROM time_entry WHERE id = $1 FOR UPDATE`, [entryId]);
+        await client.query(
+          `UPDATE time_entry SET "end" = start + interval '5 minutes', duration_seconds = 300 WHERE id = $1`,
+          [entryId],
+        );
+        const pending = write().then(
+          (value) => ({ ok: true as const, value }),
+          (error: unknown) => ({ ok: false as const, error }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        await client.query("COMMIT");
+        return await pending;
+      } finally {
+        client.release();
+        await other.close();
+      }
+    }
+
+    it("a details-only edit does not restart a timer stopped meanwhile", async () => {
+      const { started } = await startTimer(db, scope, details, at(NOW, -minutes(10)));
+      await stopElsewhereWhile(started.id, () =>
+        updateEntry(db, scope, started.id, { description: "Renamed" }, NOW),
+      );
+      const row = await db.query.timeEntry.findFirst({ where: eq(timeEntry.id, started.id) });
+      expect(row?.description).toBe("Renamed");
+      expect(row?.end).not.toBeNull();
+      expect(row?.durationSeconds).toBe(300);
+      expect(await countRunning(scope)).toBe(0);
+    });
+
+    it("a stop racing another stop keeps the first end", async () => {
+      const { started } = await startTimer(db, scope, details, at(NOW, -minutes(10)));
+      await stopElsewhereWhile(started.id, () =>
+        stopTimer(db, scope, { entryId: started.id }, NOW),
+      );
+      const row = await db.query.timeEntry.findFirst({ where: eq(timeEntry.id, started.id) });
+      expect(row?.durationSeconds).toBe(300);
+    });
+  });
+
   describe("updateEntry", () => {
     const details = {
       description: "Manual",
@@ -597,6 +649,25 @@ describe("time entries service", () => {
       });
       expect(page4.entries).toEqual([]);
       expect(page4.nextCursor).toBeNull();
+    });
+
+    it("the first page also carries entries after the current week (manual future entries)", async () => {
+      const { e1 } = await seedWeeks();
+      const nextWeek = await createManualEntry(
+        db,
+        scope,
+        {
+          ...details,
+          description: "Next week",
+          start: new Date("2026-03-17T01:00:00Z"),
+          end: new Date("2026-03-17T02:00:00Z"),
+        },
+        NOW,
+      );
+      const page = await listEntriesPage(db, scope, opts);
+      expect(page.weekStart).toBe("2026-03-08T16:00:00.000Z");
+      expect(page.weekEnd).toBe("2026-03-15T16:00:00.000Z");
+      expect(page.entries.map((e) => e.id).slice(0, 2)).toEqual([nextWeek.id, e1.id]);
     });
 
     it("returns an empty current week with no cursor when the user has no entries", async () => {

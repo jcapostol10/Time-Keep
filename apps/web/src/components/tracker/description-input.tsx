@@ -94,6 +94,10 @@ export function DescriptionInput({
             e.preventDefault();
             setActive((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
           } else if (e.key === "Enter") {
+            if (e.repeat) {
+              e.preventDefault();
+              return;
+            }
             const s = showList && active >= 0 ? suggestions[active] : undefined;
             e.preventDefault();
             if (s) pick(s);
