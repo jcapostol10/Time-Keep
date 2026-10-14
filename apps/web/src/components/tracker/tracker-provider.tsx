@@ -28,8 +28,10 @@ import {
 } from "@/server/actions/time-entries";
 
 import { trackerKeys, trackerUrls } from "./query-keys";
+import { IdleDialog } from "./idle-dialog";
 import { createTrackerChannel, type TrackerChannel } from "./tracker-channel";
 import { useTrackerCache } from "./use-tracker-cache";
+import { useIdleDetection, usePomodoro, useReminders } from "./use-tracker-helpers";
 
 export type RunningPatch = Partial<EntryDraft> & { start?: string };
 
@@ -318,6 +320,14 @@ export function TrackerProvider({
 
   useKeyboardShortcuts(() => void toggle(), focusDescription);
   useDocumentTitle(running, elapsedSeconds, now > 0);
+  usePomodoro(running, elapsedSeconds, settings, now > 0);
+  useReminders(workspaceId, viewer.timezone, running, settings, focusDescription);
+  const [idleSince, setIdleSince] = useState<Date | null>(null);
+  useIdleDetection(
+    Boolean(running) && idleSince === null,
+    settings.idleDetectionMinutes,
+    setIdleSince,
+  );
 
   const value = useMemo<TrackerContextValue>(
     () => ({
@@ -361,7 +371,10 @@ export function TrackerProvider({
 
   return (
     <TrackerContext.Provider value={value}>
-      <TrackerClockContext.Provider value={clock}>{children}</TrackerClockContext.Provider>
+      <TrackerClockContext.Provider value={clock}>
+        {children}
+        <IdleDialog idleSince={idleSince} onClose={() => setIdleSince(null)} />
+      </TrackerClockContext.Provider>
     </TrackerContext.Provider>
   );
 }

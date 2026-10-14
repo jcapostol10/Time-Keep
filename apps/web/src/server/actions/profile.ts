@@ -1,6 +1,12 @@
 "use server";
 
-import { AVATAR_MAX_BYTES, AVATAR_MIME_TYPES, updateProfileSchema } from "@timekeep/core";
+import {
+  AVATAR_MAX_BYTES,
+  AVATAR_MIME_TYPES,
+  timeZoneSchema,
+  updateProfileSchema,
+} from "@timekeep/core";
+import { eq, getDb, user } from "@timekeep/db";
 import { APIError } from "better-auth/api";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
@@ -33,6 +39,30 @@ export async function updateProfileAction(input: unknown): Promise<ActionResult>
     await getAuth().api.updateUser({ headers: await headers(), body: parsed.data });
     revalidatePath("/", "layout");
     return ok(undefined);
+  } catch (error) {
+    return fail(errorMessage(error));
+  }
+}
+
+/**
+ * Saves the browser's timezone for users who have none yet (Google sign-up
+ * does not capture it). Never overwrites a timezone the user chose.
+ */
+export async function setTimezoneIfUnsetAction(
+  timezone: unknown,
+): Promise<ActionResult<{ updated: boolean }>> {
+  const session = await requireSession();
+  const parsed = timeZoneSchema.safeParse(timezone);
+  if (!parsed.success) return fromZodError(parsed.error);
+  try {
+    const row = await getDb().query.user.findFirst({
+      where: eq(user.id, session.user.id),
+      columns: { timezone: true },
+    });
+    if (row?.timezone) return ok({ updated: false });
+    await getAuth().api.updateUser({ headers: await headers(), body: { timezone: parsed.data } });
+    revalidatePath("/", "layout");
+    return ok({ updated: true });
   } catch (error) {
     return fail(errorMessage(error));
   }

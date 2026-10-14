@@ -2,6 +2,7 @@ import { resolveViewerPrefs } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 
 import { AppShell } from "@/components/shell/app-shell";
+import { TimezoneDetector } from "@/components/tracker/timezone-detector";
 import { TrackerProvider } from "@/components/tracker/tracker-provider";
 import { getTrackerSettings } from "@/server/queries/user-settings";
 import { getRunningEntry } from "@/server/time-entries";
@@ -41,6 +42,7 @@ export default async function WorkspaceLayout({
       >
         {children}
       </AppShell>
+      <TimezoneDetector hasTimezone={Boolean(ctx.user.timezone)} />
     </TrackerProvider>
   );
 }
