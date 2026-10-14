@@ -141,7 +141,11 @@ export function EntryRow({
   }
 
   return (
-    <div role="group" aria-label={`Entry ${entryName(entry)}`} className={cn(ROW, nested && "bg-muted/20 pl-8")}>
+    <div
+      role="group"
+      aria-label={`Entry ${entryName(entry)}`}
+      className={cn(ROW, nested && "bg-muted/20 pl-8")}
+    >
       <Checkbox
         aria-label={`Select ${entryName(entry)}`}
         checked={selected}
@@ -235,14 +239,19 @@ export function EntryGroupRow({
   const ids = entries.map((e) => e.id);
   const selectedCount = ids.filter((id) => selectedIds.has(id)).length;
   const earliest = entries.reduce((a, e) => (e.start < a ? e.start : a), first.start);
-  const latest = entries.reduce((a, e) => ((e.end ?? e.start) > a ? (e.end ?? e.start) : a), first.end ?? first.start);
+  const latest = entries.reduce(
+    (a, e) => ((e.end ?? e.start) > a ? (e.end ?? e.start) : a),
+    first.end ?? first.start,
+  );
 
   return (
     <div>
       <div role="group" aria-label={`Group ${entryName(first)}`} className={ROW}>
         <Checkbox
           aria-label={`Select all ${entries.length} "${entryName(first)}" entries`}
-          checked={selectedCount === 0 ? false : selectedCount === ids.length ? true : "indeterminate"}
+          checked={
+            selectedCount === 0 ? false : selectedCount === ids.length ? true : "indeterminate"
+          }
           onCheckedChange={(v) => onSelect(ids, v === true)}
           className="mr-1"
         />
@@ -263,7 +272,10 @@ export function EntryGroupRow({
           {first.description || <span className="text-muted-foreground">(no description)</span>}
         </span>
         {first.project ? (
-          <span className="flex items-center gap-1.5 px-2 text-sm" style={{ color: first.project.color }}>
+          <span
+            className="flex items-center gap-1.5 px-2 text-sm"
+            style={{ color: first.project.color }}
+          >
             <ColorDot color={first.project.color} />
             {first.project.name}
           </span>

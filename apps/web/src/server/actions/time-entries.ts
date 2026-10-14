@@ -167,7 +167,10 @@ export async function createProjectAction(
   }
 }
 
-export async function createTagAction(slug: string, input: unknown): Promise<ActionResult<EntryTag>> {
+export async function createTagAction(
+  slug: string,
+  input: unknown,
+): Promise<ActionResult<EntryTag>> {
   try {
     const scope = await scopeFor(slug);
     const parsed = createTagSchema.safeParse(input);

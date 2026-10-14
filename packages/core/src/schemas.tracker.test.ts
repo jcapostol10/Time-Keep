@@ -38,9 +38,9 @@ describe("entry payloads", () => {
   });
 
   it("caps the description length", () => {
-    expect(entryDetailsSchema.safeParse({ description: "x".repeat(ENTRY_DESCRIPTION_MAX) }).success).toBe(
-      true,
-    );
+    expect(
+      entryDetailsSchema.safeParse({ description: "x".repeat(ENTRY_DESCRIPTION_MAX) }).success,
+    ).toBe(true);
     expect(
       entryDetailsSchema.safeParse({ description: "x".repeat(ENTRY_DESCRIPTION_MAX + 1) }).success,
     ).toBe(false);
@@ -54,7 +54,9 @@ describe("entry payloads", () => {
     });
     expect(ok.start).toBeInstanceOf(Date);
     expect(ok.end.getTime() - ok.start.getTime()).toBe(3_600_000);
-    expect(createManualEntrySchema.safeParse({ start: "2026-03-09T01:00:00Z" }).success).toBe(false);
+    expect(createManualEntrySchema.safeParse({ start: "2026-03-09T01:00:00Z" }).success).toBe(
+      false,
+    );
   });
 
   it("updateEntrySchema accepts a partial patch", () => {
@@ -64,9 +66,9 @@ describe("entry payloads", () => {
 
   it("stopTimerSchema takes an optional explicit end", () => {
     expect(stopTimerSchema.parse({ entryId: "e1" })).toEqual({ entryId: "e1" });
-    expect(stopTimerSchema.parse({ entryId: "e1", end: "2026-03-09T01:00:00Z" }).end).toBeInstanceOf(
-      Date,
-    );
+    expect(
+      stopTimerSchema.parse({ entryId: "e1", end: "2026-03-09T01:00:00Z" }).end,
+    ).toBeInstanceOf(Date);
   });
 
   it("entryIdsSchema needs at least one id", () => {
@@ -100,13 +102,16 @@ describe("trackerSettingsSchema", () => {
 
   it("bounds idle minutes and rejects fractions", () => {
     expect(
-      trackerSettingsSchema.safeParse({ ...DEFAULT_TRACKER_SETTINGS, idleDetectionMinutes: 0 }).success,
+      trackerSettingsSchema.safeParse({ ...DEFAULT_TRACKER_SETTINGS, idleDetectionMinutes: 0 })
+        .success,
     ).toBe(false);
     expect(
-      trackerSettingsSchema.safeParse({ ...DEFAULT_TRACKER_SETTINGS, idleDetectionMinutes: 1.5 }).success,
+      trackerSettingsSchema.safeParse({ ...DEFAULT_TRACKER_SETTINGS, idleDetectionMinutes: 1.5 })
+        .success,
     ).toBe(false);
     expect(
-      trackerSettingsSchema.safeParse({ ...DEFAULT_TRACKER_SETTINGS, idleDetectionMinutes: 15 }).success,
+      trackerSettingsSchema.safeParse({ ...DEFAULT_TRACKER_SETTINGS, idleDetectionMinutes: 15 })
+        .success,
     ).toBe(true);
   });
 });

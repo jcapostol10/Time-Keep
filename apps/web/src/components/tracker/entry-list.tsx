@@ -81,7 +81,11 @@ function DayTotal({ dateKey, seconds }: { dateKey: string; seconds: number }) {
 
 function weekLabel(page: EntriesPage, tz: string, weekStartsOn: Parameters<typeof weekBounds>[2]) {
   const current = weekBounds(new Date(), tz, weekStartsOn).weekStart.toISOString();
-  const previous = weekBounds(new Date(Date.parse(current) - 1), tz, weekStartsOn).weekStart.toISOString();
+  const previous = weekBounds(
+    new Date(Date.parse(current) - 1),
+    tz,
+    weekStartsOn,
+  ).weekStart.toISOString();
   if (page.weekStart === current) return "This week";
   if (page.weekStart === previous) return "Last week";
   return formatWeekRange(new Date(page.weekStart), tz);
@@ -242,7 +246,11 @@ export function EntryList() {
 
       <div ref={sentinel} className="flex justify-center">
         {hasNextPage ? (
-          <Button variant="outline" disabled={isFetchingNextPage} onClick={() => void fetchNextPage()}>
+          <Button
+            variant="outline"
+            disabled={isFetchingNextPage}
+            onClick={() => void fetchNextPage()}
+          >
             {isFetchingNextPage ? <Loader2Icon className="animate-spin" /> : null}
             Load more
           </Button>
@@ -266,7 +274,12 @@ export function EntryList() {
           >
             <Trash2Icon /> Delete
           </Button>
-          <Button variant="ghost" size="icon-sm" aria-label="Clear selection" onClick={selection.clear}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Clear selection"
+            onClick={selection.clear}
+          >
             <XIcon />
           </Button>
         </div>

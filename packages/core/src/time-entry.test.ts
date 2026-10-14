@@ -7,9 +7,10 @@ const at = (iso: string) => new Date(iso);
 
 describe("validateEntryRange", () => {
   it("rejects an end at or before the start", () => {
-    expect(
-      validateEntryRange({ start: now, end: now, now, mode: "manual" }),
-    ).toEqual({ ok: false, error: expect.stringMatching(/after/i) });
+    expect(validateEntryRange({ start: now, end: now, now, mode: "manual" })).toEqual({
+      ok: false,
+      error: expect.stringMatching(/after/i),
+    });
     expect(
       validateEntryRange({ start: now, end: at("2026-03-09T11:59:59Z"), now, mode: "manual" }).ok,
     ).toBe(false);
@@ -29,10 +30,20 @@ describe("validateEntryRange", () => {
   it("rejects entries longer than 999 hours", () => {
     const start = at("2026-01-01T00:00:00Z");
     expect(
-      validateEntryRange({ start, end: new Date(start.getTime() + 999 * 3600_000), now, mode: "manual" }).ok,
+      validateEntryRange({
+        start,
+        end: new Date(start.getTime() + 999 * 3600_000),
+        now,
+        mode: "manual",
+      }).ok,
     ).toBe(true);
     expect(
-      validateEntryRange({ start, end: new Date(start.getTime() + 999 * 3600_000 + 1000), now, mode: "manual" }),
+      validateEntryRange({
+        start,
+        end: new Date(start.getTime() + 999 * 3600_000 + 1000),
+        now,
+        mode: "manual",
+      }),
     ).toEqual({ ok: false, error: expect.stringMatching(/999/) });
   });
 

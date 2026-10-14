@@ -65,7 +65,9 @@ export function HelpMenu() {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Keyboard shortcuts</DialogTitle>
-            <DialogDescription>Work anywhere in a workspace, except while typing.</DialogDescription>
+            <DialogDescription>
+              Work anywhere in a workspace, except while typing.
+            </DialogDescription>
           </DialogHeader>
           <dl className="space-y-2 text-sm">
             {SHORTCUTS.map((s) => (

@@ -78,7 +78,13 @@ describe("time entries service", () => {
       const { started, stopped } = await startTimer(
         db,
         scope,
-        { description: "Design review", projectId: project.id, taskId: null, tagIds: [tag.id], billable: true },
+        {
+          description: "Design review",
+          projectId: project.id,
+          taskId: null,
+          tagIds: [tag.id],
+          billable: true,
+        },
         NOW,
       );
 
@@ -99,7 +105,12 @@ describe("time entries service", () => {
     });
 
     it("stops the running entry atomically and leaves exactly one running", async () => {
-      const first = await startTimer(db, scope, { description: "First", projectId: null, taskId: null, tagIds: [], billable: false }, NOW);
+      const first = await startTimer(
+        db,
+        scope,
+        { description: "First", projectId: null, taskId: null, tagIds: [], billable: false },
+        NOW,
+      );
       const second = await startTimer(
         db,
         scope,
@@ -120,8 +131,20 @@ describe("time entries service", () => {
       const second = connectTestDb();
       try {
         const results = await Promise.allSettled([
-          startTimer(db, scope, { description: "A", projectId: null, taskId: null, tagIds: [], billable: false }),
-          startTimer(second.db, scope, { description: "B", projectId: null, taskId: null, tagIds: [], billable: false }),
+          startTimer(db, scope, {
+            description: "A",
+            projectId: null,
+            taskId: null,
+            tagIds: [],
+            billable: false,
+          }),
+          startTimer(second.db, scope, {
+            description: "B",
+            projectId: null,
+            taskId: null,
+            tagIds: [],
+            billable: false,
+          }),
         ]);
         const rejected = results.filter((r) => r.status === "rejected");
         expect(rejected.length).toBeLessThanOrEqual(1);
@@ -138,11 +161,23 @@ describe("time entries service", () => {
       const foreignProject = await createProject(db, otherScope.workspaceId, { name: "Theirs" });
       const foreignTag = await createTag(db, otherScope.workspaceId, { name: "theirs" });
       await expectEntryError(
-        startTimer(db, scope, { description: "", projectId: foreignProject.id, taskId: null, tagIds: [], billable: false }),
+        startTimer(db, scope, {
+          description: "",
+          projectId: foreignProject.id,
+          taskId: null,
+          tagIds: [],
+          billable: false,
+        }),
         "INVALID",
       );
       await expectEntryError(
-        startTimer(db, scope, { description: "", projectId: null, taskId: null, tagIds: [foreignTag.id], billable: false }),
+        startTimer(db, scope, {
+          description: "",
+          projectId: null,
+          taskId: null,
+          tagIds: [foreignTag.id],
+          billable: false,
+        }),
         "INVALID",
       );
       expect(await countRunning(scope)).toBe(0);
@@ -158,35 +193,58 @@ describe("time entries service", () => {
         .values({ id: randomUUID(), ...base })
         .then(() => null)
         .catch((e: unknown) => e);
-      const code = ((err as { cause?: { code?: string } })?.cause ?? (err as { code?: string }))?.code;
+      const code = ((err as { cause?: { code?: string } })?.cause ?? (err as { code?: string }))
+        ?.code;
       expect(code).toBe("23505");
     });
 
     it("ignores soft-deleted running rows", async () => {
       const base = { workspaceId: scope.workspaceId, userId: scope.userId, start: NOW, end: null };
       await db.insert(timeEntry).values({ id: randomUUID(), ...base, deletedAt: NOW });
-      await expect(db.insert(timeEntry).values({ id: randomUUID(), ...base })).resolves.toBeDefined();
+      await expect(
+        db.insert(timeEntry).values({ id: randomUUID(), ...base }),
+      ).resolves.toBeDefined();
     });
   });
 
   describe("stopTimer", () => {
     it("sets end and duration", async () => {
-      const { started } = await startTimer(db, scope, { description: "", projectId: null, taskId: null, tagIds: [], billable: false }, NOW);
+      const { started } = await startTimer(
+        db,
+        scope,
+        { description: "", projectId: null, taskId: null, tagIds: [], billable: false },
+        NOW,
+      );
       const stopped = await stopTimer(db, scope, { entryId: started.id }, at(NOW, 135_000));
       expect(stopped).toMatchObject({ end: at(NOW, 135_000).toISOString(), durationSeconds: 135 });
       expect(await getRunningEntry(db, scope)).toBeNull();
     });
 
     it("accepts an explicit earlier end (idle discard) and is idempotent", async () => {
-      const { started } = await startTimer(db, scope, { description: "", projectId: null, taskId: null, tagIds: [], billable: false }, NOW);
-      const stopped = await stopTimer(db, scope, { entryId: started.id, end: at(NOW, minutes(5)) }, at(NOW, minutes(20)));
+      const { started } = await startTimer(
+        db,
+        scope,
+        { description: "", projectId: null, taskId: null, tagIds: [], billable: false },
+        NOW,
+      );
+      const stopped = await stopTimer(
+        db,
+        scope,
+        { entryId: started.id, end: at(NOW, minutes(5)) },
+        at(NOW, minutes(20)),
+      );
       expect(stopped.durationSeconds).toBe(300);
       const again = await stopTimer(db, scope, { entryId: started.id }, at(NOW, minutes(30)));
       expect(again.durationSeconds).toBe(300);
     });
 
     it("rejects an end more than a minute in the future", async () => {
-      const { started } = await startTimer(db, scope, { description: "", projectId: null, taskId: null, tagIds: [], billable: false }, NOW);
+      const { started } = await startTimer(
+        db,
+        scope,
+        { description: "", projectId: null, taskId: null, tagIds: [], billable: false },
+        NOW,
+      );
       await expectEntryError(
         stopTimer(db, scope, { entryId: started.id, end: at(NOW, minutes(2)) }, NOW),
         "INVALID",
@@ -195,29 +253,57 @@ describe("time entries service", () => {
 
     it("clamps a forgotten timer at 999 hours", async () => {
       const start = at(NOW, -hours(1000));
-      const { started } = await startTimer(db, scope, { description: "", projectId: null, taskId: null, tagIds: [], billable: false }, start);
+      const { started } = await startTimer(
+        db,
+        scope,
+        { description: "", projectId: null, taskId: null, tagIds: [], billable: false },
+        start,
+      );
       const stopped = await stopTimer(db, scope, { entryId: started.id }, NOW);
       expect(stopped.durationSeconds).toBe(MAX_ENTRY_SECONDS);
       expect(stopped.end).toBe(at(start, MAX_ENTRY_SECONDS * 1000).toISOString());
     });
 
     it("never touches another user's entry", async () => {
-      const { started } = await startTimer(db, otherScope, { description: "", projectId: null, taskId: null, tagIds: [], billable: false }, NOW);
+      const { started } = await startTimer(
+        db,
+        otherScope,
+        { description: "", projectId: null, taskId: null, tagIds: [], billable: false },
+        NOW,
+      );
       await expectEntryError(stopTimer(db, scope, { entryId: started.id }, NOW), "NOT_FOUND");
       expect(await countRunning(otherScope)).toBe(1);
     });
   });
 
   describe("createManualEntry", () => {
-    const details = { description: "Manual", projectId: null, taskId: null, tagIds: [], billable: false };
+    const details = {
+      description: "Manual",
+      projectId: null,
+      taskId: null,
+      tagIds: [],
+      billable: false,
+    };
 
     it("creates a stopped entry with its duration", async () => {
-      const entry = await createManualEntry(db, scope, { ...details, start: NOW, end: at(NOW, hours(1.5)) }, NOW);
-      expect(entry).toMatchObject({ description: "Manual", durationSeconds: 5400, end: at(NOW, hours(1.5)).toISOString() });
+      const entry = await createManualEntry(
+        db,
+        scope,
+        { ...details, start: NOW, end: at(NOW, hours(1.5)) },
+        NOW,
+      );
+      expect(entry).toMatchObject({
+        description: "Manual",
+        durationSeconds: 5400,
+        end: at(NOW, hours(1.5)).toISOString(),
+      });
     });
 
     it("validates the range", async () => {
-      await expectEntryError(createManualEntry(db, scope, { ...details, start: NOW, end: NOW }, NOW), "INVALID");
+      await expectEntryError(
+        createManualEntry(db, scope, { ...details, start: NOW, end: NOW }, NOW),
+        "INVALID",
+      );
       await expectEntryError(
         createManualEntry(db, scope, { ...details, start: NOW, end: at(NOW, hours(1000)) }, NOW),
         "INVALID",
@@ -236,13 +322,27 @@ describe("time entries service", () => {
   });
 
   describe("updateEntry", () => {
-    const details = { description: "Manual", projectId: null, taskId: null, tagIds: [], billable: false };
+    const details = {
+      description: "Manual",
+      projectId: null,
+      taskId: null,
+      tagIds: [],
+      billable: false,
+    };
 
     it("recomputes the duration when times change", async () => {
-      const entry = await createManualEntry(db, scope, { ...details, start: NOW, end: at(NOW, hours(1)) }, NOW);
+      const entry = await createManualEntry(
+        db,
+        scope,
+        { ...details, start: NOW, end: at(NOW, hours(1)) },
+        NOW,
+      );
       const updated = await updateEntry(db, scope, entry.id, { end: at(NOW, hours(2)) }, NOW);
       expect(updated.durationSeconds).toBe(7200);
-      await expectEntryError(updateEntry(db, scope, entry.id, { start: at(NOW, hours(3)) }, NOW), "INVALID");
+      await expectEntryError(
+        updateEntry(db, scope, entry.id, { start: at(NOW, hours(3)) }, NOW),
+        "INVALID",
+      );
     });
 
     it("replaces tags and details", async () => {
@@ -273,29 +373,70 @@ describe("time entries service", () => {
 
     it("can edit a running entry's details but not move its start into the future", async () => {
       const { started } = await startTimer(db, scope, details, NOW);
-      const updated = await updateEntry(db, scope, started.id, { description: "Renamed" }, at(NOW, minutes(1)));
+      const updated = await updateEntry(
+        db,
+        scope,
+        started.id,
+        { description: "Renamed" },
+        at(NOW, minutes(1)),
+      );
       expect(updated).toMatchObject({ description: "Renamed", end: null });
       await expectEntryError(
         updateEntry(db, scope, started.id, { start: at(NOW, minutes(10)) }, at(NOW, minutes(1))),
         "INVALID",
       );
-      const moved = await updateEntry(db, scope, started.id, { start: at(NOW, -minutes(10)) }, at(NOW, minutes(1)));
+      const moved = await updateEntry(
+        db,
+        scope,
+        started.id,
+        { start: at(NOW, -minutes(10)) },
+        at(NOW, minutes(1)),
+      );
       expect(moved.start).toBe(at(NOW, -minutes(10)).toISOString());
     });
 
     it("is scoped to the user", async () => {
-      const theirs = await createManualEntry(db, otherScope, { ...details, start: NOW, end: at(NOW, hours(1)) }, NOW);
-      await expectEntryError(updateEntry(db, scope, theirs.id, { description: "x" }, NOW), "NOT_FOUND");
+      const theirs = await createManualEntry(
+        db,
+        otherScope,
+        { ...details, start: NOW, end: at(NOW, hours(1)) },
+        NOW,
+      );
+      await expectEntryError(
+        updateEntry(db, scope, theirs.id, { description: "x" }, NOW),
+        "NOT_FOUND",
+      );
     });
   });
 
   describe("delete, restore, duplicate, continue", () => {
-    const details = { description: "Work", projectId: null, taskId: null, tagIds: [], billable: true };
+    const details = {
+      description: "Work",
+      projectId: null,
+      taskId: null,
+      tagIds: [],
+      billable: true,
+    };
 
     it("soft-deletes stopped entries only, and restores them", async () => {
-      const a = await createManualEntry(db, scope, { ...details, start: at(NOW, -hours(3)), end: at(NOW, -hours(2)) }, NOW);
-      const b = await createManualEntry(db, scope, { ...details, start: at(NOW, -hours(2)), end: at(NOW, -hours(1)) }, NOW);
-      const theirs = await createManualEntry(db, otherScope, { ...details, start: at(NOW, -hours(2)), end: at(NOW, -hours(1)) }, NOW);
+      const a = await createManualEntry(
+        db,
+        scope,
+        { ...details, start: at(NOW, -hours(3)), end: at(NOW, -hours(2)) },
+        NOW,
+      );
+      const b = await createManualEntry(
+        db,
+        scope,
+        { ...details, start: at(NOW, -hours(2)), end: at(NOW, -hours(1)) },
+        NOW,
+      );
+      const theirs = await createManualEntry(
+        db,
+        otherScope,
+        { ...details, start: at(NOW, -hours(2)), end: at(NOW, -hours(1)) },
+        NOW,
+      );
       const { started: running } = await startTimer(db, scope, details, NOW);
 
       const result = await deleteEntries(db, scope, [a.id, b.id, theirs.id, running.id]);
@@ -322,7 +463,14 @@ describe("time entries service", () => {
       );
       const copy = await duplicateEntry(db, scope, a.id);
       expect(copy.id).not.toBe(a.id);
-      expect(copy).toMatchObject({ description: "Work", start: a.start, end: a.end, durationSeconds: 3600, tagIds: [tag.id], billable: true });
+      expect(copy).toMatchObject({
+        description: "Work",
+        start: a.start,
+        end: a.end,
+        durationSeconds: 3600,
+        tagIds: [tag.id],
+        billable: true,
+      });
     });
 
     it("continue starts a new timer with the entry's details", async () => {
@@ -334,23 +482,85 @@ describe("time entries service", () => {
         NOW,
       );
       const { started } = await continueEntry(db, scope, a.id, NOW);
-      expect(started).toMatchObject({ description: "Work", projectId: project.id, billable: true, end: null, start: NOW.toISOString() });
+      expect(started).toMatchObject({
+        description: "Work",
+        projectId: project.id,
+        billable: true,
+        end: null,
+        start: NOW.toISOString(),
+      });
       await expectEntryError(continueEntry(db, scope, "nope", NOW), "NOT_FOUND");
     });
   });
 
   describe("listEntriesPage (Asia/Manila, Monday weeks)", () => {
-    const details = { description: "Work", projectId: null, taskId: null, tagIds: [], billable: false };
+    const details = {
+      description: "Work",
+      projectId: null,
+      taskId: null,
+      tagIds: [],
+      billable: false,
+    };
     const opts = { tz: "Asia/Manila", weekStart: 1 as const, now: NOW };
 
     async function seedWeeks() {
-      const e1 = await createManualEntry(db, scope, { ...details, description: "Tue", start: new Date("2026-03-10T01:00:00Z"), end: new Date("2026-03-10T02:00:00Z") }, NOW);
+      const e1 = await createManualEntry(
+        db,
+        scope,
+        {
+          ...details,
+          description: "Tue",
+          start: new Date("2026-03-10T01:00:00Z"),
+          end: new Date("2026-03-10T02:00:00Z"),
+        },
+        NOW,
+      );
       // 23:30 -> 00:30 Manila, March 9/10: stays one entry under March 9
-      const e2 = await createManualEntry(db, scope, { ...details, description: "Midnight", start: new Date("2026-03-09T15:30:00Z"), end: new Date("2026-03-09T16:30:00Z") }, NOW);
-      const e3 = await createManualEntry(db, scope, { ...details, description: "Last week", start: new Date("2026-03-04T01:00:00Z"), end: new Date("2026-03-04T02:00:00Z") }, NOW);
-      const e4 = await createManualEntry(db, scope, { ...details, description: "Weeks ago", start: new Date("2026-02-18T01:00:00Z"), end: new Date("2026-02-18T02:00:00Z") }, NOW);
+      const e2 = await createManualEntry(
+        db,
+        scope,
+        {
+          ...details,
+          description: "Midnight",
+          start: new Date("2026-03-09T15:30:00Z"),
+          end: new Date("2026-03-09T16:30:00Z"),
+        },
+        NOW,
+      );
+      const e3 = await createManualEntry(
+        db,
+        scope,
+        {
+          ...details,
+          description: "Last week",
+          start: new Date("2026-03-04T01:00:00Z"),
+          end: new Date("2026-03-04T02:00:00Z"),
+        },
+        NOW,
+      );
+      const e4 = await createManualEntry(
+        db,
+        scope,
+        {
+          ...details,
+          description: "Weeks ago",
+          start: new Date("2026-02-18T01:00:00Z"),
+          end: new Date("2026-02-18T02:00:00Z"),
+        },
+        NOW,
+      );
       await startTimer(db, scope, { ...details, description: "Running" }, at(NOW, -minutes(10)));
-      await createManualEntry(db, otherScope, { ...details, description: "Theirs", start: new Date("2026-03-10T01:00:00Z"), end: new Date("2026-03-10T02:00:00Z") }, NOW);
+      await createManualEntry(
+        db,
+        otherScope,
+        {
+          ...details,
+          description: "Theirs",
+          start: new Date("2026-03-10T01:00:00Z"),
+          end: new Date("2026-03-10T02:00:00Z"),
+        },
+        NOW,
+      );
       return { e1, e2, e3, e4 };
     }
 
@@ -365,17 +575,26 @@ describe("time entries service", () => {
 
     it("walks back week by week, skipping empty weeks, and ends with a null cursor", async () => {
       const { e3, e4 } = await seedWeeks();
-      const page2 = await listEntriesPage(db, scope, { ...opts, before: new Date("2026-03-08T16:00:00.000Z") });
+      const page2 = await listEntriesPage(db, scope, {
+        ...opts,
+        before: new Date("2026-03-08T16:00:00.000Z"),
+      });
       expect(page2.weekStart).toBe("2026-03-01T16:00:00.000Z");
       expect(page2.entries.map((e) => e.id)).toEqual([e3.id]);
       expect(page2.nextCursor).toBe("2026-03-01T16:00:00.000Z");
 
-      const page3 = await listEntriesPage(db, scope, { ...opts, before: new Date(page2.nextCursor!) });
+      const page3 = await listEntriesPage(db, scope, {
+        ...opts,
+        before: new Date(page2.nextCursor!),
+      });
       expect(page3.weekStart).toBe("2026-02-15T16:00:00.000Z");
       expect(page3.entries.map((e) => e.id)).toEqual([e4.id]);
       expect(page3.nextCursor).toBeNull();
 
-      const page4 = await listEntriesPage(db, scope, { ...opts, before: new Date("2026-02-15T16:00:00.000Z") });
+      const page4 = await listEntriesPage(db, scope, {
+        ...opts,
+        before: new Date("2026-02-15T16:00:00.000Z"),
+      });
       expect(page4.entries).toEqual([]);
       expect(page4.nextCursor).toBeNull();
     });
@@ -393,15 +612,81 @@ describe("time entries service", () => {
       const p2 = await createProject(db, scope.workspaceId, { name: "P2" });
       const tag = await createTag(db, scope.workspaceId, { name: "t" });
       const base = { taskId: null, billable: false };
-      await createManualEntry(db, scope, { ...base, description: "Design review", projectId: p1.id, tagIds: [tag.id], billable: true, start: new Date("2026-03-09T01:00:00Z"), end: new Date("2026-03-09T02:00:00Z") }, NOW);
-      await createManualEntry(db, scope, { ...base, description: "Standup", projectId: null, tagIds: [], start: new Date("2026-03-10T01:00:00Z"), end: new Date("2026-03-10T01:15:00Z") }, NOW);
-      await createManualEntry(db, scope, { ...base, description: "Design review", projectId: p2.id, tagIds: [], start: new Date("2026-03-10T03:00:00Z"), end: new Date("2026-03-10T04:00:00Z") }, NOW);
-      await createManualEntry(db, scope, { ...base, description: "", projectId: null, tagIds: [], start: new Date("2026-03-10T05:00:00Z"), end: new Date("2026-03-10T06:00:00Z") }, NOW);
-      await createManualEntry(db, otherScope, { ...base, description: "Theirs", projectId: null, tagIds: [], start: new Date("2026-03-10T05:00:00Z"), end: new Date("2026-03-10T06:00:00Z") }, NOW);
+      await createManualEntry(
+        db,
+        scope,
+        {
+          ...base,
+          description: "Design review",
+          projectId: p1.id,
+          tagIds: [tag.id],
+          billable: true,
+          start: new Date("2026-03-09T01:00:00Z"),
+          end: new Date("2026-03-09T02:00:00Z"),
+        },
+        NOW,
+      );
+      await createManualEntry(
+        db,
+        scope,
+        {
+          ...base,
+          description: "Standup",
+          projectId: null,
+          tagIds: [],
+          start: new Date("2026-03-10T01:00:00Z"),
+          end: new Date("2026-03-10T01:15:00Z"),
+        },
+        NOW,
+      );
+      await createManualEntry(
+        db,
+        scope,
+        {
+          ...base,
+          description: "Design review",
+          projectId: p2.id,
+          tagIds: [],
+          start: new Date("2026-03-10T03:00:00Z"),
+          end: new Date("2026-03-10T04:00:00Z"),
+        },
+        NOW,
+      );
+      await createManualEntry(
+        db,
+        scope,
+        {
+          ...base,
+          description: "",
+          projectId: null,
+          tagIds: [],
+          start: new Date("2026-03-10T05:00:00Z"),
+          end: new Date("2026-03-10T06:00:00Z"),
+        },
+        NOW,
+      );
+      await createManualEntry(
+        db,
+        otherScope,
+        {
+          ...base,
+          description: "Theirs",
+          projectId: null,
+          tagIds: [],
+          start: new Date("2026-03-10T05:00:00Z"),
+          end: new Date("2026-03-10T06:00:00Z"),
+        },
+        NOW,
+      );
 
       const recent = await listRecentDescriptions(db, scope);
       expect(recent.map((r) => r.description)).toEqual(["Design review", "Standup"]);
-      expect(recent[0]).toMatchObject({ projectId: p2.id, tagIds: [], billable: false, lastUsedAt: "2026-03-10T03:00:00.000Z" });
+      expect(recent[0]).toMatchObject({
+        projectId: p2.id,
+        tagIds: [],
+        billable: false,
+        lastUsedAt: "2026-03-10T03:00:00.000Z",
+      });
     });
   });
 
@@ -413,7 +698,10 @@ describe("time entries service", () => {
       expect(again.id).toBe(a.id);
       expect(b.color).toBe("#123456");
       expect(a.color).toMatch(/^#[0-9a-f]{6}$/);
-      expect((await listProjects(db, scope.workspaceId)).map((p) => p.name)).toEqual(["Alpha", "Zeta"]);
+      expect((await listProjects(db, scope.workspaceId)).map((p) => p.name)).toEqual([
+        "Alpha",
+        "Zeta",
+      ]);
       expect(await listProjects(db, otherScope.workspaceId)).toEqual([]);
 
       const t = await createTag(db, scope.workspaceId, { name: "dev" });

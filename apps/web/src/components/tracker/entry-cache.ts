@@ -23,7 +23,11 @@ function inWeek(page: EntriesPage, start: string): boolean {
   return t >= Date.parse(page.weekStart) && t < Date.parse(page.weekEnd);
 }
 
-export function patchEntry(data: EntriesData, id: string, patch: Partial<TimeEntryDTO>): EntriesData {
+export function patchEntry(
+  data: EntriesData,
+  id: string,
+  patch: Partial<TimeEntryDTO>,
+): EntriesData {
   return mapPages(data, (page) =>
     page.entries.some((e) => e.id === id)
       ? { ...page, entries: page.entries.map((e) => (e.id === id ? { ...e, ...patch } : e)) }

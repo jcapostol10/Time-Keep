@@ -49,7 +49,10 @@ function pick<T extends string | number>(
  * Resolution order per CLAUDE.md invariant 1: `user` → `workspace_settings` →
  * built-in default. Invalid stored values are skipped rather than trusted.
  */
-export function resolveViewerPrefs(user: UserPrefInputs, settings: WorkspacePrefInputs): ViewerPrefs {
+export function resolveViewerPrefs(
+  user: UserPrefInputs,
+  settings: WorkspacePrefInputs,
+): ViewerPrefs {
   const timezone =
     [user.timezone, settings.timezone].find((tz): tz is string => !!tz && isValidTimeZone(tz)) ??
     "UTC";

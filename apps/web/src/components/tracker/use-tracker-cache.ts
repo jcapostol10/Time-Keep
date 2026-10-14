@@ -6,7 +6,13 @@ import { useMemo } from "react";
 import { fetchJson } from "@/lib/fetch-json";
 import type { EntryProject, EntryTag, TimeEntryDTO } from "@/lib/tracker-types";
 
-import { type EntriesData, insertEntry, patchEntry, removeEntries, replaceEntry } from "./entry-cache";
+import {
+  type EntriesData,
+  insertEntry,
+  patchEntry,
+  removeEntries,
+  replaceEntry,
+} from "./entry-cache";
 import { type TrackerOptions, trackerKeys, trackerUrls } from "./query-keys";
 
 /** Picker data (projects, tags, recent descriptions); hydrated by the tracker page. */
@@ -77,7 +83,10 @@ export function useTrackerCache(slug: string) {
         );
       },
       /** Resolve project/tag objects for an optimistic patch from the options cache. */
-      resolveDetails(patch: { projectId?: string | null; tagIds?: string[] }): Partial<TimeEntryDTO> {
+      resolveDetails(patch: {
+        projectId?: string | null;
+        tagIds?: string[];
+      }): Partial<TimeEntryDTO> {
         const options = qc.getQueryData<TrackerOptions>(optionsKey);
         const resolved: Partial<TimeEntryDTO> = {};
         if (patch.projectId !== undefined) {

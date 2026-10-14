@@ -47,8 +47,7 @@ export function TagPicker({
   const selectedTags = tags.filter((t) => value.includes(t.id));
 
   function commit(next: string[]) {
-    const changed =
-      next.length !== value.length || next.some((id) => !value.includes(id));
+    const changed = next.length !== value.length || next.some((id) => !value.includes(id));
     if (changed) onChange(next);
   }
 
@@ -88,7 +87,10 @@ export function TagPicker({
           size="sm"
           disabled={disabled}
           aria-label={`Tags: ${selectedTags.map((t) => t.name).join(", ") || "none"}`}
-          className={cn("max-w-48 justify-start", selectedTags.length === 0 && "text-muted-foreground")}
+          className={cn(
+            "max-w-48 justify-start",
+            selectedTags.length === 0 && "text-muted-foreground",
+          )}
         >
           <TagIcon />
           {selectedTags.length > 0 ? (
@@ -98,7 +100,12 @@ export function TagPicker({
       </PopoverTrigger>
       <PopoverContent className="w-60 p-0" align="start">
         <Command>
-          <CommandInput aria-label="Search tags" placeholder="Search or create tag" value={query} onValueChange={setQuery} />
+          <CommandInput
+            aria-label="Search tags"
+            placeholder="Search or create tag"
+            value={query}
+            onValueChange={setQuery}
+          />
           <CommandList>
             <CommandEmpty>No tags found.</CommandEmpty>
             <CommandGroup>

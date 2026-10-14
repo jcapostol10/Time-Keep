@@ -33,7 +33,11 @@ describe("tracker settings", () => {
       pomodoroEnabled: true,
       pomodoroFocusMinutes: 50,
     });
-    expect(second).toMatchObject({ idleDetectionMinutes: null, pomodoroEnabled: true, pomodoroFocusMinutes: 50 });
+    expect(second).toMatchObject({
+      idleDetectionMinutes: null,
+      pomodoroEnabled: true,
+      pomodoroFocusMinutes: 50,
+    });
     expect(await getTrackerSettings(db, user.id)).toEqual(second);
   });
 });

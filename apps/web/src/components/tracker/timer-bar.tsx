@@ -4,7 +4,7 @@ import { formatClock } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import { cn } from "@timekeep/ui/lib/utils";
 import { ListPlusIcon, Loader2Icon, PlayIcon, SquareIcon, TimerIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { EMPTY_DRAFT, type EntryDraft, type RecentDescription } from "@/lib/tracker-types";
@@ -18,6 +18,17 @@ import { useTracker, useTrackerClock } from "./tracker-provider";
 import { useEntryMutations } from "./use-entry-mutations";
 
 type Mode = "timer" | "manual";
+
+const noopSubscribe = () => () => {};
+
+/** False during SSR and hydration, true once React owns the page (used by e2e tests). */
+function useHydrated(): boolean {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
+}
 
 function detailsOf(s: RecentDescription): EntryDraft {
   return {
@@ -73,7 +84,7 @@ function RunningDescription({
         if (text.trim() !== saved) onSave(text);
       }}
       inputRef={inputRef}
-      className="basis-full md:basis-auto md:flex-1"
+      className="basis-full md:flex-1 md:basis-auto"
     />
   );
 }
@@ -100,6 +111,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
     else setDraft(patch);
   }
 
+  const hydrated = useHydrated();
   const { focusDescription } = tracker;
   useEffect(() => {
     if (autoFocus) focusDescription();
@@ -108,7 +120,8 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
   return (
     <section
       aria-label="Timer"
-      className="bg-card flex flex-wrap items-center gap-1 rounded-lg border p-2 shadow-xs md:flex-nowrap"
+      data-hydrated={hydrated}
+      className="bg-card shadow-xs flex flex-wrap items-center gap-1 rounded-lg border p-2 md:flex-nowrap"
     >
       {running ? (
         <RunningDescription
@@ -129,7 +142,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
             if (mode === "timer") void tracker.start();
           }}
           inputRef={tracker.registerDescriptionInput}
-          className="basis-full md:basis-auto md:flex-1"
+          className="basis-full md:flex-1 md:basis-auto"
         />
       )}
 

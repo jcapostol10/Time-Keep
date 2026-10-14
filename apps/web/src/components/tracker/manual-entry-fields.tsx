@@ -67,7 +67,8 @@ export function ManualEntryFields({
     if (!parsed) return text.trim() ? toast.error("Enter a time like 5:30 or 5pm") : undefined;
     setState((s) => ({
       ...s,
-      durationSeconds: manualRange({ date: s.date, start: s.start, end: parsed }, tz).durationSeconds,
+      durationSeconds: manualRange({ date: s.date, start: s.start, end: parsed }, tz)
+        .durationSeconds,
     }));
   }
 
@@ -103,12 +104,7 @@ export function ManualEntryFields({
         <span className="text-muted-foreground" aria-hidden>
           –
         </span>
-        <CommitInput
-          label="End time"
-          value={endText}
-          onCommit={commitEnd}
-          className="w-[5.5rem]"
-        />
+        <CommitInput label="End time" value={endText} onCommit={commitEnd} className="w-[5.5rem]" />
       </div>
       <Input
         type="date"

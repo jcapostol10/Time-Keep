@@ -40,7 +40,8 @@ const data: InfiniteData<EntriesPage, string | null> = {
   pageParams: [null, "2026-03-08T16:00:00.000Z"],
 };
 
-const ids = (d: InfiniteData<EntriesPage, string | null>) => d.pages.map((p) => p.entries.map((e) => e.id));
+const ids = (d: InfiniteData<EntriesPage, string | null>) =>
+  d.pages.map((p) => p.entries.map((e) => e.id));
 
 describe("entry cache helpers", () => {
   it("patchEntry updates one entry and leaves the input untouched", () => {
@@ -54,7 +55,10 @@ describe("entry cache helpers", () => {
   });
 
   it("insertEntry places the entry in its week, newest first", () => {
-    expect(ids(insertEntry(data, dto("n", "2026-03-09T10:00:00.000Z")).data)).toEqual([["b", "n", "a"], ["c"]]);
+    expect(ids(insertEntry(data, dto("n", "2026-03-09T10:00:00.000Z")).data)).toEqual([
+      ["b", "n", "a"],
+      ["c"],
+    ]);
     expect(insertEntry(data, dto("n", "2026-03-09T10:00:00.000Z")).placed).toBe(true);
   });
 
@@ -65,7 +69,10 @@ describe("entry cache helpers", () => {
   });
 
   it("insertEntry does not duplicate an existing id", () => {
-    expect(ids(insertEntry(data, dto("a", "2026-03-09T05:00:00.000Z")).data)).toEqual([["b", "a"], ["c"]]);
+    expect(ids(insertEntry(data, dto("a", "2026-03-09T05:00:00.000Z")).data)).toEqual([
+      ["b", "a"],
+      ["c"],
+    ]);
   });
 
   it("replaceEntry moves an entry whose start changed week", () => {

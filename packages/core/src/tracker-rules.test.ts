@@ -44,10 +44,18 @@ describe("shouldRemind (Mon–Fri 09:00–17:00, Asia/Manila)", () => {
 
   it("is throttled by the last reminder", () => {
     expect(
-      shouldRemind({ ...base, now: wed10, lastRemindedAt: new Date(wed10.getTime() - 30 * 60_000) }),
+      shouldRemind({
+        ...base,
+        now: wed10,
+        lastRemindedAt: new Date(wed10.getTime() - 30 * 60_000),
+      }),
     ).toBe(false);
     expect(
-      shouldRemind({ ...base, now: wed10, lastRemindedAt: new Date(wed10.getTime() - 61 * 60_000) }),
+      shouldRemind({
+        ...base,
+        now: wed10,
+        lastRemindedAt: new Date(wed10.getTime() - 61 * 60_000),
+      }),
     ).toBe(true);
   });
 });
@@ -58,18 +66,35 @@ describe("heuristicIdleSince", () => {
   const threshold = 15 * 60_000;
 
   it("is null while there was recent input and the clock kept ticking", () => {
-    expect(heuristicIdleSince({ now, lastInputAt: minutes(5), lastTickAt: minutes(0.5), thresholdMs: threshold })).toBeNull();
+    expect(
+      heuristicIdleSince({
+        now,
+        lastInputAt: minutes(5),
+        lastTickAt: minutes(0.5),
+        thresholdMs: threshold,
+      }),
+    ).toBeNull();
   });
 
   it("reports the last input when input stopped for longer than the threshold", () => {
     expect(
-      heuristicIdleSince({ now, lastInputAt: minutes(20), lastTickAt: minutes(0.5), thresholdMs: threshold }),
+      heuristicIdleSince({
+        now,
+        lastInputAt: minutes(20),
+        lastTickAt: minutes(0.5),
+        thresholdMs: threshold,
+      }),
     ).toEqual(minutes(20));
   });
 
   it("detects a sleeping machine from a gap between ticks", () => {
     expect(
-      heuristicIdleSince({ now, lastInputAt: minutes(2), lastTickAt: minutes(30), thresholdMs: threshold }),
+      heuristicIdleSince({
+        now,
+        lastInputAt: minutes(2),
+        lastTickAt: minutes(30),
+        thresholdMs: threshold,
+      }),
     ).toEqual(minutes(30));
   });
 });

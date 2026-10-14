@@ -41,7 +41,9 @@ describe("Asia/Manila (UTC+8, no DST)", () => {
       "2026-03-09T01:00:00.000Z",
     );
     expect(
-      iso(zonedDateTimeToInstant({ date: "2026-03-09", hours: 0, minutes: 30, seconds: 15 }, MANILA)),
+      iso(
+        zonedDateTimeToInstant({ date: "2026-03-09", hours: 0, minutes: 30, seconds: 15 }, MANILA),
+      ),
     ).toBe("2026-03-08T16:30:15.000Z");
   });
 
@@ -52,18 +54,18 @@ describe("Asia/Manila (UTC+8, no DST)", () => {
 
 describe("America/New_York spring forward (2026-03-08 02:00 EST -> 03:00 EDT)", () => {
   it("wall times before and after the gap map to EST and EDT offsets", () => {
-    expect(iso(zonedDateTimeToInstant({ date: "2026-03-08", hours: 1, minutes: 30 }, NEW_YORK))).toBe(
-      "2026-03-08T06:30:00.000Z",
-    );
-    expect(iso(zonedDateTimeToInstant({ date: "2026-03-08", hours: 3, minutes: 30 }, NEW_YORK))).toBe(
-      "2026-03-08T07:30:00.000Z",
-    );
+    expect(
+      iso(zonedDateTimeToInstant({ date: "2026-03-08", hours: 1, minutes: 30 }, NEW_YORK)),
+    ).toBe("2026-03-08T06:30:00.000Z");
+    expect(
+      iso(zonedDateTimeToInstant({ date: "2026-03-08", hours: 3, minutes: 30 }, NEW_YORK)),
+    ).toBe("2026-03-08T07:30:00.000Z");
   });
 
   it("a wall time inside the gap resolves to the instant one hour later", () => {
-    expect(iso(zonedDateTimeToInstant({ date: "2026-03-08", hours: 2, minutes: 30 }, NEW_YORK))).toBe(
-      "2026-03-08T07:30:00.000Z",
-    );
+    expect(
+      iso(zonedDateTimeToInstant({ date: "2026-03-08", hours: 2, minutes: 30 }, NEW_YORK)),
+    ).toBe("2026-03-08T07:30:00.000Z");
   });
 
   it("startOfWeekInZone uses the offset in force at the week start", () => {

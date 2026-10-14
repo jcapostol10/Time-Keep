@@ -15,7 +15,13 @@ import { useState } from "react";
 import { useTracker, useTrackerClock } from "./tracker-provider";
 
 /** Shown when the user returns after idle time while a timer runs. */
-export function IdleDialog({ idleSince, onClose }: { idleSince: Date | null; onClose: () => void }) {
+export function IdleDialog({
+  idleSince,
+  onClose,
+}: {
+  idleSince: Date | null;
+  onClose: () => void;
+}) {
   const { running, viewer, stop, start } = useTracker();
   const { now } = useTrackerClock();
   const [busy, setBusy] = useState(false);

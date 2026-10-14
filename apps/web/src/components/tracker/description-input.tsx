@@ -46,7 +46,9 @@ export function DescriptionInput({
     const recent = data?.recent ?? [];
     const q = value.trim().toLowerCase();
     return recent
-      .filter((r) => (q ? r.description.toLowerCase().includes(q) && r.description !== value : true))
+      .filter((r) =>
+        q ? r.description.toLowerCase().includes(q) && r.description !== value : true,
+      )
       .slice(0, MAX_SUGGESTIONS);
   }, [data, value]);
   const projects = data?.projects ?? [];
@@ -72,7 +74,7 @@ export function DescriptionInput({
         aria-autocomplete="list"
         aria-activedescendant={showList && active >= 0 ? `${listId}-${active}` : undefined}
         autoComplete="off"
-        className="border-transparent shadow-none focus-visible:border-ring"
+        className="focus-visible:border-ring border-transparent shadow-none"
         onChange={(e) => {
           onChange(e.target.value);
           setOpen(true);

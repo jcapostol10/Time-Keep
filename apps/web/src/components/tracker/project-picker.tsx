@@ -106,7 +106,12 @@ export function ProjectPicker({
       </PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">
         <Command>
-          <CommandInput aria-label="Search projects" placeholder="Search or create project" value={query} onValueChange={setQuery} />
+          <CommandInput
+            aria-label="Search projects"
+            placeholder="Search or create project"
+            value={query}
+            onValueChange={setQuery}
+          />
           <CommandList>
             <CommandEmpty>No projects found.</CommandEmpty>
             <CommandGroup>

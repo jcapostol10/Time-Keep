@@ -9,9 +9,7 @@ export type TrackerMessage =
   | { type: "running"; running: TimeEntryDTO | null; sourceId: string }
   | { type: "entries-changed"; sourceId: string };
 
-type Payload =
-  | { type: "running"; running: TimeEntryDTO | null }
-  | { type: "entries-changed" };
+type Payload = { type: "running"; running: TimeEntryDTO | null } | { type: "entries-changed" };
 
 export interface TrackerChannel {
   post(message: Payload): void;

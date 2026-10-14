@@ -158,7 +158,12 @@ function hash(text: string): number {
 
 const DEMO_PROJECTS = ["Website redesign", "Mobile app", "Internal"] as const;
 const DEMO_TAGS = ["design", "dev", "meeting", "review"] as const;
-const DEMO_TASKS: { description: string; project: number | null; tags: number[]; billable: boolean }[] = [
+const DEMO_TASKS: {
+  description: string;
+  project: number | null;
+  tags: number[];
+  billable: boolean;
+}[] = [
   { description: "Design review", project: 0, tags: [0, 3], billable: true },
   { description: "Homepage layout", project: 0, tags: [0], billable: true },
   { description: "API integration", project: 1, tags: [1], billable: true },

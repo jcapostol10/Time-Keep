@@ -170,7 +170,10 @@ function implicitStopEnd(start: Date, now: Date): Date {
 
 // --- Reads -----------------------------------------------------------------------
 
-export async function getRunningEntry(db: Executor, scope: EntryScope): Promise<TimeEntryDTO | null> {
+export async function getRunningEntry(
+  db: Executor,
+  scope: EntryScope,
+): Promise<TimeEntryDTO | null> {
   const row = await db.query.timeEntry.findFirst({
     where: and(scopeWhere(scope), isNull(timeEntry.end)),
     with: withRelations,
@@ -347,7 +350,12 @@ export async function createManualEntry(
   input: EntryDetails & { start: Date; end: Date },
   _now: Date = new Date(),
 ): Promise<TimeEntryDTO> {
-  const check = validateEntryRange({ start: input.start, end: input.end, now: _now, mode: "manual" });
+  const check = validateEntryRange({
+    start: input.start,
+    end: input.end,
+    now: _now,
+    mode: "manual",
+  });
   if (!check.ok) throw new TimeEntryError("INVALID", check.error);
 
   return db.transaction(async (tx) => {

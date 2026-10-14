@@ -22,8 +22,7 @@ export interface DayGroup<T extends GroupableEntry> {
 }
 
 export type CollapsedRow<T extends GroupableEntry> =
-  | { kind: "single"; entry: T }
-  | { kind: "group"; key: string; entries: T[]; totalSeconds: number };
+  { kind: "single"; entry: T } | { kind: "group"; key: string; entries: T[]; totalSeconds: number };
 
 export function sumDuration(entries: readonly GroupableEntry[]): number {
   let total = 0;
@@ -42,7 +41,10 @@ export function entryGroupKey(e: GroupableEntry): string {
  * crosses midnight stays whole and lands on its start day). Days and entries
  * are ordered newest first.
  */
-export function groupByDay<T extends GroupableEntry>(entries: readonly T[], tz: string): DayGroup<T>[] {
+export function groupByDay<T extends GroupableEntry>(
+  entries: readonly T[],
+  tz: string,
+): DayGroup<T>[] {
   const sorted = [...entries].sort((a, b) => b.start.localeCompare(a.start));
   const byDay = new Map<string, T[]>();
   for (const entry of sorted) {
@@ -61,7 +63,9 @@ export function groupByDay<T extends GroupableEntry>(entries: readonly T[], tz: 
 }
 
 /** Collapses runs of adjacent entries that share a group key into one row. */
-export function collapseConsecutive<T extends GroupableEntry>(entries: readonly T[]): CollapsedRow<T>[] {
+export function collapseConsecutive<T extends GroupableEntry>(
+  entries: readonly T[],
+): CollapsedRow<T>[] {
   const rows: CollapsedRow<T>[] = [];
   let run: T[] = [];
   let runKey = "";

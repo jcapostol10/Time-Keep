@@ -291,7 +291,9 @@ export function TrackerProvider({
       });
       const result = await updateEntryAction(slug, current.id, patch);
       if (!result.ok) {
-        qc.setQueryData<TimeEntryDTO | null>(runningKey, (r) => (r?.id === current.id ? current : r));
+        qc.setQueryData<TimeEntryDTO | null>(runningKey, (r) =>
+          r?.id === current.id ? current : r,
+        );
         toast.error(result.error);
         return false;
       }

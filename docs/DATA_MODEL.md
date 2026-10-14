@@ -2,7 +2,7 @@
 
 PostgreSQL 16 via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
 
-## Entity overview (Phase 0)
+## Entity overview (Phases 0–1)
 
 ```
 user ──< session            (activeWorkspaceId → workspace)
@@ -12,6 +12,13 @@ verification                (email verification, password reset, magic link toke
 workspace ──1 workspace_settings
 workspace ──< membership >── user
 workspace ──< invitation    (inviterId → user)
+
+workspace ──< project       (Phase 1 stub: name + colour)
+workspace ──< tag           (Phase 1 stub: name + colour)
+workspace ──< time_entry >── user
+time_entry >── project      (nullable, ON DELETE SET NULL)
+time_entry ──< time_entry_tag >── tag
+user ──1 user_settings      (tracker preferences, created lazily)
 ```
 
 ## Tables
@@ -85,16 +92,84 @@ Unique `(workspace_id, user_id)`.
 | inviter_id | text → user | |
 | created_at | timestamptz | |
 
+### project (Phase 1 stub)
+
+Phase 2 adds client, billable default, visibility, archived and members.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | indexed |
+| name | text | unique per workspace (`project_workspace_name_uq`) |
+| color | text | `#rrggbb` from the core 20-colour palette (`PROJECT_COLORS`) |
+| created_at, updated_at | timestamptz | |
+
+### tag (Phase 1 stub)
+
+Same shape as `project`; unique index `tag_workspace_name_uq`. Phase 2 adds archived.
+
+### time_entry
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| user_id | text → user (cascade) | |
+| description | text | default `''`, max 3000 (validated in `packages/core`) |
+| project_id | text? → project (set null) | indexed |
+| task_id | text? | no FK until Phase 2 creates `task` |
+| billable | boolean | default false |
+| start | timestamptz | |
+| end | timestamptz? | `NULL` = running. Reserved word: always quote `"end"` in raw SQL |
+| duration_seconds | integer? | set on stop and on every edit; `NULL` while running |
+| deleted_at | timestamptz? | soft delete (Undo restores it) |
+| created_at, updated_at | timestamptz | |
+
+Indexes:
+
+- `time_entry_workspace_user_start_idx` on `(workspace_id, user_id, start DESC)`: the tracker list and its week pagination.
+- `time_entry_project_id_idx` on `project_id`.
+- `time_entry_one_running_uq`: `UNIQUE (workspace_id, user_id) WHERE "end" IS NULL AND "deleted_at" IS NULL`. This enforces invariant 4. Soft-deleted rows are excluded so they can never block a new timer.
+
+Rules (enforced in `apps/web/src/server/time-entries.ts`, the only write path):
+
+- Starting a timer takes `pg_advisory_xact_lock(hashtext(workspace_id || ':' || user_id))`, stops the running entry and inserts the new one in one transaction. The unique index is the backstop and surfaces as a `CONFLICT` error.
+- `end > start`; at most 999 hours; a timer cannot stop more than one minute in the future. A forgotten timer that passes 999 hours is clamped at 999 hours when stopped.
+- An entry that crosses midnight stays one row and is listed under its start date in the viewer's timezone.
+
+### time_entry_tag
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| time_entry_id | text → time_entry (cascade) | composite PK with `tag_id` |
+| tag_id | text → tag (cascade) | indexed |
+
+### user_settings
+
+Per-user tracker preferences. The row is created on first save; until then the defaults below apply (`DEFAULT_TRACKER_SETTINGS` in `packages/core`).
+
+| Column | Type | Default | Notes |
+| --- | --- | --- | --- |
+| user_id | text PK → user (cascade) | | |
+| idle_detection_minutes | smallint? | null | null = idle detection off; the UI suggests 15 |
+| pomodoro_enabled | boolean | false | |
+| pomodoro_focus_minutes | smallint | 25 | |
+| pomodoro_break_minutes | smallint | 5 | |
+| reminders_enabled | boolean | false | |
+| reminder_days | smallint[] | `{1,2,3,4,5}` | 0 = Sunday … 6 = Saturday |
+| reminder_start_minutes | smallint | 540 | minutes after local midnight (09:00) |
+| reminder_end_minutes | smallint | 1020 | 17:00 |
+| created_at, updated_at | timestamptz | | |
+
 ## Enums
 
 `workspace_role`, `membership_status`, `time_format`, `duration_format` — values come from `packages/core` constants so TypeScript and Postgres agree.
 
 ## Planned (later phases)
 
-Phase 1: `time_entry` (+ partial unique index on running entries), `time_entry_tag`, `project`, `tag` stubs.
-Phase 2: `client`, `project` (full), `project_member`, `task`, `tag`, `timesheet_template`.
+Phase 2: `client`, `project` (full; extends the Phase 1 stub in place), `project_member`, `task` (+ FK from `time_entry.task_id`), `tag` (archived), `timesheet_template`.
 Phase 3: `report_share_link`, `export_job`.
-Phase 4: `user_group`, `user_group_member`, `rate`, `workspace_settings` extensions.
+Phase 4: `user_group`, `user_group_member`, `rate` (+ rate snapshot columns on `time_entry`), `workspace_settings` extensions.
 Phase 5: `approval_request`, `lock_period`, `time_off_policy`, `time_off_request`, `holiday`, `kiosk`, `kiosk_pin`.
 Phase 6: `expense`, `expense_category`, `invoice`, `invoice_item`, `payment`, `budget`, `custom_field`.
 Phase 7: `assignment`, `milestone`.
