@@ -1,5 +1,6 @@
 export * from "./colors";
 export * from "./duration";
+export * from "./entry-edit";
 export * from "./entry-grouping";
 export * from "./prefs";
 export * from "./roles";

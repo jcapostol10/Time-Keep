@@ -40,3 +40,6 @@ Thumbs.db
 
 # vercel
 .vercel
+
+# Playwright MCP scratch output
+.playwright-mcp/

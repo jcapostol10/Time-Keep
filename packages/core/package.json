@@ -13,7 +13,8 @@
     "./schemas": "./src/schemas.ts",
     "./slug": "./src/slug.ts",
     "./time": "./src/time.ts",
-    "./time-entry": "./src/time-entry.ts"
+    "./time-entry": "./src/time-entry.ts",
+    "./entry-edit": "./src/entry-edit.ts"
   },
   "scripts": {
     "lint": "eslint .",
