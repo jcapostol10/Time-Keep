@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   ci:
-    name: lint · typecheck · unit · e2e
+    name: lint · typecheck · unit · integration
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -47,6 +47,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # e2e runs against Vercel previews (e2e-preview.yml); Docker serves the
+      # integration tests only.
       - name: Start Postgres, Mailpit and object storage
         run: docker compose up -d --wait
 
@@ -64,23 +66,3 @@ jobs:
 
       - name: Unit and integration tests
         run: pnpm test
-
-      - name: Install Playwright browsers
-        run: pnpm --filter @timekeep/web exec playwright install --with-deps chromium
-
-      - name: Build
-        run: pnpm build
-
-      - name: Seed demo workspace
-        run: pnpm db:seed
-
-      - name: End-to-end tests
-        run: pnpm e2e
-
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: apps/web/playwright-report
-          retention-days: 7
