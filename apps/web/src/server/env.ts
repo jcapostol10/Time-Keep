@@ -2,6 +2,8 @@ import "server-only";
 
 import { z } from "zod";
 
+import { resolveAppUrl } from "./app-url";
+
 const boolish = z
   .string()
   .optional()
@@ -16,8 +18,17 @@ const schema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   BETTER_AUTH_SECRET: z.string().min(16, "BETTER_AUTH_SECRET must be at least 16 characters"),
-  BETTER_AUTH_URL: z.string().url().default("http://localhost:3000"),
-  NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+  /** Optional: unset on Vercel previews, where the deployment URL is used (see app-url.ts). */
+  BETTER_AUTH_URL: optionalString,
+  NEXT_PUBLIC_APP_URL: optionalString,
+  VERCEL_ENV: optionalString,
+  VERCEL_URL: optionalString,
+  VERCEL_BRANCH_URL: optionalString,
+
+  /** Preview deployments only: store outgoing email instead of sending it (e2e reads it). */
+  MAIL_CAPTURE: boolish,
+  /** Shared secret for the preview-only test endpoints. */
+  E2E_SECRET: optionalString,
 
   GOOGLE_CLIENT_ID: optionalString,
   GOOGLE_CLIENT_SECRET: optionalString,
@@ -42,7 +53,7 @@ const schema = z.object({
   S3_PUBLIC_URL: z.string().url().default("http://localhost:9000/timekeep"),
 });
 
-export type Env = z.infer<typeof schema>;
+export type Env = z.infer<typeof schema> & { APP_URL: string };
 
 let cached: Env | undefined;
 
@@ -54,7 +65,7 @@ export function env(): Env {
       const issues = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`);
       throw new Error(`Invalid environment:\n${issues.join("\n")}`);
     }
-    cached = parsed.data;
+    cached = { ...parsed.data, APP_URL: resolveAppUrl(parsed.data) };
   }
   return cached;
 }

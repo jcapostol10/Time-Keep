@@ -9,6 +9,7 @@ import { magicLink, organization } from "better-auth/plugins";
 
 import { ac, roles } from "@/lib/permissions";
 
+import { trustedOrigins } from "./app-url";
 import { env } from "./env";
 import { sendEmail } from "./mail";
 import { createWorkspace, ensureWorkspaceSettings } from "./workspaces";
@@ -21,9 +22,9 @@ function buildAuth() {
 
   return betterAuth({
     appName: "TimeKeep",
-    baseURL: e.BETTER_AUTH_URL,
+    baseURL: e.APP_URL,
     secret: e.BETTER_AUTH_SECRET,
-    trustedOrigins: [e.NEXT_PUBLIC_APP_URL],
+    trustedOrigins: trustedOrigins(e),
 
     // Send auth failures (OAuth state mismatch, denied consent, …) to our own page.
     onAPIError: { errorURL: "/auth-error" },
@@ -151,7 +152,7 @@ function buildAuth() {
           },
         },
         sendInvitationEmail: async ({ id, email, organization: ws, inviter, role }) => {
-          const url = `${e.NEXT_PUBLIC_APP_URL}/invite/${id}`;
+          const url = `${e.APP_URL}/invite/${id}`;
           await sendEmail({
             to: email,
             subject: `${inviter.user.name} invited you to ${ws.name} on TimeKeep`,
