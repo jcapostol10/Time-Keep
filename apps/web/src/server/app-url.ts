@@ -9,6 +9,7 @@ export interface AppUrlEnv {
   VERCEL_ENV?: string;
   VERCEL_URL?: string;
   VERCEL_BRANCH_URL?: string;
+  VERCEL_PROJECT_PRODUCTION_URL?: string;
 }
 
 const LOCAL_URL = "http://localhost:3000";
@@ -21,6 +22,9 @@ function clean(value: string | undefined): string | undefined {
 export function resolveAppUrl(e: AppUrlEnv): string {
   const configured = clean(e.BETTER_AUTH_URL) ?? clean(e.NEXT_PUBLIC_APP_URL);
   if (configured) return configured;
+  // Production is reached at its project domain, not the per-deployment URL.
+  const productionUrl = clean(e.VERCEL_PROJECT_PRODUCTION_URL);
+  if (e.VERCEL_ENV === "production" && productionUrl) return `https://${productionUrl}`;
   const vercelUrl = clean(e.VERCEL_URL);
   if (e.VERCEL_ENV && vercelUrl) return `https://${vercelUrl}`;
   return LOCAL_URL;

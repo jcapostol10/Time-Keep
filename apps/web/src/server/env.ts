@@ -24,6 +24,7 @@ const schema = z.object({
   VERCEL_ENV: optionalString,
   VERCEL_URL: optionalString,
   VERCEL_BRANCH_URL: optionalString,
+  VERCEL_PROJECT_PRODUCTION_URL: optionalString,
 
   /** Preview deployments only: store outgoing email instead of sending it (e2e reads it). */
   MAIL_CAPTURE: boolish,

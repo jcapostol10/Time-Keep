@@ -22,6 +22,16 @@ describe("resolveAppUrl", () => {
     );
   });
 
+  it("uses the production domain on production deployments", () => {
+    expect(
+      resolveAppUrl({
+        VERCEL_ENV: "production",
+        VERCEL_URL: "time-keep-abc123.vercel.app",
+        VERCEL_PROJECT_PRODUCTION_URL: "time-keep.vercel.app",
+      }),
+    ).toBe("https://time-keep.vercel.app");
+  });
+
   it("ignores blank configured values", () => {
     expect(
       resolveAppUrl({ BETTER_AUTH_URL: " ", VERCEL_ENV: "preview", VERCEL_URL: "a.vercel.app" }),
