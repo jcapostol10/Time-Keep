@@ -1,6 +1,6 @@
 # Data model
 
-PostgreSQL 16 via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
+PostgreSQL (16 locally, Supabase in production) via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
 
 ## Entity overview (Phases 0–1)
 
@@ -161,6 +161,23 @@ Per-user tracker preferences. The row is created on first save; until then the d
 | reminder_start_minutes | smallint | 540 | minutes after local midnight (09:00) |
 | reminder_end_minutes | smallint | 1020 | 17:00 |
 | created_at, updated_at | timestamptz | | |
+
+### captured_email
+
+Outgoing email stored instead of sent, on Vercel preview deployments only (`MAIL_CAPTURE=true`) and only for `@e2e.test` / `@demo.test` recipients. The e2e suite reads it from `/api/test/emails`; `pnpm db:e2e-cleanup` prunes rows older than a day.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| to_address | text | lower-cased recipient; index `(to_address, created_at desc)` |
+| subject | text | |
+| html | text | |
+| text | text | |
+| created_at | timestamptz | |
+
+## Row-level security
+
+Every table enables RLS (`.enableRLS()` on each `pgTable`, migration `0003`) with no policies, and migration `0004` revokes all privileges on `public` from Supabase's `anon` and `authenticated` roles. Supabase's Data API therefore reads nothing; the app connects as the table owner (`timekeep_app` in production) and is unaffected. New tables must call `.enableRLS()`; `apps/web/src/server/rls.test.ts` fails otherwise.
 
 ## Enums
 
