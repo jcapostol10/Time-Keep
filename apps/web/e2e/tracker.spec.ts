@@ -82,6 +82,8 @@ test.describe.serial("time tracker", () => {
     await duration.fill("2:00");
     await duration.press("Enter");
     await expect(duration).toHaveValue("2:00:00");
+    // The value above is optimistic; wait until the server has confirmed the save.
+    await expect(page.locator('[data-saving="false"]')).toHaveCount(1);
 
     await openTracker(page);
     await expect(

@@ -30,6 +30,7 @@ import {
 import { trackerKeys, trackerUrls } from "./query-keys";
 import { IdleDialog } from "./idle-dialog";
 import { activeIdlePrompt, type IdlePrompt } from "./idle-prompt";
+import { trackSave, useIsSaving } from "./saving-store";
 import { createTrackerChannel, type TrackerChannel } from "./tracker-channel";
 import { useTrackerCache } from "./use-tracker-cache";
 import { useIdleDetection, usePomodoro, useReminders } from "./use-tracker-helpers";
@@ -134,6 +135,18 @@ function useDocumentTitle(running: TimeEntryDTO | null, elapsedSeconds: number, 
   }, [running, elapsedSeconds, ready]);
 }
 
+/** Ask the browser to confirm leaving while a save has not reached the server yet. */
+function useLeaveWarning(saving: boolean) {
+  useEffect(() => {
+    if (!saving) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [saving]);
+}
+
 export interface TrackerProviderProps {
   slug: string;
   workspaceId: string;
@@ -230,7 +243,7 @@ export function TrackerProvider({
     async (details?: EntryDraft) => {
       if (!begin()) return false;
       try {
-        const result = await startTimerAction(slug, details ?? draft);
+        const result = await trackSave(() => startTimerAction(slug, details ?? draft));
         if (!result.ok) {
           toast.error(result.error);
           return false;
@@ -251,10 +264,12 @@ export function TrackerProvider({
       if (!current || !begin()) return false;
       qc.setQueryData(runningKey, null);
       try {
-        const result = await stopTimerAction(slug, {
-          entryId: current.id,
-          ...(end ? { end: end.toISOString() } : {}),
-        });
+        const result = await trackSave(() =>
+          stopTimerAction(slug, {
+            entryId: current.id,
+            ...(end ? { end: end.toISOString() } : {}),
+          }),
+        );
         if (!result.ok) {
           qc.setQueryData(runningKey, current);
           toast.error(result.error);
@@ -280,7 +295,7 @@ export function TrackerProvider({
     async (entryId: string) => {
       if (!begin()) return false;
       try {
-        const result = await continueEntryAction(slug, entryId);
+        const result = await trackSave(() => continueEntryAction(slug, entryId));
         if (!result.ok) {
           toast.error(result.error);
           return false;
@@ -303,7 +318,7 @@ export function TrackerProvider({
         ...patch,
         ...cache.resolveDetails(patch),
       });
-      const result = await updateEntryAction(slug, current.id, patch);
+      const result = await trackSave(() => updateEntryAction(slug, current.id, patch));
       if (!result.ok) {
         qc.setQueryData<TimeEntryDTO | null>(runningKey, (r) =>
           r?.id === current.id ? current : r,
@@ -334,6 +349,7 @@ export function TrackerProvider({
     }
   }, [router, slug]);
 
+  useLeaveWarning(useIsSaving());
   useKeyboardShortcuts(() => void toggle(), focusDescription);
   useDocumentTitle(running, elapsedSeconds, now > 0);
   usePomodoro(running, elapsedSeconds, settings, now > 0);

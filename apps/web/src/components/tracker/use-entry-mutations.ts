@@ -13,6 +13,7 @@ import {
   updateEntryAction,
 } from "@/server/actions/time-entries";
 
+import { trackSave } from "./saving-store";
 import { useTracker } from "./tracker-provider";
 import { useTrackerCache } from "./use-tracker-cache";
 
@@ -27,7 +28,7 @@ export function useEntryMutations() {
 
   const createManual = useCallback(
     async (input: EntryDraft & { start: string; end: string }) => {
-      const result = await createManualEntryAction(slug, input);
+      const result = await trackSave(() => createManualEntryAction(slug, input));
       if (!result.ok) {
         toast.error(result.error);
         return false;
@@ -52,7 +53,7 @@ export function useEntryMutations() {
         ...cache.resolveDetails(patch),
         ...(end ? { durationSeconds: computeDurationSeconds(new Date(start), new Date(end)) } : {}),
       });
-      const result = await updateEntryAction(slug, entry.id, patch);
+      const result = await trackSave(() => updateEntryAction(slug, entry.id, patch));
       if (!result.ok) {
         cache.restoreEntries(snapshot);
         toast.error(result.error);
@@ -68,7 +69,7 @@ export function useEntryMutations() {
 
   const restore = useCallback(
     async (ids: string[]) => {
-      const result = await restoreEntriesAction(slug, { ids });
+      const result = await trackSave(() => restoreEntriesAction(slug, { ids }));
       if (!result.ok) {
         toast.error(result.error);
         return false;
@@ -86,7 +87,7 @@ export function useEntryMutations() {
       if (ids.length === 0) return false;
       const snapshot = await cache.snapshotEntries();
       cache.removeEntries(ids);
-      const result = await deleteEntriesAction(slug, { ids });
+      const result = await trackSave(() => deleteEntriesAction(slug, { ids }));
       if (!result.ok) {
         cache.restoreEntries(snapshot);
         toast.error(result.error);
@@ -105,7 +106,7 @@ export function useEntryMutations() {
 
   const duplicate = useCallback(
     async (entryId: string) => {
-      const result = await duplicateEntryAction(slug, entryId);
+      const result = await trackSave(() => duplicateEntryAction(slug, entryId));
       if (!result.ok) {
         toast.error(result.error);
         return false;

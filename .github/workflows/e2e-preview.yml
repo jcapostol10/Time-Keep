@@ -53,8 +53,9 @@ jobs:
         if: always()
         run: pnpm db:e2e-cleanup
 
+      # Always kept: a run that passes only after a retry still leaves its trace.
       - name: Upload Playwright report
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-preview
