@@ -15,6 +15,8 @@ TimeKeep is a web-based time tracking and timesheet SaaS for teams (functionally
 | `pnpm dev` | Web (`http://localhost:3000`) and worker, via Turborepo |
 | `pnpm lint && pnpm typecheck && pnpm test && pnpm e2e` | The full gate. Run it before saying a phase is done |
 | `pnpm --filter @timekeep/web e2e -- --ui` | Playwright UI mode |
+| `E2E_BASE_URL=<preview url> pnpm --filter @timekeep/web e2e` | Run the e2e suite against a Vercel preview (also needs `E2E_SECRET`, `VERCEL_AUTOMATION_BYPASS_SECRET`) |
+| `pnpm db:e2e-cleanup` | Delete throwaway `@e2e.test` users, e2e-only workspaces and old captured email |
 
 Demo login after seeding: `owner@demo.test` / `password123` (also `admin@`, `manager@`, `member1@`, `member2@` — same password). Demo workspace slug: `demo`.
 
@@ -72,6 +74,18 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md
 - UI: shadcn/ui components from `@timekeep/ui/components/*`, icons from `lucide-react`, toasts via `sonner`. Theme tokens are in `packages/ui/src/styles/globals.css` (our own teal palette; light + dark via `.dark` class and `next-themes`). Every page must work at 375px.
 - Next.js: `cacheComponents` is **off** (all pages are dynamic and auth-gated). `PageProps<"/route">` / `LayoutProps<"/route">` global types come from `next typegen` (run by `pnpm typecheck`).
 - Commit after each numbered part of a phase prompt; message body explains what and why. Tag `phase-N` when a phase's acceptance checks pass.
+
+## Deployment (Vercel + Supabase)
+
+- Vercel project `time-keep` (root `apps/web`, region `sin1`), linked to GitHub: every push gets a preview, `main` deploys production. Deployment protection is on; automation uses the bypass secret.
+- **One Supabase project holds production and every preview** (tenant = workspace). So:
+  - **Previews never migrate.** `scripts/vercel-build.ts` runs `db:migrate` only when `VERCEL_ENV=production`. Test schema changes locally before merging.
+  - **e2e stays in its own tenants**: `@demo.test` demo users and the `demo` workspace, throwaway `@e2e.test` users. Seeding and `db:e2e-cleanup` only touch workspaces whose members are all such users; never widen that.
+  - **`pnpm test` must never point at Supabase**: it truncates every table.
+- The app connects through Supavisor in **transaction mode** (port 6543): no named prepared statements, `SET`, `LISTEN/NOTIFY` or session-level advisory locks (transaction-scoped `pg_advisory_xact_lock` is fine). Migrations, seed and cleanup use `DATABASE_URL_SESSION` (port 5432).
+- **Every table enables RLS** (`.enableRLS()` on each `pgTable`) and the `anon`/`authenticated` roles have no privileges on `public`, so Supabase's Data API can read nothing. `rls.test.ts` fails if a new table misses it.
+- Previews set `MAIL_CAPTURE=true`: email is stored in `captured_email` instead of sent, and the e2e suite reads it from `/api/test/emails` (404 without `E2E_SECRET`, and always in production).
+- `.github/workflows/e2e-preview.yml` runs on every successful preview deployment: seed, e2e against the deployment URL, then cleanup.
 
 ## Working on a phase
 
