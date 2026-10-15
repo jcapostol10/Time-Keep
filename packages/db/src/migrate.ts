@@ -24,7 +24,8 @@ const isDirectRun =
   process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (isDirectRun) {
-  const url = process.argv[2] ?? process.env.DATABASE_URL;
+  // Migrations need a session (not transaction-pooled) connection on Supabase.
+  const url = process.argv[2] ?? process.env.DATABASE_URL_SESSION ?? process.env.DATABASE_URL;
   if (!url) {
     console.error("Usage: tsx src/migrate.ts [connection-string]  (or set DATABASE_URL)");
     process.exit(1);

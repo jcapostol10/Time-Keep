@@ -10,7 +10,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "dotenv -e ../../.env -- vitest run",
     "e2e": "dotenv -e ../../.env -- playwright test",
-    "storage:init": "dotenv -e ../../.env -- tsx scripts/storage-init.ts"
+    "storage:init": "dotenv -e ../../.env -- tsx scripts/storage-init.ts",
+    "vercel-build": "tsx scripts/vercel-build.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1148.0",

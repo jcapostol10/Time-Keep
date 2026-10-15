@@ -94,10 +94,19 @@ async function verifyAnonymousRead(): Promise<void> {
   }
 }
 
+/** Supabase Storage has no S3 bucket policies; its bucket is made public in Supabase itself. */
+const isSupabase = new URL(endpoint).hostname.endsWith(".supabase.co");
+
 async function main() {
   await waitForEndpoint();
   await ensureBucket();
-  await allowPublicReads();
+  if (isSupabase) {
+    console.info(
+      "[storage] Supabase Storage: skipping bucket policy (the bucket is public in Supabase)",
+    );
+  } else {
+    await allowPublicReads();
+  }
   await verifyAnonymousRead();
 }
 
