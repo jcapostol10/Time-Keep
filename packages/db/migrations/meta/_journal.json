@@ -15,6 +15,13 @@
       "when": 1791809438128,
       "tag": "0001_time_tracker",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792047564708,
+      "tag": "0002_captured_email",
+      "breakpoints": true
     }
   ]
 }
