@@ -1,0 +1,62 @@
+name: e2e on Vercel preview
+
+# Runs the Playwright suite against each successful Vercel preview deployment.
+# Previews share the production Supabase database, so the run is confined to
+# the e2e tenant: seed it, test, then delete throwaway @e2e.test data.
+on:
+  deployment_status:
+
+# One run at a time: every run shares the seeded demo tenant.
+concurrency:
+  group: e2e-preview
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: e2e against ${{ github.event.deployment_status.environment_url }}
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      contains(github.event.deployment.environment, 'Preview')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      E2E_BASE_URL: ${{ github.event.deployment_status.environment_url }}
+      E2E_SECRET: ${{ secrets.E2E_SECRET }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      DATABASE_URL_SESSION: ${{ secrets.DATABASE_URL_SESSION }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.deployment.sha }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @timekeep/web exec playwright install --with-deps chromium
+
+      - name: Seed the e2e tenant
+        run: pnpm db:seed
+
+      - name: End-to-end tests
+        run: pnpm --filter @timekeep/web e2e
+
+      - name: Clean up e2e data
+        if: always()
+        run: pnpm db:e2e-cleanup
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-preview
+          path: apps/web/playwright-report
+          retention-days: 7

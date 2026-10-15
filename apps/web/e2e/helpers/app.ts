@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-import { extractAppLink, waitForEmail } from "./mailpit";
+import { extractAppLink, waitForEmail } from "./mail";
 
 export const DEMO_PASSWORD = "password123";
 

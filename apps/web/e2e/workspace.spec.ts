@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { signIn, signUpAndVerify, uniqueEmail, workspaceSlugFromUrl } from "./helpers/app";
-import { extractAppLink, waitForEmail } from "./helpers/mailpit";
+import { extractAppLink, waitForEmail } from "./helpers/mail";
 
 test.describe("workspaces", () => {
   test("invite a second user, accept the invite and switch between workspaces", async ({

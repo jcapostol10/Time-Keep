@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { signIn, signOut, signUpAndVerify, uniqueEmail } from "./helpers/app";
-import { extractAppLink, waitForEmail } from "./helpers/mailpit";
+import { extractAppLink, waitForEmail } from "./helpers/mail";
 
 test.describe("authentication", () => {
   test("sign up, verify email, land in a personal workspace, sign out and back in", async ({
