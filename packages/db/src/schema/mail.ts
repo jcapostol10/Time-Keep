@@ -17,6 +17,6 @@ export const capturedEmail = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("captured_email_to_created_idx").on(t.toAddress, t.createdAt.desc())],
-);
+).enableRLS();
 
 export type CapturedEmail = typeof capturedEmail.$inferSelect;

@@ -32,7 +32,7 @@ export const project = pgTable(
     uniqueIndex("project_workspace_name_uq").on(t.workspaceId, t.name),
     index("project_workspace_id_idx").on(t.workspaceId),
   ],
-);
+).enableRLS();
 
 /** Phase 1 stub: name + colour. Phase 2 adds archived + usage counts. */
 export const tag = pgTable(
@@ -50,7 +50,7 @@ export const tag = pgTable(
     uniqueIndex("tag_workspace_name_uq").on(t.workspaceId, t.name),
     index("tag_workspace_id_idx").on(t.workspaceId),
   ],
-);
+).enableRLS();
 
 /**
  * A tracked block of time. `end IS NULL` means the timer is running; the
@@ -88,7 +88,7 @@ export const timeEntry = pgTable(
       .on(t.workspaceId, t.userId)
       .where(sql`"end" IS NULL AND "deleted_at" IS NULL`),
   ],
-);
+).enableRLS();
 
 export const timeEntryTag = pgTable(
   "time_entry_tag",
@@ -104,7 +104,7 @@ export const timeEntryTag = pgTable(
     primaryKey({ columns: [t.timeEntryId, t.tagId] }),
     index("time_entry_tag_tag_id_idx").on(t.tagId),
   ],
-);
+).enableRLS();
 
 /** Per-user tracker preferences (idle detection, Pomodoro, reminders). Row is created lazily. */
 export const userSettings = pgTable("user_settings", {
@@ -126,7 +126,7 @@ export const userSettings = pgTable("user_settings", {
   reminderStartMinutes: smallint("reminder_start_minutes").notNull().default(540),
   reminderEndMinutes: smallint("reminder_end_minutes").notNull().default(1020),
   ...timestamps,
-});
+}).enableRLS();
 
 export type Project = typeof project.$inferSelect;
 export type Tag = typeof tag.$inferSelect;

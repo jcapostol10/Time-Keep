@@ -30,7 +30,7 @@ export const workspace = pgTable("workspace", {
   /** JSON string; reserved by Better Auth, unused by us so far. */
   metadata: text("metadata"),
   ...timestamps,
-});
+}).enableRLS();
 
 /** Better Auth `member` → `membership`. One row per (workspace, user). */
 export const membership = pgTable(
@@ -52,7 +52,7 @@ export const membership = pgTable(
     index("membership_workspace_id_idx").on(t.workspaceId),
     index("membership_user_id_idx").on(t.userId),
   ],
-);
+).enableRLS();
 
 /**
  * Pending invites. A membership row is created only when the invite is accepted,
@@ -80,7 +80,7 @@ export const invitation = pgTable(
     index("invitation_workspace_id_idx").on(t.workspaceId),
     index("invitation_email_idx").on(t.email),
   ],
-);
+).enableRLS();
 
 /** One row per workspace, created with the workspace. */
 export const workspaceSettings = pgTable(
@@ -99,7 +99,7 @@ export const workspaceSettings = pgTable(
     ...timestamps,
   },
   (t) => [primaryKey({ columns: [t.workspaceId] })],
-);
+).enableRLS();
 
 export type Workspace = typeof workspace.$inferSelect;
 export type Membership = typeof membership.$inferSelect;

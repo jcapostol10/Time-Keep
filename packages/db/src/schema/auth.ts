@@ -18,7 +18,7 @@ export const user = pgTable("user", {
   timeFormat: text("time_format"),
   weekStart: smallint("week_start"),
   ...timestamps,
-});
+}).enableRLS();
 
 export const session = pgTable(
   "session",
@@ -36,7 +36,7 @@ export const session = pgTable(
     ...timestamps,
   },
   (t) => [index("session_user_id_idx").on(t.userId)],
-);
+).enableRLS();
 
 export const account = pgTable(
   "account",
@@ -58,7 +58,7 @@ export const account = pgTable(
     ...timestamps,
   },
   (t) => [index("account_user_id_idx").on(t.userId)],
-);
+).enableRLS();
 
 export const verification = pgTable(
   "verification",
@@ -70,7 +70,7 @@ export const verification = pgTable(
     ...timestamps,
   },
   (t) => [index("verification_identifier_idx").on(t.identifier)],
-);
+).enableRLS();
 
 export type User = typeof user.$inferSelect;
 export type NewUser = typeof user.$inferInsert;
