@@ -1,7 +1,8 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { Pool, type PoolConfig } from "pg";
 
 import * as schema from "./schema";
+import { SUPABASE_ROOT_CA } from "./supabase-ca";
 
 export type Database = NodePgDatabase<typeof schema>;
 
@@ -11,9 +12,30 @@ export interface DbHandle {
   close: () => Promise<void>;
 }
 
+/**
+ * TLS settings for a connection string: Supabase hosts get verified TLS
+ * against Supabase's root CA; anything else (local Docker) is left as is.
+ */
+export function sslOptionsFor(connectionString: string): PoolConfig["ssl"] {
+  let host = "";
+  try {
+    host = new URL(connectionString).hostname;
+  } catch {
+    return undefined;
+  }
+  if (host.endsWith(".supabase.com") || host.endsWith(".supabase.co")) {
+    return { ca: SUPABASE_ROOT_CA, rejectUnauthorized: true };
+  }
+  return undefined;
+}
+
 /** Create an independent client, e.g. for tests or scripts. */
 export function createDb(connectionString: string, options: { max?: number } = {}): DbHandle {
-  const pool = new Pool({ connectionString, max: options.max ?? 10 });
+  const pool = new Pool({
+    connectionString,
+    max: options.max ?? 10,
+    ssl: sslOptionsFor(connectionString),
+  });
   const db = drizzle(pool, { schema });
   return { db, pool, close: () => pool.end() };
 }
