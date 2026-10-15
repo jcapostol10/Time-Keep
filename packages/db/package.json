@@ -7,7 +7,9 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
-    "./migrate": "./src/migrate.ts"
+    "./migrate": "./src/migrate.ts",
+    "./e2e-tenant": "./src/e2e-tenant.ts",
+    "./seed": "./src/seed.ts"
   },
   "scripts": {
     "lint": "eslint .",
@@ -15,7 +17,8 @@
     "db:generate": "dotenv -e ../../.env -- drizzle-kit generate",
     "db:migrate": "dotenv -e ../../.env -- tsx src/migrate.ts",
     "db:seed": "dotenv -e ../../.env -- tsx src/seed.ts",
-    "db:studio": "dotenv -e ../../.env -- drizzle-kit studio"
+    "db:studio": "dotenv -e ../../.env -- drizzle-kit studio",
+    "db:e2e-cleanup": "dotenv -e ../../.env -- tsx src/e2e-cleanup.ts"
   },
   "dependencies": {
     "@timekeep/core": "workspace:*",
