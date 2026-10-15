@@ -11,7 +11,9 @@ describe("sslOptionsFor", () => {
   });
 
   it("also covers direct Supabase database hosts", () => {
-    expect(sslOptionsFor("postgresql://postgres:pw@db.ref.supabase.co:5432/postgres")).toMatchObject({
+    expect(
+      sslOptionsFor("postgresql://postgres:pw@db.ref.supabase.co:5432/postgres"),
+    ).toMatchObject({
       rejectUnauthorized: true,
     });
   });
