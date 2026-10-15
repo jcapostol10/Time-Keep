@@ -66,6 +66,15 @@ Decisions and deviations from the prompt:
 - Non-members now get the same 404 "Workspace not found" as an unknown slug from `resolveWorkspaceAccess` (it used to be 403), so neither the new API routes nor server actions reveal whether a workspace exists. 403 remains only for members whose role is too low.
 - Duration-format labels in workspace settings now read `1:30:00` / `1:30` (hours are not zero-padded), matching the formatter.
 
+## Deployment — Vercel + Supabase (2026-10-15)
+
+- [x] Vercel project `time-keep` (root `apps/web`, region `sin1`), production at https://time-keep-nine.vercel.app, deployment protection on for every deployment (production domain included).
+- [x] One Supabase project `timekeep` (Singapore) for production and previews; app login role `timekeep_app`; verified TLS; RLS on every table; Data API roles revoked; public `timekeep` storage bucket via the S3 endpoint.
+- [x] e2e runs on every preview deployment (`.github/workflows/e2e-preview.yml`): seed the e2e tenant, 18 specs, clean up. Green on preview; Docker CI keeps lint, typecheck, unit and integration tests.
+- [ ] Production email: Resend needs a verified sending domain. Until then production cannot send sign-up, invite or reset emails; the seeded demo accounts sign in without email.
+
+Design: `docs/superpowers/specs/2026-10-15-vercel-preview-e2e-design.md`. Plan: `docs/superpowers/plans/2026-10-15-vercel-preview-e2e.md`.
+
 ## Phase 2 — Projects, clients, tasks, tags, timesheet, calendar
 
 - [ ] Clients, Projects (+ detail tabs), Tasks, Tags
