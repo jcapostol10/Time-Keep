@@ -3,8 +3,16 @@ name: e2e on Vercel preview
 # Runs the Playwright suite against each successful Vercel preview deployment.
 # Previews share the production Supabase database, so the run is confined to
 # the e2e tenant: seed it, test, then delete throwaway @e2e.test data.
+#
+# Security: deployment_status runs code from the deployed commit with repo
+# secrets. Vercel's Git fork protection is on, so fork PRs are never deployed
+# (and so never reach this job) unless a maintainer authorizes them; never do.
+# Each secret is scoped to the single step that needs it.
 on:
   deployment_status:
+
+permissions:
+  contents: read
 
 # One run at a time: every run shares the seeded demo tenant.
 concurrency:
@@ -22,13 +30,11 @@ jobs:
     env:
       CI: "true"
       E2E_BASE_URL: ${{ github.event.deployment_status.environment_url }}
-      E2E_SECRET: ${{ secrets.E2E_SECRET }}
-      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-      DATABASE_URL_SESSION: ${{ secrets.DATABASE_URL_SESSION }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.deployment.sha }}
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v4
 
@@ -45,17 +51,25 @@ jobs:
 
       - name: Seed the e2e tenant
         run: pnpm db:seed
+        env:
+          DATABASE_URL_SESSION: ${{ secrets.DATABASE_URL_SESSION }}
 
       - name: End-to-end tests
         run: pnpm --filter @timekeep/web e2e
+        env:
+          E2E_SECRET: ${{ secrets.E2E_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
 
       - name: Clean up e2e data
         if: always()
         run: pnpm db:e2e-cleanup
+        env:
+          DATABASE_URL_SESSION: ${{ secrets.DATABASE_URL_SESSION }}
 
-      # Always kept: a run that passes only after a retry still leaves its trace.
+      # Screenshots and the HTML summary only: remote runs record no traces,
+      # because traces would capture the bypass header (artifacts are public).
       - name: Upload Playwright report
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-preview

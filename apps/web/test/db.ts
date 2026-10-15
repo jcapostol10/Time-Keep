@@ -4,9 +4,12 @@ import { createDb, type Database, type DbHandle, membership, sql, user } from "@
 
 import { createWorkspace } from "@/server/workspaces";
 
+import { assertSafeTestDatabaseUrl } from "./safe-test-db";
+
 export function connectTestDb(): DbHandle {
   const url = process.env.TEST_DATABASE_URL;
   if (!url) throw new Error("TEST_DATABASE_URL is not set");
+  assertSafeTestDatabaseUrl(url);
   return createDb(url, { max: 2 });
 }
 

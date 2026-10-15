@@ -5,7 +5,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 import { getDb } from "@timekeep/db";
 
 import { env } from "./env";
-import { captureEmail, captureEnabled } from "./mail-capture";
+import { captureEmail, previewMailMode } from "./mail-capture";
 
 let transporter: Transporter | undefined;
 
@@ -75,9 +75,14 @@ export function renderEmail(content: EmailContent): { html: string; text: string
 
 export async function sendEmail(args: { to: string; subject: string } & EmailContent) {
   const { html, text } = renderEmail(args);
-  if (captureEnabled(env())) {
-    // Preview deployments: store instead of sending; e2e reads /api/test/emails.
+  const mode = previewMailMode(env(), args.to);
+  if (mode === "capture") {
+    // Preview deployments: store e2e mail instead of sending; e2e reads /api/test/emails.
     await captureEmail(getDb(), { to: args.to, subject: args.subject, html, text });
+    return;
+  }
+  if (mode === "drop") {
+    console.warn(`[mail] preview: dropped "${args.subject}" to a non-e2e recipient`);
     return;
   }
   await getTransporter().sendMail({

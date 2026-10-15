@@ -4,6 +4,7 @@ import { connectTestDb, truncateAll } from "../../test/db";
 import {
   captureEmail,
   captureEnabled,
+  previewMailMode,
   listCapturedEmails,
   testEndpointAuthorized,
 } from "./mail-capture";
@@ -16,6 +17,26 @@ describe("captureEnabled", () => {
     expect(captureEnabled({ MAIL_CAPTURE: true })).toBe(true);
     expect(captureEnabled({ MAIL_CAPTURE: true, VERCEL_ENV: "production" })).toBe(false);
     expect(captureEnabled({ MAIL_CAPTURE: false, VERCEL_ENV: "preview" })).toBe(false);
+  });
+});
+
+describe("previewMailMode", () => {
+  const preview = { MAIL_CAPTURE: true, VERCEL_ENV: "preview" };
+
+  it("sends normally when capture is off (production, local)", () => {
+    expect(
+      previewMailMode({ VERCEL_ENV: "production", MAIL_CAPTURE: true }, "boss@customer.com"),
+    ).toBe("send");
+    expect(previewMailMode({}, "tina@e2e.test")).toBe("send");
+  });
+
+  it("captures only e2e recipients on a capturing preview", () => {
+    expect(previewMailMode(preview, "tina.1@e2e.test")).toBe("capture");
+    expect(previewMailMode(preview, "Member2@Demo.test")).toBe("capture");
+  });
+
+  it("drops mail to anyone else, so previews never hold real users' tokens", () => {
+    expect(previewMailMode(preview, "boss@customer.com")).toBe("drop");
   });
 });
 

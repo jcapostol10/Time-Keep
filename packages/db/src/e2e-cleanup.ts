@@ -11,7 +11,7 @@ const handle = createDb(url, { max: 2 });
 cleanupE2eData(handle.db)
   .then((r) =>
     console.info(
-      `[e2e-cleanup] removed ${r.users} users, ${r.workspaces} workspaces, ${r.emails} captured emails`,
+      `[e2e-cleanup] removed ${r.users} users, ${r.workspaces} workspaces, ${r.emails} captured emails; skipped ${r.skipped} users who belong to customer workspaces`,
     ),
   )
   .catch((error) => {

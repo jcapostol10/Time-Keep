@@ -64,6 +64,11 @@ test.describe.serial("time tracker", () => {
     await start(page);
     await timer(page).getByRole("button", { name: "Manual mode" }).click();
     await timer(page).getByRole("combobox", { name: "Description" }).fill("Manual entry");
+    // A fixed early start keeps this the oldest entry today, so the "continue"
+    // test does not depend on which minute the suite happens to run in.
+    const startTime = timer(page).getByRole("textbox", { name: "Start time" });
+    await startTime.fill("00:05");
+    await startTime.press("Tab");
     const duration = timer(page).getByRole("textbox", { name: "Duration" });
     await duration.fill("1.5");
     await duration.press("Tab");

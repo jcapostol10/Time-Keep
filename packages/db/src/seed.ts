@@ -15,7 +15,7 @@ import { hashPassword } from "better-auth/crypto";
 import { inArray, like, sql } from "drizzle-orm";
 
 import { createDb, type Database } from "./client";
-import { e2eOnlyWorkspaceIds } from "./e2e-tenant";
+import { e2eOnlyWorkspaceIds, e2eUsersInCustomerWorkspaces } from "./e2e-tenant";
 import {
   account,
   membership,
@@ -50,9 +50,17 @@ export const DEMO_USERS = [
  * real tenants too). The demo users go, taking their memberships with them.
  */
 export async function resetDemoData(db: Database) {
+  const blocked = await e2eUsersInCustomerWorkspaces(db, "@demo.test");
+  if (blocked.length > 0) {
+    const list = blocked.map((b) => `${b.email} in "${b.workspace}"`).join(", ");
+    throw new Error(
+      `Refusing to reseed: demo users belong to customer workspaces (${list}). ` +
+        "Remove them from those workspaces first; deleting them would delete customer data.",
+    );
+  }
   const demoOnly = await e2eOnlyWorkspaceIds(db, { withMemberDomain: "@demo.test" });
   if (demoOnly.length > 0) await db.delete(workspace).where(inArray(workspace.id, demoOnly));
-  await db.delete(user).where(like(user.email, "%@demo.test"));
+  await db.delete(user).where(like(sql`lower(${user.email})`, "%@demo.test"));
   // A leftover demo workspace with no members left; never one with a real member.
   await db.execute(sql`
     delete from ${workspace} w

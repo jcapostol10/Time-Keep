@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { capturedEmail, eq, timeEntry, user, workspace } from "@timekeep/db";
+import { capturedEmail, eq, invitation, timeEntry, user, workspace } from "@timekeep/db";
 import { cleanupE2eData, isE2eEmail } from "@timekeep/db/e2e-tenant";
 import { resetDemoData } from "@timekeep/db/seed";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -34,17 +34,40 @@ describe("e2e tenant boundaries", () => {
     expect(isE2eEmail("demo.test@customer.com")).toBe(false);
   });
 
-  it("reseeding keeps a customer workspace that a demo user joined", async () => {
+  it("reseeding refuses to touch a demo user who belongs to a customer workspace", async () => {
     const customer = await createUser("boss@customer.com");
     const demoUser = await createUser("member1@demo.test");
     const customerWs = await createTestWorkspace(db, "Customer Co", customer);
     await addMember(db, customerWs.id, demoUser, "member");
+    await db.insert(timeEntry).values({
+      id: randomUUID(),
+      workspaceId: customerWs.id,
+      userId: demoUser,
+      start: new Date("2026-10-01T01:00:00Z"),
+      end: new Date("2026-10-01T02:00:00Z"),
+      durationSeconds: 3600,
+    });
+    await db.insert(invitation).values({
+      id: randomUUID(),
+      workspaceId: customerWs.id,
+      email: "colleague@customer.com",
+      inviterId: demoUser,
+    });
+
+    await expect(resetDemoData(db)).rejects.toThrow(/member1@demo\.test.*Customer Co/);
+
+    expect(await exists(workspace, customerWs.id)).toBe(true);
+    expect(await exists(user, demoUser)).toBe(true);
+    expect(await db.select().from(timeEntry)).toHaveLength(1);
+    expect(await db.select().from(invitation)).toHaveLength(1);
+  });
+
+  it("reseeding still removes demo-only workspaces", async () => {
+    const demoUser = await createUser("member1@demo.test");
     const demoOnly = await createTestWorkspace(db, "Demo personal", demoUser);
 
     await resetDemoData(db);
 
-    expect(await exists(workspace, customerWs.id)).toBe(true);
-    expect(await exists(user, customer)).toBe(true);
     expect(await exists(user, demoUser)).toBe(false);
     expect(await exists(workspace, demoOnly.id)).toBe(false);
   });
@@ -69,17 +92,27 @@ describe("e2e tenant boundaries", () => {
     expect(await db.select().from(timeEntry)).toHaveLength(0);
   });
 
-  it("cleanup keeps a customer workspace an e2e user joined, and the customer", async () => {
+  it("cleanup skips an e2e user who belongs to a customer workspace, keeping their data there", async () => {
     const customer = await createUser("boss@customer.com");
     const tester = await createUser("ivy.2@e2e.test");
     const customerWs = await createTestWorkspace(db, "Customer Co", customer);
     await addMember(db, customerWs.id, tester, "member");
+    await db.insert(timeEntry).values({
+      id: randomUUID(),
+      workspaceId: customerWs.id,
+      userId: tester,
+      start: new Date("2026-10-01T01:00:00Z"),
+      end: new Date("2026-10-01T02:00:00Z"),
+      durationSeconds: 3600,
+    });
 
-    await cleanupE2eData(db);
+    const result = await cleanupE2eData(db);
 
+    expect(result).toMatchObject({ users: 0, skipped: 1 });
     expect(await exists(workspace, customerWs.id)).toBe(true);
     expect(await exists(user, customer)).toBe(true);
-    expect(await exists(user, tester)).toBe(false);
+    expect(await exists(user, tester)).toBe(true);
+    expect(await db.select().from(timeEntry)).toHaveLength(1);
   });
 
   it("cleanup keeps the demo users and the demo workspace", async () => {

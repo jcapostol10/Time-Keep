@@ -1,4 +1,5 @@
 import { getDb } from "@timekeep/db";
+import { isE2eEmail } from "@timekeep/db/e2e-tenant";
 
 import { env } from "@/server/env";
 import { listCapturedEmails, testEndpointAuthorized } from "@/server/mail-capture";
@@ -17,7 +18,10 @@ export async function GET(request: Request) {
   }
   const url = new URL(request.url);
   const to = url.searchParams.get("to");
-  if (!to) return Response.json({ error: "`to` is required" }, { status: 400, headers: NO_STORE });
+  // Only e2e mailboxes are ever readable here.
+  if (!to || !isE2eEmail(to)) {
+    return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
+  }
   const messages = await listCapturedEmails(getDb(), {
     to,
     subject: url.searchParams.get("subject") ?? undefined,

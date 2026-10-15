@@ -25,7 +25,9 @@ export default defineConfig({
   reporter: isCI ? [["github"], ["html", { open: "never" }]] : [["list"]],
   use: {
     baseURL,
-    trace: "retain-on-failure",
+    // Remote traces would record the Vercel bypass header and auth cookies, and
+    // reports are downloadable from this public repo, so never trace remotely.
+    trace: remoteUrl ? "off" : "retain-on-failure",
     screenshot: "only-on-failure",
     ...(remoteUrl && bypass
       ? {

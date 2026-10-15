@@ -86,6 +86,13 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md
 - **Every table enables RLS** (`.enableRLS()` on each `pgTable`) and the `anon`/`authenticated` roles have no privileges on `public`, so Supabase's Data API can read nothing. `rls.test.ts` fails if a new table misses it.
 - Previews set `MAIL_CAPTURE=true`: email is stored in `captured_email` instead of sent, and the e2e suite reads it from `/api/test/emails` (404 without `E2E_SECRET`, and always in production).
 - `.github/workflows/e2e-preview.yml` runs on every successful preview deployment: seed, e2e against the deployment URL, then cleanup.
+- **Shared-database safety rules.**
+  - Seed and cleanup never delete a demo or e2e user who belongs to a customer workspace: reseeding fails loudly, and cleanup skips that user.
+  - Previews capture mail only for `@e2e.test` / `@demo.test` recipients and drop everything else, because preview tokens are valid in production.
+  - `test/safe-test-db.ts` refuses any non-local `TEST_DATABASE_URL`.
+  - Remote Playwright runs record no traces, because they would capture the bypass header and artifacts are public.
+- **Never authorize a Vercel deployment of a fork PR.** Git fork protection is on. An authorized fork build would run with the preview environment, which holds production database credentials, and the e2e workflow would run the fork's code with repository secrets.
+- **Migrations must be backward-compatible (expand, then contract).** While a production build runs, live production and every open preview still run old code against the new schema.
 
 ## Working on a phase
 

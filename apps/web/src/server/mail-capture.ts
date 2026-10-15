@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 
 import { capturedEmail, type Database, desc, eq } from "@timekeep/db";
+import { isE2eEmail } from "@timekeep/db/e2e-tenant";
 
 /**
  * Preview-only email capture. On Vercel previews (MAIL_CAPTURE=true) outgoing
@@ -19,6 +20,18 @@ const MAX_RESULTS = 20;
 
 export function captureEnabled(e: CaptureEnv): boolean {
   return Boolean(e.MAIL_CAPTURE) && e.VERCEL_ENV !== "production";
+}
+
+/**
+ * What `sendEmail` does with a message: send it (capture off), capture it
+ * (an e2e recipient on a capturing preview), or drop it (anyone else on a
+ * capturing preview). Previews share the production database, so their
+ * magic-link and reset tokens work in production: only mail for e2e
+ * addresses may ever be stored or served.
+ */
+export function previewMailMode(e: CaptureEnv, to: string): "send" | "capture" | "drop" {
+  if (!captureEnabled(e)) return "send";
+  return isE2eEmail(to) ? "capture" : "drop";
 }
 
 /** True only on a capturing, non-production deployment with a matching secret. */
