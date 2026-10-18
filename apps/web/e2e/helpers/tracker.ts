@@ -34,3 +34,33 @@ export async function addManualEntry(
   await waitForSaves(page);
   await timer(page).getByRole("button", { name: "Timer mode" }).click();
 }
+
+export const projectButton = (page: Page) => timer(page).getByRole("button", { name: /^Project:/ });
+export const tagsButton = (page: Page) => timer(page).getByRole("button", { name: /^Tags:/ });
+
+/** Creates a project from the timer bar's picker and selects it. */
+export async function createProject(page: Page, name: string) {
+  await projectButton(page).click();
+  await page.getByRole("combobox", { name: "Search projects" }).fill(name);
+  await page.getByRole("option", { name: `Create project “${name}”` }).click();
+  await expect(projectButton(page)).toHaveAccessibleName(`Project: ${name}`);
+}
+
+/** Creates a tag from the timer bar's picker, selects it and closes the picker. */
+export async function createTag(page: Page, name: string) {
+  await tagsButton(page).click();
+  await page.getByRole("combobox", { name: "Search tags" }).fill(name);
+  await page.getByRole("option", { name: `Create tag “${name}”` }).click();
+  await page.keyboard.press("Escape");
+}
+
+/** Runs the timer for just over a second with the bar's current details. */
+export async function runTimer(page: Page, description: string) {
+  await timer(page).getByRole("combobox", { name: "Description" }).fill(description);
+  await timer(page).getByRole("button", { name: "Start" }).click();
+  await expect(timer(page).getByRole("button", { name: "Stop" })).toBeVisible();
+  await page.waitForTimeout(1_100);
+  await timer(page).getByRole("button", { name: "Stop" }).click();
+  await expect(entry(page, description)).toBeVisible();
+  await waitForSaves(page);
+}

@@ -1,5 +1,16 @@
 import { expect, test } from "./fixtures";
-import { addManualEntry, entry, timer, today, waitForSaves } from "./helpers/tracker";
+import {
+  addManualEntry,
+  createProject,
+  createTag,
+  entry,
+  projectButton,
+  runTimer,
+  tagsButton,
+  timer,
+  today,
+  waitForSaves,
+} from "./helpers/tracker";
 
 /**
  * Time Tracker flows. Every test has its own fresh user and workspace and
@@ -75,23 +86,32 @@ test.describe("time tracker", () => {
 
   test("continue an entry", async ({ page, freshUser: _user, trackerPage }) => {
     await trackerPage();
-    await addManualEntry(page, { description: "Manual entry", start: "00:05", duration: "1.5" });
+    await createProject(page, "Website");
+    await createTag(page, "design");
+    await timer(page).getByRole("button", { name: "Billable", exact: true }).click();
+    await runTimer(page, "Site work");
+    await expect(projectButton(page)).toHaveAccessibleName("Project: none");
 
-    await today(page).getByRole("button", { name: 'Continue "Manual entry"' }).click();
+    await today(page).getByRole("button", { name: 'Continue "Site work"' }).click();
     await expect(timer(page).getByRole("button", { name: "Stop" })).toBeVisible();
     await expect(timer(page).getByRole("combobox", { name: "Description" })).toHaveValue(
-      "Manual entry",
+      "Site work",
     );
+    await expect(projectButton(page)).toHaveAccessibleName("Project: Website");
+    await expect(tagsButton(page)).toHaveAccessibleName("Tags: design");
+    await expect(
+      timer(page).getByRole("button", { name: "Billable", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
     await page.waitForTimeout(1_200);
     await timer(page).getByRole("button", { name: "Stop" }).click();
     await expect(timer(page).getByRole("button", { name: "Start" })).toBeVisible();
 
     // The copy and the original are adjacent and identical, so they collapse.
-    const group = today(page).getByRole("group", { name: "Group Manual entry", exact: true });
+    const group = today(page).getByRole("group", { name: "Group Site work", exact: true });
     await expect(group.getByRole("button", { name: "2 entries" })).toBeVisible();
-    await expect(entry(page, "Manual entry")).toHaveCount(0);
+    await expect(entry(page, "Site work")).toHaveCount(0);
     await group.getByRole("button", { name: "2 entries" }).click();
-    await expect(entry(page, "Manual entry")).toHaveCount(2);
+    await expect(entry(page, "Site work")).toHaveCount(2);
   });
 
   test("delete an entry and undo", async ({ page, freshUser: _user, trackerPage }) => {
@@ -116,7 +136,7 @@ test.describe("time tracker", () => {
     await expect(entry(page, "Design review")).toHaveCount(0);
   });
 
-  test("a double Enter or S starts only one timer", async ({ page, freshUser, trackerPage }) => {
+  test("a double Enter starts only one timer", async ({ page, freshUser, trackerPage }) => {
     await trackerPage();
     const description = timer(page).getByRole("combobox", { name: "Description" });
     await description.fill("Double start");

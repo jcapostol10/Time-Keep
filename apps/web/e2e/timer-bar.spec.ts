@@ -1,29 +1,15 @@
-import type { Page } from "@playwright/test";
-
 import { expect, test } from "./fixtures";
-import { entry, timer, waitForSaves } from "./helpers/tracker";
+import {
+  createProject,
+  createTag,
+  entry,
+  projectButton,
+  runTimer,
+  tagsButton,
+  timer,
+} from "./helpers/tracker";
 
 /** Timer bar controls: pickers, billable, autocomplete and keyboard shortcuts. */
-
-const projectButton = (page: Page) => timer(page).getByRole("button", { name: /^Project:/ });
-const tagsButton = (page: Page) => timer(page).getByRole("button", { name: /^Tags:/ });
-
-async function createProject(page: Page, name: string) {
-  await projectButton(page).click();
-  await page.getByRole("combobox", { name: "Search projects" }).fill(name);
-  await page.getByRole("option", { name: `Create project “${name}”` }).click();
-  await expect(projectButton(page)).toHaveAccessibleName(`Project: ${name}`);
-}
-
-async function runTimer(page: Page, description: string) {
-  await timer(page).getByRole("combobox", { name: "Description" }).fill(description);
-  await timer(page).getByRole("button", { name: "Start" }).click();
-  await expect(timer(page).getByRole("button", { name: "Stop" })).toBeVisible();
-  await page.waitForTimeout(1_100);
-  await timer(page).getByRole("button", { name: "Stop" }).click();
-  await expect(entry(page, description)).toBeVisible();
-  await waitForSaves(page);
-}
 
 test.describe("timer bar", () => {
   test("create a project inline and start a timer on it", async ({
@@ -105,10 +91,7 @@ test.describe("timer bar", () => {
   }) => {
     await trackerPage();
     await createProject(page, "Website");
-    await tagsButton(page).click();
-    await page.getByRole("combobox", { name: "Search tags" }).fill("design");
-    await page.getByRole("option", { name: "Create tag “design”" }).click();
-    await page.keyboard.press("Escape");
+    await createTag(page, "design");
     await timer(page).getByRole("button", { name: "Billable", exact: true }).click();
     await runTimer(page, "Design review");
 

@@ -42,7 +42,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Time Tracker: timer bar
 
 - [x] Start a timer, keep it running across a reload, stop it; the tab title shows the clock — `tracker.spec.ts` › "start, reload and stop a timer"
-- [x] Pressing Enter twice or S twice starts only one timer — `tracker.spec.ts` › "a double Enter or S starts only one timer"
+- [x] Pressing Enter twice quickly starts only one timer — `tracker.spec.ts` › "a double Enter starts only one timer"
 - [x] Two browser tabs never show two running timers — `tracker.spec.ts` › "two tabs never show two running timers"
 - [x] Create a project inline and start a timer on it — `timer-bar.spec.ts` › "create a project inline and start a timer on it"
 - [x] Search the project picker and clear the project — `timer-bar.spec.ts` › "search the project picker and clear the project"
@@ -68,7 +68,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Time Tracker: row actions and inline edits
 
 - [x] Edit a duration inline and keep it after a reload — `tracker.spec.ts` › "edit a duration inline"
-- [x] Continue an entry: a new timer starts with the same details — `tracker.spec.ts` › "continue an entry"
+- [x] Continue an entry: a new timer starts with the same description, project, tags and billable — `tracker.spec.ts` › "continue an entry"
 - [x] Delete an entry and undo the delete — `tracker.spec.ts` › "delete an entry and undo"
 - [ ] Duplicate an entry — gap
 - [ ] Select several entries and delete them in bulk, with undo — gap
