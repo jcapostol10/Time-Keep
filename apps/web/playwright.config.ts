@@ -39,6 +39,8 @@ export default defineConfig({
       : {}),
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Local runs delete the @e2e.test users they created; previews are cleaned by CI.
+  ...(remoteUrl ? {} : { globalTeardown: "./e2e/global-teardown.ts" }),
   ...(remoteUrl
     ? {}
     : {
