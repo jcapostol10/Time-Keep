@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { type Role, slugify, uniqueSlug } from "@timekeep/core";
-import { type Database, eq, membership, workspace, workspaceSettings } from "@timekeep/db";
+import { type Database, eq, membership, sql, workspace, workspaceSettings } from "@timekeep/db";
 
 export interface CreateWorkspaceArgs {
   name: string;
@@ -19,10 +19,14 @@ export interface CreateWorkspaceArgs {
  */
 export async function createWorkspace(db: Database, args: CreateWorkspaceArgs) {
   return db.transaction(async (tx) => {
+    const base = slugify(args.name);
+    // Serialise slug allocation per base slug: without it, two sign-ups with
+    // the same name read the same free slug and the second insert fails.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`workspace-slug:${base}`}))`);
     const taken = new Set(
       (await tx.select({ slug: workspace.slug }).from(workspace)).map((r) => r.slug),
     );
-    const slug = uniqueSlug(slugify(args.name), (s) => taken.has(s));
+    const slug = uniqueSlug(base, (s) => taken.has(s));
     const id = randomUUID();
 
     const [created] = await tx
