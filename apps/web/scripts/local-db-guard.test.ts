@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isLocalDatabaseUrl } from "./local-db-guard";
+import { cleanupTarget, isLocalDatabaseUrl } from "./local-db-guard";
 
 describe("isLocalDatabaseUrl", () => {
   it("accepts local hosts", () => {
@@ -21,5 +21,27 @@ describe("isLocalDatabaseUrl", () => {
   it("rejects missing or malformed URLs", () => {
     expect(isLocalDatabaseUrl(undefined)).toBe(false);
     expect(isLocalDatabaseUrl("not a url")).toBe(false);
+  });
+});
+
+describe("cleanupTarget", () => {
+  it("is the URL cleanup actually connects to: the session URL when set", () => {
+    expect(
+      cleanupTarget({
+        DATABASE_URL: "postgres://u:p@localhost:5432/x",
+        DATABASE_URL_SESSION: "postgresql://a.b:pw@aws-0-x.pooler.supabase.com:5432/postgres",
+      }),
+    ).toBe("postgresql://a.b:pw@aws-0-x.pooler.supabase.com:5432/postgres");
+    expect(cleanupTarget({ DATABASE_URL: "postgres://u:p@localhost:5432/x" })).toBe(
+      "postgres://u:p@localhost:5432/x",
+    );
+  });
+
+  it("is not local when the session URL is remote, even if DATABASE_URL is local", () => {
+    const env = {
+      DATABASE_URL: "postgres://u:p@localhost:5432/x",
+      DATABASE_URL_SESSION: "postgresql://a.b:pw@aws-0-x.pooler.supabase.com:5432/postgres",
+    };
+    expect(isLocalDatabaseUrl(cleanupTarget(env))).toBe(false);
   });
 });
