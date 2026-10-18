@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import { createProjectAction } from "@/server/actions/time-entries";
 
+import { trackDraftWrite } from "./draft-writes";
 import { useTrackerCache, useTrackerOptions } from "./use-tracker-cache";
 
 export function ColorDot({ color, className }: { color: string; className?: string }) {
@@ -132,7 +133,7 @@ export function ProjectPicker({
                 <CommandItem
                   value={`__create__ ${trimmed}`}
                   disabled={creating}
-                  onSelect={() => void create()}
+                  onSelect={() => void trackDraftWrite(create())}
                 >
                   <PlusIcon />
                   <span className="truncate">Create project &ldquo;{trimmed}&rdquo;</span>

@@ -47,6 +47,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Create a project inline and start a timer on it — `timer-bar.spec.ts` › "create a project inline and start a timer on it"
 - [x] Search the project picker and clear the project — `timer-bar.spec.ts` › "search the project picker and clear the project"
 - [x] Pick several tags, including one created inline — `timer-bar.spec.ts` › "pick several tags, including one created inline"
+- [x] Start right after creating a tag: the tag stays on the entry — `timer-bar.spec.ts` › "a tag created just before Start stays on the entry"
+- [x] Start right after creating a project: the project stays on the entry — `timer-bar.spec.ts` › "a project created just before Start stays on the entry"
 - [x] The billable toggle is saved with the entry — `timer-bar.spec.ts` › "the billable toggle is saved with the entry"
 - [x] Description autocomplete fills project, tags and billable from a recent entry — `timer-bar.spec.ts` › "autocomplete fills project, tags and billable from a recent entry"
 - [x] N focuses the description and Esc leaves it — `timer-bar.spec.ts` › "N focuses the description and Esc leaves it"

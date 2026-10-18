@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+
 import { expect, test } from "./fixtures";
 import {
   createProject,
@@ -7,9 +9,23 @@ import {
   runTimer,
   tagsButton,
   timer,
+  waitForSaves,
 } from "./helpers/tracker";
 
 /** Timer bar controls: pickers, billable, autocomplete and keyboard shortcuts. */
+
+/** Delays only the create-project/tag server actions, as on a distant server. */
+async function slowCreates(page: Page) {
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const isCreate =
+      request.method() === "POST" &&
+      request.headers()["next-action"] !== undefined &&
+      (request.postData() ?? "").includes('"name":');
+    if (isCreate) await new Promise((resolve) => setTimeout(resolve, 1_500));
+    await route.fallback();
+  });
+}
 
 test.describe("timer bar", () => {
   test("create a project inline and start a timer on it", async ({
@@ -107,6 +123,47 @@ test.describe("timer bar", () => {
     await expect(
       timer(page).getByRole("button", { name: "Billable", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("a tag created just before Start stays on the entry", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await slowCreates(page);
+    await timer(page).getByRole("combobox", { name: "Description" }).fill("Hurried work");
+    await tagsButton(page).click();
+    await page.getByRole("combobox", { name: "Search tags" }).fill("design");
+    await page.getByRole("option", { name: "Create tag “design”" }).click();
+    await page.keyboard.press("Escape");
+    await timer(page).getByRole("button", { name: "Start" }).click();
+
+    await expect(timer(page).getByRole("button", { name: "Stop" })).toBeVisible();
+    await expect(tagsButton(page)).toHaveAccessibleName("Tags: design");
+    await waitForSaves(page);
+    await trackerPage();
+    await expect(tagsButton(page)).toHaveAccessibleName("Tags: design");
+  });
+
+  test("a project created just before Start stays on the entry", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await slowCreates(page);
+    await timer(page).getByRole("combobox", { name: "Description" }).fill("Hurried work");
+    await projectButton(page).click();
+    await page.getByRole("combobox", { name: "Search projects" }).fill("Website");
+    await page.getByRole("option", { name: "Create project “Website”" }).click();
+    await timer(page).getByRole("button", { name: "Start" }).click();
+
+    await expect(timer(page).getByRole("button", { name: "Stop" })).toBeVisible();
+    await expect(projectButton(page)).toHaveAccessibleName("Project: Website");
+    await waitForSaves(page);
+    await trackerPage();
+    await expect(projectButton(page)).toHaveAccessibleName("Project: Website");
   });
 
   test("N focuses the description and Esc leaves it", async ({

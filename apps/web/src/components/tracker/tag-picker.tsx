@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import { createTagAction } from "@/server/actions/time-entries";
 
+import { trackDraftWrite } from "./draft-writes";
 import { useTrackerCache, useTrackerOptions } from "./use-tracker-cache";
 
 /**
@@ -152,7 +153,7 @@ export function TagPicker({
                 <CommandItem
                   value={`__create__ ${trimmed}`}
                   disabled={creating}
-                  onSelect={() => void create()}
+                  onSelect={() => void trackDraftWrite(create())}
                 >
                   <PlusIcon />
                   <span className="truncate">Create tag &ldquo;{trimmed}&rdquo;</span>

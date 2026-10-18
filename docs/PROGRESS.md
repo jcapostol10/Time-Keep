@@ -85,7 +85,7 @@ Design: `docs/superpowers/specs/2026-10-15-vercel-preview-e2e-design.md`. Plan: 
 - [ ] Step 5: Phase 0 gaps (invite cancellation, role changes, avatar validation, preferences).
 - [ ] Step 6: 375px layouts.
 
-Coverage: 33 of 58 functions (2026-10-18). Bugs found by the backfill and fixed: concurrent same-name sign-ups returned 500 (workspace slug race); the tag picker wiped typed text and could drop a tag created just before closing.
+Coverage: 35 of 60 functions (2026-10-18). Bugs found by the backfill and fixed: concurrent same-name sign-ups returned 500 (workspace slug race); the tag picker wiped typed text and could drop a tag created just before closing; on a slow connection a project or tag created just before Start was left off the entry (found by the first Vercel preview run; Start now waits for picker creates).
 
 ## Phase 2 — Projects, clients, tasks, tags, timesheet, calendar
 

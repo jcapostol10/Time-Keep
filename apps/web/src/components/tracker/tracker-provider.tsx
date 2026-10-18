@@ -27,6 +27,7 @@ import {
   updateEntryAction,
 } from "@/server/actions/time-entries";
 
+import { draftWritesSettled } from "./draft-writes";
 import { trackerKeys, trackerUrls } from "./query-keys";
 import { IdleDialog } from "./idle-dialog";
 import { activeIdlePrompt, type IdlePrompt } from "./idle-prompt";
@@ -235,27 +236,35 @@ export function TrackerProvider({
     [cache, setRunning],
   );
 
+  // Latest draft for `start`, which reads it after waiting for picker creates.
+  const draftRef = useRef<EntryDraft>(EMPTY_DRAFT);
   const setDraft = useCallback((patch: Partial<EntryDraft>) => {
-    setDraftState((d) => ({ ...d, ...patch }));
+    draftRef.current = { ...draftRef.current, ...patch };
+    setDraftState(draftRef.current);
   }, []);
 
   const start = useCallback(
     async (details?: EntryDraft) => {
       if (!begin()) return false;
       try {
-        const result = await trackSave(() => startTimerAction(slug, details ?? draft));
+        // A project or tag still being created belongs on this entry.
+        if (!details) await draftWritesSettled();
+        const result = await trackSave(() =>
+          startTimerAction(slug, details ?? draftRef.current),
+        );
         if (!result.ok) {
           toast.error(result.error);
           return false;
         }
         applyStart(result.data);
+        draftRef.current = EMPTY_DRAFT;
         setDraftState(EMPTY_DRAFT);
         return true;
       } finally {
         finish();
       }
     },
-    [slug, draft, applyStart, begin, finish],
+    [slug, applyStart, begin, finish],
   );
 
   const stop = useCallback(
