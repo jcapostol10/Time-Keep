@@ -4,8 +4,9 @@ import { formatClock } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import { cn } from "@timekeep/ui/lib/utils";
 import { ListPlusIcon, Loader2Icon, PlayIcon, SquareIcon, TimerIcon } from "lucide-react";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { EMPTY_DRAFT, type EntryDraft, type RecentDescription } from "@/lib/tracker-types";
 
@@ -18,17 +19,6 @@ import { useTracker, useTrackerClock } from "./tracker-provider";
 import { useEntryMutations } from "./use-entry-mutations";
 
 type Mode = "timer" | "manual";
-
-const noopSubscribe = () => () => {};
-
-/** False during SSR and hydration, true once React owns the page (used by e2e tests). */
-function useHydrated(): boolean {
-  return useSyncExternalStore(
-    noopSubscribe,
-    () => true,
-    () => false,
-  );
-}
 
 function detailsOf(s: RecentDescription): EntryDraft {
   return {

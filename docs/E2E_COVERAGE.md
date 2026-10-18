@@ -44,13 +44,13 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Start a timer, keep it running across a reload, stop it; the tab title shows the clock — `tracker.spec.ts` › "start, reload and stop a timer"
 - [x] Pressing Enter twice or S twice starts only one timer — `tracker.spec.ts` › "a double Enter or S starts only one timer"
 - [x] Two browser tabs never show two running timers — `tracker.spec.ts` › "two tabs never show two running timers"
-- [ ] Create a project inline and start a timer on it — gap
-- [ ] Search the project picker and clear the project — gap
-- [ ] Pick several tags, including one created inline — gap
-- [ ] The billable toggle is saved with the entry — gap
-- [ ] Description autocomplete fills project, tags and billable from a recent entry — gap
-- [ ] N focuses the description and Esc leaves it — gap
-- [ ] S starts and stops the timer from another workspace page — gap
+- [x] Create a project inline and start a timer on it — `timer-bar.spec.ts` › "create a project inline and start a timer on it"
+- [x] Search the project picker and clear the project — `timer-bar.spec.ts` › "search the project picker and clear the project"
+- [x] Pick several tags, including one created inline — `timer-bar.spec.ts` › "pick several tags, including one created inline"
+- [x] The billable toggle is saved with the entry — `timer-bar.spec.ts` › "the billable toggle is saved with the entry"
+- [x] Description autocomplete fills project, tags and billable from a recent entry — `timer-bar.spec.ts` › "autocomplete fills project, tags and billable from a recent entry"
+- [x] N focuses the description and Esc leaves it — `timer-bar.spec.ts` › "N focuses the description and Esc leaves it"
+- [x] S starts and stops the timer from another workspace page — `timer-bar.spec.ts` › "S starts and stops the timer from another workspace page"
 
 ## Time Tracker: manual mode
 

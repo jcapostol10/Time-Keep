@@ -1,0 +1,158 @@
+import type { Page } from "@playwright/test";
+
+import { expect, test } from "./fixtures";
+import { entry, timer, waitForSaves } from "./helpers/tracker";
+
+/** Timer bar controls: pickers, billable, autocomplete and keyboard shortcuts. */
+
+const projectButton = (page: Page) => timer(page).getByRole("button", { name: /^Project:/ });
+const tagsButton = (page: Page) => timer(page).getByRole("button", { name: /^Tags:/ });
+
+async function createProject(page: Page, name: string) {
+  await projectButton(page).click();
+  await page.getByRole("combobox", { name: "Search projects" }).fill(name);
+  await page.getByRole("option", { name: `Create project “${name}”` }).click();
+  await expect(projectButton(page)).toHaveAccessibleName(`Project: ${name}`);
+}
+
+async function runTimer(page: Page, description: string) {
+  await timer(page).getByRole("combobox", { name: "Description" }).fill(description);
+  await timer(page).getByRole("button", { name: "Start" }).click();
+  await expect(timer(page).getByRole("button", { name: "Stop" })).toBeVisible();
+  await page.waitForTimeout(1_100);
+  await timer(page).getByRole("button", { name: "Stop" }).click();
+  await expect(entry(page, description)).toBeVisible();
+  await waitForSaves(page);
+}
+
+test.describe("timer bar", () => {
+  test("create a project inline and start a timer on it", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await createProject(page, "Website");
+    await runTimer(page, "Site work");
+    await expect(
+      entry(page, "Site work").getByRole("button", { name: /^Project:/ }),
+    ).toHaveAccessibleName("Project: Website");
+  });
+
+  test("search the project picker and clear the project", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await createProject(page, "Alpha");
+    await createProject(page, "Beta");
+
+    await projectButton(page).click();
+    await page.getByRole("combobox", { name: "Search projects" }).fill("bet");
+    await expect(page.getByRole("option", { name: "Beta", exact: true })).toBeVisible();
+    await expect(page.getByRole("option", { name: "Alpha", exact: true })).toHaveCount(0);
+    await page.getByRole("option", { name: "Beta", exact: true }).click();
+    await expect(projectButton(page)).toHaveAccessibleName("Project: Beta");
+
+    await projectButton(page).click();
+    await page.getByRole("option", { name: "No project" }).click();
+    await expect(projectButton(page)).toHaveAccessibleName("Project: none");
+  });
+
+  test("pick several tags, including one created inline", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await tagsButton(page).click();
+    const search = page.getByRole("combobox", { name: "Search tags" });
+    await search.fill("design");
+    await page.getByRole("option", { name: "Create tag “design”" }).click();
+    await search.fill("review");
+    await page.getByRole("option", { name: "Create tag “review”" }).click();
+    await page.keyboard.press("Escape");
+    await expect(tagsButton(page)).toHaveAccessibleName("Tags: design, review");
+
+    await runTimer(page, "Tagged work");
+    await expect(
+      entry(page, "Tagged work").getByRole("button", { name: /^Tags:/ }),
+    ).toHaveAccessibleName("Tags: design, review");
+  });
+
+  test("the billable toggle is saved with the entry", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    const billable = timer(page).getByRole("button", { name: "Billable", exact: true });
+    await expect(billable).toHaveAttribute("aria-pressed", "false");
+    await billable.click();
+    await expect(billable).toHaveAttribute("aria-pressed", "true");
+
+    await runTimer(page, "Billable work");
+    await expect(
+      entry(page, "Billable work").getByRole("button", { name: "Billable", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("autocomplete fills project, tags and billable from a recent entry", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await createProject(page, "Website");
+    await tagsButton(page).click();
+    await page.getByRole("combobox", { name: "Search tags" }).fill("design");
+    await page.getByRole("option", { name: "Create tag “design”" }).click();
+    await page.keyboard.press("Escape");
+    await timer(page).getByRole("button", { name: "Billable", exact: true }).click();
+    await runTimer(page, "Design review");
+
+    // The bar is cleared after the timer starts; pick the recent entry back.
+    await expect(projectButton(page)).toHaveAccessibleName("Project: none");
+    const description = timer(page).getByRole("combobox", { name: "Description" });
+    await description.fill("Desi");
+    await page.getByRole("option", { name: /Design review/ }).click();
+
+    await expect(description).toHaveValue("Design review");
+    await expect(projectButton(page)).toHaveAccessibleName("Project: Website");
+    await expect(tagsButton(page)).toHaveAccessibleName("Tags: design");
+    await expect(
+      timer(page).getByRole("button", { name: "Billable", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("N focuses the description and Esc leaves it", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    const description = timer(page).getByRole("combobox", { name: "Description" });
+    await page.getByRole("heading", { name: "Time Tracker" }).click();
+    await expect(description).not.toBeFocused();
+
+    await page.keyboard.press("n");
+    await expect(description).toBeFocused();
+    await expect(description).toHaveValue("");
+
+    await page.keyboard.press("Escape");
+    await expect(description).not.toBeFocused();
+  });
+
+  test("S starts and stops the timer from another workspace page", async ({ page, freshUser }) => {
+    await page.goto(`/w/${freshUser.slug}/team`);
+    await expect(page.locator('main[data-hydrated="true"]')).toBeVisible();
+    await expect(page).toHaveTitle("Team · TimeKeep");
+
+    await page.keyboard.press("s");
+    await expect(page).toHaveTitle(/^0:00:\d\d · /);
+
+    await page.keyboard.press("s");
+    await expect(page).toHaveTitle("Team · TimeKeep");
+  });
+});

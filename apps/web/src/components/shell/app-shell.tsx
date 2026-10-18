@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Logo } from "@/components/logo";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { workspaceRoutes } from "@/lib/routes";
 
@@ -24,6 +25,7 @@ export interface AppShellProps {
 
 export function AppShell({ user, workspace, workspaces, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const hydrated = useHydrated();
   const home = workspaceRoutes.tracker(workspace.slug);
 
   return (
@@ -67,7 +69,7 @@ export function AppShell({ user, workspace, workspaces, children }: AppShellProp
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8" data-hydrated={hydrated}>
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>
       </div>
