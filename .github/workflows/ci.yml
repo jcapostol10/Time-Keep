@@ -61,6 +61,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: E2E coverage list matches the tests
+        run: pnpm --filter @timekeep/web e2e:coverage
+
       - name: Typecheck
         run: pnpm typecheck
 
