@@ -51,7 +51,7 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md
 3. **Every query is scoped by `workspaceId` and role-checked.** Server actions and route handlers call `requireWorkspaceAccess(slug, minRole)` from `apps/web/src/server/workspace-access.ts` first; pages/layouts use `requireWorkspacePage`. Cross-tenant access must render not-found, never leak existence: non-members get the same 404 as an unknown slug; 403 is only for members whose role is too low.
 4. **At most one running timer per user per workspace**, enforced by the partial unique index `time_entry_one_running_uq` (`WHERE "end" IS NULL AND deleted_at IS NULL`) plus a per-user advisory lock in `startTimer`. Starting a timer stops the running one in the same transaction.
 5. **Rates are snapshotted on the entry** so historical reports never shift. (Phase 4.)
-6. **No feature merges without tests.** Pure logic → Vitest in `packages/core`; DB behaviour → Vitest integration tests in `apps/web/src/**/*.test.ts` against `TEST_DATABASE_URL`; user flows → Playwright in `apps/web/e2e`.
+6. **No feature merges without tests.** Pure logic → Vitest in `packages/core`; DB behaviour → Vitest integration tests in `apps/web/src/**/*.test.ts` against `TEST_DATABASE_URL`; user flows → Playwright in `apps/web/e2e`. From Phase 2, a feature starts with unticked lines in `docs/E2E_COVERAGE.md` and failing e2e tests before any app code.
 7. **Secrets never enter git.** The repo is public. `.env` is ignored; `.env.example` documents every variable.
 
 ## Conventions
@@ -70,7 +70,18 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md
 - Tracker data flow: the page SSRs the first week into react-query (`HydrationBoundary`); later pages and refetches use the `/api/w/[slug]/...` route handlers; writes are server actions followed by cache updates (`components/tracker/entry-cache.ts`). Everything crossing the boundary is JSON with ISO strings (`lib/tracker-types.ts`), never `Date`.
 - `TrackerProvider` (in the workspace layout) owns the running timer on every workspace page: tab title, S / N / Esc shortcuts, cross-tab sync (BroadcastChannel + refetch on focus), idle detection, Pomodoro and reminders. Components that need the ticking clock use `useTrackerClock()`; everything else uses `useTracker()` so rows do not re-render every second.
 - `react-hooks` v7 lint rules are on: no `Date.now()` or other impure calls during render, no synchronous `setState` in effects (use `useSyncExternalStore`, `useEffectEvent`, or derive state), and `useWatch` instead of `form.watch`.
-- e2e specs that type into the tracker wait for `section[aria-label="Timer"][data-hydrated="true"]` first; tracker specs use a fresh signed-up user so seeded data stays stable.
+- **e2e suite** (design: `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
+  - Import `test` and `expect` from `e2e/fixtures.ts`. Fixtures:
+    - `freshUser`: a new `@e2e.test` account, signed in over HTTP. Fixtures are lazy, so request it explicitly.
+    - `demoUser(role)`: only for role and isolation tests.
+    - `trackerPage()`: opens the tracker once it is interactive.
+  - Each test creates its own data (`e2e/helpers/tracker.ts` `addManualEntry` at explicit early times) and must pass in any order.
+  - Wait for `data-hydrated="true"` (timer bar, or the shell's `<main>`) before typing or pressing keys.
+  - Wait for `[data-saving="false"]` before reloading after an edit.
+  - `docs/E2E_COVERAGE.md` lists every user-facing function. `pnpm --filter @timekeep/web e2e:coverage` (run in CI) fails when a ticked line names a missing test.
+  - Tick a line only after its test was seen to fail with the guarded behaviour broken; the commit message records the break.
+  - The suite must stay under 10 minutes on a Vercel preview; slow tests move to a nightly run rather than being deleted.
+  - Local runs clean up `@e2e.test` users in a global teardown that only ever touches a local database.
 - UI: shadcn/ui components from `@timekeep/ui/components/*`, icons from `lucide-react`, toasts via `sonner`. Theme tokens are in `packages/ui/src/styles/globals.css` (our own teal palette; light + dark via `.dark` class and `next-themes`). Every page must work at 375px.
 - Next.js: `cacheComponents` is **off** (all pages are dynamic and auth-gated). `PageProps<"/route">` / `LayoutProps<"/route">` global types come from `next typegen` (run by `pnpm typecheck`).
 - Commit after each numbered part of a phase prompt; message body explains what and why. Tag `phase-N` when a phase's acceptance checks pass.

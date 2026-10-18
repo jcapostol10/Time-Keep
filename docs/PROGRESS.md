@@ -75,6 +75,18 @@ Decisions and deviations from the prompt:
 
 Design: `docs/superpowers/specs/2026-10-15-vercel-preview-e2e-design.md`. Plan: `docs/superpowers/plans/2026-10-15-vercel-preview-e2e.md`.
 
+## E2E suite (test-driven backfill)
+
+- [x] Foundation: `docs/E2E_COVERAGE.md` with a CI check, `freshUser` / `demoUser` / `trackerPage` fixtures, local cleanup.
+- [x] Step 1: tracker tests made independent (fresh user per test).
+- [x] Step 2: timer bar (pickers, billable, autocomplete, shortcuts).
+- [ ] Step 3: entry list and inline edits.
+- [ ] Step 4: timer settings, idle prompt, Pomodoro and reminders (clock-controlled).
+- [ ] Step 5: Phase 0 gaps (invite cancellation, role changes, avatar validation, preferences).
+- [ ] Step 6: 375px layouts.
+
+Coverage: 33 of 58 functions (2026-10-18). Bugs found by the backfill and fixed: concurrent same-name sign-ups returned 500 (workspace slug race); the tag picker wiped typed text and could drop a tag created just before closing.
+
 ## Phase 2 — Projects, clients, tasks, tags, timesheet, calendar
 
 - [ ] Clients, Projects (+ detail tabs), Tasks, Tags
