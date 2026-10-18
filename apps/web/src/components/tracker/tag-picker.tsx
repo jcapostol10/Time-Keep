@@ -12,7 +12,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@timekeep/ui/components/popover";
 import { cn } from "@timekeep/ui/lib/utils";
 import { CheckIcon, PlusIcon, TagIcon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { createTagAction } from "@/server/actions/time-entries";
@@ -40,6 +40,9 @@ export function TagPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selection, setSelection] = useState<string[]>(value);
+  // Mirrors of state that async tag creation reads after it resolves.
+  const selectionRef = useRef<string[]>(value);
+  const openRef = useRef(false);
   const [creating, setCreating] = useState(false);
   const trimmed = query.trim();
   const canCreate =
@@ -51,30 +54,43 @@ export function TagPicker({
     if (changed) onChange(next);
   }
 
+  function updateSelection(next: string[]) {
+    selectionRef.current = next;
+    setSelection(next);
+  }
+
   function toggle(id: string) {
-    setSelection((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+    const current = selectionRef.current;
+    updateSelection(current.includes(id) ? current.filter((x) => x !== id) : [...current, id]);
   }
 
   async function create() {
+    const name = trimmed;
     setCreating(true);
-    const result = await createTagAction(slug, { name: trimmed });
+    const result = await createTagAction(slug, { name });
     setCreating(false);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
     cache.addTag(result.data);
-    setSelection((s) => (s.includes(result.data.id) ? s : [...s, result.data.id]));
-    setQuery("");
+    const current = selectionRef.current;
+    const next = current.includes(result.data.id) ? current : [...current, result.data.id];
+    updateSelection(next);
+    // Keep whatever the user has typed since; only clear the name just created.
+    setQuery((q) => (q.trim() === name ? "" : q));
+    // Closed while the tag was being created: apply it now, or it would be lost.
+    if (!openRef.current) commit(next);
   }
 
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
-        if (next) setSelection(value);
+        openRef.current = next;
+        if (next) updateSelection(value);
         else {
-          commit(selection);
+          commit(selectionRef.current);
           setQuery("");
         }
         setOpen(next);
