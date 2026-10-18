@@ -46,27 +46,67 @@ describe("parseCoverage", () => {
   });
 });
 
+/** A minimal `playwright test --list --reporter=json` report. */
+function report(files: { file: string; describe?: string; specs: [string, string][] }[]) {
+  return JSON.stringify({
+    suites: files.map(({ file, describe, specs }) => {
+      const leaf = specs.map(([title, expectedStatus]) => ({
+        title,
+        file,
+        tests: [{ expectedStatus, status: "skipped" }],
+      }));
+      return describe
+        ? { title: file, file, specs: [], suites: [{ title: describe, file, specs: leaf }] }
+        : { title: file, file, specs: leaf };
+    }),
+  });
+}
+
 describe("parseListedTests", () => {
   it("keys each listed test by spec file and its own title", () => {
     const listed = parseListedTests(
-      [
-        "Listing tests:",
-        "  [chromium] › tracker.spec.ts:36:7 › time tracker › start, reload and stop a timer",
-        "  [chromium] › e2e\\auth.spec.ts:7:7 › authentication › sign up",
-        "  [chromium] › e2e/fixtures.spec.ts:3:5 › freshUser starts signed in",
-        "Total: 3 tests in 3 files",
-      ].join("\n"),
+      report([
+        {
+          file: "tracker.spec.ts",
+          describe: "time tracker",
+          specs: [["start, reload and stop a timer", "passed"]],
+        },
+        { file: "auth\\auth.spec.ts", describe: "authentication", specs: [["sign up", "passed"]] },
+        { file: "team/invite.spec.ts", specs: [["invite a member", "passed"]] },
+        { file: "fixtures.spec.ts", specs: [["freshUser starts signed in", "passed"]] },
+      ]),
     );
     for (const key of [
       "auth.spec.ts::sign up",
+      "invite.spec.ts::invite a member",
       "fixtures.spec.ts::freshUser starts signed in",
       "tracker.spec.ts::start, reload and stop a timer",
+      "tracker.spec.ts::time tracker › start, reload and stop a timer",
     ]) {
       expect(listed.has(key)).toBe(true);
     }
     // A describe block alone is not a test.
     expect(listed.has("tracker.spec.ts::time tracker")).toBe(false);
-    expect(listed.has("tracker.spec.ts::start")).toBe(false);
+  });
+
+  it("leaves out skipped and fixme tests, so they never count as covered", () => {
+    const listed = parseListedTests(
+      report([
+        {
+          file: "a.spec.ts",
+          specs: [
+            ["runs", "passed"],
+            ["skipped", "skipped"],
+          ],
+        },
+      ]),
+    );
+    expect(listed.has("a.spec.ts::runs")).toBe(true);
+    expect(listed.has("a.spec.ts::skipped")).toBe(false);
+  });
+
+  it("rejects output that is not a JSON report", () => {
+    expect(() => parseListedTests("Listing tests: Total: 0 tests")).toThrow();
   });
 });
 

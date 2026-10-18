@@ -48,23 +48,42 @@ export function parseCoverage(markdown: string): CoverageLine[] {
   return lines;
 }
 
-const LISTED = /^\s*\[[^\]]+\]\s+›\s+(.+?):\d+:\d+\s+›\s+(.+)$/;
+interface ReportSpec {
+  title: string;
+  file: string;
+  tests: { expectedStatus: string }[];
+}
+
+interface ReportSuite {
+  title: string;
+  specs?: ReportSpec[];
+  suites?: ReportSuite[];
+}
 
 /**
- * Keys `${specFile}::${title}` for every listed test. Titles may themselves
- * contain " › ", so every suffix of the describe/test path is keyed.
+ * Reads `playwright test --list --reporter=json` and keys `${specFile}::${title}`
+ * for every test that will run. Titles may themselves contain " › ", so every
+ * suffix of the describe/test path is keyed. Tests marked `test.skip` or
+ * `test.fixme` are left out: a test that never runs covers nothing. (A
+ * `test.skip()` call inside a test body only shows up at run time.)
  */
-export function parseListedTests(listOutput: string): Set<string> {
+export function parseListedTests(reportJson: string): Set<string> {
+  const report = JSON.parse(reportJson) as { suites?: ReportSuite[] };
+  if (!Array.isArray(report.suites)) throw new Error("not a Playwright JSON report");
   const keys = new Set<string>();
-  for (const raw of listOutput.split(/\r?\n/)) {
-    const match = LISTED.exec(raw);
-    if (!match) continue;
-    const file = (match[1] ?? "").split(/[\\/]/).pop() ?? "";
-    const segments = (match[2] ?? "").split(" › ");
-    for (let i = 0; i < segments.length; i++) {
-      keys.add(`${file}::${segments.slice(i).join(" › ")}`);
+  const walk = (suite: ReportSuite, path: string[]) => {
+    for (const spec of suite.specs ?? []) {
+      if (spec.tests.every((t) => t.expectedStatus === "skipped")) continue;
+      const file = spec.file.split(/[\\/]/).pop() ?? "";
+      const segments = [...path, spec.title];
+      for (let i = 0; i < segments.length; i++) {
+        keys.add(`${file}::${segments.slice(i).join(" › ")}`);
+      }
     }
-  }
+    for (const child of suite.suites ?? []) walk(child, [...path, child.title]);
+  };
+  // The top-level suites are files; their titles are not part of a test's name.
+  for (const fileSuite of report.suites) walk(fileSuite, []);
   return keys;
 }
 
@@ -79,10 +98,11 @@ function main() {
   const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const listFile = path.resolve(webRoot, "../../docs/E2E_COVERAGE.md");
   // A fixed command string: nothing user-controlled reaches the shell.
-  const result = spawnSync("pnpm exec playwright test --list", {
+  const result = spawnSync("pnpm exec playwright test --list --reporter=json", {
     cwd: webRoot,
     encoding: "utf8",
     shell: true,
+    maxBuffer: 64 * 1024 * 1024,
   });
   if (result.status !== 0) {
     console.error(result.stdout, result.stderr);
@@ -98,7 +118,7 @@ function main() {
   if (stale.length > 0) {
     for (const l of stale) {
       console.error(
-        `[coverage] E2E_COVERAGE.md:${l.line} "${l.text}" names a test that does not exist: ${l.spec ?? "?"} › "${l.title ?? "?"}"`,
+        `[coverage] E2E_COVERAGE.md:${l.line} "${l.text}" names a test that does not exist or is skipped: ${l.spec ?? "?"} › "${l.title ?? "?"}"`,
       );
     }
     process.exit(1);
