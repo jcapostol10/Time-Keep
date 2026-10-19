@@ -5,10 +5,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 ## Needs the owner
 
 - [ ] **Production email:** verify a sending domain in Resend. Until then, production can only email the Resend account owner, so sign-up verification, password reset and invites fail for everyone else.
-- [ ] **Google sign-in on production:** the button only appears when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set. Production has neither. Needs:
-  - in Google Cloud Console, the redirect URI `https://time-keep-nine.vercel.app/api/auth/callback/google` and the origin `https://time-keep-nine.vercel.app`, and the consent screen published (in "Testing" only listed test users can sign in);
-  - both variables on the Vercel project, Production only. Previews get a new URL each time and Google does not accept wildcard redirect URIs. **Done 2026-10-19:** set from the local OAuth client (owner chose to reuse it), marked sensitive; they take effect on the next production deployment.
-
+- [ ] **Production is behind Vercel Authentication.** Deployment protection covers every deployment, production included, so anyone not signed in to the Vercel team gets a Vercel login page instead of TimeKeep. Fine while it is private; before real customers use it, switch protection to "Standard" (previews only) or add a custom domain outside protection. The e2e workflow only targets previews, so it is unaffected.
 ## App
 
 - [ ] The workspace slug lock (`pg_advisory_xact_lock` in `createWorkspace`) covers the base slug only, not neighbouring suffixed slugs, so two sign-ups with different base names can still race for the same suffixed slug. Rare; the unique index turns it into an error, not bad data.
@@ -36,4 +33,5 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## Done
 
+- [x] Google sign-in on production. Done 2026-10-20: Vercel Production has `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (the local OAuth client, marked sensitive); the owner added the production redirect URI and origin in Google Cloud Console; production (`17ff9c6`) renders "Continue with Google" and starts OAuth at accounts.google.com with redirect_uri `https://time-keep-nine.vercel.app/api/auth/callback/google`.
 - [x] PROGRESS marked the e2e foundation done before the Vercel preview run was green. Resolved 2026-10-18: preview run 39128237619 passed 30/30 in 3.9 min on `2862a53`.
