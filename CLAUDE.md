@@ -41,7 +41,7 @@ packages/core/       Pure domain code: roles, zod schemas, slugs, duration + tim
                      entry grouping/editing, tracker rules. Unit tested. No I/O
 packages/ui/         shadcn/ui components (`@timekeep/ui/components/*`) and the theme (src/styles/globals.css)
 packages/config/     Shared ESLint flat configs and tsconfig presets
-docs/                PRD.md, DATA_MODEL.md, PROGRESS.md
+docs/                PRD.md, DATA_MODEL.md, PROGRESS.md, E2E_COVERAGE.md, BACKLOG.md (deferred fixes)
 ```
 
 ## Invariants (do not break these)
@@ -111,3 +111,4 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md
 2. Plan first (folder tree, schema changes, file list), then build part by part.
 3. Add a migration with `pnpm db:generate` for every schema change; never edit applied migrations.
 4. Finish with `pnpm lint && pnpm typecheck && pnpm test && pnpm e2e`, update `docs/DATA_MODEL.md` and `docs/PROGRESS.md`, update this file if conventions changed, commit, tag.
+5. Keep `docs/BACKLOG.md` current: add every deferred finding (review minors, gaps a test run exposed, setup left for later), and move an item to its Done section, with date and commit, in the same commit that fixes it.
