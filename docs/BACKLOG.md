@@ -7,7 +7,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] **Production email:** verify a sending domain in Resend. Until then, production can only email the Resend account owner, so sign-up verification, password reset and invites fail for everyone else.
 - [ ] **Google sign-in on production:** the button only appears when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set. Production has neither. Needs:
   - in Google Cloud Console, the redirect URI `https://time-keep-nine.vercel.app/api/auth/callback/google` and the origin `https://time-keep-nine.vercel.app`, and the consent screen published (in "Testing" only listed test users can sign in);
-  - both variables on the Vercel project, Production only. Previews get a new URL each time and Google does not accept wildcard redirect URIs.
+  - both variables on the Vercel project, Production only. Previews get a new URL each time and Google does not accept wildcard redirect URIs. **Done 2026-10-19:** set from the local OAuth client (owner chose to reuse it), marked sensitive; they take effect on the next production deployment.
 
 ## App
 
