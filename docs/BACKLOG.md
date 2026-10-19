@@ -6,6 +6,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 - [ ] **Production email:** verify a sending domain in Resend. Until then, production can only email the Resend account owner, so sign-up verification, password reset and invites fail for everyone else.
 - [ ] **Production is behind Vercel Authentication.** Deployment protection covers every deployment, production included, so anyone not signed in to the Vercel team gets a Vercel login page instead of TimeKeep. Fine while it is private; before real customers use it, switch protection to "Standard" (previews only) or add a custom domain outside protection. The e2e workflow only targets previews, so it is unaffected.
+
 ## App
 
 - [ ] The workspace slug lock (`pg_advisory_xact_lock` in `createWorkspace`) covers the base slug only, not neighbouring suffixed slugs, so two sign-ups with different base names can still race for the same suffixed slug. Rare; the unique index turns it into an error, not bad data.
