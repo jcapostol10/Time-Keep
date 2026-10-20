@@ -9,6 +9,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## App
 
+Nothing open.
 
 ## E2E suite
 
@@ -17,9 +18,11 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)
 
+Nothing open.
 
 ## Docs
 
+Nothing open.
 
 ## Done
 
