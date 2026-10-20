@@ -16,6 +16,8 @@ const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
 export default defineConfig({
   testDir: "./e2e",
+  // Vitest unit tests of e2e helpers live next to them.
+  testIgnore: "**/*.unit.test.ts",
   fullyParallel: false,
   workers: 1,
   forbidOnly: isCI,

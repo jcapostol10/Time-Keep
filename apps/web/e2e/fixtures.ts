@@ -1,7 +1,8 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import { type APIRequestContext, test as base, expect, type Page } from "@playwright/test";
 
 import { DEMO_PASSWORD, uniqueEmail } from "./helpers/app";
 import { extractAppLink, waitForEmail } from "./helpers/mail";
+import { zoneNearNoon } from "./helpers/time-zones";
 
 /**
  * Shared fixtures. Import `test` and `expect` from here, not from
@@ -18,6 +19,47 @@ export interface FreshUser {
   password: string;
   name: string;
   slug: string;
+}
+
+/**
+ * Signs up a new @e2e.test account over `request` and verifies its email;
+ * `request` then holds the session. Its time zone is one where it is about
+ * noon, so a test never runs across local midnight.
+ */
+export async function signUpFreshUser(
+  request: APIRequestContext,
+  baseURL: string | undefined,
+): Promise<FreshUser> {
+  const name = "Fresh Tester";
+  const email = uniqueEmail("fresh");
+  const password = DEMO_PASSWORD;
+  const origin = new URL(baseURL ?? "http://localhost:3000").origin;
+
+  const signUp = await request.post("/api/auth/sign-up/email", {
+    data: { name, email, password, timezone: zoneNearNoon() },
+    headers: { origin },
+  });
+  expect(signUp.ok(), `sign-up for ${email} returned ${signUp.status()}`).toBe(true);
+
+  let link: string;
+  try {
+    link = extractAppLink(await waitForEmail(email, { subject: /verify/i }));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`freshUser: no verification email for ${email}: ${reason}`, { cause: error });
+  }
+  const verified = await request.get(link);
+  expect(verified.ok(), `verification for ${email} returned ${verified.status()}`).toBe(true);
+
+  // The new account owns exactly one workspace: its personal one.
+  const list = await request.get("/api/auth/organization/list");
+  expect(list.ok(), `listing workspaces for ${email} returned ${list.status()}`).toBe(true);
+  const workspaces = (await list.json()) as { slug: string }[];
+  const slug = workspaces.length === 1 ? workspaces[0]?.slug : undefined;
+  if (!slug) {
+    throw new Error(`freshUser: expected one workspace for ${email}, got ${workspaces.length}`);
+  }
+  return { email, password, name, slug };
 }
 
 interface Fixtures {
@@ -37,32 +79,9 @@ export const test = base.extend<Fixtures>({
   },
 
   freshUser: async ({ page, baseURL, session }, provide) => {
-    const name = "Fresh Tester";
-    const email = uniqueEmail("fresh");
-    const password = DEMO_PASSWORD;
-    const origin = new URL(baseURL ?? "http://localhost:3000").origin;
-
-    const signUp = await page.request.post("/api/auth/sign-up/email", {
-      data: { name, email, password, timezone: "Asia/Manila" },
-      headers: { origin },
-    });
-    expect(signUp.ok(), `sign-up for ${email} returned ${signUp.status()}`).toBe(true);
-
-    let link: string;
-    try {
-      link = extractAppLink(await waitForEmail(email, { subject: /verify/i }));
-    } catch {
-      throw new Error(`freshUser: no verification email for ${email}`);
-    }
-    const verified = await page.request.get(link);
-    expect(verified.ok(), `verification for ${email} returned ${verified.status()}`).toBe(true);
-
-    const home = await page.request.get("/", { maxRedirects: 0 });
-    const slug = /\/w\/([^/]+)\//.exec(home.headers()["location"] ?? "")?.[1];
-    if (!slug) throw new Error(`freshUser: ${email} is not signed in after verification`);
-
-    session.slug = slug;
-    await provide({ email, password, name, slug });
+    const user = await signUpFreshUser(page.request, baseURL);
+    session.slug = user.slug;
+    await provide(user);
   },
 
   demoUser: async ({ page, baseURL }, provide) => {

@@ -12,7 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "scripts/**/*.test.ts", "e2e/**/*.unit.test.ts"],
     globalSetup: ["./test/global-setup.ts"],
     // Integration tests share one database; run files serially.
     fileParallelism: false,

@@ -72,7 +72,7 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md, E2E_COVERAGE.md, BACKLO
 - `react-hooks` v7 lint rules are on: no `Date.now()` or other impure calls during render, no synchronous `setState` in effects (use `useSyncExternalStore`, `useEffectEvent`, or derive state), and `useWatch` instead of `form.watch`.
 - **e2e suite** (design: `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
   - Import `test` and `expect` from `e2e/fixtures.ts`. Fixtures:
-    - `freshUser`: a new `@e2e.test` account, signed in over HTTP. Fixtures are lazy, so request it explicitly.
+    - `freshUser`: a new `@e2e.test` account, signed in over HTTP, in a time zone where it is about noon (so no test crosses local midnight). Fixtures are lazy, so request it explicitly. `signUpFreshUser(request, baseURL)` makes another one in a separate context.
     - `demoUser(role)`: only for role and isolation tests.
     - `trackerPage()`: opens the tracker once it is interactive.
   - Each test creates its own data (`e2e/helpers/tracker.ts` `addManualEntry` at explicit early times) and must pass in any order.
@@ -83,6 +83,7 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md, E2E_COVERAGE.md, BACKLO
   - `test.skip` / `test.fixme` in `e2e/` are lint errors (a skip inside a test body is invisible to the coverage check). A deliberate skip needs an `eslint-disable` with a reason, and its coverage line is unticked.
   - The suite must stay under 10 minutes on a Vercel preview; slow tests move to a nightly run rather than being deleted.
   - Local runs clean up `@e2e.test` users in a global teardown that only ever touches a local database.
+  - Helpers under `e2e/helpers/` can have Vitest unit tests named `*.unit.test.ts`; Playwright ignores them.
 - UI: shadcn/ui components from `@timekeep/ui/components/*`, icons from `lucide-react`, toasts via `sonner`. Theme tokens are in `packages/ui/src/styles/globals.css` (our own teal palette; light + dark via `.dark` class and `next-themes`). Every page must work at 375px.
 - Next.js: `cacheComponents` is **off** (all pages are dynamic and auth-gated). `PageProps<"/route">` / `LayoutProps<"/route">` global types come from `next typegen` (run by `pnpm typecheck`).
 - Commit after each numbered part of a phase prompt; message body explains what and why. Tag `phase-N` when a phase's acceptance checks pass.

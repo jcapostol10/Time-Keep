@@ -1,6 +1,4 @@
-import { expect, test } from "./fixtures";
-
-let firstEmail: string | undefined;
+import { expect, signUpFreshUser, test } from "./fixtures";
 
 test("freshUser starts signed in on its own workspace", async ({
   page,
@@ -10,13 +8,23 @@ test("freshUser starts signed in on its own workspace", async ({
   await trackerPage();
   await expect(page.getByRole("heading", { name: "Time Tracker" })).toBeVisible();
   expect(page.url()).toContain(`/w/${freshUser.slug}/tracker`);
-  firstEmail = freshUser.email;
 });
 
-test("two tests get different fresh users", async ({ freshUser }) => {
+test("every freshUser is a new account with its own workspace", async ({
+  browser,
+  baseURL,
+  freshUser,
+}) => {
   expect(freshUser.email).toMatch(/@e2e\.test$/);
-  expect(firstEmail).toBeDefined();
-  expect(freshUser.email).not.toBe(firstEmail);
+  // A second sign-up in its own cookie jar, the way the fixture runs per test.
+  const other = await browser.newContext({ ...test.info().project.use, baseURL });
+  try {
+    const second = await signUpFreshUser(other.request, baseURL);
+    expect(second.email).not.toBe(freshUser.email);
+    expect(second.slug).not.toBe(freshUser.slug);
+  } finally {
+    await other.close();
+  }
 });
 
 test("demoUser signs in as the requested role", async ({ page, demoUser }) => {
