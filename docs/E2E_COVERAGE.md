@@ -141,6 +141,21 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Tags show how many entries use them — `tags.spec.ts` › "delete a tag in use"
 - [x] Delete a tag in use after a confirmation naming the count — `tags.spec.ts` › "delete a tag in use"
 
+## Timesheet
+
+- [x] The week's entries show as rows with day, row and grand totals — `timesheet.spec.ts` › "the week's entries show as rows with totals"
+- [x] Typing a duration in an empty cell creates an entry at 09:00 — `timesheet.spec.ts` › "typing in an empty cell creates an entry at 09:00"
+- [x] A second cell on the same day starts after the day's last entry — `timesheet.spec.ts` › "a second cell on the same day starts after the day's last entry"
+- [x] Increasing a cell extends its entry — `timesheet.spec.ts` › "increasing a cell extends its entry"
+- [x] Lowering a cell below its other entries opens the entries list — `timesheet.spec.ts` › "lowering a cell below its other entries opens the list"
+- [x] Clearing a cell deletes its entries — `timesheet.spec.ts` › "clearing a cell deletes its entries"
+- [x] Invalid input reverts the cell — `timesheet.spec.ts` › "invalid input reverts the cell"
+- [x] Add a new row — `timesheet.spec.ts` › "add a new row"
+- [x] Copy last week, rows and time — `timesheet.spec.ts` › "copy last week with time"
+- [x] Save and apply a template — `timesheet.spec.ts` › "save and apply a template"
+- [x] Move between cells with the keyboard — `timesheet.spec.ts` › "move between cells with the keyboard"
+- [x] Navigate weeks and back to today — `timesheet.spec.ts` › "navigate weeks"
+
 ## Tenant isolation
 
 - [x] A member of one workspace cannot open another workspace's pages — `tenant-isolation.spec.ts` › "a member of one workspace cannot open another workspace's pages"

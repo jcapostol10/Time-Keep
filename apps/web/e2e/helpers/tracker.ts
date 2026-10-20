@@ -80,3 +80,22 @@ export async function pickTask(page: Page, project: string, task: string) {
   await page.getByRole("option", { name: `${project} › ${task}`, exact: true }).click();
   await expect(projectButton(page)).toHaveAccessibleName(`Project: ${project} › ${task}`);
 }
+
+/** Like addManualEntry, on a given local date (YYYY-MM-DD). */
+export async function addManualEntryOn(
+  page: Page,
+  opts: { description: string; date: string; start: string; duration: string },
+) {
+  await timer(page).getByRole("button", { name: "Manual mode" }).click();
+  await timer(page).getByRole("combobox", { name: "Description" }).fill(opts.description);
+  await timer(page).getByRole("textbox", { name: "Date" }).fill(opts.date);
+  const start = timer(page).getByRole("textbox", { name: "Start time" });
+  await start.fill(opts.start);
+  await start.press("Tab");
+  const duration = timer(page).getByRole("textbox", { name: "Duration" });
+  await duration.fill(opts.duration);
+  await duration.press("Tab");
+  await timer(page).getByRole("button", { name: "Add" }).click();
+  await waitForSaves(page);
+  await timer(page).getByRole("button", { name: "Timer mode" }).click();
+}
