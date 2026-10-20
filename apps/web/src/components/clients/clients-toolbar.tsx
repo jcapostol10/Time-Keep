@@ -17,10 +17,21 @@ export function ClientsToolbar({ q, status }: { q: string; status: string }) {
   const pathname = usePathname();
   const [text, setText] = useState(q);
 
-  function navigate(next: { q: string; status: string }) {
+  // Quick successive changes compose on this state; it follows the props.
+  const [filters, setFilters] = useState({ q, status });
+  const propsKey = `${q}\u0000${status}`;
+  const [seenKey, setSeenKey] = useState(propsKey);
+  if (seenKey !== propsKey) {
+    setSeenKey(propsKey);
+    setFilters({ q, status });
+  }
+
+  function navigate(next: Partial<{ q: string; status: string }>) {
+    const merged = { ...filters, ...next };
+    setFilters(merged);
     const params = new URLSearchParams();
-    if (next.q) params.set("q", next.q);
-    if (next.status !== "active") params.set("status", next.status);
+    if (merged.q) params.set("q", merged.q);
+    if (merged.status !== "active") params.set("status", merged.status);
     const search = params.toString();
     router.replace(search ? `${pathname}?${search}` : pathname);
   }
@@ -28,7 +39,7 @@ export function ClientsToolbar({ q, status }: { q: string; status: string }) {
   // Debounce typing; the URL (and the list) follows a moment later.
   useEffect(() => {
     if (text === q) return;
-    const handle = setTimeout(() => navigate({ q: text, status }), 250);
+    const handle = setTimeout(() => navigate({ q: text }), 250);
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate is stable per render
   }, [text]);
@@ -43,7 +54,7 @@ export function ClientsToolbar({ q, status }: { q: string; status: string }) {
         onChange={(e) => setText(e.target.value)}
         className="sm:max-w-xs"
       />
-      <Select value={status} onValueChange={(value) => navigate({ q: text, status: value })}>
+      <Select value={filters.status} onValueChange={(value) => navigate({ status: value })}>
         <SelectTrigger aria-label="Status" className="w-full sm:w-40">
           <SelectValue />
         </SelectTrigger>

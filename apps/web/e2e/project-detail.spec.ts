@@ -12,8 +12,7 @@ async function openProject(page: Page, slug: string, name: string) {
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 }
 
-const tab = (page: Page, name: string) =>
-  page.getByRole("tablist").getByRole("tab", { name });
+const tab = (page: Page, name: string) => page.getByRole("tablist").getByRole("tab", { name });
 
 test.describe("project detail", () => {
   test("manage a project's tasks", async ({ page, freshUser }) => {
@@ -51,6 +50,7 @@ test.describe("project detail", () => {
     const confirm = page.getByRole("alertdialog", { name: "Delete task?" });
     await expect(confirm).toContainText("No entries");
     await confirm.getByRole("button", { name: "Delete" }).click();
+    await expect(confirm).toBeHidden();
     await expect(page.getByRole("row", { name: /Visual design/ })).toHaveCount(0);
   });
 

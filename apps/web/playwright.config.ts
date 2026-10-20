@@ -18,8 +18,12 @@ export default defineConfig({
   testDir: "./e2e",
   // Vitest unit tests of e2e helpers live next to them.
   testIgnore: "**/*.unit.test.ts",
+  // Spec files run in parallel; tests inside a file stay serial. Fresh-user
+  // specs are independent and the demo-account specs only read shared data
+  // (profile.spec renames member2 and restores it), so three workers keep the
+  // suite inside its 10-minute preview budget.
   fullyParallel: false,
-  workers: 1,
+  workers: 3,
   forbidOnly: isCI,
   retries: remoteUrl ? 2 : isCI ? 1 : 0,
   // Retries are for telling a flaky test from a broken one, not for hiding

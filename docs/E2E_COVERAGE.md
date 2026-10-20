@@ -169,8 +169,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Entry views
 
-- [ ] The same entry shows identically in the tracker, timesheet and calendar — gap
-- [ ] Editing an entry in one view updates the others — gap
+- [x] The same entry shows identically in the tracker, timesheet and calendar — `entry-views.spec.ts` › "an entry edited in the timesheet changes in the tracker and the calendar"
+- [x] Editing an entry in one view updates the others — `entry-views.spec.ts` › "an entry edited in the timesheet changes in the tracker and the calendar"
 
 ## Tenant isolation
 

@@ -9,10 +9,14 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## App
 
-Nothing open.
+- [ ] After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
+- [ ] Timesheet rows added by hand live only for the page visit (templates persist); consider keeping them per week in local storage.
+- [ ] Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands (fast locally, visible on a slow connection). Patch the range query before the write.
+- [ ] A member whose picker still lists a project that was just archived or made private gets the server's message on Start, but the picker only refreshes after the next options fetch (30 s stale time). Refetch options when a start is rejected.
 
 ## E2E suite
 
+- [ ] The suite runs spec files with 3 workers to stay under 10 minutes on a preview; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). If a new spec writes to the demo tenant, check it against the others or give it its own project in the Playwright config.
 - [ ] Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
 - [ ] Re-prove the 26 coverage ticks carried over from Phases 0–1: break each guarded behaviour once and watch its test fail.
 

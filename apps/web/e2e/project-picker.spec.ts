@@ -72,7 +72,8 @@ test.describe("project and task picker", () => {
     await createProjectViaUi(page, freshUser.slug, "Zeta");
     await createProjectViaUi(page, freshUser.slug, "Omega");
     await page.getByRole("button", { name: "Favourite Zeta" }).click();
-    await expect(page.getByRole("button", { name: "Unfavourite Zeta" })).toBeVisible();
+    // The star flips at once and is disabled until the save lands.
+    await expect(page.getByRole("button", { name: "Unfavourite Zeta" })).toBeEnabled();
 
     await trackerPage();
     await projectButton(page).click();
@@ -171,6 +172,7 @@ test.describe("project and task picker", () => {
     const confirm = page.getByRole("alertdialog", { name: "Delete task?" });
     await expect(confirm).toContainText("1 entry keeps the project");
     await confirm.getByRole("button", { name: "Delete" }).click();
+    await expect(confirm).toBeHidden();
     await expect(page.getByRole("row", { name: /Design/ })).toHaveCount(0);
 
     await trackerPage();

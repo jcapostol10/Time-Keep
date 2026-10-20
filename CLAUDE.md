@@ -29,8 +29,10 @@ apps/web/            Next.js 16 App Router (React 19, TS strict, Tailwind v4 + s
   src/app/api/w/[workspaceSlug]/*   JSON GET route handlers for client reads (tracker entries, running, options)
   src/server/        server-only code: auth.ts (Better Auth), env.ts, mail.ts, storage.ts (S3),
                      session.ts, workspace-access.ts, workspaces.ts, time-entries.ts (entry service),
+                     timesheet.ts (templates, copy week), catalog/* (clients, projects, tasks, tags),
                      actions/* (server actions), queries/*
-  src/components/    UI; shell/* is the app frame, tracker/*, auth/*, team/*, settings/*, account/*
+  src/components/    UI; shell/* is the app frame, tracker/*, timesheet/*, calendar/*, clients/*,
+                     projects/*, tags/*, auth/*, team/*, settings/*, account/*
   src/hooks/         client hooks (use-now: shared 1s clock; use-local-storage)
   src/lib/           isomorphic helpers: auth-client.ts, permissions.ts, routes.ts, action-result.ts,
                      tracker-types.ts (DTOs), fetch-json.ts, notifications.ts
@@ -68,6 +70,10 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md, E2E_COVERAGE.md, BACKLO
 - **Time entries are written only through `apps/web/src/server/time-entries.ts`** (db-injected functions, scoped to one workspace + user). Server actions in `actions/time-entries.ts` wrap it. Later phases add rate snapshots, locks and approvals there, so never insert or update `time_entry` anywhere else.
 - **Date, time and duration maths only via `packages/core`**: `parseDuration` / `formatDuration` / `formatClock`, `localDateKey`, `zonedDateTimeToInstant`, `addDaysInZone`, `weekBounds`, `formatTimeOfDay`, `parseTimeOfDay`, and `entry-edit.ts` for row edits. They are DST-safe (built on `@date-fns/tz`); never add `n * 86_400_000` to an instant. Viewer preferences come from `resolveViewerPrefs(user, workspaceSettings)`.
 - Bare numbers typed as durations are hours (`1.5` = 1:30:00); `1:30`, `90m`, `1h30m` also work.
+- **Catalog** (clients, projects, tasks, tags): services in `src/server/catalog/*` take a `Viewer` (`workspaceId`, `userId`, `role`) and apply `canSeeProject` from `packages/core/src/catalog.ts` (admins see everything; others see public projects and private ones they are on). A private project a member is not on is "not found", never "forbidden". `trackingBlock` says why details cannot take new time (archived project, done task, archived tag); the entry service applies it on start, manual create, continue, duplicate and detail changes. Owners and admins manage the catalog; members only pick. Patch schemas are explicit (`projectPatchSchema`, `clientPatchSchema`, …): zod 4 `.partial()` keeps field defaults, which would reset untouched columns.
+- Pickers: `ProjectPicker` takes and returns `{ projectId, taskId }` (a task implies its project) and shows the entry's own project/task (`current`) when the options no longer list it; the same for `TagPicker` and archived tags.
+- Timesheet and calendar read the viewer's entries for a range through `/api/w/[slug]/time-entries/range` under the `trackerKeys.range` key, which sits under the tracker's `entries` prefix, so any entry write (`useEntryWrites`, the list's mutations, another tab) refetches every view. Their maths is pure in `packages/core/src/timesheet.ts` and `calendar.ts`.
+- `components/calendar/event-sources.ts` is the extension point for Google/Outlook events; nothing syncs yet.
 - Tracker data flow: the page SSRs the first week into react-query (`HydrationBoundary`); later pages and refetches use the `/api/w/[slug]/...` route handlers; writes are server actions followed by cache updates (`components/tracker/entry-cache.ts`). Everything crossing the boundary is JSON with ISO strings (`lib/tracker-types.ts`), never `Date`.
 - `TrackerProvider` (in the workspace layout) owns the running timer on every workspace page: tab title, S / N / Esc shortcuts, cross-tab sync (BroadcastChannel + refetch on focus), idle detection, Pomodoro and reminders. Components that need the ticking clock use `useTrackerClock()`; everything else uses `useTracker()` so rows do not re-render every second.
 - `react-hooks` v7 lint rules are on: no `Date.now()` or other impure calls during render, no synchronous `setState` in effects (use `useSyncExternalStore`, `useEffectEvent`, or derive state), and `useWatch` instead of `form.watch`.

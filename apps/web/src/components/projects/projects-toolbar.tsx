@@ -44,8 +44,20 @@ export function ProjectsToolbar({
   const pathname = usePathname();
   const [text, setText] = useState(query.q);
 
+  // The filters a navigation is built from. Props lag the URL by a server
+  // round trip, and useSearchParams lags too, so quick successive changes
+  // compose on this state; it follows the props whenever they change.
+  const [filters, setFilters] = useState<ProjectListQuery>(query);
+  const queryKey = JSON.stringify(query);
+  const [seenKey, setSeenKey] = useState(queryKey);
+  if (seenKey !== queryKey) {
+    setSeenKey(queryKey);
+    setFilters(query);
+  }
+
   function navigate(next: Partial<ProjectListQuery>) {
-    const merged = { ...query, q: text, ...next };
+    const merged = { ...filters, ...next };
+    setFilters(merged);
     const params = new URLSearchParams();
     if (merged.q) params.set("q", merged.q);
     if (merged.clientId) params.set("client", merged.clientId);
@@ -66,8 +78,8 @@ export function ProjectsToolbar({
   }, [text]);
 
   const sortValue =
-    SORTS.find((s) => s.sort === query.sort && s.dir === query.dir)?.value ?? "name-asc";
-  const visibleClients = clients.filter((c) => !c.archived || c.id === query.clientId);
+    SORTS.find((s) => s.sort === filters.sort && s.dir === filters.dir)?.value ?? "name-asc";
+  const visibleClients = clients.filter((c) => !c.archived || c.id === filters.clientId);
 
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -80,7 +92,7 @@ export function ProjectsToolbar({
         className="w-full sm:w-60"
       />
       <Select
-        value={query.clientId ?? ALL}
+        value={filters.clientId ?? ALL}
         onValueChange={(v) => navigate({ clientId: v === ALL ? undefined : v })}
       >
         <SelectTrigger aria-label="Client" className="w-[calc(50%-0.25rem)] sm:w-40">
@@ -96,7 +108,7 @@ export function ProjectsToolbar({
         </SelectContent>
       </Select>
       <Select
-        value={query.status}
+        value={filters.status}
         onValueChange={(v) => navigate({ status: v as ProjectListQuery["status"] })}
       >
         <SelectTrigger aria-label="Status" className="w-[calc(50%-0.25rem)] sm:w-32">
@@ -109,7 +121,7 @@ export function ProjectsToolbar({
         </SelectContent>
       </Select>
       <Select
-        value={query.billing}
+        value={filters.billing}
         onValueChange={(v) => navigate({ billing: v as ProjectListQuery["billing"] })}
       >
         <SelectTrigger aria-label="Billing" className="w-[calc(50%-0.25rem)] sm:w-36">
@@ -122,7 +134,7 @@ export function ProjectsToolbar({
         </SelectContent>
       </Select>
       <Select
-        value={query.access}
+        value={filters.access}
         onValueChange={(v) => navigate({ access: v as ProjectListQuery["access"] })}
       >
         <SelectTrigger aria-label="Access" className="w-[calc(50%-0.25rem)] sm:w-32">

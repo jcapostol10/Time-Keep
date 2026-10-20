@@ -52,8 +52,7 @@ test.describe("projects", () => {
       await page.getByRole("option", { name: option, exact: true }).click();
     };
     // The third cell is the name (after the checkbox and the star); a badge may follow on a new line.
-    const names = () =>
-      page.getByRole("table").locator("tbody tr td:nth-child(3)").allInnerTexts();
+    const names = () => page.getByRole("table").locator("tbody tr td:nth-child(3)").allInnerTexts();
 
     await select("Client", "Globex");
     await expect(projectRow(page, "Alpha")).toBeVisible();
@@ -93,6 +92,7 @@ test.describe("projects", () => {
     await star.click();
     const starred = page.getByRole("button", { name: "Unfavourite Zeta" });
     await expect(starred).toHaveAttribute("aria-pressed", "true");
+    await expect(starred).toBeEnabled(); // the save has landed
 
     await page.reload();
     await expect(page.getByRole("button", { name: "Unfavourite Zeta" })).toHaveAttribute(
