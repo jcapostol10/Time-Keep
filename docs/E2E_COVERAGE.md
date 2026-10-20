@@ -156,6 +156,17 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Move between cells with the keyboard — `timesheet.spec.ts` › "move between cells with the keyboard"
 - [x] Navigate weeks and back to today — `timesheet.spec.ts` › "navigate weeks"
 
+## Calendar
+
+- [ ] Entries show as blocks with the project colour in week and day view — gap
+- [ ] Drag on empty space to create an entry — gap
+- [ ] Drag a block to move it — gap
+- [ ] Drag a block's edge to resize it — gap
+- [ ] Click a block to edit it — gap
+- [ ] The running timer shows as a growing block — gap
+- [ ] Overlapping entries sit side by side — gap
+- [ ] Navigate days and weeks and back to today — gap
+
 ## Tenant isolation
 
 - [x] A member of one workspace cannot open another workspace's pages — `tenant-isolation.spec.ts` › "a member of one workspace cannot open another workspace's pages"
