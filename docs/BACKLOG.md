@@ -23,9 +23,6 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)
 
-- [ ] The "run as a script" check compares `process.argv[1]` without resolving symlinks, so running it through a symlinked path silently does nothing.
-- [ ] Tests are keyed by spec file name only; two specs with the same name in different folders would collide.
-- [ ] `parseCoverage` has no test for trailing spaces after the closing quote.
 
 ## Docs
 
@@ -33,6 +30,9 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## Done
 
+- [x] `parseCoverage` has no test for trailing spaces after the closing quote. Done 2026-10-20 ("coverage-check: spec paths, symlinked runs, trailing spaces"): test added; it fails when trailing whitespace handling is removed.
+- [x] Tests are keyed by spec file name only; two specs with the same name in different folders would collide. Done 2026-10-20 ("coverage-check: spec paths, symlinked runs, trailing spaces"): specs are keyed by their path under e2e/; the two-folder test failed before.
+- [x] The "run as a script" check compares `process.argv[1]` without resolving symlinks, so running it through a symlinked path silently does nothing. Done 2026-10-20 ("coverage-check: spec paths, symlinked runs, trailing spaces"): isMainModule compares real paths; the junction test failed before.
 - [x] The workspace slug lock (`pg_advisory_xact_lock` in `createWorkspace`) covers the base slug only, not neighbouring suffixed slugs, so two sign-ups with different base names can still race for the same suffixed slug. Rare; the unique index turns it into an error, not bad data. Done 2026-10-20 ("workspaces: one lock for all slug allocation"): a single advisory lock now serialises slug allocation; workspaces.test.ts "gives distinct slugs when a name's suffixed slug is another name's base" failed before (duplicate neighbour-0-x-2).
 - [x] Google sign-in on production. Done 2026-10-20: Vercel Production has `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (the local OAuth client, marked sensitive); the owner added the production redirect URI and origin in Google Cloud Console; production (`17ff9c6`) renders "Continue with Google" and starts OAuth at accounts.google.com with redirect_uri `https://time-keep-nine.vercel.app/api/auth/callback/google`.
 - [x] PROGRESS marked the e2e foundation done before the Vercel preview run was green. Resolved 2026-10-18: preview run 39128237619 passed 30/30 in 3.9 min on `2862a53`.

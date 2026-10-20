@@ -4,12 +4,13 @@
  *
  * Line format in the coverage list:
  *   - [x] What the user can do — `spec-file.spec.ts` › "exact test title"
+ *     (a spec in a subfolder of e2e/ is named by its path, e.g. `team/invite.spec.ts`)
  *   - [ ] What the user can do — gap
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 export interface CoverageLine {
   /** 1-based line number in the markdown file. */
@@ -61,8 +62,9 @@ interface ReportSuite {
 }
 
 /**
- * Reads `playwright test --list --reporter=json` and keys `${specFile}::${title}`
- * for every test that will run. Titles may themselves contain " › ", so every
+ * Reads `playwright test --list --reporter=json` and keys `${specPath}::${title}`
+ * for every test that will run, where specPath is the file's path under e2e/
+ * (so same-named specs in two folders stay apart). Titles may themselves contain " › ", so every
  * suffix of the describe/test path is keyed. Tests marked `test.skip` or
  * `test.fixme` are left out: a test that never runs covers nothing. (A
  * `test.skip()` call inside a test body only shows up at run time.)
@@ -74,7 +76,8 @@ export function parseListedTests(reportJson: string): Set<string> {
   const walk = (suite: ReportSuite, path: string[]) => {
     for (const spec of suite.specs ?? []) {
       if (spec.tests.every((t) => t.expectedStatus === "skipped")) continue;
-      const file = spec.file.split(/[\\/]/).pop() ?? "";
+      // The spec's path under e2e/, with forward slashes on every platform.
+      const file = spec.file.replace(/\\/g, "/");
       const segments = [...path, spec.title];
       for (let i = 0; i < segments.length; i++) {
         keys.add(`${file}::${segments.slice(i).join(" › ")}`);
@@ -125,4 +128,18 @@ function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+/**
+ * True when `argv1` (the script path Node was started with) is this module.
+ * Node gives modules their real path, so a path through a symlink or junction
+ * must be resolved before comparing.
+ */
+export function isMainModule(moduleUrl: string, argv1: string | undefined): boolean {
+  if (!argv1) return false;
+  try {
+    return realpathSync(fileURLToPath(moduleUrl)) === realpathSync(argv1);
+  } catch {
+    return false;
+  }
+}
+
+if (isMainModule(import.meta.url, process.argv[1])) main();

@@ -1,6 +1,6 @@
 # End-to-end coverage
 
-Every user-facing function of TimeKeep, and the Playwright test that proves it works. A ticked line names its spec file and exact test title; `pnpm --filter @timekeep/web e2e:coverage` fails if a ticked line names a test that does not exist. An unticked line is a gap still to cover.
+Every user-facing function of TimeKeep, and the Playwright test that proves it works. A ticked line names its spec file (by its path under `apps/web/e2e/`, e.g. `team/invite.spec.ts` for a spec in a subfolder) and exact test title; `pnpm --filter @timekeep/web e2e:coverage` fails if a ticked line names a test that does not exist. An unticked line is a gap still to cover.
 
 Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 

@@ -1,6 +1,11 @@
+import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
-import { findStale, parseCoverage, parseListedTests } from "./coverage-check";
+import { findStale, isMainModule, parseCoverage, parseListedTests } from "./coverage-check";
 
 describe("parseCoverage", () => {
   it("reads a ticked line with its spec file and test title", () => {
@@ -40,6 +45,11 @@ describe("parseCoverage", () => {
     ]);
   });
 
+  it("ignores whitespace after the closing quote", () => {
+    const [line] = parseCoverage('- [x] Spaced — `a.spec.ts` › "a title"   	');
+    expect(line).toMatchObject({ ticked: true, spec: "a.spec.ts", title: "a title" });
+  });
+
   it("keeps titles containing › and escaped quotes intact", () => {
     const [line] = parseCoverage('- [x] Odd title — `x.spec.ts` › "a › b says \\"hi\\""');
     expect(line?.title).toBe('a › b says "hi"');
@@ -77,8 +87,8 @@ describe("parseListedTests", () => {
       ]),
     );
     for (const key of [
-      "auth.spec.ts::sign up",
-      "invite.spec.ts::invite a member",
+      "auth/auth.spec.ts::sign up",
+      "team/invite.spec.ts::invite a member",
       "fixtures.spec.ts::freshUser starts signed in",
       "tracker.spec.ts::start, reload and stop a timer",
       "tracker.spec.ts::time tracker › start, reload and stop a timer",
@@ -87,6 +97,15 @@ describe("parseListedTests", () => {
     }
     // A describe block alone is not a test.
     expect(listed.has("tracker.spec.ts::time tracker")).toBe(false);
+  });
+
+  it("keys specs by their path under e2e/, so same-named specs in two folders stay apart", () => {
+    const listed = parseListedTests(
+      report([{ file: "team/invite.spec.ts", specs: [["invite a member", "passed"]] }]),
+    );
+    expect(listed.has("team/invite.spec.ts::invite a member")).toBe(true);
+    expect(listed.has("invite.spec.ts::invite a member")).toBe(false);
+    expect(listed.has("admin/invite.spec.ts::invite a member")).toBe(false);
   });
 
   it("leaves out skipped and fixme tests, so they never count as covered", () => {
@@ -127,5 +146,29 @@ describe("findStale", () => {
   it("treats a ticked line without a test reference as stale", () => {
     const lines = parseCoverage("- [x] Ticked but unnamed — gap");
     expect(findStale(lines, new Set()).map((l) => l.text)).toEqual(["Ticked but unnamed"]);
+  });
+});
+
+describe("isMainModule", () => {
+  const script = fileURLToPath(new URL("./coverage-check.ts", import.meta.url));
+
+  it("is true for the script's own path and false for another file", () => {
+    const url = new URL("./coverage-check.ts", import.meta.url).href;
+    expect(isMainModule(url, script)).toBe(true);
+    expect(isMainModule(url, fileURLToPath(import.meta.url))).toBe(false);
+    expect(isMainModule(url, undefined)).toBe(false);
+  });
+
+  it("is true when the script was started through a linked folder", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "coverage-link-"));
+    const link = path.join(dir, "scripts");
+    try {
+      // A junction needs no admin rights on Windows; elsewhere it is a symlink.
+      symlinkSync(path.dirname(script), link, "junction");
+      const url = new URL("./coverage-check.ts", import.meta.url).href;
+      expect(isMainModule(url, path.join(link, "coverage-check.ts"))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
