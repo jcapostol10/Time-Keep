@@ -1,3 +1,4 @@
+export * from "./catalog";
 export * from "./colors";
 export * from "./duration";
 export * from "./entry-edit";

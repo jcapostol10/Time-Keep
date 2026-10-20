@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./catalog": "./src/catalog.ts",
     "./colors": "./src/colors.ts",
     "./duration": "./src/duration.ts",
     "./entry-grouping": "./src/entry-grouping.ts",

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { PROJECT_VISIBILITIES, TASK_STATUSES } from "./catalog";
 import { hexColorSchema } from "./colors";
 import { ROLES } from "./roles";
 
@@ -184,14 +185,113 @@ export const entryIdsSchema = z.object({
 });
 export type EntryIdsInput = z.infer<typeof entryIdsSchema>;
 
-export const createProjectSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(100),
+// --- Catalog: clients, projects, tasks, tags ----------------------------------
+
+const catalogNameSchema = z.string().trim().min(1, "Name is required").max(100);
+
+export const clientInputSchema = z.object({
+  name: catalogNameSchema,
+  address: z.string().trim().max(500).default(""),
+  email: z.union([z.literal(""), z.email("Enter a valid email address")]).default(""),
+  notes: z.string().trim().max(2000).default(""),
+  /** Reserved for invoicing (Phase 6). */
+  currency: currencyCodeSchema.nullable().default(null),
+});
+export type ClientInput = z.infer<typeof clientInputSchema>;
+
+export const projectInputSchema = z.object({
+  name: catalogNameSchema,
+  clientId: z.string().min(1).nullable().default(null),
+  color: hexColorSchema.optional(),
+  billable: z.boolean().default(true),
+  visibility: z.enum(PROJECT_VISIBILITIES).default("PUBLIC"),
+  note: z.string().trim().max(2000).default(""),
+});
+export type ProjectInput = z.infer<typeof projectInputSchema>;
+
+export const projectPatchSchema = projectInputSchema.partial().extend({
+  archived: z.boolean().optional(),
+  isTemplate: z.boolean().optional(),
+});
+export type ProjectPatch = z.infer<typeof projectPatchSchema>;
+
+export const projectListQuerySchema = z.object({
+  q: z.string().trim().max(100).default(""),
+  clientId: z.string().min(1).optional(),
+  status: z.enum(["active", "archived", "all"]).default("active"),
+  billing: z.enum(["all", "billable", "non-billable"]).default("all"),
+  access: z.enum(["all", "public", "private"]).default("all"),
+  sort: z.enum(["name", "client", "tracked"]).default("name"),
+  dir: z.enum(["asc", "desc"]).default("asc"),
+});
+export type ProjectListQuery = z.infer<typeof projectListQuerySchema>;
+
+export const projectMembersSchema = z.object({
+  userIds: z.array(z.string().min(1)).max(500),
+});
+
+export const deleteProjectSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("delete") }),
+  z.object({ mode: z.literal("reassign"), projectId: z.string().min(1).nullable() }),
+]);
+export type DeleteProjectMode = z.infer<typeof deleteProjectSchema>;
+
+export const taskInputSchema = z.object({
+  name: catalogNameSchema,
+  assigneeIds: z.array(z.string().min(1)).max(100).default([]),
+});
+export type TaskInput = z.infer<typeof taskInputSchema>;
+
+export const taskPatchSchema = z.object({
+  name: catalogNameSchema.optional(),
+  status: z.enum(TASK_STATUSES).optional(),
+  assigneeIds: z.array(z.string().min(1)).max(100).optional(),
+});
+export type TaskPatch = z.infer<typeof taskPatchSchema>;
+
+export const tagInputSchema = z.object({
+  name: catalogNameSchema,
   color: hexColorSchema.optional(),
 });
-export type CreateProjectInput = z.infer<typeof createProjectSchema>;
+export type TagInput = z.infer<typeof tagInputSchema>;
 
-export const createTagSchema = createProjectSchema;
-export type CreateTagInput = z.infer<typeof createTagSchema>;
+export const tagPatchSchema = z.object({
+  name: catalogNameSchema.optional(),
+  color: hexColorSchema.optional(),
+  archived: z.boolean().optional(),
+});
+export type TagPatch = z.infer<typeof tagPatchSchema>;
+
+/** @deprecated Task 3 of Phase 2 removes these; use projectInputSchema / tagInputSchema. */
+export const createProjectSchema = projectInputSchema;
+export type CreateProjectInput = ProjectInput;
+export const createTagSchema = tagInputSchema;
+export type CreateTagInput = TagInput;
+
+export const dateRangeSchema = z
+  .object({ from: isoInstantSchema, to: isoInstantSchema })
+  .refine((r) => r.to.getTime() > r.from.getTime(), { message: "The range must end after it starts" });
+export type DateRangeInput = z.infer<typeof dateRangeSchema>;
+
+// --- Timesheet -------------------------------------------------------------------
+
+export const timesheetRowSchema = z.object({
+  projectId: z.string().min(1).nullable(),
+  taskId: z.string().min(1).nullable(),
+  description: z.string().max(ENTRY_DESCRIPTION_MAX).default(""),
+});
+
+export const timesheetTemplateInputSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(60),
+  rows: z.array(timesheetRowSchema).max(50),
+});
+export type TimesheetTemplateInput = z.infer<typeof timesheetTemplateInputSchema>;
+
+export const copyWeekSchema = z.object({
+  fromWeekStart: isoInstantSchema,
+  toWeekStart: isoInstantSchema,
+});
+export type CopyWeekInput = z.infer<typeof copyWeekSchema>;
 
 export const trackerSettingsSchema = z
   .object({

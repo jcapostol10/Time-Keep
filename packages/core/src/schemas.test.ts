@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  clientInputSchema,
   currencyCodeSchema,
+  deleteProjectSchema,
   inviteMemberSchema,
+  projectInputSchema,
+  timesheetTemplateInputSchema,
   isValidTimeZone,
   slugSchema,
   timeZoneSchema,
@@ -62,5 +66,54 @@ describe("invite", () => {
     const ok = inviteMemberSchema.parse({ email: "  Dev@Example.COM ", role: "member" });
     expect(ok.email).toBe("dev@example.com");
     expect(inviteMemberSchema.safeParse({ email: "a@b.co", role: "owner" }).success).toBe(false);
+  });
+});
+
+describe("client input", () => {
+  it("trims the name and defaults the rest", () => {
+    const parsed = clientInputSchema.parse({ name: " Acme " });
+    expect(parsed).toEqual({ name: "Acme", address: "", email: "", notes: "", currency: null });
+  });
+
+  it("accepts an empty email or a valid one, nothing else", () => {
+    expect(clientInputSchema.safeParse({ name: "Acme", email: "" }).success).toBe(true);
+    expect(clientInputSchema.safeParse({ name: "Acme", email: "a@b.co" }).success).toBe(true);
+    expect(clientInputSchema.safeParse({ name: "Acme", email: "nope" }).success).toBe(false);
+  });
+});
+
+describe("project input", () => {
+  it("defaults to billable, public, no client", () => {
+    const parsed = projectInputSchema.parse({ name: "Website" });
+    expect(parsed).toMatchObject({
+      name: "Website",
+      clientId: null,
+      billable: true,
+      visibility: "PUBLIC",
+      note: "",
+    });
+    expect(parsed.color).toBeUndefined();
+  });
+});
+
+describe("delete project", () => {
+  it("accepts both modes and requires a target for reassign", () => {
+    expect(deleteProjectSchema.safeParse({ mode: "delete" }).success).toBe(true);
+    expect(deleteProjectSchema.safeParse({ mode: "reassign", projectId: "p2" }).success).toBe(true);
+    expect(deleteProjectSchema.safeParse({ mode: "reassign", projectId: null }).success).toBe(true);
+    expect(deleteProjectSchema.safeParse({ mode: "reassign" }).success).toBe(false);
+  });
+});
+
+describe("timesheet template", () => {
+  it("caps rows at 50", () => {
+    const row = { projectId: null, taskId: null, description: "" };
+    const rows = (n: number) => Array.from({ length: n }, () => row);
+    expect(timesheetTemplateInputSchema.safeParse({ name: "Week", rows: rows(50) }).success).toBe(
+      true,
+    );
+    expect(timesheetTemplateInputSchema.safeParse({ name: "Week", rows: rows(51) }).success).toBe(
+      false,
+    );
   });
 });
