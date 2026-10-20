@@ -2,26 +2,155 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { pickColor, type ProjectInput } from "@timekeep/core";
+import {
+  canManageCatalog,
+  type DeleteProjectMode,
+  pickColor,
+  type ProjectInput,
+  type ProjectListQuery,
+  type ProjectPatch,
+} from "@timekeep/core";
 import {
   and,
   asc,
   client,
   type Database,
   eq,
+  gte,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  membership,
+  or,
   project,
   projectFavorite,
+  projectMember,
+  sql,
   task,
+  timeEntry,
+  user,
 } from "@timekeep/db";
+import type { SQL } from "drizzle-orm";
 
+import type { ProjectDetail, ProjectListItem, ProjectStatus } from "@/lib/catalog-types";
 import type { PickerProject } from "@/lib/tracker-types";
 
 import { CatalogError, isUniqueViolation } from "./errors";
 import { type Viewer, visibleProjectFilter } from "./viewer";
+import { reassignProjectEntries, softDeleteProjectEntries } from "../time-entries";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
 
 const DUPLICATE_NAME = "A project with this name already exists for this client.";
+const NOT_FOUND = "Project not found.";
+
+const detailRelations = {
+  client: { columns: { name: true } },
+  members: { columns: { userId: true } },
+} as const;
+
+type ProjectRow = typeof project.$inferSelect & {
+  client: { name: string } | null;
+  members: { userId: string }[];
+};
+
+/** Escapes LIKE wildcards so a search for "100%" means the characters. */
+function likePattern(q: string): string {
+  return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
+/**
+ * The project, if it is in the viewer's workspace and visible to them. A
+ * private project the viewer is not on is NOT_FOUND, like any other missing id.
+ */
+export async function requireVisibleProject(
+  db: Executor,
+  viewer: Viewer,
+  projectId: string,
+): Promise<ProjectRow> {
+  const row = await db.query.project.findFirst({
+    where: and(
+      eq(project.id, projectId),
+      eq(project.workspaceId, viewer.workspaceId),
+      visibleProjectFilter(viewer),
+    ),
+    with: detailRelations,
+  });
+  if (!row) throw new CatalogError("NOT_FOUND", NOT_FOUND);
+  return row;
+}
+
+/** Tracked seconds per project: everyone's for admins, the viewer's own otherwise. */
+async function trackedByProject(db: Executor, viewer: Viewer): Promise<Map<string, number>> {
+  const rows = await db
+    .select({
+      projectId: timeEntry.projectId,
+      seconds: sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::int`,
+    })
+    .from(timeEntry)
+    .where(
+      and(
+        eq(timeEntry.workspaceId, viewer.workspaceId),
+        isNull(timeEntry.deletedAt),
+        isNotNull(timeEntry.end),
+        isNotNull(timeEntry.projectId),
+        canManageCatalog(viewer.role) ? undefined : eq(timeEntry.userId, viewer.userId),
+      ),
+    )
+    .groupBy(timeEntry.projectId);
+  return new Map(rows.flatMap((r) => (r.projectId ? [[r.projectId, r.seconds] as const] : [])));
+}
+
+async function favoriteIds(db: Executor, viewer: Viewer): Promise<Set<string>> {
+  const rows = await db
+    .select({ projectId: projectFavorite.projectId })
+    .from(projectFavorite)
+    .innerJoin(project, eq(project.id, projectFavorite.projectId))
+    .where(
+      and(eq(projectFavorite.userId, viewer.userId), eq(project.workspaceId, viewer.workspaceId)),
+    );
+  return new Set(rows.map((r) => r.projectId));
+}
+
+function toListItem(row: ProjectRow, tracked: number, favorite: boolean): ProjectListItem {
+  return {
+    id: row.id,
+    name: row.name,
+    color: row.color,
+    clientId: row.clientId,
+    clientName: row.client?.name ?? null,
+    billable: row.billable,
+    visibility: row.visibility,
+    archived: row.archived,
+    isTemplate: row.isTemplate,
+    favorite,
+    trackedSeconds: tracked,
+    memberCount: row.members.length,
+  };
+}
+
+function toDetail(row: ProjectRow, tracked: number, favorite: boolean): ProjectDetail {
+  return {
+    ...toListItem(row, tracked, favorite),
+    note: row.note,
+    memberIds: row.members.map((m) => m.userId),
+  };
+}
+
+function compareBy(sort: ProjectListQuery["sort"], dir: ProjectListQuery["dir"]) {
+  const sign = dir === "asc" ? 1 : -1;
+  return (a: ProjectListItem, b: ProjectListItem): number => {
+    let cmp = 0;
+    if (sort === "tracked") cmp = a.trackedSeconds - b.trackedSeconds;
+    else if (sort === "client") {
+      cmp = (a.clientName ?? "￿").localeCompare(b.clientName ?? "￿");
+    }
+    if (cmp === 0) cmp = a.name.localeCompare(b.name);
+    return cmp * sign;
+  };
+}
 
 function comparePicker(a: PickerProject, b: PickerProject): number {
   if (a.favorite !== b.favorite) return a.favorite ? -1 : 1;
@@ -31,6 +160,41 @@ function comparePicker(a: PickerProject, b: PickerProject): number {
     return a.clientName.localeCompare(b.clientName);
   }
   return a.name.localeCompare(b.name);
+}
+
+/** The projects list page: visible projects filtered, sorted and with tracked time. */
+export async function listProjects(
+  db: Executor,
+  viewer: Viewer,
+  q: ProjectListQuery,
+): Promise<ProjectListItem[]> {
+  const filters: (SQL | undefined)[] = [
+    eq(project.workspaceId, viewer.workspaceId),
+    visibleProjectFilter(viewer),
+  ];
+  if (q.status !== "all") filters.push(eq(project.archived, q.status === "archived"));
+  if (q.billing !== "all") filters.push(eq(project.billable, q.billing === "billable"));
+  if (q.access !== "all") {
+    filters.push(eq(project.visibility, q.access === "private" ? "PRIVATE" : "PUBLIC"));
+  }
+  if (q.clientId) filters.push(eq(project.clientId, q.clientId));
+  if (q.q) {
+    const pattern = likePattern(q.q);
+    filters.push(
+      or(
+        ilike(project.name, pattern),
+        sql`EXISTS (SELECT 1 FROM "client" c WHERE c."id" = ${project.clientId} AND c."name" ILIKE ${pattern})`,
+      ),
+    );
+  }
+  const rows = await db.query.project.findMany({ where: and(...filters), with: detailRelations });
+  const [tracked, favorites] = await Promise.all([
+    trackedByProject(db, viewer),
+    favoriteIds(db, viewer),
+  ]);
+  return rows
+    .map((r) => toListItem(r, tracked.get(r.id) ?? 0, favorites.has(r.id)))
+    .sort(compareBy(q.sort, q.dir));
 }
 
 /**
@@ -55,19 +219,43 @@ export async function listPickerProjects(db: Executor, viewer: Viewer): Promise<
     },
   });
   return rows
-    .map(
-      (r): PickerProject => ({
-        id: r.id,
-        name: r.name,
-        color: r.color,
-        clientId: r.clientId,
-        clientName: r.client?.name ?? null,
-        billable: r.billable,
-        favorite: r.favorites.length > 0,
-        tasks: r.tasks,
-      }),
-    )
+    .map((r): PickerProject => ({
+      id: r.id,
+      name: r.name,
+      color: r.color,
+      clientId: r.clientId,
+      clientName: r.client?.name ?? null,
+      billable: r.billable,
+      favorite: r.favorites.length > 0,
+      tasks: r.tasks,
+    }))
     .sort(comparePicker);
+}
+
+export async function getProject(
+  db: Executor,
+  viewer: Viewer,
+  projectId: string,
+): Promise<ProjectDetail> {
+  const row = await requireVisibleProject(db, viewer, projectId);
+  const [tracked, favorites] = await Promise.all([
+    trackedByProject(db, viewer),
+    favoriteIds(db, viewer),
+  ]);
+  return toDetail(row, tracked.get(row.id) ?? 0, favorites.has(row.id));
+}
+
+async function requireClientName(
+  db: Executor,
+  workspaceId: string,
+  clientId: string,
+): Promise<string> {
+  const found = await db.query.client.findFirst({
+    where: and(eq(client.id, clientId), eq(client.workspaceId, workspaceId)),
+    columns: { name: true },
+  });
+  if (!found) throw new CatalogError("INVALID", "Client not found.");
+  return found.name;
 }
 
 /**
@@ -81,15 +269,7 @@ export async function createProject(
 ): Promise<PickerProject> {
   const name = input.name.trim();
   const clientId = input.clientId ?? null;
-  let clientName: string | null = null;
-  if (clientId) {
-    const found = await db.query.client.findFirst({
-      where: and(eq(client.id, clientId), eq(client.workspaceId, viewer.workspaceId)),
-      columns: { name: true },
-    });
-    if (!found) throw new CatalogError("INVALID", "Client not found.");
-    clientName = found.name;
-  }
+  const clientName = clientId ? await requireClientName(db, viewer.workspaceId, clientId) : null;
   const id = randomUUID();
   try {
     await db.insert(project).values({
@@ -119,5 +299,207 @@ export async function createProject(
     billable: row.billable,
     favorite: false,
     tasks: [],
+  };
+}
+
+export async function updateProject(
+  db: Executor,
+  viewer: Viewer,
+  projectId: string,
+  patch: ProjectPatch,
+): Promise<ProjectDetail> {
+  await requireVisibleProject(db, viewer, projectId);
+  if (patch.clientId) await requireClientName(db, viewer.workspaceId, patch.clientId);
+  try {
+    await db
+      .update(project)
+      .set({
+        ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+        ...(patch.clientId !== undefined ? { clientId: patch.clientId } : {}),
+        ...(patch.color !== undefined ? { color: patch.color } : {}),
+        ...(patch.billable !== undefined ? { billable: patch.billable } : {}),
+        ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
+        ...(patch.note !== undefined ? { note: patch.note } : {}),
+        ...(patch.archived !== undefined ? { archived: patch.archived } : {}),
+        ...(patch.isTemplate !== undefined ? { isTemplate: patch.isTemplate } : {}),
+      })
+      .where(eq(project.id, projectId));
+  } catch (error) {
+    if (isUniqueViolation(error, "project_workspace_client_name_uq")) {
+      throw new CatalogError("CONFLICT", DUPLICATE_NAME);
+    }
+    throw error;
+  }
+  return getProject(db, viewer, projectId);
+}
+
+/** Archives or unarchives the given visible projects; returns how many changed. */
+export async function setProjectsArchived(
+  db: Executor,
+  viewer: Viewer,
+  ids: string[],
+  archived: boolean,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const rows = await db
+    .update(project)
+    .set({ archived })
+    .where(
+      and(
+        inArray(project.id, ids),
+        eq(project.workspaceId, viewer.workspaceId),
+        visibleProjectFilter(viewer),
+      ),
+    )
+    .returning({ id: project.id });
+  return rows.length;
+}
+
+/**
+ * Deletes a project after moving its entries to another project (or none)
+ * or soft-deleting them, in one transaction. The target must be visible and
+ * not archived.
+ */
+export async function deleteProject(
+  db: Database,
+  viewer: Viewer,
+  projectId: string,
+  mode: DeleteProjectMode,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await requireVisibleProject(tx, viewer, projectId);
+    if (mode.mode === "reassign") {
+      if (mode.projectId) {
+        if (mode.projectId === projectId) {
+          throw new CatalogError("INVALID", "Choose a different project.");
+        }
+        const target = await tx.query.project.findFirst({
+          where: and(
+            eq(project.id, mode.projectId),
+            eq(project.workspaceId, viewer.workspaceId),
+            visibleProjectFilter(viewer),
+          ),
+          columns: { archived: true },
+        });
+        if (!target) throw new CatalogError("INVALID", "Target project not found.");
+        if (target.archived) throw new CatalogError("INVALID", "Target project is archived.");
+      }
+      await reassignProjectEntries(tx, viewer.workspaceId, projectId, mode.projectId);
+    } else {
+      await softDeleteProjectEntries(tx, viewer.workspaceId, projectId);
+    }
+    await tx.delete(project).where(eq(project.id, projectId));
+  });
+}
+
+/** Replaces the members of a (private) project; each must be an active workspace member. */
+export async function setProjectMembers(
+  db: Database,
+  viewer: Viewer,
+  projectId: string,
+  userIds: string[],
+): Promise<void> {
+  await requireVisibleProject(db, viewer, projectId);
+  const unique = [...new Set(userIds)];
+  if (unique.length > 0) {
+    const rows = await db
+      .select({ userId: membership.userId })
+      .from(membership)
+      .where(
+        and(
+          eq(membership.workspaceId, viewer.workspaceId),
+          inArray(membership.userId, unique),
+          eq(membership.status, "ACTIVE"),
+        ),
+      );
+    if (rows.length !== unique.length) {
+      throw new CatalogError("INVALID", "Only workspace members can be added.");
+    }
+  }
+  await db.transaction(async (tx) => {
+    await tx.delete(projectMember).where(eq(projectMember.projectId, projectId));
+    if (unique.length > 0) {
+      await tx.insert(projectMember).values(unique.map((userId) => ({ projectId, userId })));
+    }
+  });
+}
+
+export async function setFavorite(
+  db: Executor,
+  viewer: Viewer,
+  projectId: string,
+  favorite: boolean,
+): Promise<void> {
+  await requireVisibleProject(db, viewer, projectId);
+  if (favorite) {
+    await db
+      .insert(projectFavorite)
+      .values({ projectId, userId: viewer.userId })
+      .onConflictDoNothing();
+  } else {
+    await db
+      .delete(projectFavorite)
+      .where(
+        and(eq(projectFavorite.projectId, projectId), eq(projectFavorite.userId, viewer.userId)),
+      );
+  }
+}
+
+/** Tracked time on a project by task and by member, for entries starting in `[from, to)`. */
+export async function getProjectStatus(
+  db: Executor,
+  viewer: Viewer,
+  projectId: string,
+  range: { from: Date; to: Date },
+): Promise<ProjectStatus> {
+  await requireVisibleProject(db, viewer, projectId);
+  const rows = await db
+    .select({
+      taskId: timeEntry.taskId,
+      taskName: task.name,
+      userId: timeEntry.userId,
+      userName: user.name,
+      billable: timeEntry.billable,
+      seconds: sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::int`,
+    })
+    .from(timeEntry)
+    .leftJoin(task, eq(task.id, timeEntry.taskId))
+    .innerJoin(user, eq(user.id, timeEntry.userId))
+    .where(
+      and(
+        eq(timeEntry.workspaceId, viewer.workspaceId),
+        eq(timeEntry.projectId, projectId),
+        isNull(timeEntry.deletedAt),
+        isNotNull(timeEntry.end),
+        gte(timeEntry.start, range.from),
+        lt(timeEntry.start, range.to),
+      ),
+    )
+    .groupBy(timeEntry.taskId, task.name, timeEntry.userId, user.name, timeEntry.billable);
+
+  const byTask = new Map<string | null, { name: string; seconds: number }>();
+  const byMember = new Map<string, { name: string; seconds: number }>();
+  let billableSeconds = 0;
+  let nonBillableSeconds = 0;
+  for (const r of rows) {
+    const t = byTask.get(r.taskId) ?? { name: r.taskName ?? "No task", seconds: 0 };
+    t.seconds += r.seconds;
+    byTask.set(r.taskId, t);
+    const m = byMember.get(r.userId) ?? { name: r.userName, seconds: 0 };
+    m.seconds += r.seconds;
+    byMember.set(r.userId, m);
+    if (r.billable) billableSeconds += r.seconds;
+    else nonBillableSeconds += r.seconds;
+  }
+  const bySeconds = <T extends { seconds: number; name: string }>(a: T, b: T) =>
+    b.seconds - a.seconds || a.name.localeCompare(b.name);
+  return {
+    from: range.from.toISOString(),
+    to: range.to.toISOString(),
+    byTask: [...byTask].map(([taskId, v]) => ({ taskId, ...v })).sort(bySeconds),
+    byMember: [...byMember].map(([userId, v]) => ({ userId, ...v })).sort(bySeconds),
+    billableSeconds,
+    nonBillableSeconds,
+    totalSeconds: billableSeconds + nonBillableSeconds,
   };
 }
