@@ -72,3 +72,11 @@ export async function pickProject(page: Page, name: string) {
   await page.getByRole("option", { name, exact: true }).click();
   await expect(projectButton(page)).toHaveAccessibleName(`Project: ${name}`);
 }
+
+/** Picks a task (and so its project) in the timer bar. */
+export async function pickTask(page: Page, project: string, task: string) {
+  await projectButton(page).click();
+  await page.getByRole("combobox", { name: "Search projects" }).fill(task);
+  await page.getByRole("option", { name: `${project} › ${task}`, exact: true }).click();
+  await expect(projectButton(page)).toHaveAccessibleName(`Project: ${project} › ${task}`);
+}

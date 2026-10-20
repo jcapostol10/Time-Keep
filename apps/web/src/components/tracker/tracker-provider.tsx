@@ -1,6 +1,12 @@
 "use client";
 
-import { formatClock, type TrackerSettingsInput, type ViewerPrefs } from "@timekeep/core";
+import {
+  canManageCatalog,
+  formatClock,
+  type Role,
+  type TrackerSettingsInput,
+  type ViewerPrefs,
+} from "@timekeep/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
@@ -41,6 +47,8 @@ export type RunningPatch = Partial<EntryDraft> & { start?: string };
 interface TrackerContextValue {
   slug: string;
   workspaceId: string;
+  /** Owner or admin: may create projects and tags from the pickers. */
+  canManage: boolean;
   viewer: ViewerPrefs;
   settings: TrackerSettingsInput;
   running: TimeEntryDTO | null;
@@ -151,6 +159,7 @@ function useLeaveWarning(saving: boolean) {
 export interface TrackerProviderProps {
   slug: string;
   workspaceId: string;
+  role: Role;
   viewer: ViewerPrefs;
   settings: TrackerSettingsInput;
   initialRunning: TimeEntryDTO | null;
@@ -160,6 +169,7 @@ export interface TrackerProviderProps {
 export function TrackerProvider({
   slug,
   workspaceId,
+  role,
   viewer,
   settings,
   initialRunning,
@@ -249,9 +259,7 @@ export function TrackerProvider({
       try {
         // A project or tag still being created belongs on this entry.
         if (!details) await draftWritesSettled();
-        const result = await trackSave(() =>
-          startTimerAction(slug, details ?? draftRef.current),
-        );
+        const result = await trackSave(() => startTimerAction(slug, details ?? draftRef.current));
         if (!result.ok) {
           toast.error(result.error);
           return false;
@@ -378,6 +386,7 @@ export function TrackerProvider({
     () => ({
       slug,
       workspaceId,
+      canManage: canManageCatalog(role),
       viewer,
       settings,
       running,
@@ -396,6 +405,7 @@ export function TrackerProvider({
     [
       slug,
       workspaceId,
+      role,
       viewer,
       settings,
       running,

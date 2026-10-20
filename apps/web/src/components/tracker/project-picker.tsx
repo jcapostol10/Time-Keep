@@ -11,11 +11,12 @@ import {
 } from "@timekeep/ui/components/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@timekeep/ui/components/popover";
 import { cn } from "@timekeep/ui/lib/utils";
-import { CheckIcon, FolderIcon, PlusIcon } from "lucide-react";
-import { useState } from "react";
+import { CheckIcon, CornerDownRightIcon, FolderIcon, PlusIcon } from "lucide-react";
+import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { createProjectAction } from "@/server/actions/time-entries";
+import type { PickerProject } from "@/lib/tracker-types";
+import { createProjectAction } from "@/server/actions/projects";
 
 import { trackDraftWrite } from "./draft-writes";
 import { useTrackerCache, useTrackerOptions } from "./use-tracker-cache";
@@ -30,38 +31,102 @@ export function ColorDot({ color, className }: { color: string; className?: stri
   );
 }
 
+export interface ProjectSelection {
+  projectId: string | null;
+  taskId: string | null;
+}
+
+/** What an entry already carries, shown when the picker no longer lists it (archived, done). */
+export interface CurrentSelection {
+  project: { name: string; color: string } | null;
+  task: { name: string } | null;
+}
+
+interface Group {
+  key: string;
+  label: string;
+  projects: PickerProject[];
+}
+
+/**
+ * Favourites first (listed there only, so every option stays unique), then
+ * one group per client in name order, then projects without a client.
+ */
+export function groupProjects(projects: PickerProject[]): Group[] {
+  const favourites = projects.filter((p) => p.favorite);
+  const byClient = new Map<string, Group>();
+  for (const p of projects) {
+    if (p.favorite) continue;
+    const key = p.clientId ?? "__none__";
+    const group = byClient.get(key) ?? {
+      key,
+      label: p.clientName ?? "No client",
+      projects: [],
+    };
+    group.projects.push(p);
+    byClient.set(key, group);
+  }
+  const clients = [...byClient.values()].sort((a, b) => {
+    if (a.key === "__none__") return 1;
+    if (b.key === "__none__") return -1;
+    return a.label.localeCompare(b.label);
+  });
+  return favourites.length > 0
+    ? [{ key: "__favourites__", label: "Favourites", projects: favourites }, ...clients]
+    : clients;
+}
+
+/**
+ * Picks a project, or a task and with it its project. Projects are grouped
+ * by client with favourites first; typing searches project and task names.
+ * Admins can create a project from here.
+ */
 export function ProjectPicker({
   slug,
   value,
   onChange,
   compact = false,
   disabled = false,
+  canCreate = false,
   current = null,
 }: {
   slug: string;
-  value: string | null;
-  onChange: (projectId: string | null) => void;
+  value: ProjectSelection;
+  onChange: (selection: ProjectSelection) => void;
   /** Icon-only trigger when nothing is selected (entry rows). */
   compact?: boolean;
   disabled?: boolean;
-  /** The entry's own project, shown when the picker no longer lists it (archived). */
-  current?: { name: string; color: string } | null;
+  canCreate?: boolean;
+  current?: CurrentSelection | null;
 }) {
   const { data } = useTrackerOptions(slug);
   const cache = useTrackerCache(slug);
-  const projects = data?.projects ?? [];
+  const projects = useMemo(() => data?.projects ?? [], [data]);
+  const groups = useMemo(() => groupProjects(projects), [projects]);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
-  const selected =
-    projects.find((p) => p.id === value) ??
-    (value && current ? { id: value, name: current.name, color: current.color } : null);
-  const trimmed = query.trim();
-  const canCreate =
-    trimmed.length > 0 && !projects.some((p) => p.name.toLowerCase() === trimmed.toLowerCase());
 
-  function choose(id: string | null) {
-    onChange(id);
+  const listed = projects.find((p) => p.id === value.projectId);
+  const project =
+    listed ??
+    (value.projectId && current?.project
+      ? { id: value.projectId, name: current.project.name, color: current.project.color, tasks: [] }
+      : null);
+  const task = value.taskId
+    ? (listed?.tasks.find((t) => t.id === value.taskId) ??
+      (current?.task ? { id: value.taskId, name: current.task.name } : null))
+    : null;
+  const label = project ? `${project.name}${task ? ` › ${task.name}` : ""}` : "none";
+
+  const trimmed = query.trim();
+  const showCreate =
+    canCreate &&
+    trimmed.length > 0 &&
+    !projects.some((p) => p.name.toLowerCase() === trimmed.toLowerCase());
+
+  function choose(selection: ProjectSelection) {
+    onChange(selection);
     setOpen(false);
     setQuery("");
   }
@@ -75,8 +140,11 @@ export function ProjectPicker({
       return;
     }
     cache.addProject(result.data);
-    choose(result.data.id);
+    choose({ projectId: result.data.id, taskId: null });
   }
+
+  // cmdk needs a unique value per item; names are unique within a client.
+  const projectValue = (p: PickerProject) => `${p.name} · ${p.clientName ?? "no client"}`;
 
   return (
     <Popover
@@ -92,14 +160,15 @@ export function ProjectPicker({
           variant="ghost"
           size="sm"
           disabled={disabled}
-          aria-label={`Project: ${selected?.name ?? "none"}`}
-          className={cn("max-w-48 justify-start", !selected && "text-muted-foreground")}
+          aria-label={`Project: ${label}`}
+          className={cn("max-w-56 justify-start", !project && "text-muted-foreground")}
         >
-          {selected ? (
+          {project ? (
             <>
-              <ColorDot color={selected.color} />
-              <span className="truncate" style={{ color: selected.color }}>
-                {selected.name}
+              <ColorDot color={project.color} />
+              <span className="truncate" style={{ color: project.color }}>
+                {project.name}
+                {task ? <span className="text-foreground"> › {task.name}</span> : null}
               </span>
             </>
           ) : (
@@ -110,30 +179,59 @@ export function ProjectPicker({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
+      <PopoverContent className="w-72 p-0" align="start">
         <Command>
           <CommandInput
             aria-label="Search projects"
-            placeholder="Search or create project"
+            placeholder={canCreate ? "Search or create project" : "Search projects and tasks"}
             value={query}
             onValueChange={setQuery}
           />
           <CommandList>
             <CommandEmpty>No projects found.</CommandEmpty>
             <CommandGroup>
-              <CommandItem value="__no_project__" onSelect={() => choose(null)}>
+              <CommandItem
+                value="__no_project__"
+                onSelect={() => choose({ projectId: null, taskId: null })}
+              >
                 <span className="text-muted-foreground">No project</span>
-                {value === null ? <CheckIcon className="ml-auto" /> : null}
+                {value.projectId === null ? <CheckIcon className="ml-auto" /> : null}
               </CommandItem>
-              {projects.map((p) => (
-                <CommandItem key={p.id} value={p.name} onSelect={() => choose(p.id)}>
-                  <ColorDot color={p.color} />
-                  <span className="truncate">{p.name}</span>
-                  {p.id === value ? <CheckIcon className="ml-auto" /> : null}
-                </CommandItem>
-              ))}
             </CommandGroup>
-            {canCreate ? (
+            {groups.map((group) => (
+              <CommandGroup key={group.key} heading={group.label}>
+                {group.projects.map((p) => (
+                  <Fragment key={p.id}>
+                    <CommandItem
+                      value={projectValue(p)}
+                      keywords={[p.name]}
+                      onSelect={() => choose({ projectId: p.id, taskId: null })}
+                    >
+                      <ColorDot color={p.color} />
+                      <span className="truncate">{p.name}</span>
+                      {p.id === value.projectId && value.taskId === null ? (
+                        <CheckIcon className="ml-auto" />
+                      ) : null}
+                    </CommandItem>
+                    {p.tasks.map((t) => (
+                      <CommandItem
+                        key={t.id}
+                        value={`${projectValue(p)} › ${t.name}`}
+                        keywords={[t.name, p.name]}
+                        aria-label={`${p.name} › ${t.name}`}
+                        onSelect={() => choose({ projectId: p.id, taskId: t.id })}
+                        className="pl-7"
+                      >
+                        <CornerDownRightIcon className="text-muted-foreground" aria-hidden />
+                        <span className="truncate">{t.name}</span>
+                        {t.id === value.taskId ? <CheckIcon className="ml-auto" /> : null}
+                      </CommandItem>
+                    ))}
+                  </Fragment>
+                ))}
+              </CommandGroup>
+            ))}
+            {showCreate ? (
               <CommandGroup>
                 <CommandItem
                   value={`__create__ ${trimmed}`}

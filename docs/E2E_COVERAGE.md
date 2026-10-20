@@ -116,13 +116,22 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Add a task with assignees — `project-detail.spec.ts` › "manage a project's tasks"
 - [x] Rename a task — `project-detail.spec.ts` › "manage a project's tasks"
 - [x] Mark a task done and reopen it — `project-detail.spec.ts` › "manage a project's tasks"
-- [ ] A done task takes no new time and is hidden from the picker — gap
-- [ ] Delete a task; its entries keep the project — gap
+- [x] A done task takes no new time and is hidden from the picker — `project-picker.spec.ts` › "a done task takes no new time and is hidden from the picker"
+- [x] Delete a task; its entries keep the project — `project-picker.spec.ts` › "delete a task; its entries keep the project"
 - [x] Make a project private and pick its members — `project-detail.spec.ts` › "make a project private and pick its members"
 - [x] The status tab sums time by task and member for a date range — `project-detail.spec.ts` › "the status tab sums time by task and member"
 - [x] Edit project settings, mark it as a template, archive and unarchive it — `project-detail.spec.ts` › "edit project settings, mark it as a template, archive and unarchive it"
 - [x] Members cannot open project detail — `project-detail.spec.ts` › "members cannot open project detail"
 - [x] The Budget and Rates tabs say which phase brings them — `project-detail.spec.ts` › "the Budget and Rates tabs say which phase brings them"
+
+## Projects and tasks in the tracker
+
+- [x] Pick a task in the timer bar; the entry shows project and task — `project-picker.spec.ts` › "pick a task and the entry shows project and task"
+- [x] Autocomplete fills the task along with the project — `project-picker.spec.ts` › "pick a task and the entry shows project and task"
+- [x] Search the picker by task name — `project-picker.spec.ts` › "search the picker by task name"
+- [x] The picker groups projects by client, favourites first — `project-picker.spec.ts` › "the picker groups projects by client with favourites first"
+- [x] A member cannot see or pick a private project they are not on — `project-picker.spec.ts` › "a member cannot see or pick a private project they are not on"
+- [x] Members cannot create projects or tags from the pickers — `project-picker.spec.ts` › "members cannot create projects or tags from the pickers"
 
 ## Tenant isolation
 

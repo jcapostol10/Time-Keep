@@ -29,11 +29,14 @@ export function TagPicker({
   value,
   onChange,
   disabled = false,
+  canCreate = false,
 }: {
   slug: string;
   value: string[];
   onChange: (tagIds: string[]) => void;
   disabled?: boolean;
+  /** Admins may create a tag from here. */
+  canCreate?: boolean;
 }) {
   const { data } = useTrackerOptions(slug);
   const cache = useTrackerCache(slug);
@@ -46,8 +49,10 @@ export function TagPicker({
   const openRef = useRef(false);
   const [creating, setCreating] = useState(false);
   const trimmed = query.trim();
-  const canCreate =
-    trimmed.length > 0 && !tags.some((t) => t.name.toLowerCase() === trimmed.toLowerCase());
+  const showCreate =
+    canCreate &&
+    trimmed.length > 0 &&
+    !tags.some((t) => t.name.toLowerCase() === trimmed.toLowerCase());
   const selectedTags = tags.filter((t) => value.includes(t.id));
 
   function commit(next: string[]) {
@@ -148,7 +153,7 @@ export function TagPicker({
                 );
               })}
             </CommandGroup>
-            {canCreate ? (
+            {showCreate ? (
               <CommandGroup>
                 <CommandItem
                   value={`__create__ ${trimmed}`}
