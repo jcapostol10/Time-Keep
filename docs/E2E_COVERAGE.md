@@ -88,6 +88,16 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [ ] Pomodoro notice at the end of a focus block — gap
 - [ ] Reminder when no timer runs during working hours — gap
 
+## Clients
+
+- [x] Create a client with name, email and notes — `clients.spec.ts` › "create and edit a client"
+- [x] Edit a client — `clients.spec.ts` › "create and edit a client"
+- [x] Search clients by name — `clients.spec.ts` › "search clients"
+- [x] Archive a client and find it under the archived filter; unarchive it — `clients.spec.ts` › "archive and unarchive a client"
+- [x] Delete an unused client — `clients.spec.ts` › "delete an unused client"
+- [ ] A client with projects cannot be deleted — gap
+- [x] Members cannot open the clients page and do not see it in the sidebar — `clients.spec.ts` › "members cannot open the clients page"
+
 ## Tenant isolation
 
 - [x] A member of one workspace cannot open another workspace's pages — `tenant-isolation.spec.ts` › "a member of one workspace cannot open another workspace's pages"

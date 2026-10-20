@@ -12,12 +12,16 @@ import {
   UsersIcon,
 } from "lucide-react";
 
+import type { Role } from "@timekeep/core";
+
 import { workspaceRoutes } from "@/lib/routes";
 
 export interface NavItem {
   label: string;
   href: (slug: string) => string;
   icon: LucideIcon;
+  /** Hidden from roles below this one (the page itself also checks). */
+  minRole?: Role;
 }
 
 export interface NavGroup {
@@ -46,8 +50,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Projects", href: workspaceRoutes.projects, icon: FolderKanbanIcon },
       { label: "Team", href: workspaceRoutes.team, icon: UsersIcon },
-      { label: "Clients", href: workspaceRoutes.clients, icon: Building2Icon },
-      { label: "Tags", href: workspaceRoutes.tags, icon: TagIcon },
+      { label: "Clients", href: workspaceRoutes.clients, icon: Building2Icon, minRole: "admin" },
+      { label: "Tags", href: workspaceRoutes.tags, icon: TagIcon, minRole: "admin" },
       { label: "Settings", href: workspaceRoutes.settings, icon: SettingsIcon },
     ],
   },

@@ -1,5 +1,6 @@
 export * from "./catalog";
 export * from "./colors";
+export * from "./currencies";
 export * from "./duration";
 export * from "./entry-edit";
 export * from "./entry-grouping";
