@@ -158,14 +158,19 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Calendar
 
-- [ ] Entries show as blocks with the project colour in week and day view — gap
-- [ ] Drag on empty space to create an entry — gap
-- [ ] Drag a block to move it — gap
-- [ ] Drag a block's edge to resize it — gap
-- [ ] Click a block to edit it — gap
-- [ ] The running timer shows as a growing block — gap
-- [ ] Overlapping entries sit side by side — gap
-- [ ] Navigate days and weeks and back to today — gap
+- [x] Entries show as blocks with the project colour in week and day view — `calendar.spec.ts` › "entries show as blocks in week and day view"
+- [x] Drag on empty space to create an entry — `calendar.spec.ts` › "drag to create an entry"
+- [x] Drag a block to move it — `calendar.spec.ts` › "move and resize an entry by dragging"
+- [x] Drag a block's edge to resize it — `calendar.spec.ts` › "move and resize an entry by dragging"
+- [x] Click a block to edit it — `calendar.spec.ts` › "click a block to edit it"
+- [x] The running timer shows as a growing block — `calendar.spec.ts` › "the running timer shows as a block"
+- [x] Overlapping entries sit side by side — `calendar.spec.ts` › "overlapping entries sit side by side"
+- [x] Navigate days and weeks and back to today — `calendar.spec.ts` › "navigate days and weeks"
+
+## Entry views
+
+- [ ] The same entry shows identically in the tracker, timesheet and calendar — gap
+- [ ] Editing an entry in one view updates the others — gap
 
 ## Tenant isolation
 
