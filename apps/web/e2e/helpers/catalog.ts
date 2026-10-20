@@ -27,10 +27,16 @@ export async function createClientViaUi(
   await expect(clientRow(page, name)).toBeVisible();
 }
 
-/** Opens the "More actions" menu of a row and clicks an item. */
+/**
+ * Opens the "More actions" menu of a row and clicks an item. A re-render that
+ * lands right after the menu opens (a server action's revalidation followed by
+ * router.refresh) can close it again; a person would reopen it, so this retries.
+ */
 export async function rowAction(page: Page, row: ReturnType<Page["getByRole"]>, item: string) {
-  await row.getByRole("button", { name: "More actions" }).click();
-  await page.getByRole("menuitem", { name: item }).click();
+  await expect(async () => {
+    await row.getByRole("button", { name: "More actions" }).click();
+    await page.getByRole("menuitem", { name: item }).click({ timeout: 3_000 });
+  }).toPass({ timeout: 20_000 });
 }
 
 /** The row whose name cell is the project (the cell also carries an "Archived" badge in that view). */

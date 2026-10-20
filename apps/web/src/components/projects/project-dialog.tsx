@@ -10,25 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@timekeep/ui/components/dialog";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@timekeep/ui/components/form";
-import { Input } from "@timekeep/ui/components/input";
-import { RadioGroup, RadioGroupItem } from "@timekeep/ui/components/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@timekeep/ui/components/select";
-import { Switch } from "@timekeep/ui/components/switch";
-import { Textarea } from "@timekeep/ui/components/textarea";
+import { Form } from "@timekeep/ui/components/form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon, PlusIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -40,10 +22,8 @@ import type { z } from "zod";
 import type { ProjectListItem } from "@/lib/catalog-types";
 import { createProjectAction, updateProjectAction } from "@/server/actions/projects";
 
-import { ColorPalette } from "./color-palette";
+import { ProjectFormFields } from "./project-form-fields";
 import type { ClientOption } from "./projects-toolbar";
-
-const NO_CLIENT = "__none__";
 
 type FormValues = z.input<typeof projectInputSchema>;
 
@@ -112,127 +92,14 @@ export function ProjectDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input autoFocus {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="clientId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Client</FormLabel>
-                  <Select
-                    value={field.value ?? NO_CLIENT}
-                    onValueChange={(v) => field.onChange(v === NO_CLIENT ? null : v)}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="w-full" aria-label="Client">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={NO_CLIENT}>No client</SelectItem>
-                      {selectableClients.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormItem>
-              <FormLabel>Colour</FormLabel>
-              <ColorPalette
-                value={effectiveColor}
-                onChange={(c) => {
-                  setColorPicked(true);
-                  form.setValue("color", c, { shouldDirty: true });
-                }}
-              />
-            </FormItem>
-            <FormField
-              control={form.control}
-              name="billable"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-md border px-3 py-2">
-                  <div>
-                    <FormLabel>Billable by default</FormLabel>
-                    <p className="text-muted-foreground text-xs">
-                      New entries on this project start billable.
-                    </p>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      aria-label="Billable by default"
-                      checked={field.value ?? true}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="visibility"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Visibility</FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      aria-label="Visibility"
-                      value={field.value ?? "PUBLIC"}
-                      onValueChange={field.onChange}
-                      className="gap-2"
-                    >
-                      <label className="flex items-start gap-3 rounded-md border px-3 py-2">
-                        <RadioGroupItem value="PUBLIC" aria-label="Public" className="mt-0.5" />
-                        <span>
-                          <span className="block text-sm font-medium">Public</span>
-                          <span className="text-muted-foreground block text-xs">
-                            Every member can see it and track time on it.
-                          </span>
-                        </span>
-                      </label>
-                      <label className="flex items-start gap-3 rounded-md border px-3 py-2">
-                        <RadioGroupItem value="PRIVATE" aria-label="Private" className="mt-0.5" />
-                        <span>
-                          <span className="block text-sm font-medium">Private</span>
-                          <span className="text-muted-foreground block text-xs">
-                            Only admins and the people you add on its Access tab.
-                          </span>
-                        </span>
-                      </label>
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="note"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Note</FormLabel>
-                  <FormControl>
-                    <Textarea rows={2} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+            <ProjectFormFields
+              form={form}
+              clients={selectableClients}
+              color={effectiveColor}
+              onColorChange={(c) => {
+                setColorPicked(true);
+                form.setValue("color", c, { shouldDirty: true });
+              }}
             />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

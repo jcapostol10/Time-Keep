@@ -30,11 +30,16 @@ const DUPLICATE_NAME = "A task with this name already exists in this project.";
 
 type TaskRow = typeof task.$inferSelect & { assignees: { userId: string }[] };
 
-async function trackedByTask(db: Executor, projectId: string): Promise<Map<string, number>> {
+/** Tracked seconds and live entry counts per task of a project. */
+async function usageByTask(
+  db: Executor,
+  projectId: string,
+): Promise<Map<string, { seconds: number; entries: number }>> {
   const rows = await db
     .select({
       taskId: timeEntry.taskId,
       seconds: sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::int`,
+      entries: sql<number>`count(*)::int`,
     })
     .from(timeEntry)
     .where(
@@ -42,21 +47,25 @@ async function trackedByTask(db: Executor, projectId: string): Promise<Map<strin
         eq(timeEntry.projectId, projectId),
         isNotNull(timeEntry.taskId),
         isNull(timeEntry.deletedAt),
-        isNotNull(timeEntry.end),
       ),
     )
     .groupBy(timeEntry.taskId);
-  return new Map(rows.flatMap((r) => (r.taskId ? [[r.taskId, r.seconds] as const] : [])));
+  return new Map(
+    rows.flatMap((r) =>
+      r.taskId ? [[r.taskId, { seconds: r.seconds, entries: r.entries }] as const] : [],
+    ),
+  );
 }
 
-function toDTO(row: TaskRow, tracked: number): TaskDTO {
+function toDTO(row: TaskRow, usage: { seconds: number; entries: number } | undefined): TaskDTO {
   return {
     id: row.id,
     projectId: row.projectId,
     name: row.name,
     status: row.status,
     assigneeIds: row.assignees.map((a) => a.userId).sort(),
-    trackedSeconds: tracked,
+    trackedSeconds: usage?.seconds ?? 0,
+    entryCount: usage?.entries ?? 0,
   };
 }
 
@@ -111,8 +120,8 @@ export async function listTasks(
     with: { assignees: { columns: { userId: true } } },
     orderBy: asc(task.name),
   });
-  const tracked = await trackedByTask(db, projectId);
-  return rows.map((r) => toDTO(r, tracked.get(r.id) ?? 0));
+  const usage = await usageByTask(db, projectId);
+  return rows.map((r) => toDTO(r, usage.get(r.id)));
 }
 
 export async function createTask(
@@ -139,7 +148,7 @@ export async function createTask(
     throw error;
   }
   await replaceAssignees(db, id, assigneeIds);
-  return toDTO(await requireVisibleTask(db, viewer, id), 0);
+  return toDTO(await requireVisibleTask(db, viewer, id), undefined);
 }
 
 export async function updateTask(
@@ -170,8 +179,8 @@ export async function updateTask(
       throw error;
     }
   }
-  const tracked = await trackedByTask(db, row.projectId);
-  return toDTO(await requireVisibleTask(db, viewer, taskId), tracked.get(taskId) ?? 0);
+  const usage = await usageByTask(db, row.projectId);
+  return toDTO(await requireVisibleTask(db, viewer, taskId), usage.get(taskId));
 }
 
 /** Deletes a task; its entries stay on the project with no task (FK SET NULL). */

@@ -53,6 +53,8 @@ export interface TaskDTO {
   status: "ACTIVE" | "DONE";
   assigneeIds: string[];
   trackedSeconds: number;
+  /** Live entries on the task; the delete dialog says how many lose it. */
+  entryCount: number;
 }
 
 export interface TagDTO {

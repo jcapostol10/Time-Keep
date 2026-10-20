@@ -133,3 +133,11 @@ export function parseTimeOfDay(input: string): { hours: number; minutes: number 
   }
   return { hours, minutes };
 }
+
+/** The viewer's local month containing `instant`, as `[monthStart, monthEnd)` instants. */
+export function monthBoundsInZone(instant: Date, tz: string): { monthStart: Date; monthEnd: Date } {
+  const local = new TZDate(instant, tz);
+  const start = new TZDate(local.getFullYear(), local.getMonth(), 1, tz);
+  const end = new TZDate(local.getFullYear(), local.getMonth() + 1, 1, tz);
+  return { monthStart: new Date(start.getTime()), monthEnd: new Date(end.getTime()) };
+}
