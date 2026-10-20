@@ -16,6 +16,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## E2E suite
 
+- [ ] Against the dev server, three workers occasionally close an open picker mid-test (Next recompiles routes on demand and pushes updates); the production-server run (see the CLAUDE.md commands) is stable. Consider making `pnpm e2e` build and start a production server locally.
 - [ ] The suite runs spec files with 3 workers to stay under 10 minutes on a preview; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). If a new spec writes to the demo tenant, check it against the others or give it its own project in the Playwright config.
 - [ ] Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
 - [ ] Re-prove the 26 coverage ticks carried over from Phases 0–1: break each guarded behaviour once and watch its test fail.

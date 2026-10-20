@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
+import { waitForApp } from "./helpers/app";
 import { createClientViaUi, createProjectViaUi, projectRow, rowAction } from "./helpers/catalog";
 import {
   addManualEntry,
@@ -17,7 +18,9 @@ import {
 
 async function addTaskViaUi(page: Page, slug: string, project: string, task: string) {
   await page.goto(`/w/${slug}/projects`);
+  await waitForApp(page);
   await projectRow(page, project).getByRole("link", { name: project }).click();
+  await waitForApp(page);
   await page.getByRole("button", { name: "Add task" }).click();
   const dialog = page.getByRole("dialog", { name: "New task" });
   await dialog.getByLabel("Name").fill(task);

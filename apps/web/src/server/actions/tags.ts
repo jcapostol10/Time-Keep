@@ -21,7 +21,10 @@ function errorMessage(error: unknown): string {
   return "Something went wrong.";
 }
 
-/** Also the tag picker's inline create; returns the picker's shape. */
+/**
+ * Also the tag picker's inline create; returns the picker's shape and does
+ * not revalidate (that would refresh the tracker under the open picker).
+ */
 export async function createTagAction(
   slug: string,
   input: unknown,
@@ -31,7 +34,6 @@ export async function createTagAction(
     const parsed = tagInputSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     const created = await createTag(getDb(), ctx.workspace.id, parsed.data);
-    revalidatePath(workspaceRoutes.tags(slug));
     return ok({ id: created.id, name: created.name, color: created.color });
   } catch (error) {
     return fail(errorMessage(error));

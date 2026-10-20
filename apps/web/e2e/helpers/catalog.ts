@@ -1,5 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
+import { waitForApp } from "./app";
+
 /** Actions on the Clients, Projects and Tags pages shared by the catalog specs. */
 
 export const clientRow = (page: Page, name: string) =>
@@ -17,6 +19,7 @@ export async function createClientViaUi(
   extra: { email?: string; notes?: string } = {},
 ) {
   if (!page.url().includes(`/w/${slug}/clients`)) await page.goto(`/w/${slug}/clients`);
+  await waitForApp(page);
   await page.getByRole("button", { name: "New client" }).click();
   const dialog = page.getByRole("dialog", { name: "New client" });
   await dialog.getByLabel("Name").fill(name);
@@ -58,6 +61,7 @@ export async function createProjectViaUi(
   } = {},
 ) {
   if (!page.url().includes(`/w/${slug}/projects`)) await page.goto(`/w/${slug}/projects`);
+  await waitForApp(page);
   await page.getByRole("button", { name: "New project" }).click();
   const dialog = page.getByRole("dialog", { name: "New project" });
   await dialog.getByLabel("Name").fill(name);

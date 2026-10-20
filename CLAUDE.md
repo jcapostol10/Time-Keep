@@ -15,6 +15,7 @@ TimeKeep is a web-based time tracking and timesheet SaaS for teams (functionally
 | `pnpm dev` | Web (`http://localhost:3000`) and worker, via Turborepo |
 | `pnpm lint && pnpm typecheck && pnpm test && pnpm e2e` | The full gate. Run it before saying a phase is done |
 | `pnpm --filter @timekeep/web e2e -- --ui` | Playwright UI mode |
+| `pnpm --filter @timekeep/web build && CI=1 AUTH_RATE_LIMIT_ENABLED=false pnpm --filter @timekeep/web e2e` | The suite against a production server, as CI and previews run it (the dev server can drop a popover under three workers; the production rate limit must be off) |
 | `pnpm --filter @timekeep/web e2e:coverage` | Check `docs/E2E_COVERAGE.md`: every ticked line must name a listed, non-skipped test (runs in CI) |
 | `E2E_BASE_URL=<preview url> pnpm --filter @timekeep/web e2e` | Run the e2e suite against a Vercel preview (also needs `E2E_SECRET`, `VERCEL_AUTOMATION_BYPASS_SECRET`) |
 | `pnpm db:e2e-cleanup` | Delete throwaway `@e2e.test` users, e2e-only workspaces and old captured email |

@@ -51,7 +51,11 @@ function refresh(slug: string) {
   revalidatePath(workspaceRoutes.clients(slug));
 }
 
-/** Also the picker's inline create. */
+/**
+ * Also the picker's inline create, so it does not revalidate any path: Next
+ * would refresh the calling page (the tracker) under the open picker. The
+ * Projects page refreshes itself after its dialog.
+ */
 export async function createProjectAction(
   slug: string,
   input: unknown,
@@ -61,7 +65,6 @@ export async function createProjectAction(
     const parsed = projectInputSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     const created = await createProject(getDb(), viewer, parsed.data);
-    refresh(slug);
     return ok(created);
   } catch (error) {
     return fail(errorMessage(error));

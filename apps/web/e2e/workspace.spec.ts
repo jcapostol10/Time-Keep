@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-import { signIn, signUpAndVerify, uniqueEmail, workspaceSlugFromUrl } from "./helpers/app";
+import {
+  openWorkspaceSwitcher,
+  signIn,
+  signUpAndVerify,
+  uniqueEmail,
+  workspaceSlugFromUrl,
+} from "./helpers/app";
 import { extractAppLink, waitForEmail } from "./helpers/mail";
 
 test.describe("workspaces", () => {
@@ -42,7 +48,7 @@ test.describe("workspaces", () => {
     await expect(invitee).toHaveURL(new RegExp(`/w/${studioSlug}/tracker`));
 
     // Switcher lists both workspaces; switching navigates and persists.
-    await invitee.getByRole("button", { name: "Switch workspace" }).click();
+    await openWorkspaceSwitcher(invitee);
     await expect(invitee.getByRole("menuitem", { name: /Owen Studio/ })).toBeVisible();
     await invitee.getByRole("menuitem", { name: /Ivy's workspace/ }).click();
     await expect(invitee).toHaveURL(new RegExp(`/w/${personalSlug}/tracker`));

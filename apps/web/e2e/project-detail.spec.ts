@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
+import { waitForApp } from "./helpers/app";
 import { createProjectViaUi, projectRow, rowAction } from "./helpers/catalog";
 import { addManualEntry, pickProject } from "./helpers/tracker";
 
@@ -8,8 +9,10 @@ import { addManualEntry, pickProject } from "./helpers/tracker";
 
 async function openProject(page: Page, slug: string, name: string) {
   if (!page.url().includes(`/w/${slug}/projects`)) await page.goto(`/w/${slug}/projects`);
+  await waitForApp(page);
   await projectRow(page, name).getByRole("link", { name }).click();
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+  await waitForApp(page);
 }
 
 const tab = (page: Page, name: string) => page.getByRole("tablist").getByRole("tab", { name });
