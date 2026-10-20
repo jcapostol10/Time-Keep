@@ -19,7 +19,6 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] Tests add manual entries at early times (00:05, 00:10) in Asia/Manila. A run that straddles Manila midnight can put them on different days.
 - [ ] `fixtures.spec.ts` "two tests get different fresh users" depends on test order.
 - [ ] Remote runs use `retries: 2`, which hides flaky tests unless someone reads the report. Fail the job on flaky tests, or report them in the job summary.
-- [ ] A `test.skip()` call inside a test body is invisible to `playwright test --list`, so `e2e:coverage` still counts that test as covered.
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)
 
@@ -30,6 +29,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## Done
 
+- [x] A `test.skip()` call inside a test body is invisible to `playwright test --list`, so `e2e:coverage` still counts that test as covered. Done 2026-10-20 ("e2e: skipping a test is a lint error"): no-restricted-syntax flags test.skip/test.fixme in e2e/; a probe spec with both linted clean before and fails after.
 - [x] `parseCoverage` has no test for trailing spaces after the closing quote. Done 2026-10-20 ("coverage-check: spec paths, symlinked runs, trailing spaces"): test added; it fails when trailing whitespace handling is removed.
 - [x] Tests are keyed by spec file name only; two specs with the same name in different folders would collide. Done 2026-10-20 ("coverage-check: spec paths, symlinked runs, trailing spaces"): specs are keyed by their path under e2e/; the two-folder test failed before.
 - [x] The "run as a script" check compares `process.argv[1]` without resolving symlinks, so running it through a symlinked path silently does nothing. Done 2026-10-20 ("coverage-check: spec paths, symlinked runs, trailing spaces"): isMainModule compares real paths; the junction test failed before.

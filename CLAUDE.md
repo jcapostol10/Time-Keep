@@ -80,6 +80,7 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md, E2E_COVERAGE.md, BACKLO
   - Wait for `[data-saving="false"]` before reloading after an edit.
   - `docs/E2E_COVERAGE.md` lists every user-facing function. `pnpm --filter @timekeep/web e2e:coverage` (run in CI) fails when a ticked line names a missing test.
   - Tick a line only after its test was seen to fail with the guarded behaviour broken; the commit message records the break.
+  - `test.skip` / `test.fixme` in `e2e/` are lint errors (a skip inside a test body is invisible to the coverage check). A deliberate skip needs an `eslint-disable` with a reason, and its coverage line is unticked.
   - The suite must stay under 10 minutes on a Vercel preview; slow tests move to a nightly run rather than being deleted.
   - Local runs clean up `@e2e.test` users in a global teardown that only ever touches a local database.
 - UI: shadcn/ui components from `@timekeep/ui/components/*`, icons from `lucide-react`, toasts via `sonner`. Theme tokens are in `packages/ui/src/styles/globals.css` (our own teal palette; light + dark via `.dark` class and `next-themes`). Every page must work at 375px.
