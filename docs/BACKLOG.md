@@ -14,7 +14,6 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 - [ ] Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
 - [ ] Re-prove the 26 coverage ticks carried over from Phases 0–1: break each guarded behaviour once and watch its test fail.
-- [ ] Remote runs use `retries: 2`, which hides flaky tests unless someone reads the report. Fail the job on flaky tests, or report them in the job summary.
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)
 
@@ -25,6 +24,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## Done
 
+- [x] Remote runs use `retries: 2`, which hides flaky tests unless someone reads the report. Fail the job on flaky tests, or report them in the job summary. Done 2026-10-20 ("e2e: a flaky test fails the run in CI"): failOnFlakyTests is on in CI and remote runs; a probe that passes only on retry exited 0 before and 1 after.
 - [x] `fixtures.spec.ts` "two tests get different fresh users" depends on test order. Done 2026-10-20 ("e2e: fresh users near noon, with clear errors and an API slug"): replaced by "every freshUser is a new account with its own workspace", which signs up a second user itself; it fails when signUpFreshUser reuses an account.
 - [x] Tests add manual entries at early times (00:05, 00:10) in Asia/Manila. A run that straddles Manila midnight can put them on different days. Done 2026-10-20 ("e2e: fresh users near noon, with clear errors and an API slug"): fresh users get a no-DST zone where it is about noon (e2e/helpers/time-zones.ts, unit-tested for every UTC hour and in July).
 - [x] `freshUser` reads the workspace slug from the `Location` header of the `/` redirect. It breaks if that redirect changes; read it from an API instead. Done 2026-10-20 ("e2e: fresh users near noon, with clear errors and an API slug"): the slug comes from /api/auth/organization/list (exactly one workspace expected).

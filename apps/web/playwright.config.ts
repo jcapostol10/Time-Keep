@@ -22,6 +22,9 @@ export default defineConfig({
   workers: 1,
   forbidOnly: isCI,
   retries: remoteUrl ? 2 : isCI ? 1 : 0,
+  // Retries are for telling a flaky test from a broken one, not for hiding
+  // it: a test that only passed on retry still fails the run in CI.
+  failOnFlakyTests: isCI || Boolean(remoteUrl),
   timeout: remoteUrl ? 120_000 : 60_000,
   expect: { timeout: remoteUrl ? 20_000 : 10_000 },
   reporter: isCI ? [["github"], ["html", { open: "never" }]] : [["list"]],
