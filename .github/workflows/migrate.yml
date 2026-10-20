@@ -1,0 +1,55 @@
+name: Migrate shared database
+
+# Applies the chosen branch's pending migrations to the shared Supabase
+# database (production and every preview use it), the "expand" step of a
+# schema change. Previews never migrate, so until this runs a preview of a
+# schema-changing branch cannot seed or pass e2e. The production build runs
+# the same migrator on merge, a no-op for anything applied here.
+#
+# From then until the merge deploys, live production runs the old code
+# against the new schema, so every migration must stay backward-compatible.
+#
+# Maintainers only: workflow_dispatch runs this file from a ref of this
+# repository, so a fork cannot reach the secret. The secret is scoped to the
+# one step that needs it.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "migrate" to apply this branch''s pending migrations to the shared database'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Never while a preview run is seeding or testing the shared tenant.
+concurrency:
+  group: e2e-preview
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: migrate ${{ github.ref_name }}
+    if: github.event.inputs.confirm == 'migrate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply pending migrations
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL_SESSION: ${{ secrets.DATABASE_URL_SESSION }}

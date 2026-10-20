@@ -14,8 +14,9 @@ import {
 import { hashPassword } from "better-auth/crypto";
 import { inArray, like, sql } from "drizzle-orm";
 
-import { createDb, type Database } from "./client";
+import { createDb, type Database, type DbExecutor } from "./client";
 import { e2eOnlyWorkspaceIds, e2eUsersInCustomerWorkspaces } from "./e2e-tenant";
+import { type JournalEntry, listPendingMigrations } from "./migrations-status";
 import {
   account,
   client,
@@ -52,7 +53,7 @@ export const DEMO_USERS = [
  * ever invited a demo account is kept (the shared production database holds
  * real tenants too). The demo users go, taking their memberships with them.
  */
-export async function resetDemoData(db: Database) {
+export async function resetDemoData(db: DbExecutor) {
   const blocked = await e2eUsersInCustomerWorkspaces(db, "@demo.test");
   if (blocked.length > 0) {
     const list = blocked.map((b) => `${b.email} in "${b.workspace}"`).join(", ");
@@ -72,7 +73,7 @@ export async function resetDemoData(db: Database) {
   `);
 }
 
-async function createUser(db: Database, name: string, email: string, passwordHash: string) {
+async function createUser(db: DbExecutor, name: string, email: string, passwordHash: string) {
   const id = randomUUID();
   await db
     .insert(user)
@@ -88,7 +89,7 @@ async function createUser(db: Database, name: string, email: string, passwordHas
 }
 
 async function createWorkspace(
-  db: Database,
+  db: DbExecutor,
   name: string,
   ownerId: string,
   opts: { slug?: string; timezone?: string } = {},
@@ -110,42 +111,59 @@ async function createWorkspace(
   return { id, slug };
 }
 
-export async function seed(db: Database) {
-  await resetDemoData(db);
+/**
+ * Rebuilds the demo tenant in one transaction, so a failure part-way leaves
+ * the previous data (or nothing) rather than a half-seeded tenant. Refuses to
+ * run while this package's migrations are not all applied: previews share the
+ * production database and never migrate it, so a schema-changing branch runs
+ * the "Migrate shared database" workflow first.
+ */
+export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}) {
+  const pending = await listPendingMigrations(db, opts.journal);
+  if (pending.length > 0) {
+    throw new Error(
+      `Refusing to seed: migrations pending (${pending.join(", ")}). ` +
+        'Previews never migrate; run the "Migrate shared database" workflow for this branch first.',
+    );
+  }
 
-  const passwordHash = await hashPassword(DEMO_PASSWORD);
-  const ids = new Map<string, string>();
-  for (const u of DEMO_USERS) {
-    const id = await createUser(db, u.name, u.email, passwordHash);
-    ids.set(u.email, id);
-    await createWorkspace(db, personalWorkspaceName(u.name), id, {
+  return db.transaction(async (tx) => {
+    await resetDemoData(tx);
+
+    const passwordHash = await hashPassword(DEMO_PASSWORD);
+    const ids = new Map<string, string>();
+    for (const u of DEMO_USERS) {
+      const id = await createUser(tx, u.name, u.email, passwordHash);
+      ids.set(u.email, id);
+      await createWorkspace(tx, personalWorkspaceName(u.name), id, {
+        timezone: DEMO_WORKSPACE.timezone,
+      });
+    }
+
+    const ownerId = ids.get("owner@demo.test");
+    if (!ownerId) throw new Error("owner missing");
+    const demo = await createWorkspace(tx, DEMO_WORKSPACE.name, ownerId, {
+      slug: DEMO_WORKSPACE.slug,
       timezone: DEMO_WORKSPACE.timezone,
     });
-  }
 
-  const ownerId = ids.get("owner@demo.test");
-  if (!ownerId) throw new Error("owner missing");
-  const demo = await createWorkspace(db, DEMO_WORKSPACE.name, ownerId, {
-    slug: DEMO_WORKSPACE.slug,
-    timezone: DEMO_WORKSPACE.timezone,
+    for (const u of DEMO_USERS) {
+      if (u.role === "owner") continue;
+      const userId = ids.get(u.email);
+      if (!userId) continue;
+      await tx.insert(membership).values({
+        id: randomUUID(),
+        workspaceId: demo.id,
+        userId,
+        role: u.role,
+        status: "ACTIVE",
+      });
+    }
+
+    await seedTrackerData(tx, demo.id, ids);
+
+    return { workspaceSlug: demo.slug };
   });
-
-  for (const u of DEMO_USERS) {
-    if (u.role === "owner") continue;
-    const userId = ids.get(u.email);
-    if (!userId) continue;
-    await db.insert(membership).values({
-      id: randomUUID(),
-      workspaceId: demo.id,
-      userId,
-      role: u.role,
-      status: "ACTIVE",
-    });
-  }
-
-  await seedTrackerData(db, demo.id, ids);
-
-  return { workspaceSlug: demo.slug };
 }
 
 /** Deterministic PRNG so every seed run produces the same demo entries. */
@@ -201,7 +219,7 @@ const DEMO_ENTRY_KINDS: {
  * Two weeks of stopped entries (weekdays, 09:00–18:00 Manila) for every demo
  * user, plus one entry for member1 that crosses midnight. No running timers.
  */
-async function seedTrackerData(db: Database, workspaceId: string, ids: Map<string, string>) {
+async function seedTrackerData(db: DbExecutor, workspaceId: string, ids: Map<string, string>) {
   const tz = DEMO_WORKSPACE.timezone;
   const clientIds = DEMO_CLIENTS.map(() => randomUUID());
   await db.insert(client).values(
@@ -269,6 +287,13 @@ async function seedTrackerData(db: Database, workspaceId: string, ids: Map<strin
 
   for (const [email, userId] of ids) {
     const random = mulberry32(hash(email));
+    // A user only ever tracks time on projects they can see.
+    const kinds = DEMO_ENTRY_KINDS.filter(
+      (k) =>
+        k.project === null ||
+        DEMO_PROJECTS[k.project]?.visibility === "PUBLIC" ||
+        PRIVATE_PROJECT_MEMBERS.includes(email),
+    );
     const entries: (typeof timeEntry.$inferInsert)[] = [];
     const links: (typeof timeEntryTag.$inferInsert)[] = [];
 
@@ -280,7 +305,7 @@ async function seedTrackerData(db: Database, workspaceId: string, ids: Map<strin
       let minutes = 9 * 60 + Math.floor(random() * 4) * 15;
       const count = 2 + Math.floor(random() * 3);
       for (let i = 0; i < count && minutes < 17 * 60; i++) {
-        const kind = DEMO_ENTRY_KINDS[Math.floor(random() * DEMO_ENTRY_KINDS.length)] ?? DEMO_ENTRY_KINDS[0]!;
+        const kind = kinds[Math.floor(random() * kinds.length)] ?? kinds[0]!;
         const length = 30 + Math.floor(random() * 7) * 15;
         const start = zonedDateTimeToInstant(
           { date, hours: Math.floor(minutes / 60), minutes: minutes % 60 },

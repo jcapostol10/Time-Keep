@@ -100,7 +100,7 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md, E2E_COVERAGE.md, BACKLO
 
 - Vercel project `time-keep` (root `apps/web`, region `sin1`), linked to GitHub: every push gets a preview, `main` deploys production. Deployment protection is on; automation uses the bypass secret.
 - **One Supabase project holds production and every preview** (tenant = workspace). So:
-  - **Previews never migrate.** `scripts/vercel-build.ts` runs `db:migrate` only when `VERCEL_ENV=production`. Test schema changes locally before merging.
+  - **Previews never migrate.** `scripts/vercel-build.ts` runs `db:migrate` only when `VERCEL_ENV=production`. A schema-changing branch first applies its migrations to the shared database with the **Migrate shared database** workflow (Actions → `migrate.yml` → run on the branch, type `migrate`): the expand step, so the preview can seed and run e2e before the merge, and the production build then has nothing to apply. Until then `pnpm db:seed` refuses to run (pending migrations) rather than half-seed the demo tenant. Test schema changes locally before that.
   - **e2e stays in its own tenants**: `@demo.test` demo users and the `demo` workspace, throwaway `@e2e.test` users. Seeding and `db:e2e-cleanup` only touch workspaces whose members are all such users; never widen that.
   - **`pnpm test` must never point at Supabase**: it truncates every table.
 - The app connects through Supavisor in **transaction mode** (port 6543): no named prepared statements, `SET`, `LISTEN/NOTIFY` or session-level advisory locks (transaction-scoped `pg_advisory_xact_lock` is fine). Migrations, seed and cleanup use `DATABASE_URL_SESSION` (port 5432).
