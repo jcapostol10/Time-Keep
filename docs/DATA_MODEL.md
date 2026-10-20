@@ -2,7 +2,7 @@
 
 PostgreSQL (16 locally, Supabase in production) via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
 
-## Entity overview (Phases 0–1)
+## Entity overview (Phases 0–2)
 
 ```
 user ──< session            (activeWorkspaceId → workspace)
@@ -13,12 +13,18 @@ workspace ──1 workspace_settings
 workspace ──< membership >── user
 workspace ──< invitation    (inviterId → user)
 
-workspace ──< project       (Phase 1 stub: name + colour)
-workspace ──< tag           (Phase 1 stub: name + colour)
+workspace ──< client
+workspace ──< project >── client   (nullable, ON DELETE RESTRICT)
+project ──< project_member >── user   (who may see a PRIVATE project)
+project ──< project_favorite >── user
+project ──< task ──< task_assignee >── user
+workspace ──< tag
 workspace ──< time_entry >── user
 time_entry >── project      (nullable, ON DELETE SET NULL)
+time_entry >── task         (nullable, ON DELETE SET NULL)
 time_entry ──< time_entry_tag >── tag
 user ──1 user_settings      (tracker preferences, created lazily)
+user ──< timesheet_template (per workspace)
 ```
 
 ## Tables
@@ -92,21 +98,65 @@ Unique `(workspace_id, user_id)`.
 | inviter_id | text → user | |
 | created_at | timestamptz | |
 
-### project (Phase 1 stub)
-
-Phase 2 adds client, billable default, visibility, archived and members.
+### client
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | id | text PK | UUID |
 | workspace_id | text → workspace (cascade) | indexed |
-| name | text | unique per workspace (`project_workspace_name_uq`) |
-| color | text | `#rrggbb` from the core 20-colour palette (`PROJECT_COLORS`) |
+| name | text | unique per workspace (`client_workspace_name_uq`) |
+| address, email, notes | text | default `''`; email is `''` or a valid address |
+| currency | char(3)? | ISO 4217; reserved for invoicing (Phase 6) |
+| archived | boolean | default false |
 | created_at, updated_at | timestamptz | |
 
-### tag (Phase 1 stub)
+A client can be deleted only while no project points at it (`ON DELETE RESTRICT`; the app checks first and says "Move or delete its projects first").
 
-Same shape as `project`; unique index `tag_workspace_name_uq`. Phase 2 adds archived.
+### project
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | indexed |
+| name | text | unique within the client: `project_workspace_client_name_uq` on `(workspace_id, client_id, name)` **NULLS NOT DISTINCT**, so projects without a client form one group |
+| color | text | `#rrggbb` from the core 20-colour palette (`PROJECT_COLORS`) |
+| client_id | text? → client (restrict) | indexed |
+| billable | boolean | default true; the default for new entries on the project |
+| visibility | `project_visibility` | `PUBLIC` (any member may see and track) or `PRIVATE` (admins and `project_member` rows only) |
+| note | text | default `''` |
+| archived | boolean | default false; archived projects keep their entries but take no new time |
+| is_template | boolean | default false; Phase 4 clones templates |
+| created_at, updated_at | timestamptz | |
+
+Rules (`packages/core/src/catalog.ts`): `canSeeProject` (admins always; otherwise PUBLIC or a member) and `trackingBlock` (archived project, done task, task of another project, archived tag) are applied by the entry service on every start, manual create, continue, duplicate and detail change. A private project the user is not on is reported as "Project not found.", never as forbidden.
+
+### project_member, project_favorite
+
+Both `(project_id → project cascade, user_id → user cascade)` with a composite primary key and an index on `user_id`. Members may see and track on a PRIVATE project (user groups arrive in Phase 4). Favourites are per user: starred in the list, first in the picker.
+
+### task
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | denormalised so every query stays workspace-scoped |
+| project_id | text → project (cascade) | indexed |
+| name | text | unique per project (`task_project_name_uq`) |
+| status | `task_status` | `ACTIVE` or `DONE`; done tasks keep their entries but take no new time |
+| created_at, updated_at | timestamptz | |
+
+`task_assignee` `(task_id, user_id)` is informational in Phase 2.
+
+### tag
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | indexed |
+| name | text | unique per workspace (`tag_workspace_name_uq`) |
+| color | text | palette colour |
+| archived | boolean | default false; archived tags stay on entries but cannot be added |
+| created_at, updated_at | timestamptz | |
 
 ### time_entry
 
@@ -117,7 +167,7 @@ Same shape as `project`; unique index `tag_workspace_name_uq`. Phase 2 adds arch
 | user_id | text → user (cascade) | |
 | description | text | default `''`, max 3000 (validated in `packages/core`) |
 | project_id | text? → project (set null) | indexed |
-| task_id | text? | no FK until Phase 2 creates `task` |
+| task_id | text? → task (set null) | indexed; must belong to `project_id` |
 | billable | boolean | default false |
 | start | timestamptz | |
 | end | timestamptz? | `NULL` = running. Reserved word: always quote `"end"` in raw SQL |
@@ -128,7 +178,7 @@ Same shape as `project`; unique index `tag_workspace_name_uq`. Phase 2 adds arch
 Indexes:
 
 - `time_entry_workspace_user_start_idx` on `(workspace_id, user_id, start DESC)`: the tracker list and its week pagination.
-- `time_entry_project_id_idx` on `project_id`.
+- `time_entry_project_id_idx` on `project_id`; `time_entry_task_id_idx` on `task_id`.
 - `time_entry_one_running_uq`: `UNIQUE (workspace_id, user_id) WHERE "end" IS NULL AND "deleted_at" IS NULL`. This enforces invariant 4. Soft-deleted rows are excluded so they can never block a new timer.
 
 Rules (enforced in `apps/web/src/server/time-entries.ts`, the only write path):
@@ -162,6 +212,19 @@ Per-user tracker preferences. The row is created on first save; until then the d
 | reminder_end_minutes | smallint | 1020 | 17:00 |
 | created_at, updated_at | timestamptz | | |
 
+### timesheet_template
+
+A user's saved set of timesheet rows, applied to any week.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| user_id | text → user (cascade) | |
+| name | text | unique per `(workspace_id, user_id)` |
+| rows | jsonb | `[{ projectId, taskId, description }]`, at most 50 |
+| created_at, updated_at | timestamptz | |
+
 ### captured_email
 
 Outgoing email stored instead of sent, on Vercel preview deployments only (`MAIL_CAPTURE=true`) and only for `@e2e.test` / `@demo.test` recipients. The e2e suite reads it from `/api/test/emails`; `pnpm db:e2e-cleanup` prunes rows older than a day.
@@ -181,11 +244,10 @@ Every table enables RLS (`.enableRLS()` on each `pgTable`, migration `0003`) wit
 
 ## Enums
 
-`workspace_role`, `membership_status`, `time_format`, `duration_format` — values come from `packages/core` constants so TypeScript and Postgres agree.
+`workspace_role`, `membership_status`, `time_format`, `duration_format`, `project_visibility`, `task_status` — values come from `packages/core` constants so TypeScript and Postgres agree.
 
 ## Planned (later phases)
 
-Phase 2: `client`, `project` (full; extends the Phase 1 stub in place), `project_member`, `task` (+ FK from `time_entry.task_id`), `tag` (archived), `timesheet_template`.
 Phase 3: `report_share_link`, `export_job`.
 Phase 4: `user_group`, `user_group_member`, `rate` (+ rate snapshot columns on `time_entry`), `workspace_settings` extensions.
 Phase 5: `approval_request`, `lock_period`, `time_off_policy`, `time_off_request`, `holiday`, `kiosk`, `kiosk_pin`.

@@ -36,6 +36,13 @@
       "when": 1792047874839,
       "tag": "0004_revoke_data_api_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792470085649,
+      "tag": "0005_phase2_catalog",
+      "breakpoints": true
     }
   ]
 }

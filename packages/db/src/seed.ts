@@ -18,9 +18,12 @@ import { createDb, type Database } from "./client";
 import { e2eOnlyWorkspaceIds, e2eUsersInCustomerWorkspaces } from "./e2e-tenant";
 import {
   account,
+  client,
   membership,
   project,
+  projectMember,
   tag,
+  task,
   timeEntry,
   timeEntryTag,
   user,
@@ -163,9 +166,22 @@ function hash(text: string): number {
   return h;
 }
 
-const DEMO_PROJECTS = ["Website redesign", "Mobile app", "Internal"] as const;
+const DEMO_CLIENTS = ["Acme Corp", "Globex"] as const;
+/** name, client index (null = none), visibility, tasks (the last of "Website redesign" is done). */
+const DEMO_PROJECTS: {
+  name: string;
+  client: number | null;
+  visibility: "PUBLIC" | "PRIVATE";
+  tasks: string[];
+}[] = [
+  { name: "Website redesign", client: 0, visibility: "PUBLIC", tasks: ["Design", "Development", "QA"] },
+  { name: "Mobile app", client: 1, visibility: "PRIVATE", tasks: ["iOS", "Android"] },
+  { name: "Internal", client: null, visibility: "PUBLIC", tasks: ["Meetings", "Admin"] },
+];
+/** member2 is left off the private project so the demo tenant has a project a member cannot see. */
+const PRIVATE_PROJECT_MEMBERS = ["owner@demo.test", "admin@demo.test", "manager@demo.test", "member1@demo.test"];
 const DEMO_TAGS = ["design", "dev", "meeting", "review"] as const;
-const DEMO_TASKS: {
+const DEMO_ENTRY_KINDS: {
   description: string;
   project: number | null;
   tags: number[];
@@ -187,15 +203,56 @@ const DEMO_TASKS: {
  */
 async function seedTrackerData(db: Database, workspaceId: string, ids: Map<string, string>) {
   const tz = DEMO_WORKSPACE.timezone;
-  const projectIds = DEMO_PROJECTS.map(() => randomUUID());
-  await db.insert(project).values(
-    DEMO_PROJECTS.map((name, i) => ({
-      id: projectIds[i] ?? randomUUID(),
+  const clientIds = DEMO_CLIENTS.map(() => randomUUID());
+  await db.insert(client).values(
+    DEMO_CLIENTS.map((name, i) => ({
+      id: clientIds[i] ?? randomUUID(),
       workspaceId,
       name,
-      color: pickColor(name),
+      email: `billing@${name.toLowerCase().replace(/\s+/g, "")}.example`,
     })),
   );
+  const projectIds = DEMO_PROJECTS.map(() => randomUUID());
+  await db.insert(project).values(
+    DEMO_PROJECTS.map((p, i) => ({
+      id: projectIds[i] ?? randomUUID(),
+      workspaceId,
+      name: p.name,
+      color: pickColor(p.name),
+      clientId: p.client === null ? null : (clientIds[p.client] ?? null),
+      visibility: p.visibility,
+      billable: p.client !== null,
+    })),
+  );
+  const privateMembers = DEMO_PROJECTS.flatMap((p, i) =>
+    p.visibility === "PRIVATE"
+      ? PRIVATE_PROJECT_MEMBERS.flatMap((email) => {
+          const userId = ids.get(email);
+          const projectId = projectIds[i];
+          return userId && projectId ? [{ projectId, userId }] : [];
+        })
+      : [],
+  );
+  if (privateMembers.length > 0) await db.insert(projectMember).values(privateMembers);
+  // First task of each project; entries land on it.
+  const firstTaskIds: (string | null)[] = [];
+  const taskRows: (typeof task.$inferInsert)[] = [];
+  DEMO_PROJECTS.forEach((p, i) => {
+    const projectId = projectIds[i];
+    if (!projectId) return;
+    p.tasks.forEach((name, j) => {
+      const id = randomUUID();
+      if (j === 0) firstTaskIds[i] = id;
+      taskRows.push({
+        id,
+        workspaceId,
+        projectId,
+        name,
+        status: p.name === "Website redesign" && j === p.tasks.length - 1 ? "DONE" : "ACTIVE",
+      });
+    });
+  });
+  await db.insert(task).values(taskRows);
   const tagIds = DEMO_TAGS.map(() => randomUUID());
   await db.insert(tag).values(
     DEMO_TAGS.map((name, i) => ({
@@ -223,7 +280,7 @@ async function seedTrackerData(db: Database, workspaceId: string, ids: Map<strin
       let minutes = 9 * 60 + Math.floor(random() * 4) * 15;
       const count = 2 + Math.floor(random() * 3);
       for (let i = 0; i < count && minutes < 17 * 60; i++) {
-        const task = DEMO_TASKS[Math.floor(random() * DEMO_TASKS.length)] ?? DEMO_TASKS[0]!;
+        const kind = DEMO_ENTRY_KINDS[Math.floor(random() * DEMO_ENTRY_KINDS.length)] ?? DEMO_ENTRY_KINDS[0]!;
         const length = 30 + Math.floor(random() * 7) * 15;
         const start = zonedDateTimeToInstant(
           { date, hours: Math.floor(minutes / 60), minutes: minutes % 60 },
@@ -236,14 +293,15 @@ async function seedTrackerData(db: Database, workspaceId: string, ids: Map<strin
           id,
           workspaceId,
           userId,
-          description: task.description,
-          projectId: task.project === null ? null : (projectIds[task.project] ?? null),
-          billable: task.billable,
+          description: kind.description,
+          projectId: kind.project === null ? null : (projectIds[kind.project] ?? null),
+          taskId: kind.project === null ? null : (firstTaskIds[kind.project] ?? null),
+          billable: kind.billable,
           start,
           end,
           durationSeconds: computeDurationSeconds(start, end),
         });
-        for (const t of task.tags) {
+        for (const t of kind.tags) {
           const tagId = tagIds[t];
           if (tagId) links.push({ timeEntryId: id, tagId });
         }
@@ -262,6 +320,7 @@ async function seedTrackerData(db: Database, workspaceId: string, ids: Map<strin
         userId,
         description: "Release deploy",
         projectId: projectIds[1] ?? null,
+        taskId: firstTaskIds[1] ?? null,
         billable: true,
         start,
         end,
