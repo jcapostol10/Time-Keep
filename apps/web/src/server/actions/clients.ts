@@ -1,6 +1,6 @@
 "use server";
 
-import { clientInputSchema } from "@timekeep/core";
+import { clientInputSchema, clientPatchSchema } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 import { revalidatePath } from "next/cache";
 
@@ -19,10 +19,6 @@ function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return "Something went wrong.";
 }
-
-const clientPatchSchema = clientInputSchema.partial().extend({
-  archived: clientInputSchema.shape.name.optional().transform(() => undefined).optional(),
-});
 
 export async function createClientAction(
   slug: string,
@@ -47,11 +43,9 @@ export async function updateClientAction(
 ): Promise<ActionResult<ClientDTO>> {
   try {
     const ctx = await requireWorkspaceAccess(slug, "admin");
-    const { archived, ...rest } = (input ?? {}) as Record<string, unknown>;
-    const parsed = clientPatchSchema.safeParse(rest);
+    const parsed = clientPatchSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const patch = { ...parsed.data, archived: typeof archived === "boolean" ? archived : undefined };
-    const updated = await updateClient(getDb(), ctx.workspace.id, clientId, patch);
+    const updated = await updateClient(getDb(), ctx.workspace.id, clientId, parsed.data);
     revalidatePath(workspaceRoutes.clients(slug));
     return ok(updated);
   } catch (error) {

@@ -7,6 +7,11 @@ export const workspaceRoutes = {
   dashboard: (slug: string) => `/w/${slug}/dashboard`,
   reports: (slug: string) => `/w/${slug}/reports`,
   projects: (slug: string) => `/w/${slug}/projects`,
+  project: (
+    slug: string,
+    projectId: string,
+    tab?: "access" | "status" | "settings" | "budget" | "rates",
+  ) => `/w/${slug}/projects/${projectId}${tab ? `/${tab}` : ""}`,
   team: (slug: string) => `/w/${slug}/team`,
   clients: (slug: string) => `/w/${slug}/clients`,
   tags: (slug: string) => `/w/${slug}/tags`,

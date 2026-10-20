@@ -36,6 +36,7 @@ export function ProjectPicker({
   onChange,
   compact = false,
   disabled = false,
+  current = null,
 }: {
   slug: string;
   value: string | null;
@@ -43,6 +44,8 @@ export function ProjectPicker({
   /** Icon-only trigger when nothing is selected (entry rows). */
   compact?: boolean;
   disabled?: boolean;
+  /** The entry's own project, shown when the picker no longer lists it (archived). */
+  current?: { name: string; color: string } | null;
 }) {
   const { data } = useTrackerOptions(slug);
   const cache = useTrackerCache(slug);
@@ -50,7 +53,9 @@ export function ProjectPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
-  const selected = projects.find((p) => p.id === value) ?? null;
+  const selected =
+    projects.find((p) => p.id === value) ??
+    (value && current ? { id: value, name: current.name, color: current.color } : null);
   const trimmed = query.trim();
   const canCreate =
     trimmed.length > 0 && !projects.some((p) => p.name.toLowerCase() === trimmed.toLowerCase());

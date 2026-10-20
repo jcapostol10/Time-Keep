@@ -95,8 +95,21 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Search clients by name — `clients.spec.ts` › "search clients"
 - [x] Archive a client and find it under the archived filter; unarchive it — `clients.spec.ts` › "archive and unarchive a client"
 - [x] Delete an unused client — `clients.spec.ts` › "delete an unused client"
-- [ ] A client with projects cannot be deleted — gap
+- [x] A client with projects cannot be deleted — `projects.spec.ts` › "create a project from the projects page"
 - [x] Members cannot open the clients page and do not see it in the sidebar — `clients.spec.ts` › "members cannot open the clients page"
+
+## Projects
+
+- [x] Create a project with client, colour, billable default and visibility — `projects.spec.ts` › "create a project from the projects page"
+- [x] Filter projects by client, status, billing and access — `projects.spec.ts` › "filter, search and sort the projects list"
+- [x] Search and sort projects — `projects.spec.ts` › "filter, search and sort the projects list"
+- [x] Favourite a project (the star persists) — `projects.spec.ts` › "favourite a project"
+- [x] Archive projects in bulk — `projects.spec.ts` › "bulk archive; archived projects keep their time but take no new time"
+- [x] An archived project keeps its entries but takes no new time — `projects.spec.ts` › "bulk archive; archived projects keep their time but take no new time"
+- [x] Project names are unique per client — `projects.spec.ts` › "project names are unique per client"
+- [x] Delete a project and move its entries to another project — `projects.spec.ts` › "delete a project and move its entries"
+- [x] Delete a project and its entries — `projects.spec.ts` › "delete a project and its entries"
+- [x] Members see only their own tracked time in the projects list — `projects.spec.ts` › "a member sees Your time; admins see Tracked"
 
 ## Tenant isolation
 

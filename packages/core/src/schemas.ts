@@ -199,6 +199,17 @@ export const clientInputSchema = z.object({
 });
 export type ClientInput = z.infer<typeof clientInputSchema>;
 
+/** Only the keys given are written; see projectPatchSchema. */
+export const clientPatchSchema = z.object({
+  name: catalogNameSchema.optional(),
+  address: z.string().trim().max(500).optional(),
+  email: z.union([z.literal(""), z.email("Enter a valid email address")]).optional(),
+  notes: z.string().trim().max(2000).optional(),
+  currency: currencyCodeSchema.nullable().optional(),
+  archived: z.boolean().optional(),
+});
+export type ClientPatch = z.infer<typeof clientPatchSchema>;
+
 export const projectInputSchema = z.object({
   name: catalogNameSchema,
   clientId: z.string().min(1).nullable().default(null),
@@ -209,7 +220,14 @@ export const projectInputSchema = z.object({
 });
 export type ProjectInput = z.infer<typeof projectInputSchema>;
 
-export const projectPatchSchema = projectInputSchema.partial().extend({
+/** Only the keys given are written; no field defaults, or a patch would reset the rest. */
+export const projectPatchSchema = z.object({
+  name: catalogNameSchema.optional(),
+  clientId: z.string().min(1).nullable().optional(),
+  color: hexColorSchema.optional(),
+  billable: z.boolean().optional(),
+  visibility: z.enum(PROJECT_VISIBILITIES).optional(),
+  note: z.string().trim().max(2000).optional(),
   archived: z.boolean().optional(),
   isTemplate: z.boolean().optional(),
 });

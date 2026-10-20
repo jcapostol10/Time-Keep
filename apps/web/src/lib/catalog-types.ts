@@ -25,6 +25,7 @@ export interface ProjectListItem {
   visibility: "PUBLIC" | "PRIVATE";
   archived: boolean;
   isTemplate: boolean;
+  note: string;
   favorite: boolean;
   /** Everyone's time for admins; the viewer's own time for members. */
   trackedSeconds: number;
@@ -32,7 +33,6 @@ export interface ProjectListItem {
 }
 
 export interface ProjectDetail extends ProjectListItem {
-  note: string;
   memberIds: string[];
 }
 

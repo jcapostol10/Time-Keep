@@ -162,6 +162,7 @@ export function EntryRow({
       <ProjectPicker
         slug={slug}
         value={entry.projectId}
+        current={entry.project}
         compact
         onChange={(projectId) => save({ projectId })}
       />

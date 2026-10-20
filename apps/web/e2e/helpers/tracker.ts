@@ -64,3 +64,11 @@ export async function runTimer(page: Page, description: string) {
   await expect(entry(page, description)).toBeVisible();
   await waitForSaves(page);
 }
+
+/** Picks an existing project in the timer bar. */
+export async function pickProject(page: Page, name: string) {
+  await projectButton(page).click();
+  await page.getByRole("combobox", { name: "Search projects" }).fill(name);
+  await page.getByRole("option", { name, exact: true }).click();
+  await expect(projectButton(page)).toHaveAccessibleName(`Project: ${name}`);
+}

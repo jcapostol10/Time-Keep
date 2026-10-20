@@ -32,3 +32,38 @@ export async function rowAction(page: Page, row: ReturnType<Page["getByRole"]>, 
   await row.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: item }).click();
 }
+
+/** The row whose name cell is the project (the cell also carries an "Archived" badge in that view). */
+export const projectRow = (page: Page, name: string) =>
+  page.getByRole("row").filter({
+    has: page.getByRole("cell", { name: new RegExp(`^${escapeRegExp(name)}( Archived)?$`) }),
+  });
+
+/** Creates a project through the Projects page dialog and waits for its row. */
+export async function createProjectViaUi(
+  page: Page,
+  slug: string,
+  name: string,
+  opts: {
+    client?: string;
+    visibility?: "Public" | "Private";
+    billable?: boolean;
+    color?: string;
+  } = {},
+) {
+  if (!page.url().includes(`/w/${slug}/projects`)) await page.goto(`/w/${slug}/projects`);
+  await page.getByRole("button", { name: "New project" }).click();
+  const dialog = page.getByRole("dialog", { name: "New project" });
+  await dialog.getByLabel("Name").fill(name);
+  if (opts.client) {
+    await dialog.getByRole("combobox", { name: "Client" }).click();
+    await page.getByRole("option", { name: opts.client, exact: true }).click();
+  }
+  if (opts.color) await dialog.getByRole("radio", { name: opts.color }).click();
+  if (opts.billable === false)
+    await dialog.getByRole("switch", { name: "Billable by default" }).click();
+  if (opts.visibility) await dialog.getByRole("radio", { name: opts.visibility }).click();
+  await dialog.getByRole("button", { name: "Create project" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(projectRow(page, name)).toBeVisible();
+}

@@ -125,6 +125,7 @@ function toListItem(row: ProjectRow, tracked: number, favorite: boolean): Projec
     visibility: row.visibility,
     archived: row.archived,
     isTemplate: row.isTemplate,
+    note: row.note,
     favorite,
     trackedSeconds: tracked,
     memberCount: row.members.length,
@@ -134,7 +135,6 @@ function toListItem(row: ProjectRow, tracked: number, favorite: boolean): Projec
 function toDetail(row: ProjectRow, tracked: number, favorite: boolean): ProjectDetail {
   return {
     ...toListItem(row, tracked, favorite),
-    note: row.note,
     memberIds: row.members.map((m) => m.userId),
   };
 }

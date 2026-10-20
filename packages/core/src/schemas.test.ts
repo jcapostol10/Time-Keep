@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   clientInputSchema,
+  clientPatchSchema,
   currencyCodeSchema,
   deleteProjectSchema,
   inviteMemberSchema,
   projectInputSchema,
+  projectPatchSchema,
   timesheetTemplateInputSchema,
   isValidTimeZone,
   slugSchema,
@@ -115,5 +117,18 @@ describe("timesheet template", () => {
     expect(timesheetTemplateInputSchema.safeParse({ name: "Week", rows: rows(51) }).success).toBe(
       false,
     );
+  });
+});
+
+describe("patch schemas", () => {
+  it("a project patch carries only the keys given, never the input defaults", () => {
+    expect(projectPatchSchema.parse({ archived: true })).toEqual({ archived: true });
+    expect(projectPatchSchema.parse({ name: " X ", note: "n" })).toEqual({ name: "X", note: "n" });
+  });
+
+  it("a client patch carries only the keys given", () => {
+    expect(clientPatchSchema.parse({ archived: true })).toEqual({ archived: true });
+    expect(clientPatchSchema.parse({ email: "" })).toEqual({ email: "" });
+    expect(clientPatchSchema.safeParse({ email: "nope" }).success).toBe(false);
   });
 });
