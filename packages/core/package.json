@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./calendar": "./src/calendar.ts",
     "./catalog": "./src/catalog.ts",
     "./colors": "./src/colors.ts",
     "./currencies": "./src/currencies.ts",
