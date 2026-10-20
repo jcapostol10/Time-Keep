@@ -16,6 +16,7 @@
     "./slug": "./src/slug.ts",
     "./time": "./src/time.ts",
     "./time-entry": "./src/time-entry.ts",
+    "./timesheet": "./src/timesheet.ts",
     "./entry-edit": "./src/entry-edit.ts",
     "./tracker-rules": "./src/tracker-rules.ts"
   },
