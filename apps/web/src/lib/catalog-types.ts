@@ -57,6 +57,13 @@ export interface TaskDTO {
   entryCount: number;
 }
 
+/** One saved set of timesheet rows. */
+export interface TimesheetTemplateDTO {
+  id: string;
+  name: string;
+  rows: { projectId: string | null; taskId: string | null; description: string }[];
+}
+
 export interface TagDTO {
   id: string;
   name: string;
