@@ -20,9 +20,11 @@ export interface CreateWorkspaceArgs {
 export async function createWorkspace(db: Database, args: CreateWorkspaceArgs) {
   return db.transaction(async (tx) => {
     const base = slugify(args.name);
-    // Serialise slug allocation per base slug: without it, two sign-ups with
-    // the same name read the same free slug and the second insert fails.
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`workspace-slug:${base}`}))`);
+    // Serialise all slug allocation: without it, two sign-ups read the same
+    // free slug and the second insert fails. A per-base lock is not enough,
+    // because "Acme" (with "acme" taken) and "Acme 2" both want "acme-2".
+    // Workspaces are created rarely, so one lock costs nothing.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('workspace-slug'))`);
     const taken = new Set(
       (await tx.select({ slug: workspace.slug }).from(workspace)).map((r) => r.slug),
     );
