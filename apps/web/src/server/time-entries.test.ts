@@ -1,24 +1,32 @@
 import { randomUUID } from "node:crypto";
 
-import { MAX_ENTRY_SECONDS } from "@timekeep/core";
-import { and, count, eq, isNull, timeEntry } from "@timekeep/db";
+import { type EntryDetails, MAX_ENTRY_SECONDS } from "@timekeep/core";
+import { and, count, eq, isNull, project, projectMember, tag, task, timeEntry } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../test/db";
+import {
+  addMember,
+  connectTestDb,
+  createTestUser,
+  createTestWorkspace,
+  truncateAll,
+} from "../../test/db";
+import { createProject, listPickerProjects } from "./catalog/projects";
+import { createTag, listTags } from "./catalog/tags";
 import {
   continueEntry,
   createManualEntry,
-  createProject,
-  createTag,
+  countProjectEntries,
   deleteEntries,
   duplicateEntry,
   type EntryScope,
   getRunningEntry,
+  listEntriesInRange,
   listEntriesPage,
-  listProjects,
   listRecentDescriptions,
-  listTags,
+  reassignProjectEntries,
   restoreEntries,
+  softDeleteProjectEntries,
   startTimer,
   stopTimer,
   TimeEntryError,
@@ -55,6 +63,7 @@ async function countRunning(scope: EntryScope) {
 
 let scope: EntryScope;
 let otherScope: EntryScope;
+let memberScope: EntryScope;
 
 describe("time entries service", () => {
   beforeAll(async () => truncateAll(db));
@@ -66,13 +75,16 @@ describe("time entries service", () => {
     const bob = await createTestUser(db, "Bob B");
     const ws = await createTestWorkspace(db, "Workspace A", alice.id);
     const wsB = await createTestWorkspace(db, "Workspace B", bob.id);
-    scope = { workspaceId: ws.id, userId: alice.id };
-    otherScope = { workspaceId: wsB.id, userId: bob.id };
+    const carol = await createTestUser(db, "Carol C");
+    await addMember(db, ws.id, carol.id, "member");
+    scope = { workspaceId: ws.id, userId: alice.id, role: "owner" };
+    otherScope = { workspaceId: wsB.id, userId: bob.id, role: "owner" };
+    memberScope = { workspaceId: ws.id, userId: carol.id, role: "member" };
   });
 
   describe("startTimer", () => {
     it("creates a running entry with the given details", async () => {
-      const project = await createProject(db, scope.workspaceId, { name: "Website" });
+      const project = await createProject(db, scope, { name: "Website" });
       const tag = await createTag(db, scope.workspaceId, { name: "design" });
 
       const { started, stopped } = await startTimer(
@@ -158,7 +170,7 @@ describe("time entries service", () => {
     });
 
     it("rejects a project or tag from another workspace", async () => {
-      const foreignProject = await createProject(db, otherScope.workspaceId, { name: "Theirs" });
+      const foreignProject = await createProject(db, otherScope, { name: "Theirs" });
       const foreignTag = await createTag(db, otherScope.workspaceId, { name: "theirs" });
       await expectEntryError(
         startTimer(db, scope, {
@@ -406,7 +418,7 @@ describe("time entries service", () => {
     it("replaces tags and details", async () => {
       const t1 = await createTag(db, scope.workspaceId, { name: "one" });
       const t2 = await createTag(db, scope.workspaceId, { name: "two" });
-      const project = await createProject(db, scope.workspaceId, { name: "P" });
+      const project = await createProject(db, scope, { name: "P" });
       const entry = await createManualEntry(
         db,
         scope,
@@ -532,7 +544,7 @@ describe("time entries service", () => {
     });
 
     it("continue starts a new timer with the entry's details", async () => {
-      const project = await createProject(db, scope.workspaceId, { name: "P" });
+      const project = await createProject(db, scope, { name: "P" });
       const a = await createManualEntry(
         db,
         scope,
@@ -685,8 +697,8 @@ describe("time entries service", () => {
 
   describe("listRecentDescriptions", () => {
     it("is distinct, newest first, and carries the details of the latest use", async () => {
-      const p1 = await createProject(db, scope.workspaceId, { name: "P1" });
-      const p2 = await createProject(db, scope.workspaceId, { name: "P2" });
+      const p1 = await createProject(db, scope, { name: "P1" });
+      const p2 = await createProject(db, scope, { name: "P2" });
       const tag = await createTag(db, scope.workspaceId, { name: "t" });
       const base = { taskId: null, billable: false };
       await createManualEntry(
@@ -768,22 +780,188 @@ describe("time entries service", () => {
   });
 
   describe("projects and tags", () => {
-    it("find-or-create by name within a workspace, listed alphabetically", async () => {
-      const a = await createProject(db, scope.workspaceId, { name: "Zeta" });
-      const b = await createProject(db, scope.workspaceId, { name: "Alpha", color: "#123456" });
-      const again = await createProject(db, scope.workspaceId, { name: "Zeta" });
-      expect(again.id).toBe(a.id);
+    it("projects are unique per client; tags are find-or-create", async () => {
+      const a = await createProject(db, scope, { name: "Zeta" });
+      const b = await createProject(db, scope, { name: "Alpha", color: "#123456" });
+      await expect(createProject(db, scope, { name: "Zeta" })).rejects.toMatchObject({
+        code: "CONFLICT",
+      });
       expect(b.color).toBe("#123456");
       expect(a.color).toMatch(/^#[0-9a-f]{6}$/);
-      expect((await listProjects(db, scope.workspaceId)).map((p) => p.name)).toEqual([
-        "Alpha",
-        "Zeta",
-      ]);
-      expect(await listProjects(db, otherScope.workspaceId)).toEqual([]);
+      expect((await listPickerProjects(db, scope)).map((p) => p.name)).toEqual(["Alpha", "Zeta"]);
+      expect(await listPickerProjects(db, otherScope)).toEqual([]);
 
       const t = await createTag(db, scope.workspaceId, { name: "dev" });
       expect((await createTag(db, scope.workspaceId, { name: "dev" })).id).toBe(t.id);
-      expect((await listTags(db, scope.workspaceId)).map((x) => x.name)).toEqual(["dev"]);
+      expect(
+        (await listTags(db, scope.workspaceId, { includeArchived: false })).map((x) => x.name),
+      ).toEqual(["dev"]);
+    });
+  });
+
+  describe("Phase 2 details", () => {
+    const details = (over: Partial<EntryDetails> = {}): EntryDetails => ({
+      description: "Work",
+      projectId: null,
+      taskId: null,
+      tagIds: [],
+      billable: false,
+      ...over,
+    });
+    const manual = (over: Partial<EntryDetails> = {}, offsetMin = 0) => ({
+      ...details(over),
+      start: at(NOW, minutes(offsetMin)),
+      end: at(NOW, minutes(offsetMin + 30)),
+    });
+    async function expectMessage(promise: Promise<unknown>, message: string) {
+      await expect(promise).rejects.toMatchObject({ code: "INVALID", message });
+    }
+    async function addTask(projectId: string, name: string, status: "ACTIVE" | "DONE" = "ACTIVE") {
+      const id = randomUUID();
+      await db.insert(task).values({ id, workspaceId: scope.workspaceId, projectId, name, status });
+      return id;
+    }
+    const range = (s: EntryScope) =>
+      listEntriesInRange(db, s, { from: at(NOW, hours(-3)), to: at(NOW, hours(3)) });
+
+    it("a private project is usable by its members and invisible to others", async () => {
+      const secret = await createProject(db, scope, { name: "Secret", visibility: "PRIVATE" });
+      await expectMessage(
+        startTimer(db, memberScope, details({ projectId: secret.id }), NOW),
+        "Project not found.",
+      );
+      expect(await countRunning(memberScope)).toBe(0);
+      await db.insert(projectMember).values({ projectId: secret.id, userId: memberScope.userId });
+      const { started } = await startTimer(db, memberScope, details({ projectId: secret.id }), NOW);
+      expect(started.projectId).toBe(secret.id);
+      // Admins never need membership.
+      const asOwner = await createManualEntry(db, scope, manual({ projectId: secret.id }));
+      expect(asOwner.project?.name).toBe("Secret");
+    });
+
+    it("an archived project takes no new time but keeps its entries", async () => {
+      const old = await createProject(db, scope, { name: "Old" });
+      const entry = await createManualEntry(db, scope, manual({ projectId: old.id }));
+      await db.update(project).set({ archived: true }).where(eq(project.id, old.id));
+
+      await expectMessage(
+        startTimer(db, scope, details({ projectId: old.id }), NOW),
+        "This project is archived.",
+      );
+      const renamed = await updateEntry(db, scope, entry.id, { description: "Still mine" });
+      expect(renamed).toMatchObject({ description: "Still mine", projectId: old.id });
+      const fresh = await createManualEntry(db, scope, manual({}, 60));
+      await expectMessage(
+        updateEntry(db, scope, fresh.id, { projectId: old.id }),
+        "This project is archived.",
+      );
+    });
+
+    it("a done task or a task of another project is rejected", async () => {
+      const web = await createProject(db, scope, { name: "Web" });
+      const app = await createProject(db, scope, { name: "App" });
+      const design = await addTask(web.id, "Design");
+      const qa = await addTask(web.id, "QA", "DONE");
+
+      const ok = await createManualEntry(db, scope, manual({ projectId: web.id, taskId: design }));
+      expect(ok.task).toEqual({ id: design, name: "Design" });
+      await expectMessage(
+        createManualEntry(db, scope, manual({ projectId: web.id, taskId: qa })),
+        "This task is done.",
+      );
+      await expectMessage(
+        createManualEntry(db, scope, manual({ projectId: app.id, taskId: design })),
+        "This task belongs to another project.",
+      );
+      await expectMessage(
+        createManualEntry(db, scope, manual({ projectId: null, taskId: design })),
+        "This task belongs to another project.",
+      );
+      // A patch that changes only the task is checked against the entry's project.
+      await expectMessage(updateEntry(db, scope, ok.id, { taskId: qa }), "This task is done.");
+      const moved = await createManualEntry(db, scope, manual({ projectId: app.id }, 60));
+      await expectMessage(
+        updateEntry(db, scope, moved.id, { taskId: design }),
+        "This task belongs to another project.",
+      );
+    });
+
+    it("an archived tag cannot be added", async () => {
+      const urgent = await createTag(db, scope.workspaceId, { name: "urgent" });
+      const entry = await createManualEntry(db, scope, manual({ tagIds: [urgent.id] }));
+      await db.update(tag).set({ archived: true }).where(eq(tag.id, urgent.id));
+
+      await expectMessage(
+        startTimer(db, scope, details({ tagIds: [urgent.id] }), NOW),
+        'Tag "urgent" is archived.',
+      );
+      const kept = await updateEntry(db, scope, entry.id, { description: "Kept" });
+      expect(kept.tagIds).toEqual([urgent.id]);
+      expect(await listTags(db, scope.workspaceId, { includeArchived: false })).toEqual([]);
+      expect(
+        (await listTags(db, scope.workspaceId, { includeArchived: true })).map((t) => t.archived),
+      ).toEqual([true]);
+    });
+
+    it("continue and duplicate refuse an archived project", async () => {
+      const old = await createProject(db, scope, { name: "Old" });
+      const entry = await createManualEntry(db, scope, manual({ projectId: old.id }));
+      await db.update(project).set({ archived: true }).where(eq(project.id, old.id));
+      await expectMessage(continueEntry(db, scope, entry.id, NOW), "This project is archived.");
+      await expectMessage(duplicateEntry(db, scope, entry.id), "This project is archived.");
+      expect(await countRunning(scope)).toBe(0);
+    });
+
+    it("listEntriesInRange returns own stopped entries in order", async () => {
+      const a = await createManualEntry(db, scope, manual({ description: "a" }, 60));
+      const b = await createManualEntry(db, scope, manual({ description: "b" }, 0));
+      await createManualEntry(db, scope, manual({ description: "before" }, -120));
+      await createManualEntry(db, scope, manual({ description: "boundary" }, 180));
+      await createManualEntry(db, memberScope, manual({ description: "theirs" }, 30));
+      await startTimer(db, scope, details({ description: "running" }), at(NOW, minutes(90)));
+
+      const rows = await listEntriesInRange(db, scope, { from: NOW, to: at(NOW, minutes(180)) });
+      expect(rows.map((r) => r.id)).toEqual([b.id, a.id]);
+    });
+
+    it("reassignProjectEntries moves entries and clears their task", async () => {
+      const web = await createProject(db, scope, { name: "Web" });
+      const app = await createProject(db, scope, { name: "App" });
+      const design = await addTask(web.id, "Design");
+      const mine = await createManualEntry(db, scope, manual({ projectId: web.id, taskId: design }));
+      const theirs = await createManualEntry(db, memberScope, manual({ projectId: web.id }));
+      await createManualEntry(db, scope, manual({ projectId: app.id }, 60));
+
+      expect(await countProjectEntries(db, scope.workspaceId, web.id)).toBe(2);
+      expect(await reassignProjectEntries(db, scope.workspaceId, web.id, app.id)).toBe(2);
+      expect(await countProjectEntries(db, scope.workspaceId, web.id)).toBe(0);
+      const movedMine = (await range(scope)).find((e) => e.id === mine.id);
+      expect(movedMine).toMatchObject({ projectId: app.id, taskId: null, task: null });
+      expect((await range(memberScope)).map((e) => [e.id, e.projectId])).toEqual([
+        [theirs.id, app.id],
+      ]);
+      expect(await reassignProjectEntries(db, scope.workspaceId, app.id, null)).toBe(3);
+    });
+
+    it("softDeleteProjectEntries hides them", async () => {
+      const web = await createProject(db, scope, { name: "Web" });
+      await createManualEntry(db, scope, manual({ projectId: web.id }));
+      await createManualEntry(db, memberScope, manual({ projectId: web.id }));
+      const kept = await createManualEntry(db, scope, manual({}, 60));
+
+      expect(await softDeleteProjectEntries(db, scope.workspaceId, web.id)).toBe(2);
+      expect((await range(scope)).map((r) => r.id)).toEqual([kept.id]);
+      expect(await range(memberScope)).toEqual([]);
+    });
+
+    it("the DTO carries the task and the project's client name", async () => {
+      const web = await createProject(db, scope, { name: "Web" });
+      const design = await addTask(web.id, "Design");
+      const entry = await createManualEntry(db, scope, manual({ projectId: web.id, taskId: design }));
+      expect(entry.task).toEqual({ id: design, name: "Design" });
+      expect(entry.project).toEqual({ id: web.id, name: "Web", color: web.color, clientName: null });
+      const { started } = await continueEntry(db, scope, entry.id, at(NOW, hours(2)));
+      expect(started.task).toEqual({ id: design, name: "Design" });
     });
   });
 });

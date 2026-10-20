@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { fetchJson } from "@/lib/fetch-json";
-import type { EntryProject, EntryTag, TimeEntryDTO } from "@/lib/tracker-types";
+import type { EntryTag, PickerProject, TimeEntryDTO } from "@/lib/tracker-types";
 
 import {
   type EntriesData,
@@ -65,7 +65,7 @@ export function useTrackerCache(slug: string) {
       getOptions(): TrackerOptions | undefined {
         return qc.getQueryData<TrackerOptions>(optionsKey);
       },
-      addProject(projectItem: EntryProject) {
+      addProject(projectItem: PickerProject) {
         qc.setQueryData<TrackerOptions>(optionsKey, (d) =>
           d && !d.projects.some((p) => p.id === projectItem.id)
             ? {
@@ -82,17 +82,27 @@ export function useTrackerCache(slug: string) {
             : d,
         );
       },
-      /** Resolve project/tag objects for an optimistic patch from the options cache. */
+      /** Resolve project/task/tag objects for an optimistic patch from the options cache. */
       resolveDetails(patch: {
         projectId?: string | null;
+        taskId?: string | null;
         tagIds?: string[];
       }): Partial<TimeEntryDTO> {
         const options = qc.getQueryData<TrackerOptions>(optionsKey);
         const resolved: Partial<TimeEntryDTO> = {};
         if (patch.projectId !== undefined) {
-          resolved.project = patch.projectId
-            ? (options?.projects.find((p) => p.id === patch.projectId) ?? null)
+          const found = patch.projectId
+            ? options?.projects.find((p) => p.id === patch.projectId)
+            : undefined;
+          resolved.project = found
+            ? { id: found.id, name: found.name, color: found.color, clientName: found.clientName }
             : null;
+        }
+        if (patch.taskId !== undefined) {
+          const found = patch.taskId
+            ? options?.projects.flatMap((p) => p.tasks).find((t) => t.id === patch.taskId)
+            : undefined;
+          resolved.task = found ? { id: found.id, name: found.name } : null;
         }
         if (patch.tagIds !== undefined) {
           resolved.tags = patch.tagIds

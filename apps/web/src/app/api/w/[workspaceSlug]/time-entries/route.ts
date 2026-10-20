@@ -26,7 +26,7 @@ export async function GET(
     const viewer = resolveViewerPrefs(access.user, access.settings);
     const page = await listEntriesPage(
       getDb(),
-      { workspaceId: access.workspace.id, userId: access.user.id },
+      { workspaceId: access.workspace.id, userId: access.user.id, role: access.role },
       { before, tz: viewer.timezone, weekStart: viewer.weekStart },
     );
     return Response.json(page, { headers: NO_STORE });

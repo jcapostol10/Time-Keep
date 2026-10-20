@@ -14,6 +14,7 @@ export async function GET(
     const running = await getRunningEntry(getDb(), {
       workspaceId: access.workspace.id,
       userId: access.user.id,
+      role: access.role,
     });
     return Response.json({ running }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

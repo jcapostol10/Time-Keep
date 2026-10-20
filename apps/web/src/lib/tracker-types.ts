@@ -8,6 +8,30 @@ export interface EntryProject {
   id: string;
   name: string;
   color: string;
+  clientName: string | null;
+}
+
+export interface EntryTask {
+  id: string;
+  name: string;
+}
+
+export interface PickerTask {
+  id: string;
+  name: string;
+}
+
+/** A project the viewer may track on, with its active tasks, as the pickers list it. */
+export interface PickerProject {
+  id: string;
+  name: string;
+  color: string;
+  clientId: string | null;
+  clientName: string | null;
+  /** Default for new entries on this project. */
+  billable: boolean;
+  favorite: boolean;
+  tasks: PickerTask[];
 }
 
 export interface EntryTag {
@@ -22,6 +46,7 @@ export interface TimeEntryDTO {
   projectId: string | null;
   project: EntryProject | null;
   taskId: string | null;
+  task: EntryTask | null;
   tags: EntryTag[];
   tagIds: string[];
   billable: boolean;

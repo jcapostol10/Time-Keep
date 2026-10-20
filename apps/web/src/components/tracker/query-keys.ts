@@ -1,4 +1,4 @@
-import type { EntryProject, EntryTag, RecentDescription } from "@/lib/tracker-types";
+import type { EntryTag, PickerProject, RecentDescription } from "@/lib/tracker-types";
 
 /** react-query keys shared by the server page (hydration) and client hooks. */
 export const trackerKeys = {
@@ -9,7 +9,7 @@ export const trackerKeys = {
 };
 
 export interface TrackerOptions {
-  projects: EntryProject[];
+  projects: PickerProject[];
   tags: EntryTag[];
   recent: RecentDescription[];
 }

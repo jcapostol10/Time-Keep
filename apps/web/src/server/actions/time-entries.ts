@@ -2,22 +2,23 @@
 
 import {
   createManualEntrySchema,
-  createProjectSchema,
-  createTagSchema,
   entryIdsSchema,
+  projectInputSchema,
   startTimerSchema,
   stopTimerSchema,
+  tagInputSchema,
   updateEntrySchema,
 } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
-import type { EntryProject, EntryTag, TimeEntryDTO } from "@/lib/tracker-types";
+import type { EntryTag, PickerProject, TimeEntryDTO } from "@/lib/tracker-types";
+import { CatalogError } from "@/server/catalog/errors";
+import { createProject } from "@/server/catalog/projects";
+import { createTag } from "@/server/catalog/tags";
 import {
   continueEntry,
   createManualEntry,
-  createProject,
-  createTag,
   deleteEntries,
   duplicateEntry,
   type EntryScope,
@@ -34,14 +35,15 @@ export type StartResult = { started: TimeEntryDTO; stopped: TimeEntryDTO | null 
 function errorMessage(error: unknown): string {
   if (error instanceof WorkspaceAccessError) return error.message;
   if (error instanceof TimeEntryError) return error.message;
+  if (error instanceof CatalogError) return error.message;
   if (error instanceof Error) return error.message;
   return "Something went wrong.";
 }
 
-/** Members act only on their own entries in Phase 1 ("add time for others" is Phase 4). */
+/** Members act only on their own entries until Phase 4 ("add time for others"). */
 async function scopeFor(slug: string): Promise<EntryScope> {
   const ctx = await requireWorkspaceAccess(slug);
-  return { workspaceId: ctx.workspace.id, userId: ctx.user.id };
+  return { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
 }
 
 export async function startTimerAction(
@@ -153,29 +155,33 @@ export async function continueEntryAction(
   }
 }
 
+/** Inline create from the picker. Admins only (the Phase 4 settings may open it up). */
 export async function createProjectAction(
   slug: string,
   input: unknown,
-): Promise<ActionResult<EntryProject>> {
+): Promise<ActionResult<PickerProject>> {
   try {
-    const scope = await scopeFor(slug);
-    const parsed = createProjectSchema.safeParse(input);
+    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const parsed = projectInputSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    return ok(await createProject(getDb(), scope.workspaceId, parsed.data));
+    const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+    return ok(await createProject(getDb(), viewer, parsed.data));
   } catch (error) {
     return fail(errorMessage(error));
   }
 }
 
+/** Inline create from the tag picker. Admins only. */
 export async function createTagAction(
   slug: string,
   input: unknown,
 ): Promise<ActionResult<EntryTag>> {
   try {
-    const scope = await scopeFor(slug);
-    const parsed = createTagSchema.safeParse(input);
+    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const parsed = tagInputSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    return ok(await createTag(getDb(), scope.workspaceId, parsed.data));
+    const created = await createTag(getDb(), ctx.workspace.id, parsed.data);
+    return ok({ id: created.id, name: created.name, color: created.color });
   } catch (error) {
     return fail(errorMessage(error));
   }

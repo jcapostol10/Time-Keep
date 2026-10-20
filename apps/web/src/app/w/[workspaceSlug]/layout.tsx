@@ -17,7 +17,7 @@ export default async function WorkspaceLayout({
   const db = getDb();
   const [workspaces, running, trackerSettings] = await Promise.all([
     listUserWorkspaces(db, ctx.user.id),
-    getRunningEntry(db, { workspaceId: ctx.workspace.id, userId: ctx.user.id }),
+    getRunningEntry(db, { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role }),
     getTrackerSettings(db, ctx.user.id),
   ]);
   const viewer = resolveViewerPrefs(ctx.user, ctx.settings);

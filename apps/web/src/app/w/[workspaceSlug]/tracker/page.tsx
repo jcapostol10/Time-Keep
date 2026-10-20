@@ -6,12 +6,9 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { trackerKeys, type TrackerOptions } from "@/components/tracker/query-keys";
 import { TrackerPageClient } from "@/components/tracker/tracker-page-client";
-import {
-  listEntriesPage,
-  listProjects,
-  listRecentDescriptions,
-  listTags,
-} from "@/server/time-entries";
+import { listPickerProjects } from "@/server/catalog/projects";
+import { listTags } from "@/server/catalog/tags";
+import { listEntriesPage, listRecentDescriptions } from "@/server/time-entries";
 import { requireWorkspacePage } from "@/server/workspace-access";
 
 export const metadata: Metadata = { title: "Time Tracker" };
@@ -25,14 +22,15 @@ export default async function TrackerPage({
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/tracker`);
   const viewer = resolveViewerPrefs(ctx.user, ctx.settings);
   const db = getDb();
-  const scope = { workspaceId: ctx.workspace.id, userId: ctx.user.id };
+  const scope = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
 
-  const [firstPage, projects, tags, recent] = await Promise.all([
+  const [firstPage, projects, tagRows, recent] = await Promise.all([
     listEntriesPage(db, scope, { tz: viewer.timezone, weekStart: viewer.weekStart }),
-    listProjects(db, scope.workspaceId),
-    listTags(db, scope.workspaceId),
+    listPickerProjects(db, scope),
+    listTags(db, scope.workspaceId, { includeArchived: false }),
     listRecentDescriptions(db, scope),
   ]);
+  const tags = tagRows.map((t) => ({ id: t.id, name: t.name, color: t.color }));
 
   // Fresh per request; HydrationBoundary merges it into the browser cache.
   const queryClient = new QueryClient();

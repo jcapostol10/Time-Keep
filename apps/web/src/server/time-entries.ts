@@ -3,11 +3,13 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  canSeeProject,
   computeDurationSeconds,
   type EntryDetails,
   MAX_ENTRY_SECONDS,
-  pickColor,
+  type Role,
   TIMER_STOP_FUTURE_GRACE_MS,
+  trackingBlock,
   validateEntryRange,
   weekBounds,
   type WeekStartDay,
@@ -26,9 +28,11 @@ import {
   ne,
   type Project,
   project,
+  projectMember,
   sql,
   type Tag,
   tag,
+  task,
   type TimeEntry,
   timeEntry,
   timeEntryTag,
@@ -42,6 +46,8 @@ import type {
   TimeEntryDTO,
 } from "@/lib/tracker-types";
 
+import { CatalogError } from "./catalog/errors";
+
 /**
  * The single write path for time entries. Server actions and route handlers
  * call these db-injected functions after `requireWorkspaceAccess`; later
@@ -49,12 +55,14 @@ import type {
  * else may insert or update `time_entry` rows.
  *
  * Every function is scoped to one (workspace, user): members only ever see
- * and edit their own entries in Phase 1.
+ * and edit their own entries until Phase 4. The role decides which projects
+ * the user may put time on (private projects need membership).
  */
 
 export interface EntryScope {
   workspaceId: string;
   userId: string;
+  role: Role;
 }
 
 export class TimeEntryError extends Error {
@@ -69,9 +77,17 @@ export class TimeEntryError extends Error {
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
 
-type EntryRow = TimeEntry & { project: Project | null; tags: { tag: Tag }[] };
+type EntryRow = TimeEntry & {
+  project: (Project & { client: { name: string } | null }) | null;
+  task: { id: string; name: string } | null;
+  tags: { tag: Tag }[];
+};
 
-const withRelations = { project: true, tags: { with: { tag: true } } } as const;
+const withRelations = {
+  project: { with: { client: { columns: { name: true } } } },
+  task: { columns: { id: true, name: true } },
+  tags: { with: { tag: true } },
+} as const;
 
 function scopeWhere(scope: EntryScope) {
   return and(
@@ -81,8 +97,8 @@ function scopeWhere(scope: EntryScope) {
   );
 }
 
-function toProject(p: Project | null): EntryProject | null {
-  return p ? { id: p.id, name: p.name, color: p.color } : null;
+function toProject(p: EntryRow["project"]): EntryProject | null {
+  return p ? { id: p.id, name: p.name, color: p.color, clientName: p.client?.name ?? null } : null;
 }
 
 function toDTO(row: EntryRow): TimeEntryDTO {
@@ -95,6 +111,7 @@ function toDTO(row: EntryRow): TimeEntryDTO {
     projectId: row.projectId,
     project: toProject(row.project),
     taskId: row.taskId,
+    task: row.task ? { id: row.task.id, name: row.task.name } : null,
     tags,
     tagIds: tags.map((t) => t.id),
     billable: row.billable,
@@ -136,27 +153,72 @@ async function lockOwned(db: Executor, scope: EntryScope, id: string): Promise<v
   if (!row) throw new TimeEntryError("NOT_FOUND", "Time entry not found.");
 }
 
-/** Project and tags must belong to the workspace; anything else is INVALID (never leaks). */
-async function assertDetailsBelongToWorkspace(
+/**
+ * The details new time is recorded with must be usable: the project exists
+ * in the workspace, is visible to the user (a private project they are not
+ * on is "not found", never "forbidden") and is not archived; the task belongs
+ * to the project and is active; the tags are not archived. For a patch, only
+ * the parts present are checked, against the entry's current details.
+ */
+async function assertDetailsUsable(
   db: Executor,
-  workspaceId: string,
-  details: { projectId?: string | null; tagIds?: string[] },
+  scope: EntryScope,
+  details: { projectId?: string | null; taskId?: string | null; tagIds?: string[] },
+  current?: { projectId: string | null; taskId: string | null },
 ): Promise<void> {
-  if (details.projectId) {
+  const projectTouched = details.projectId !== undefined;
+  const taskTouched = details.taskId !== undefined;
+  const tagsTouched = details.tagIds !== undefined;
+  if (!projectTouched && !taskTouched && !tagsTouched) return;
+
+  const projectId = projectTouched ? details.projectId : (current?.projectId ?? null);
+  const taskId = taskTouched ? details.taskId : (current?.taskId ?? null);
+
+  let projectRow: { id: string; archived: boolean } | null = null;
+  if (projectId) {
     const found = await db.query.project.findFirst({
-      where: and(eq(project.id, details.projectId), eq(project.workspaceId, workspaceId)),
-      columns: { id: true },
+      where: and(eq(project.id, projectId), eq(project.workspaceId, scope.workspaceId)),
+      columns: { id: true, archived: true, visibility: true },
+      with: {
+        members: { where: eq(projectMember.userId, scope.userId), columns: { userId: true } },
+      },
     });
-    if (!found) throw new TimeEntryError("INVALID", "Project not found.");
+    const visible =
+      found &&
+      canSeeProject({
+        role: scope.role,
+        visibility: found.visibility,
+        isMember: found.members.length > 0,
+      });
+    if (!found || !visible) throw new TimeEntryError("INVALID", "Project not found.");
+    // Archived blocks only when the project itself is being (re)assigned.
+    projectRow = { id: found.id, archived: projectTouched ? found.archived : false };
   }
-  const tagIds = [...new Set(details.tagIds ?? [])];
-  if (tagIds.length > 0) {
-    const found = await db.query.tag.findMany({
-      where: and(inArray(tag.id, tagIds), eq(tag.workspaceId, workspaceId)),
-      columns: { id: true },
+
+  let taskRow: { projectId: string; status: "ACTIVE" | "DONE" } | null = null;
+  if (taskId && (taskTouched || projectTouched)) {
+    const found = await db.query.task.findFirst({
+      where: and(eq(task.id, taskId), eq(task.workspaceId, scope.workspaceId)),
+      columns: { projectId: true, status: true },
     });
-    if (found.length !== tagIds.length) throw new TimeEntryError("INVALID", "Tag not found.");
+    if (!found) throw new TimeEntryError("INVALID", "Task not found.");
+    taskRow = found;
   }
+
+  let tagRows: { name: string; archived: boolean }[] = [];
+  if (tagsTouched) {
+    const tagIds = [...new Set(details.tagIds ?? [])];
+    if (tagIds.length > 0) {
+      tagRows = await db.query.tag.findMany({
+        where: and(inArray(tag.id, tagIds), eq(tag.workspaceId, scope.workspaceId)),
+        columns: { name: true, archived: true },
+      });
+      if (tagRows.length !== tagIds.length) throw new TimeEntryError("INVALID", "Tag not found.");
+    }
+  }
+
+  const block = trackingBlock({ project: projectRow, task: taskRow, tags: tagRows });
+  if (block) throw new TimeEntryError("INVALID", block);
 }
 
 async function replaceTags(db: Executor, entryId: string, tagIds: string[]): Promise<void> {
@@ -298,7 +360,7 @@ export async function startTimer(
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${`${scope.workspaceId}:${scope.userId}`}))`,
     );
-    await assertDetailsBelongToWorkspace(tx, scope.workspaceId, input);
+    await assertDetailsUsable(tx, scope, input);
 
     const running = await tx.query.timeEntry.findFirst({
       where: and(scopeWhere(scope), isNull(timeEntry.end)),
@@ -381,7 +443,7 @@ export async function createManualEntry(
   if (!check.ok) throw new TimeEntryError("INVALID", check.error);
 
   return db.transaction(async (tx) => {
-    await assertDetailsBelongToWorkspace(tx, scope.workspaceId, input);
+    await assertDetailsUsable(tx, scope, input);
     const id = randomUUID();
     await tx.insert(timeEntry).values({
       id,
@@ -414,7 +476,7 @@ export async function updateEntry(
   return db.transaction(async (tx) => {
     await lockOwned(tx, scope, entryId);
     const row = await findOwned(tx, scope, entryId);
-    await assertDetailsBelongToWorkspace(tx, scope.workspaceId, patch);
+    await assertDetailsUsable(tx, scope, patch, { projectId: row.projectId, taskId: row.taskId });
 
     // Only touch the times when the patch does, so a details edit never
     // rewrites (or un-stops) times changed elsewhere.
@@ -496,6 +558,11 @@ export async function duplicateEntry(
   return db.transaction(async (tx) => {
     const row = await findOwned(tx, scope, entryId);
     if (!row.end) throw new TimeEntryError("INVALID", "Stop the timer before duplicating it.");
+    await assertDetailsUsable(tx, scope, {
+      projectId: row.projectId,
+      taskId: row.taskId,
+      tagIds: row.tags.map((t) => t.tag.id),
+    });
     const id = randomUUID();
     await tx.insert(timeEntry).values({
       id,
@@ -537,55 +604,79 @@ export async function continueEntry(
   );
 }
 
-// --- Project / tag stubs (Phase 2 replaces these) ----------------------------------
+// --- Range reads and project-wide operations ----------------------------------------
 
-export async function listProjects(db: Executor, workspaceId: string): Promise<EntryProject[]> {
-  return db
-    .select({ id: project.id, name: project.name, color: project.color })
-    .from(project)
-    .where(eq(project.workspaceId, workspaceId))
-    .orderBy(asc(project.name));
+/** The caller's stopped entries starting in `[from, to)`, oldest first. */
+export async function listEntriesInRange(
+  db: Executor,
+  scope: EntryScope,
+  range: { from: Date; to: Date },
+): Promise<TimeEntryDTO[]> {
+  const rows = await db.query.timeEntry.findMany({
+    where: and(
+      scopeWhere(scope),
+      isNotNull(timeEntry.end),
+      gte(timeEntry.start, range.from),
+      lt(timeEntry.start, range.to),
+    ),
+    orderBy: [asc(timeEntry.start), asc(timeEntry.id)],
+    with: withRelations,
+  });
+  return rows.map(toDTO);
 }
 
-/** Find-or-create by name (unique per workspace). */
-export async function createProject(
+function projectEntriesWhere(workspaceId: string, projectId: string) {
+  return and(
+    eq(timeEntry.workspaceId, workspaceId),
+    eq(timeEntry.projectId, projectId),
+    isNull(timeEntry.deletedAt),
+  );
+}
+
+/** Live entries (any user) on a project; the delete-project dialog shows it. */
+export async function countProjectEntries(
   db: Executor,
   workspaceId: string,
-  input: { name: string; color?: string },
-): Promise<EntryProject> {
-  const name = input.name.trim();
-  await db
-    .insert(project)
-    .values({ id: randomUUID(), workspaceId, name, color: input.color ?? pickColor(name) })
-    .onConflictDoNothing({ target: [project.workspaceId, project.name] });
-  const row = await db.query.project.findFirst({
-    where: and(eq(project.workspaceId, workspaceId), eq(project.name, name)),
-  });
-  if (!row) throw new Error("Project could not be created");
-  return { id: row.id, name: row.name, color: row.color };
+  projectId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(timeEntry)
+    .where(projectEntriesWhere(workspaceId, projectId));
+  return row?.n ?? 0;
 }
 
-export async function listTags(db: Executor, workspaceId: string): Promise<EntryTag[]> {
-  return db
-    .select({ id: tag.id, name: tag.name, color: tag.color })
-    .from(tag)
-    .where(eq(tag.workspaceId, workspaceId))
-    .orderBy(asc(tag.name));
-}
-
-export async function createTag(
+/**
+ * Moves every live entry on `fromProjectId` (any user) to `toProjectId` or
+ * to no project. Tasks belong to a project, so they are cleared. Admin-only;
+ * the caller checks the role and that the target is usable.
+ */
+export async function reassignProjectEntries(
   db: Executor,
   workspaceId: string,
-  input: { name: string; color?: string },
-): Promise<EntryTag> {
-  const name = input.name.trim();
-  await db
-    .insert(tag)
-    .values({ id: randomUUID(), workspaceId, name, color: input.color ?? pickColor(name) })
-    .onConflictDoNothing({ target: [tag.workspaceId, tag.name] });
-  const row = await db.query.tag.findFirst({
-    where: and(eq(tag.workspaceId, workspaceId), eq(tag.name, name)),
-  });
-  if (!row) throw new Error("Tag could not be created");
-  return { id: row.id, name: row.name, color: row.color };
+  fromProjectId: string,
+  toProjectId: string | null,
+): Promise<number> {
+  const rows = await db
+    .update(timeEntry)
+    .set({ projectId: toProjectId, taskId: null })
+    .where(projectEntriesWhere(workspaceId, fromProjectId))
+    .returning({ id: timeEntry.id });
+  return rows.length;
 }
+
+/** Soft-deletes every live entry on a project (any user). Admin-only; no undo. */
+export async function softDeleteProjectEntries(
+  db: Executor,
+  workspaceId: string,
+  projectId: string,
+): Promise<number> {
+  const rows = await db
+    .update(timeEntry)
+    .set({ deletedAt: new Date() })
+    .where(projectEntriesWhere(workspaceId, projectId))
+    .returning({ id: timeEntry.id });
+  return rows.length;
+}
+
+export { CatalogError };
