@@ -91,7 +91,9 @@ export async function copyWeek(
     from: args.fromWeekStart,
     to: addDaysInZone(args.fromWeekStart, 7, args.tz),
   });
-  const shifted = shiftEntriesByDays(source, days, args.tz);
+  // Range reads return stopped entries only; narrow the type for the shift.
+  const stopped = source.flatMap((e) => (e.end ? [{ ...e, end: e.end }] : []));
+  const shifted = shiftEntriesByDays(stopped, days, args.tz);
   return db.transaction(async (tx) => {
     const created: TimeEntryDTO[] = [];
     for (const e of shifted) {
