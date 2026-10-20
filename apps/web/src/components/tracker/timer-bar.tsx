@@ -148,6 +148,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
           key={running?.id ?? "draft"}
           slug={slug}
           value={values.tagIds}
+          current={running?.tags ?? []}
           canCreate={canManage}
           onChange={(tagIds) => change({ tagIds })}
         />

@@ -6,16 +6,14 @@ import {
   projectInputSchema,
   startTimerSchema,
   stopTimerSchema,
-  tagInputSchema,
   updateEntrySchema,
 } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
-import type { EntryTag, PickerProject, TimeEntryDTO } from "@/lib/tracker-types";
+import type { PickerProject, TimeEntryDTO } from "@/lib/tracker-types";
 import { CatalogError } from "@/server/catalog/errors";
 import { createProject } from "@/server/catalog/projects";
-import { createTag } from "@/server/catalog/tags";
 import {
   continueEntry,
   createManualEntry,
@@ -166,22 +164,6 @@ export async function createProjectAction(
     if (!parsed.success) return fromZodError(parsed.error);
     const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
     return ok(await createProject(getDb(), viewer, parsed.data));
-  } catch (error) {
-    return fail(errorMessage(error));
-  }
-}
-
-/** Inline create from the tag picker. Admins only. */
-export async function createTagAction(
-  slug: string,
-  input: unknown,
-): Promise<ActionResult<EntryTag>> {
-  try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
-    const parsed = tagInputSchema.safeParse(input);
-    if (!parsed.success) return fromZodError(parsed.error);
-    const created = await createTag(getDb(), ctx.workspace.id, parsed.data);
-    return ok({ id: created.id, name: created.name, color: created.color });
   } catch (error) {
     return fail(errorMessage(error));
   }

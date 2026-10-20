@@ -170,6 +170,7 @@ export function EntryRow({
       <TagPicker
         slug={slug}
         value={entry.tagIds}
+        current={entry.tags}
         canCreate={canManage}
         onChange={(tagIds) => save({ tagIds })}
       />

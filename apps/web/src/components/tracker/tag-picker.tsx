@@ -15,7 +15,8 @@ import { CheckIcon, PlusIcon, TagIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { createTagAction } from "@/server/actions/time-entries";
+import type { EntryTag } from "@/lib/tracker-types";
+import { createTagAction } from "@/server/actions/tags";
 
 import { trackDraftWrite } from "./draft-writes";
 import { useTrackerCache, useTrackerOptions } from "./use-tracker-cache";
@@ -30,6 +31,7 @@ export function TagPicker({
   onChange,
   disabled = false,
   canCreate = false,
+  current = [],
 }: {
   slug: string;
   value: string[];
@@ -37,6 +39,8 @@ export function TagPicker({
   disabled?: boolean;
   /** Admins may create a tag from here. */
   canCreate?: boolean;
+  /** The entry's own tags, shown when the picker no longer lists them (archived). */
+  current?: EntryTag[];
 }) {
   const { data } = useTrackerOptions(slug);
   const cache = useTrackerCache(slug);
@@ -53,7 +57,10 @@ export function TagPicker({
     canCreate &&
     trimmed.length > 0 &&
     !tags.some((t) => t.name.toLowerCase() === trimmed.toLowerCase());
-  const selectedTags = tags.filter((t) => value.includes(t.id));
+  const selectedTags = value.flatMap((id) => {
+    const found = tags.find((t) => t.id === id) ?? current.find((t) => t.id === id);
+    return found ? [found] : [];
+  });
 
   function commit(next: string[]) {
     const changed = next.length !== value.length || next.some((id) => !value.includes(id));

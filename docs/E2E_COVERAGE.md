@@ -133,6 +133,14 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A member cannot see or pick a private project they are not on — `project-picker.spec.ts` › "a member cannot see or pick a private project they are not on"
 - [x] Members cannot create projects or tags from the pickers — `project-picker.spec.ts` › "members cannot create projects or tags from the pickers"
 
+## Tags
+
+- [x] Create a tag — `tags.spec.ts` › "create and rename a tag"
+- [x] Rename a tag — `tags.spec.ts` › "create and rename a tag"
+- [x] An archived tag stays on entries but cannot be added — `tags.spec.ts` › "an archived tag stays on entries but cannot be added"
+- [x] Tags show how many entries use them — `tags.spec.ts` › "delete a tag in use"
+- [x] Delete a tag in use after a confirmation naming the count — `tags.spec.ts` › "delete a tag in use"
+
 ## Tenant isolation
 
 - [x] A member of one workspace cannot open another workspace's pages — `tenant-isolation.spec.ts` › "a member of one workspace cannot open another workspace's pages"

@@ -897,10 +897,27 @@ describe("time entries service", () => {
       );
       const kept = await updateEntry(db, scope, entry.id, { description: "Kept" });
       expect(kept.tagIds).toEqual([urgent.id]);
-      expect(await listTags(db, scope.workspaceId, { includeArchived: false })).toEqual([]);
+      // A tag already on the entry may stay while other tags change; only adding it is blocked.
+      const live = await createTag(db, scope.workspaceId, { name: "live" });
+      const retagged = await updateEntry(db, scope, entry.id, { tagIds: [urgent.id, live.id] });
+      expect(retagged.tagIds.sort()).toEqual([urgent.id, live.id].sort());
+      const fresh = await createManualEntry(db, scope, manual({}, 60));
+      await expectMessage(
+        updateEntry(db, scope, fresh.id, { tagIds: [urgent.id] }),
+        'Tag "urgent" is archived.',
+      );
       expect(
-        (await listTags(db, scope.workspaceId, { includeArchived: true })).map((t) => t.archived),
-      ).toEqual([true]);
+        (await listTags(db, scope.workspaceId, { includeArchived: false })).map((t) => t.name),
+      ).toEqual(["live"]);
+      expect(
+        (await listTags(db, scope.workspaceId, { includeArchived: true })).map((t) => [
+          t.name,
+          t.archived,
+        ]),
+      ).toEqual([
+        ["live", false],
+        ["urgent", true],
+      ]);
     });
 
     it("continue and duplicate refuse an archived project", async () => {

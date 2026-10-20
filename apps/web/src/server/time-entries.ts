@@ -164,7 +164,7 @@ async function assertDetailsUsable(
   db: Executor,
   scope: EntryScope,
   details: { projectId?: string | null; taskId?: string | null; tagIds?: string[] },
-  current?: { projectId: string | null; taskId: string | null },
+  current?: { projectId: string | null; taskId: string | null; tagIds: string[] },
 ): Promise<void> {
   const projectTouched = details.projectId !== undefined;
   const taskTouched = details.taskId !== undefined;
@@ -205,19 +205,22 @@ async function assertDetailsUsable(
     taskRow = found;
   }
 
-  let tagRows: { name: string; archived: boolean }[] = [];
+  // Tags already on the entry may stay (an archived tag is only blocked from being added).
+  let addedTags: { name: string; archived: boolean }[] = [];
   if (tagsTouched) {
     const tagIds = [...new Set(details.tagIds ?? [])];
     if (tagIds.length > 0) {
-      tagRows = await db.query.tag.findMany({
+      const tagRows = await db.query.tag.findMany({
         where: and(inArray(tag.id, tagIds), eq(tag.workspaceId, scope.workspaceId)),
-        columns: { name: true, archived: true },
+        columns: { id: true, name: true, archived: true },
       });
       if (tagRows.length !== tagIds.length) throw new TimeEntryError("INVALID", "Tag not found.");
+      const alreadyOn = new Set(current?.tagIds ?? []);
+      addedTags = tagRows.filter((t) => !alreadyOn.has(t.id));
     }
   }
 
-  const block = trackingBlock({ project: projectRow, task: taskRow, tags: tagRows });
+  const block = trackingBlock({ project: projectRow, task: taskRow, tags: addedTags });
   if (block) throw new TimeEntryError("INVALID", block);
 }
 
@@ -476,7 +479,11 @@ export async function updateEntry(
   return db.transaction(async (tx) => {
     await lockOwned(tx, scope, entryId);
     const row = await findOwned(tx, scope, entryId);
-    await assertDetailsUsable(tx, scope, patch, { projectId: row.projectId, taskId: row.taskId });
+    await assertDetailsUsable(tx, scope, patch, {
+      projectId: row.projectId,
+      taskId: row.taskId,
+      tagIds: row.tags.map((t) => t.tag.id),
+    });
 
     // Only touch the times when the patch does, so a details edit never
     // rewrites (or un-stops) times changed elsewhere.
@@ -497,9 +504,11 @@ export async function updateEntry(
       }
     }
 
+    // updatedAt is always set, so a tags-only patch is still a valid UPDATE.
     await tx
       .update(timeEntry)
       .set({
+        updatedAt: now,
         ...(patch.description !== undefined ? { description: patch.description.trim() } : {}),
         ...(patch.projectId !== undefined ? { projectId: patch.projectId } : {}),
         ...(patch.taskId !== undefined ? { taskId: patch.taskId } : {}),

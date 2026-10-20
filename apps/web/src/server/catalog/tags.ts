@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { pickColor, type TagInput } from "@timekeep/core";
+import { pickColor, type TagInput, type TagPatch } from "@timekeep/core";
 import {
   and,
   asc,
@@ -17,6 +17,8 @@ import {
 } from "@timekeep/db";
 
 import type { TagDTO } from "@/lib/catalog-types";
+
+import { CatalogError, isUniqueViolation } from "./errors";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
 
@@ -73,4 +75,52 @@ export async function createTag(
   });
   if (!row) throw new Error("Tag could not be created");
   return toDTO(row, await usageCounts(db, workspaceId));
+}
+
+const DUPLICATE_NAME = "A tag with this name already exists.";
+
+async function findOwned(db: Executor, workspaceId: string, id: string): Promise<Tag> {
+  const row = await db.query.tag.findFirst({
+    where: and(eq(tag.id, id), eq(tag.workspaceId, workspaceId)),
+  });
+  if (!row) throw new CatalogError("NOT_FOUND", "Tag not found.");
+  return row;
+}
+
+/** Rename, recolour, archive or unarchive. Archived tags stay on entries but cannot be added. */
+export async function updateTag(
+  db: Executor,
+  workspaceId: string,
+  id: string,
+  patch: TagPatch,
+): Promise<TagDTO> {
+  await findOwned(db, workspaceId, id);
+  try {
+    await db
+      .update(tag)
+      .set({
+        ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+        ...(patch.color !== undefined ? { color: patch.color } : {}),
+        ...(patch.archived !== undefined ? { archived: patch.archived } : {}),
+      })
+      .where(and(eq(tag.id, id), eq(tag.workspaceId, workspaceId)));
+  } catch (error) {
+    if (isUniqueViolation(error, "tag_workspace_name_uq")) {
+      throw new CatalogError("CONFLICT", DUPLICATE_NAME);
+    }
+    throw error;
+  }
+  return toDTO(await findOwned(db, workspaceId, id), await usageCounts(db, workspaceId));
+}
+
+/** Deletes a tag; the link rows cascade, so entries simply lose it. */
+export async function deleteTag(
+  db: Executor,
+  workspaceId: string,
+  id: string,
+): Promise<{ affectedEntries: number }> {
+  await findOwned(db, workspaceId, id);
+  const affectedEntries = (await usageCounts(db, workspaceId)).get(id) ?? 0;
+  await db.delete(tag).where(and(eq(tag.id, id), eq(tag.workspaceId, workspaceId)));
+  return { affectedEntries };
 }
