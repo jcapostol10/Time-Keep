@@ -56,18 +56,35 @@ const schema = z.object({
 
 export type Env = z.infer<typeof schema> & { APP_URL: string };
 
+/** Senders that only work before a domain is verified; production must not boot with them. */
+const PLACEHOLDER_SENDER = /@(timekeep\.local|resend\.dev)\b/i;
+
+const schemaWithGuards = schema.superRefine((e, ctx) => {
+  if (e.VERCEL_ENV === "production" && PLACEHOLDER_SENDER.test(e.MAIL_FROM)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["MAIL_FROM"],
+      message:
+        "MAIL_FROM must use a verified sending domain in production (docs/BACKLOG.md, production email)",
+    });
+  }
+});
+
+/** Parses and validates an environment: process.env in the app, their own in tests. */
+export function parseEnv(raw: Record<string, string | undefined>): Env {
+  const parsed = schemaWithGuards.safeParse(raw);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`);
+    throw new Error(`Invalid environment:\n${issues.join("\n")}`);
+  }
+  return { ...parsed.data, APP_URL: resolveAppUrl(parsed.data) };
+}
+
 let cached: Env | undefined;
 
 /** Validated process.env. Parsed once, on first use, so `next build` never needs secrets. */
 export function env(): Env {
-  if (!cached) {
-    const parsed = schema.safeParse(process.env);
-    if (!parsed.success) {
-      const issues = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`);
-      throw new Error(`Invalid environment:\n${issues.join("\n")}`);
-    }
-    cached = { ...parsed.data, APP_URL: resolveAppUrl(parsed.data) };
-  }
+  if (!cached) cached = parseEnv(process.env);
   return cached;
 }
 

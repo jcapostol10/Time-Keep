@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { AvatarUploader } from "@/components/account/avatar-uploader";
 import { ProfileForm } from "@/components/account/profile-form";
+import { TestEmailButton } from "@/components/account/test-email-button";
 import { TrackerSettingsForm } from "@/components/account/tracker-settings-form";
 import { getTrackerSettings } from "@/server/queries/user-settings";
 import { requireSession } from "@/server/session";
@@ -47,6 +48,10 @@ export default async function AccountPage() {
         <section>
           <h2 className="mb-3 text-base font-semibold">Timer</h2>
           <TrackerSettingsForm defaultValues={trackerSettings} />
+        </section>
+        <section>
+          <h2 className="mb-3 text-base font-semibold">Email</h2>
+          <TestEmailButton email={user.email} />
         </section>
       </div>
     </>

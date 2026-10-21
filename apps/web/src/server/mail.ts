@@ -1,5 +1,6 @@
 import "server-only";
 
+import { APIError } from "better-auth/api";
 import nodemailer, { type Transporter } from "nodemailer";
 
 import { getDb } from "@timekeep/db";
@@ -92,4 +93,25 @@ export async function sendEmail(args: { to: string; subject: string } & EmailCon
     html,
     text,
   });
+}
+
+/**
+ * For the auth hooks: a transport failure (an unverified sender, a refused
+ * recipient) becomes a message the person can act on, with the cause logged
+ * on the server, instead of a bare 500 whose text they would never see.
+ */
+export async function sendEmailOrExplain(
+  what: string,
+  args: Parameters<typeof sendEmail>[0],
+  send: (args: Parameters<typeof sendEmail>[0]) => Promise<void> = sendEmail,
+): Promise<void> {
+  try {
+    await send(args);
+  } catch (error) {
+    console.error(`[mail] could not send the ${what}`, error);
+    throw new APIError("INTERNAL_SERVER_ERROR", {
+      message: `We couldn't send the ${what}. Try again in a minute, or contact support.`,
+      code: "EMAIL_SEND_FAILED",
+    });
+  }
 }

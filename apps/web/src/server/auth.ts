@@ -11,7 +11,7 @@ import { ac, roles } from "@/lib/permissions";
 
 import { trustedOrigins } from "./app-url";
 import { env } from "./env";
-import { sendEmail } from "./mail";
+import { sendEmailOrExplain } from "./mail";
 import { createWorkspace, ensureWorkspaceSettings } from "./workspaces";
 
 const ONE_DAY = 60 * 60 * 24;
@@ -61,7 +61,7 @@ function buildAuth() {
       minPasswordLength: 8,
       requireEmailVerification: true,
       sendResetPassword: async ({ user, url }) => {
-        await sendEmail({
+        await sendEmailOrExplain("password reset email", {
           to: user.email,
           subject: "Reset your TimeKeep password",
           title: "Reset your password",
@@ -77,7 +77,7 @@ function buildAuth() {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
-        await sendEmail({
+        await sendEmailOrExplain("verification email", {
           to: user.email,
           subject: "Verify your email for TimeKeep",
           title: "Confirm your email address",
@@ -118,7 +118,7 @@ function buildAuth() {
       magicLink({
         expiresIn: 60 * 15,
         sendMagicLink: async ({ email, url }) => {
-          await sendEmail({
+          await sendEmailOrExplain("sign-in link", {
             to: email,
             subject: "Your TimeKeep sign-in link",
             title: "Sign in to TimeKeep",
@@ -153,7 +153,7 @@ function buildAuth() {
         },
         sendInvitationEmail: async ({ id, email, organization: ws, inviter, role }) => {
           const url = `${e.APP_URL}/invite/${id}`;
-          await sendEmail({
+          await sendEmailOrExplain("invitation email", {
             to: email,
             subject: `${inviter.user.name} invited you to ${ws.name} on TimeKeep`,
             title: `Join ${ws.name}`,

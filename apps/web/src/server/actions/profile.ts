@@ -7,13 +7,14 @@ import {
   updateProfileSchema,
 } from "@timekeep/core";
 import { eq, getDb, user } from "@timekeep/db";
-import { APIError } from "better-auth/api";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
+import { userErrorMessage } from "@/server/actions/errors";
 import { getAuth } from "@/server/auth";
+import { sendEmail } from "@/server/mail";
 import { requireSession } from "@/server/session";
 import { deleteObject, objectKeyFromUrl, uploadObject } from "@/server/storage";
 
@@ -23,12 +24,6 @@ const EXTENSIONS: Record<(typeof AVATAR_MIME_TYPES)[number], string> = {
   "image/webp": "webp",
   "image/gif": "gif",
 };
-
-function errorMessage(error: unknown): string {
-  if (error instanceof APIError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong.";
-}
 
 export async function updateProfileAction(input: unknown): Promise<ActionResult> {
   await requireSession("/account");
@@ -40,7 +35,7 @@ export async function updateProfileAction(input: unknown): Promise<ActionResult>
     revalidatePath("/", "layout");
     return ok(undefined);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -48,6 +43,29 @@ export async function updateProfileAction(input: unknown): Promise<ActionResult>
  * Saves the browser's timezone for users who have none yet (Google sign-up
  * does not capture it). Never overwrites a timezone the user chose.
  */
+/**
+ * A message to the signed-in person, so they can see that TimeKeep's email
+ * reaches them, and so an owner can check a new production sender without
+ * creating accounts. Unlike other actions it shows the provider's reason on
+ * failure: that reason is the point of the check.
+ */
+export async function sendTestEmailAction(): Promise<ActionResult> {
+  const { user } = await requireSession("/account");
+  try {
+    await sendEmail({
+      to: user.email,
+      subject: "TimeKeep test email",
+      title: "Email works",
+      intro: `This message confirms that TimeKeep can reach you at ${user.email}.`,
+      outro: "Sent from Profile settings. Nothing else to do.",
+    });
+    return ok(undefined);
+  } catch (error) {
+    console.error("[mail] test email failed", error);
+    return fail(`Could not send: ${error instanceof Error ? error.message : "unknown error"}`);
+  }
+}
+
 export async function setTimezoneIfUnsetAction(
   timezone: unknown,
 ): Promise<ActionResult<{ updated: boolean }>> {
@@ -64,7 +82,7 @@ export async function setTimezoneIfUnsetAction(
     revalidatePath("/", "layout");
     return ok({ updated: true });
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -99,7 +117,7 @@ export async function uploadAvatarAction(
     revalidatePath("/", "layout");
     return ok({ url });
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -112,7 +130,7 @@ export async function removeAvatarAction(): Promise<ActionResult> {
     revalidatePath("/", "layout");
     return ok(undefined);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 

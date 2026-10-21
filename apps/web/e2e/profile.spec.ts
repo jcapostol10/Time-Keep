@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { openUserMenu, signIn } from "./helpers/app";
+import { waitForEmail } from "./helpers/mail";
 
 test.describe("profile settings", () => {
   test("update name and timezone, upload and remove an avatar", async ({ page }) => {
@@ -29,5 +30,14 @@ test.describe("profile settings", () => {
     await page.getByLabel("Full name").fill("Max Member");
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByText("Profile saved")).toBeVisible();
+  });
+
+  test("send a test email", async ({ page }) => {
+    await signIn(page, "member2@demo.test");
+    await page.goto("/account");
+    await page.getByRole("button", { name: "Send me a test email" }).click();
+    await expect(page.getByText("Test email sent to member2@demo.test")).toBeVisible();
+    const message = await waitForEmail("member2@demo.test", { subject: /test email/i });
+    expect(message.Text).toContain("reach you at member2@demo.test");
   });
 });
