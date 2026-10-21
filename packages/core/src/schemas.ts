@@ -282,9 +282,15 @@ export type TagPatch = z.infer<typeof tagPatchSchema>;
 
 export type CreateTagInput = TagInput;
 
+/** A view asks for at most a year at a time; 366 days covers a leap year. */
+export const MAX_DATE_RANGE_DAYS = 366;
 export const dateRangeSchema = z
   .object({ from: isoInstantSchema, to: isoInstantSchema })
-  .refine((r) => r.to.getTime() > r.from.getTime(), { message: "The range must end after it starts" });
+  .refine((r) => r.to.getTime() > r.from.getTime(), { message: "The range must end after it starts" })
+  // A span between two instants, not a date shifted by days, so milliseconds are fine here.
+  .refine((r) => r.to.getTime() - r.from.getTime() <= MAX_DATE_RANGE_DAYS * 86_400_000, {
+    message: "Pick a range of at most one year.",
+  });
 export type DateRangeInput = z.infer<typeof dateRangeSchema>;
 
 // --- Timesheet -------------------------------------------------------------------

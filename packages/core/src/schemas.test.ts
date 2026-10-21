@@ -4,6 +4,7 @@ import {
   clientInputSchema,
   clientPatchSchema,
   currencyCodeSchema,
+  dateRangeSchema,
   deleteProjectSchema,
   inviteMemberSchema,
   projectInputSchema,
@@ -104,6 +105,16 @@ describe("delete project", () => {
     expect(deleteProjectSchema.safeParse({ mode: "reassign", projectId: "p2" }).success).toBe(true);
     expect(deleteProjectSchema.safeParse({ mode: "reassign", projectId: null }).success).toBe(true);
     expect(deleteProjectSchema.safeParse({ mode: "reassign" }).success).toBe(false);
+  });
+});
+
+describe("date range", () => {
+  it("rejects a span over a year, so no view can ask for everything", () => {
+    const from = "2026-01-01T00:00:00.000Z";
+    expect(dateRangeSchema.safeParse({ from, to: "2026-12-31T00:00:00.000Z" }).success).toBe(true);
+    const over = dateRangeSchema.safeParse({ from, to: "2027-01-03T00:00:00.000Z" });
+    expect(over.success).toBe(false);
+    expect(over.error?.issues[0]?.message).toBe("Pick a range of at most one year.");
   });
 });
 
