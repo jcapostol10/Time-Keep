@@ -158,7 +158,9 @@ async function lockOwned(db: Executor, scope: EntryScope, id: string): Promise<v
  * in the workspace, is visible to the user (a private project they are not
  * on is "not found", never "forbidden") and is not archived; the task belongs
  * to the project and is active; the tags are not archived. For a patch, only
- * the parts present are checked, against the entry's current details.
+ * the parts that change are checked, against the entry's current details: the
+ * dialogs send every field, and an unchanged project, task or tag set must not
+ * be re-checked as though it were being assigned now (archived, visibility).
  */
 async function assertDetailsUsable(
   db: Executor,
@@ -166,9 +168,12 @@ async function assertDetailsUsable(
   details: { projectId?: string | null; taskId?: string | null; tagIds?: string[] },
   current?: { projectId: string | null; taskId: string | null; tagIds: string[] },
 ): Promise<void> {
-  const projectTouched = details.projectId !== undefined;
-  const taskTouched = details.taskId !== undefined;
-  const tagsTouched = details.tagIds !== undefined;
+  const projectTouched =
+    details.projectId !== undefined && (!current || details.projectId !== current.projectId);
+  const taskTouched =
+    details.taskId !== undefined && (!current || details.taskId !== current.taskId);
+  const tagsTouched =
+    details.tagIds !== undefined && (!current || !sameIdSet(details.tagIds, current.tagIds));
   if (!projectTouched && !taskTouched && !tagsTouched) return;
 
   const projectId = projectTouched ? details.projectId : (current?.projectId ?? null);
@@ -190,7 +195,10 @@ async function assertDetailsUsable(
         visibility: found.visibility,
         isMember: found.members.length > 0,
       });
-    if (!found || !visible) throw new TimeEntryError("INVALID", "Project not found.");
+    if (!found) throw new TimeEntryError("INVALID", "Project not found.");
+    // Visibility is a condition for assigning a project; an entry already on a
+    // private project the user has since left keeps it (they can still retag it).
+    if (projectTouched && !visible) throw new TimeEntryError("INVALID", "Project not found.");
     // Archived blocks only when the project itself is being (re)assigned.
     projectRow = { id: found.id, archived: projectTouched ? found.archived : false };
   }
@@ -222,6 +230,12 @@ async function assertDetailsUsable(
 
   const block = trackingBlock({ project: projectRow, task: taskRow, tags: addedTags });
   if (block) throw new TimeEntryError("INVALID", block);
+}
+
+function sameIdSet(a: string[], b: string[]): boolean {
+  const x = [...new Set(a)].sort();
+  const y = [...new Set(b)].sort();
+  return x.length === y.length && x.every((id, i) => id === y[i]);
 }
 
 async function replaceTags(db: Executor, entryId: string, tagIds: string[]): Promise<void> {

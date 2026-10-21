@@ -857,6 +857,43 @@ describe("time entries service", () => {
       );
     });
 
+    it("a patch that repeats the entry's current details is not a reassignment", async () => {
+      const old = await createProject(db, scope, { name: "Old" });
+      const review = await createTag(db, scope.workspaceId, { name: "review" });
+      const entry = await createManualEntry(
+        db,
+        scope,
+        manual({ projectId: old.id, tagIds: [review.id] }),
+      );
+      await db.update(project).set({ archived: true }).where(eq(project.id, old.id));
+      // The calendar dialog sends every field; an unchanged project is not touched.
+      const edited = await updateEntry(db, scope, entry.id, {
+        description: "Edited",
+        projectId: old.id,
+        taskId: null,
+        tagIds: [review.id],
+      });
+      expect(edited).toMatchObject({ description: "Edited", projectId: old.id });
+      expect(edited.tags.map((t) => t.id)).toEqual([review.id]);
+    });
+
+    it("own entries on a private project the user left can still be retagged", async () => {
+      const secret = await createProject(db, scope, { name: "Secret", visibility: "PRIVATE" });
+      await db.insert(projectMember).values({ projectId: secret.id, userId: memberScope.userId });
+      const entry = await createManualEntry(db, memberScope, manual({ projectId: secret.id }));
+      await db.delete(projectMember).where(eq(projectMember.userId, memberScope.userId));
+      const urgent = await createTag(db, scope.workspaceId, { name: "urgent" });
+
+      const retagged = await updateEntry(db, memberScope, entry.id, { tagIds: [urgent.id] });
+      expect(retagged.tags.map((t) => t.name)).toEqual(["urgent"]);
+      // Moving it to another private project they are not on is still refused.
+      const other = await createProject(db, scope, { name: "Other", visibility: "PRIVATE" });
+      await expectMessage(
+        updateEntry(db, memberScope, entry.id, { projectId: other.id }),
+        "Project not found.",
+      );
+    });
+
     it("a done task or a task of another project is rejected", async () => {
       const web = await createProject(db, scope, { name: "Web" });
       const app = await createProject(db, scope, { name: "App" });
