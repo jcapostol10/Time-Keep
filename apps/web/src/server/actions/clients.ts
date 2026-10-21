@@ -7,18 +7,11 @@ import { revalidatePath } from "next/cache";
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
 import type { ClientDTO } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
+import { userErrorMessage } from "@/server/actions/errors";
 import { createClient, deleteClient, updateClient } from "@/server/catalog/clients";
-import { CatalogError } from "@/server/catalog/errors";
-import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
+import { requireWorkspaceAccess } from "@/server/workspace-access";
 
 /** Clients are managed by admins only (decision 1 of the Phase 2 design). */
-
-function errorMessage(error: unknown): string {
-  if (error instanceof WorkspaceAccessError) return error.message;
-  if (error instanceof CatalogError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong.";
-}
 
 export async function createClientAction(
   slug: string,
@@ -32,7 +25,7 @@ export async function createClientAction(
     revalidatePath(workspaceRoutes.clients(slug));
     return ok(created);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -49,7 +42,7 @@ export async function updateClientAction(
     revalidatePath(workspaceRoutes.clients(slug));
     return ok(updated);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -63,6 +56,6 @@ export async function deleteClientAction(
     revalidatePath(workspaceRoutes.clients(slug));
     return ok(null);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }

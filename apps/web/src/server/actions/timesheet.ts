@@ -6,20 +6,11 @@ import { getDb } from "@timekeep/db";
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
 import type { TimesheetTemplateDTO } from "@/lib/catalog-types";
 import type { TimeEntryDTO } from "@/lib/tracker-types";
-import { CatalogError } from "@/server/catalog/errors";
-import { TimeEntryError } from "@/server/time-entries";
+import { userErrorMessage } from "@/server/actions/errors";
 import { copyWeek, deleteTemplate, saveTemplate } from "@/server/timesheet";
-import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
+import { requireWorkspaceAccess } from "@/server/workspace-access";
 
 /** Templates and copy-week are per member; no admin role needed. */
-
-function errorMessage(error: unknown): string {
-  if (error instanceof WorkspaceAccessError) return error.message;
-  if (error instanceof CatalogError) return error.message;
-  if (error instanceof TimeEntryError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong.";
-}
 
 export async function saveTemplateAction(
   slug: string,
@@ -32,7 +23,7 @@ export async function saveTemplateAction(
     const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
     return ok(await saveTemplate(getDb(), viewer, parsed.data));
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -46,7 +37,7 @@ export async function deleteTemplateAction(
     await deleteTemplate(getDb(), viewer, templateId);
     return ok(null);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -62,6 +53,6 @@ export async function copyWeekAction(
     const tz = resolveViewerPrefs(ctx.user, ctx.settings).timezone;
     return ok(await copyWeek(getDb(), scope, { ...parsed.data, tz }));
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }

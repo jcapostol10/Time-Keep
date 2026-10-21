@@ -7,19 +7,12 @@ import { revalidatePath } from "next/cache";
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
 import type { TaskDTO } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
-import { CatalogError } from "@/server/catalog/errors";
+import { userErrorMessage } from "@/server/actions/errors";
 import { createTask, deleteTask, updateTask } from "@/server/catalog/tasks";
 import type { Viewer } from "@/server/catalog/viewer";
-import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
+import { requireWorkspaceAccess } from "@/server/workspace-access";
 
 /** Tasks are managed by admins only (decision 1 of the Phase 2 design). */
-
-function errorMessage(error: unknown): string {
-  if (error instanceof WorkspaceAccessError) return error.message;
-  if (error instanceof CatalogError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong.";
-}
 
 async function adminViewer(slug: string): Promise<Viewer> {
   const ctx = await requireWorkspaceAccess(slug, "admin");
@@ -39,7 +32,7 @@ export async function createTaskAction(
     revalidatePath(workspaceRoutes.project(slug, projectId));
     return ok(created);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -56,7 +49,7 @@ export async function updateTaskAction(
     revalidatePath(workspaceRoutes.project(slug, updated.projectId));
     return ok(updated);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -70,6 +63,6 @@ export async function deleteTaskAction(
     revalidatePath(workspaceRoutes.projects(slug), "layout");
     return ok(result);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }

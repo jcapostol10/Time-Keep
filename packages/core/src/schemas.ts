@@ -280,10 +280,6 @@ export const tagPatchSchema = z.object({
 });
 export type TagPatch = z.infer<typeof tagPatchSchema>;
 
-/** @deprecated Task 3 of Phase 2 removes these; use projectInputSchema / tagInputSchema. */
-export const createProjectSchema = projectInputSchema;
-export type CreateProjectInput = ProjectInput;
-export const createTagSchema = tagInputSchema;
 export type CreateTagInput = TagInput;
 
 export const dateRangeSchema = z

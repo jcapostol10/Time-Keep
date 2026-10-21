@@ -3,7 +3,6 @@
 import {
   createManualEntrySchema,
   entryIdsSchema,
-  projectInputSchema,
   startTimerSchema,
   stopTimerSchema,
   updateEntrySchema,
@@ -11,9 +10,8 @@ import {
 import { getDb } from "@timekeep/db";
 
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
-import type { PickerProject, TimeEntryDTO } from "@/lib/tracker-types";
-import { CatalogError } from "@/server/catalog/errors";
-import { createProject } from "@/server/catalog/projects";
+import type { TimeEntryDTO } from "@/lib/tracker-types";
+import { userErrorMessage } from "@/server/actions/errors";
 import {
   continueEntry,
   createManualEntry,
@@ -23,20 +21,11 @@ import {
   restoreEntries,
   startTimer,
   stopTimer,
-  TimeEntryError,
   updateEntry,
 } from "@/server/time-entries";
-import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
+import { requireWorkspaceAccess } from "@/server/workspace-access";
 
 export type StartResult = { started: TimeEntryDTO; stopped: TimeEntryDTO | null };
-
-function errorMessage(error: unknown): string {
-  if (error instanceof WorkspaceAccessError) return error.message;
-  if (error instanceof TimeEntryError) return error.message;
-  if (error instanceof CatalogError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong.";
-}
 
 /** Members act only on their own entries until Phase 4 ("add time for others"). */
 async function scopeFor(slug: string): Promise<EntryScope> {
@@ -54,7 +43,7 @@ export async function startTimerAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await startTimer(getDb(), scope, parsed.data));
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -68,7 +57,7 @@ export async function stopTimerAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await stopTimer(getDb(), scope, parsed.data));
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -82,7 +71,7 @@ export async function createManualEntryAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await createManualEntry(getDb(), scope, parsed.data));
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -97,7 +86,7 @@ export async function updateEntryAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await updateEntry(getDb(), scope, entryId, parsed.data));
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -111,7 +100,7 @@ export async function deleteEntriesAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await deleteEntries(getDb(), scope, parsed.data.ids));
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -125,7 +114,7 @@ export async function restoreEntriesAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await restoreEntries(getDb(), scope, parsed.data.ids));
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -137,7 +126,7 @@ export async function duplicateEntryAction(
     const scope = await scopeFor(slug);
     return ok(await duplicateEntry(getDb(), scope, entryId));
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -149,22 +138,7 @@ export async function continueEntryAction(
     const scope = await scopeFor(slug);
     return ok(await continueEntry(getDb(), scope, entryId));
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
-/** Inline create from the picker. Admins only (the Phase 4 settings may open it up). */
-export async function createProjectAction(
-  slug: string,
-  input: unknown,
-): Promise<ActionResult<PickerProject>> {
-  try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
-    const parsed = projectInputSchema.safeParse(input);
-    if (!parsed.success) return fromZodError(parsed.error);
-    const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
-    return ok(await createProject(getDb(), viewer, parsed.data));
-  } catch (error) {
-    return fail(errorMessage(error));
-  }
-}

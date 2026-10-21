@@ -8,18 +8,11 @@ import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
 import type { TagDTO } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
 import type { EntryTag } from "@/lib/tracker-types";
-import { CatalogError } from "@/server/catalog/errors";
+import { userErrorMessage } from "@/server/actions/errors";
 import { createTag, deleteTag, updateTag } from "@/server/catalog/tags";
-import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
+import { requireWorkspaceAccess } from "@/server/workspace-access";
 
 /** Tags are managed by admins only (decision 1 of the Phase 2 design). */
-
-function errorMessage(error: unknown): string {
-  if (error instanceof WorkspaceAccessError) return error.message;
-  if (error instanceof CatalogError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong.";
-}
 
 /**
  * Also the tag picker's inline create; returns the picker's shape and does
@@ -36,7 +29,7 @@ export async function createTagAction(
     const created = await createTag(getDb(), ctx.workspace.id, parsed.data);
     return ok({ id: created.id, name: created.name, color: created.color });
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -53,7 +46,7 @@ export async function updateTagAction(
     revalidatePath(workspaceRoutes.tags(slug));
     return ok(updated);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -67,6 +60,6 @@ export async function deleteTagAction(
     revalidatePath(workspaceRoutes.tags(slug));
     return ok(result);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }

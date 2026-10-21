@@ -14,7 +14,7 @@ import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
 import type { ProjectDetail } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
 import type { PickerProject } from "@/lib/tracker-types";
-import { CatalogError } from "@/server/catalog/errors";
+import { userErrorMessage } from "@/server/actions/errors";
 import {
   createProject,
   deleteProject,
@@ -25,16 +25,9 @@ import {
 } from "@/server/catalog/projects";
 import type { Viewer } from "@/server/catalog/viewer";
 import { countProjectEntries } from "@/server/time-entries";
-import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
+import { requireWorkspaceAccess } from "@/server/workspace-access";
 
 /** Projects are managed by admins only (decision 1 of the Phase 2 design); favourites are per member. */
-
-function errorMessage(error: unknown): string {
-  if (error instanceof WorkspaceAccessError) return error.message;
-  if (error instanceof CatalogError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong.";
-}
 
 async function adminViewer(slug: string): Promise<Viewer> {
   const ctx = await requireWorkspaceAccess(slug, "admin");
@@ -67,7 +60,7 @@ export async function createProjectAction(
     const created = await createProject(getDb(), viewer, parsed.data);
     return ok(created);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -84,7 +77,7 @@ export async function updateProjectAction(
     refresh(slug);
     return ok(updated);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -103,7 +96,7 @@ export async function archiveProjectsAction(
     refresh(slug);
     return ok(n);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -116,7 +109,7 @@ export async function countProjectEntriesAction(
     const viewer = await adminViewer(slug);
     return ok(await countProjectEntries(getDb(), viewer.workspaceId, projectId));
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -133,7 +126,7 @@ export async function deleteProjectAction(
     refresh(slug);
     return ok(null);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -150,7 +143,7 @@ export async function setProjectMembersAction(
     refresh(slug);
     return ok(null);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -165,6 +158,6 @@ export async function setFavoriteAction(
     refresh(slug);
     return ok(null);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
