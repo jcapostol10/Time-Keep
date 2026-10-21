@@ -29,7 +29,8 @@ import { DescriptionInput } from "../tracker/description-input";
 import { ProjectPicker } from "../tracker/project-picker";
 import { TagPicker } from "../tracker/tag-picker";
 import { useTracker } from "../tracker/tracker-provider";
-import { useEntryWrites } from "../tracker/use-entry-writes";
+import { type UpdateEntryPatch, useEntryWrites } from "../tracker/use-entry-writes";
+import { draftChanges, timesChanged } from "./entry-dialog-model";
 
 export type EntryDialogMode =
   | { kind: "create"; dayKey: string; start: Date; end: Date }
@@ -45,7 +46,7 @@ export function EntryDialog({ mode, onClose }: { mode: EntryDialogMode; onClose:
     mode.kind === "create" ? mode.end : new Date(mode.entry.end ?? mode.entry.start);
   const dayKey = mode.kind === "create" ? mode.dayKey : localDateKey(initialStart, tz);
 
-  const [draft, setDraft] = useState<EntryDraft>(() =>
+  const initialDraft: EntryDraft =
     mode.kind === "create"
       ? EMPTY_DRAFT
       : {
@@ -54,10 +55,14 @@ export function EntryDialog({ mode, onClose }: { mode: EntryDialogMode; onClose:
           taskId: mode.entry.taskId,
           tagIds: mode.entry.tagIds,
           billable: mode.entry.billable,
-        },
-  );
-  const [startText, setStartText] = useState(formatTimeOfDay(initialStart, tz, viewer.timeFormat));
-  const [endText, setEndText] = useState(formatTimeOfDay(initialEnd, tz, viewer.timeFormat));
+        };
+  const initialTexts = {
+    startText: formatTimeOfDay(initialStart, tz, viewer.timeFormat),
+    endText: formatTimeOfDay(initialEnd, tz, viewer.timeFormat),
+  };
+  const [draft, setDraft] = useState<EntryDraft>(initialDraft);
+  const [startText, setStartText] = useState(initialTexts.startText);
+  const [endText, setEndText] = useState(initialTexts.endText);
   const [busy, setBusy] = useState(false);
 
   function patchDraft(patch: Partial<EntryDraft>) {
@@ -81,21 +86,34 @@ export function EntryDialog({ mode, onClose }: { mode: EntryDialogMode; onClose:
   }
 
   async function submit() {
-    const t = times();
-    if (!t) return;
+    if (mode.kind === "create") {
+      const t = times();
+      if (!t) return;
+      setBusy(true);
+      const ok = await writes.createManual({
+        ...draft,
+        start: t.start.toISOString(),
+        end: t.end.toISOString(),
+      });
+      setBusy(false);
+      if (ok) onClose();
+      return;
+    }
+    // Only what changed: a re-sent project reads as an assignment (refused when
+    // archived), and re-parsed times would drop a timer-recorded entry's seconds.
+    const patch: UpdateEntryPatch = draftChanges(initialDraft, draft);
+    if (timesChanged(initialTexts, { startText, endText })) {
+      const t = times();
+      if (!t) return;
+      patch.start = t.start.toISOString();
+      patch.end = t.end.toISOString();
+    }
+    if (Object.keys(patch).length === 0) {
+      onClose();
+      return;
+    }
     setBusy(true);
-    const ok =
-      mode.kind === "create"
-        ? await writes.createManual({
-            ...draft,
-            start: t.start.toISOString(),
-            end: t.end.toISOString(),
-          })
-        : await writes.update(mode.entry.id, {
-            ...draft,
-            start: t.start.toISOString(),
-            end: t.end.toISOString(),
-          });
+    const ok = await writes.update(mode.entry.id, patch);
     setBusy(false);
     if (ok) onClose();
   }
