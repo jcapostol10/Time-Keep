@@ -7,6 +7,7 @@ import {
   type TimesheetCell as CellData,
   type TimesheetEntry,
   type TimesheetRow,
+  type TimesheetRowKey,
 } from "@timekeep/core";
 import { Input } from "@timekeep/ui/components/input";
 import { useState } from "react";
@@ -34,6 +35,7 @@ export function TimesheetCell({
   entries,
   cell,
   billableDefault,
+  onKeepRow,
 }: {
   row: TimesheetRow;
   day: string;
@@ -43,6 +45,8 @@ export function TimesheetCell({
   entries: TimeEntryDTO[];
   cell: CellData;
   billableDefault: boolean;
+  /** Called before a delete that may empty the row, so the row stays for the visit. */
+  onKeepRow?: (row: TimesheetRowKey) => void;
 }) {
   const { viewer } = useTracker();
   const writes = useEntryWrites();
@@ -85,10 +89,14 @@ export function TimesheetCell({
         await writes.update(plan.entryId, { end: plan.end.toISOString() });
         return;
       case "delete":
+        onKeepRow?.(row);
         await writes.remove(plan.entryIds);
         return;
       case "choose":
         setChoosing(plan.entries);
+        return;
+      case "reject":
+        toast.error(plan.message);
         return;
     }
   }

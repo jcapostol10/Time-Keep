@@ -9,6 +9,7 @@ import type { TimeEntryDTO } from "@/lib/tracker-types";
 import {
   createManualEntryAction,
   deleteEntriesAction,
+  restoreEntriesAction,
   updateEntryAction,
 } from "@/server/actions/time-entries";
 
@@ -60,9 +61,9 @@ export function useEntryWrites() {
     [slug, settle],
   );
 
-  const remove = useCallback(
+  const restore = useCallback(
     async (ids: string[]): Promise<boolean> => {
-      const result = await trackSave(() => deleteEntriesAction(slug, { ids }));
+      const result = await trackSave(() => restoreEntriesAction(slug, { ids }));
       if (!result.ok) {
         toast.error(result.error);
         return false;
@@ -71,6 +72,24 @@ export function useEntryWrites() {
       return true;
     },
     [slug, settle],
+  );
+
+  /** Soft delete with a 5-second Undo toast, like the tracker list's. */
+  const remove = useCallback(
+    async (ids: string[]): Promise<boolean> => {
+      const result = await trackSave(() => deleteEntriesAction(slug, { ids }));
+      if (!result.ok) {
+        toast.error(result.error);
+        return false;
+      }
+      settle();
+      toast(ids.length === 1 ? "Entry deleted" : `${ids.length} entries deleted`, {
+        duration: 5000,
+        action: { label: "Undo", onClick: () => void restore(ids) },
+      });
+      return true;
+    },
+    [slug, settle, restore],
   );
 
   return useMemo(

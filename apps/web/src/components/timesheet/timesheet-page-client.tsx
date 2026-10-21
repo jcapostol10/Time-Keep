@@ -64,6 +64,15 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
     });
   }
 
+  /** A row whose last entry is being cleared stays for the visit, like an added one. */
+  function keepRow(key: TimesheetRowKey) {
+    setExtraRowsByWeek((prev) => {
+      const current = prev[weekKey] ?? [];
+      if (current.some((k) => rowKeyString(k) === rowKeyString(key))) return prev;
+      return { ...prev, [weekKey]: [...current, key] };
+    });
+  }
+
   function goToWeek(anchor: Date | null) {
     router.push(anchor ? `${pathname}?week=${localDateKey(anchor, tz)}` : pathname);
   }
@@ -114,6 +123,7 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
         today={today}
         hydrated={hydrated}
         labelOf={(row) => rowLabel(row, names)}
+        onKeepRow={keepRow}
       />
 
       {adding ? (

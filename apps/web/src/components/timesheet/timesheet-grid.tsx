@@ -1,6 +1,12 @@
 "use client";
 
-import { addDaysInZone, formatDuration, type Timesheet, type TimesheetRow } from "@timekeep/core";
+import {
+  addDaysInZone,
+  formatDuration,
+  type Timesheet,
+  type TimesheetRow,
+  type TimesheetRowKey,
+} from "@timekeep/core";
 import { cn } from "@timekeep/ui/lib/utils";
 import type { KeyboardEvent } from "react";
 
@@ -43,6 +49,7 @@ export function TimesheetGrid({
   today,
   hydrated,
   labelOf,
+  onKeepRow,
 }: {
   sheet: Timesheet;
   entries: TimeEntryDTO[];
@@ -51,6 +58,7 @@ export function TimesheetGrid({
   today: string | null;
   hydrated: boolean;
   labelOf: (row: TimesheetRow) => string;
+  onKeepRow?: (key: TimesheetRowKey) => void;
 }) {
   const { viewer } = useTracker();
   const tz = viewer.timezone;
@@ -134,6 +142,7 @@ export function TimesheetGrid({
                         entries={entries}
                         cell={row.cells[day]!}
                         billableDefault={project?.billable ?? false}
+                        onKeepRow={onKeepRow}
                       />
                     </td>
                   ))}

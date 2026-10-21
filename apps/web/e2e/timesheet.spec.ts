@@ -143,12 +143,43 @@ test.describe("timesheet", () => {
     await addManualEntry(page, { description: "Gone", start: "00:05", duration: "1" });
     await openTimesheet(page, freshUser.slug);
     await typeCell(page, "No project · Gone", today, "");
-    // The row only existed because of that entry, so it goes with it.
-    await expect(cell(page, "No project · Gone", today)).toHaveCount(0);
+    // The row stays for the visit, empty, so its other days can still be typed.
+    await expect(cell(page, "No project · Gone", today)).toHaveValue("");
+    await expect(page.getByText("Entry deleted")).toBeVisible();
     await waitForSaves(page);
 
     await trackerPage();
     await expect(entry(page, "Gone")).toHaveCount(0);
+  });
+
+  test("undo restores a cleared cell", async ({ page, freshUser, trackerPage }) => {
+    const today = dayLabel(new Date(), freshUser.timezone);
+    await trackerPage();
+    await addManualEntry(page, { description: "Back", start: "00:05", duration: "1" });
+    await openTimesheet(page, freshUser.slug);
+    await typeCell(page, "No project · Back", today, "");
+    await expect(cell(page, "No project · Back", today)).toHaveValue("");
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(cell(page, "No project · Back", today)).toHaveValue("1:00:00");
+    await waitForSaves(page);
+    await page.reload();
+    await expect(cell(page, "No project · Back", today)).toHaveValue("1:00:00");
+  });
+
+  test("a cleared row stays for the visit", async ({ page, freshUser, trackerPage }) => {
+    const today = dayLabel(new Date(), freshUser.timezone);
+    await trackerPage();
+    await addManualEntry(page, { description: "Moved", start: "00:05", duration: "1" });
+    await openTimesheet(page, freshUser.slug);
+    // Another day of the same week (yesterday, or tomorrow when today starts the week).
+    const yesterday = dayLabel(daysAgo(1), freshUser.timezone);
+    const other = (await cell(page, "No project · Moved", yesterday).count())
+      ? yesterday
+      : dayLabel(daysAgo(-1), freshUser.timezone);
+    await typeCell(page, "No project · Moved", today, "");
+    await expect(cell(page, "No project · Moved", today)).toHaveValue("");
+    await typeCell(page, "No project · Moved", other, "0.5");
+    await expect(cell(page, "No project · Moved", other)).toHaveValue("0:30:00");
   });
 
   test("invalid input reverts the cell", async ({ page, freshUser, trackerPage }) => {
@@ -161,6 +192,15 @@ test.describe("timesheet", () => {
     await expect(page.getByText(/Enter a duration/)).toBeVisible();
     await expect(cell(page, "No project · Site work", today)).toHaveValue("1:00:00");
     await typeCell(page, "No project · Site work", today, "1000h");
+    await expect(cell(page, "No project · Site work", today)).toHaveValue("1:00:00");
+    await typeCell(page, "No project · Site work", today, "-1");
+    await expect(cell(page, "No project · Site work", today)).toHaveValue("1:00:00");
+    // 80 typed for 8.0 would be an 80-hour entry spilling over three days.
+    await typeCell(page, "No project · Site work", today, "80");
+    await expect(page.getByText("A day holds at most 24 hours.")).toBeVisible();
+    await expect(cell(page, "No project · Site work", today)).toHaveValue("1:00:00");
+    // None of it was written.
+    await page.reload();
     await expect(cell(page, "No project · Site work", today)).toHaveValue("1:00:00");
   });
 
