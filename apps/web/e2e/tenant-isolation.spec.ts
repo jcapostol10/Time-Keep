@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { signIn } from "./helpers/app";
+import { openWorkspaceSwitcher, signIn } from "./helpers/app";
 
 test.describe("tenant isolation", () => {
   test("a member of one workspace cannot open another workspace's pages", async ({ page }) => {
@@ -20,7 +20,7 @@ test.describe("tenant isolation", () => {
 
   test("the switcher only lists the user's own workspaces", async ({ page }) => {
     await signIn(page, "member1@demo.test");
-    await page.getByRole("button", { name: "Switch workspace" }).click();
+    await openWorkspaceSwitcher(page);
     await expect(page.getByRole("menuitem", { name: /Demo Workspace/ })).toBeVisible();
     await expect(page.getByRole("menuitem", { name: /Mia's workspace/ })).toBeVisible();
     await expect(page.getByRole("menuitem", { name: /Olivia's workspace/ })).toHaveCount(0);

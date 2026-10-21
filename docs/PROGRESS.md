@@ -85,13 +85,39 @@ Design: `docs/superpowers/specs/2026-10-15-vercel-preview-e2e-design.md`. Plan: 
 - [ ] Step 5: Phase 0 gaps (invite cancellation, role changes, avatar validation, preferences).
 - [ ] Step 6: 375px layouts.
 
-Coverage: 35 of 60 functions (2026-10-18). Bugs found by the backfill and fixed: concurrent same-name sign-ups returned 500 (workspace slug race); the tag picker wiped typed text and could drop a tag created just before closing; on a slow connection a project or tag created just before Start was left off the entry (found by the first Vercel preview run; Start now waits for picker creates).
+Coverage: 95 of 120 functions (2026-10-20; the Phase 0–1 gaps are the steps above). Bugs found by the backfill and fixed: concurrent same-name sign-ups returned 500 (workspace slug race); the tag picker wiped typed text and could drop a tag created just before closing; on a slow connection a project or tag created just before Start was left off the entry (found by the first Vercel preview run; Start now waits for picker creates).
 
 ## Phase 2 — Projects, clients, tasks, tags, timesheet, calendar
 
-- [ ] Clients, Projects (+ detail tabs), Tasks, Tags
-- [ ] Timesheet weekly grid with templates
-- [ ] Calendar day/week with drag create/move/resize
+- [x] 1. Clients page: list with search and status, create/edit (name, address, email, notes, currency placeholder), archive, delete only when unused, project counts (`clients.spec.ts`)
+- [x] 2. Projects: list with client/status/billing/access filters, search, sort, favourites, bulk archive, delete with move-or-delete entries; detail pages (Tasks, Access, Status, Settings; Budget and Rates placeholders); picker grouped by client with favourites first and tasks beneath projects (`projects.spec.ts`, `project-detail.spec.ts`, `project-picker.spec.ts`)
+- [x] 3. Tasks (assignees, done/reopen, delete keeps entries on the project) and Tags page (usage counts, archive, delete) (`tags.spec.ts`)
+- [x] 4. Timesheet: weekly grid, cell maths in core, add row, copy last week, templates, keyboard navigation (`timesheet.spec.ts`)
+- [x] 5. Calendar: day/week, drag to create, move and resize, running timer block, overlaps side by side, extension point for external events (`calendar.spec.ts`)
+
+Acceptance checks:
+
+- [x] The same entry shows identically in Time Tracker, Timesheet and Calendar, and editing it in one updates the others (`entry-views.spec.ts`)
+- [x] A member cannot see or pick a private project they are not on (`project-picker.spec.ts`, "a member cannot see or pick a private project they are not on"; `project-detail.spec.ts`, "make a project private and pick its members")
+
+Design: `docs/superpowers/specs/2026-10-20-phase-2-design.md`. Plan: `docs/superpowers/plans/2026-10-20-phase-2.md`.
+
+Decisions (the owner agreed on 2026-10-20) and deviations from the prompt:
+
+- Clients, projects, tasks and tags are created and edited by owners and admins only; members see no "Create" in the pickers. A "members too" setting belongs with the Phase 4 admin controls.
+- Project detail pages are admin-only in Phase 2; members use the pickers. Phase 4's manager role opens them up.
+- Project names are unique per client (`NULLS NOT DISTINCT`, so projects without a client form one group). The old per-workspace index was dropped in the same migration; the owner accepted that the Phase 1 inline create errors during the production build.
+- Timesheet rows group by project, task and description, so every entry is visible in exactly one row and the grid total always equals the entry list total. A row whose last entry is cleared stays for the visit (the review reversed the first ruling, under which it left the grid); rows added by hand last for the page visit, templates persist.
+- The running timer is not in the timesheet (no duration yet); it is a growing block in the calendar. An entry crossing midnight counts under its start day in the grid and is drawn on both days in the calendar.
+- A task marked done cannot receive new time, like an archived project or tag; existing entries keep it. A tag already on an entry may stay while its other tags change; only adding an archived tag is blocked.
+- Deleting a project with time asks to move its entries to another project (or none) or delete them (soft delete, no undo). Deleting a task keeps its entries on the project; deleting a tag removes it from entries.
+- Favourites are per user and listed in the picker's Favourites group only (not again under the client), so every option name stays unique.
+- Tracked hours on the projects list are everyone's for admins and the member's own ("Your time") for members.
+- Picker creates still register in `draft-writes.ts` (Phase 1), so Start waits for a project or tag created a moment before.
+
+Bugs found by the tests and fixed in this phase: zod 4 `.partial()` keeps field defaults, so a patch built from an input schema reset untouched fields (archiving a project made it billable, public and client-less); entry rows showed "none" for an archived project or tag because they read names from the picker options; a tags-only patch produced an empty UPDATE (since Phase 1); the calendar drop read the ghost from state that pointer-move batching had not flushed.
+
+Review (2026-10-21): a fresh reviewer read the whole branch (no Critical, 5 Important, 16 Minor findings). Fixed on the branch, each with a test that failed first: the calendar dialog sent every field, so editing an entry on an archived project failed and every save re-parsed the times at minute precision; a tags-only edit re-checked visibility of the entry's own project; the seed was not transactional and the preview job ran it against the unmigrated shared database (it now refuses pending migrations and runs in one transaction, and the **Migrate shared database** workflow applies a branch's migrations ahead of its preview); timesheet cells deleted without Undo and accepted 80 hours; a drop near midnight crossed into the next day, and an empty cell after a midnight-crossing entry filled the next day; a stale picker kept a dead project after a rejected Start; database errors reached the user as SQL. Every deferred finding is in `docs/BACKLOG.md`.
 
 ## Phase 3 — Reports, dashboard and exports
 

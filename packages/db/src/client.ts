@@ -5,6 +5,8 @@ import * as schema from "./schema";
 import { SUPABASE_ROOT_CA } from "./supabase-ca";
 
 export type Database = NodePgDatabase<typeof schema>;
+/** What a query helper needs; a transaction handle satisfies it too. */
+export type DbExecutor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
 
 export interface DbHandle {
   db: Database;

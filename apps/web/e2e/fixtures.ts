@@ -19,6 +19,8 @@ export interface FreshUser {
   password: string;
   name: string;
   slug: string;
+  /** The IANA zone the account was created with (local noon at sign-up). */
+  timezone: string;
 }
 
 /**
@@ -33,10 +35,11 @@ export async function signUpFreshUser(
   const name = "Fresh Tester";
   const email = uniqueEmail("fresh");
   const password = DEMO_PASSWORD;
+  const timezone = zoneNearNoon();
   const origin = new URL(baseURL ?? "http://localhost:3000").origin;
 
   const signUp = await request.post("/api/auth/sign-up/email", {
-    data: { name, email, password, timezone: zoneNearNoon() },
+    data: { name, email, password, timezone },
     headers: { origin },
   });
   expect(signUp.ok(), `sign-up for ${email} returned ${signUp.status()}`).toBe(true);
@@ -59,7 +62,7 @@ export async function signUpFreshUser(
   if (!slug) {
     throw new Error(`freshUser: expected one workspace for ${email}, got ${workspaces.length}`);
   }
-  return { email, password, name, slug };
+  return { email, password, name, slug, timezone };
 }
 
 interface Fixtures {

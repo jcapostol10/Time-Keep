@@ -110,7 +110,7 @@ export function EntryRow({
   onSelectedChange: (selected: boolean) => void;
   nested?: boolean;
 }) {
-  const { slug, viewer } = useTracker();
+  const { slug, viewer, canManage } = useTracker();
   const { update } = useEntryMutations();
   const tz = viewer.timezone;
   const end = entry.end ?? entry.start;
@@ -161,11 +161,19 @@ export function EntryRow({
       />
       <ProjectPicker
         slug={slug}
-        value={entry.projectId}
+        value={{ projectId: entry.projectId, taskId: entry.taskId }}
+        current={{ project: entry.project, task: entry.task }}
         compact
-        onChange={(projectId) => save({ projectId })}
+        canCreate={canManage}
+        onChange={(sel) => save({ projectId: sel.projectId, taskId: sel.taskId })}
       />
-      <TagPicker slug={slug} value={entry.tagIds} onChange={(tagIds) => save({ tagIds })} />
+      <TagPicker
+        slug={slug}
+        value={entry.tagIds}
+        current={entry.tags}
+        canCreate={canManage}
+        onChange={(tagIds) => save({ tagIds })}
+      />
       <BillableToggle value={entry.billable} onChange={(billable) => save({ billable })} />
       <div className="ml-auto flex flex-wrap items-center justify-end gap-0.5 md:shrink-0 md:flex-nowrap">
         <CommitInput

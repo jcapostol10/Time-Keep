@@ -12,6 +12,7 @@ function dto(id: string, start: string, extra: Partial<TimeEntryDTO> = {}): Time
     projectId: null,
     project: null,
     taskId: null,
+    task: null,
     tags: [],
     tagIds: [],
     billable: false,

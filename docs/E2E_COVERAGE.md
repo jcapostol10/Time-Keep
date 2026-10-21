@@ -88,10 +88,102 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [ ] Pomodoro notice at the end of a focus block — gap
 - [ ] Reminder when no timer runs during working hours — gap
 
+## Clients
+
+- [x] Create a client with name, email and notes — `clients.spec.ts` › "create and edit a client"
+- [x] Edit a client — `clients.spec.ts` › "create and edit a client"
+- [x] Search clients by name — `clients.spec.ts` › "search clients"
+- [x] Archive a client and find it under the archived filter; unarchive it — `clients.spec.ts` › "archive and unarchive a client"
+- [x] Delete an unused client — `clients.spec.ts` › "delete an unused client"
+- [x] A client with projects cannot be deleted — `projects.spec.ts` › "create a project from the projects page"
+- [x] Members cannot open the clients page and do not see it in the sidebar — `clients.spec.ts` › "members cannot open the clients page"
+
+## Projects
+
+- [x] Create a project with client, colour, billable default and visibility — `projects.spec.ts` › "create a project from the projects page"
+- [x] Filter projects by client, status, billing and access — `projects.spec.ts` › "filter, search and sort the projects list"
+- [x] Search and sort projects — `projects.spec.ts` › "filter, search and sort the projects list"
+- [x] Favourite a project (the star persists) — `projects.spec.ts` › "favourite a project"
+- [x] Archive projects in bulk — `projects.spec.ts` › "bulk archive; archived projects keep their time but take no new time"
+- [x] An archived project keeps its entries but takes no new time — `projects.spec.ts` › "bulk archive; archived projects keep their time but take no new time"
+- [x] Project names are unique per client — `projects.spec.ts` › "project names are unique per client"
+- [x] Delete a project and move its entries to another project — `projects.spec.ts` › "delete a project and move its entries"
+- [x] Delete a project and its entries — `projects.spec.ts` › "delete a project and its entries"
+- [x] Members see only their own tracked time in the projects list — `projects.spec.ts` › "a member sees Your time; admins see Tracked"
+
+## Project detail
+
+- [x] Add a task with assignees — `project-detail.spec.ts` › "manage a project's tasks"
+- [x] Rename a task — `project-detail.spec.ts` › "manage a project's tasks"
+- [x] Mark a task done and reopen it — `project-detail.spec.ts` › "manage a project's tasks"
+- [x] A done task takes no new time and is hidden from the picker — `project-picker.spec.ts` › "a done task takes no new time and is hidden from the picker"
+- [x] Delete a task; its entries keep the project — `project-picker.spec.ts` › "delete a task; its entries keep the project"
+- [x] Make a project private and pick its members — `project-detail.spec.ts` › "make a project private and pick its members"
+- [x] The status tab sums time by task and member for a date range — `project-detail.spec.ts` › "the status tab sums time by task and member"
+- [x] Edit project settings, mark it as a template, archive and unarchive it — `project-detail.spec.ts` › "edit project settings, mark it as a template, archive and unarchive it"
+- [x] Members cannot open project detail — `project-detail.spec.ts` › "members cannot open project detail"
+- [x] The Budget and Rates tabs say which phase brings them — `project-detail.spec.ts` › "the Budget and Rates tabs say which phase brings them"
+
+## Projects and tasks in the tracker
+
+- [x] Pick a task in the timer bar; the entry shows project and task — `project-picker.spec.ts` › "pick a task and the entry shows project and task"
+- [x] Autocomplete fills the task along with the project — `project-picker.spec.ts` › "pick a task and the entry shows project and task"
+- [x] Search the picker by task name — `project-picker.spec.ts` › "search the picker by task name"
+- [x] The picker groups projects by client, favourites first — `project-picker.spec.ts` › "the picker groups projects by client with favourites first"
+- [x] A member cannot see or pick a private project they are not on — `project-picker.spec.ts` › "a member cannot see or pick a private project they are not on"
+- [x] Members cannot create projects or tags from the pickers — `project-picker.spec.ts` › "members cannot create projects or tags from the pickers"
+- [x] A rejected Start refreshes a stale picker and drops the dead project from the draft — `projects.spec.ts` › "a stale picker refreshes when Start is rejected"
+
+## Tags
+
+- [x] Create a tag — `tags.spec.ts` › "create and rename a tag"
+- [x] Rename a tag — `tags.spec.ts` › "create and rename a tag"
+- [x] An archived tag stays on entries but cannot be added — `tags.spec.ts` › "an archived tag stays on entries but cannot be added"
+- [x] Tags show how many entries use them — `tags.spec.ts` › "delete a tag in use"
+- [x] Delete a tag in use after a confirmation naming the count — `tags.spec.ts` › "delete a tag in use"
+
+## Timesheet
+
+- [x] The week's entries show as rows with day, row and grand totals — `timesheet.spec.ts` › "the week's entries show as rows with totals"
+- [x] Typing a duration in an empty cell creates an entry at 09:00 — `timesheet.spec.ts` › "typing in an empty cell creates an entry at 09:00"
+- [x] A second cell on the same day starts after the day's last entry — `timesheet.spec.ts` › "a second cell on the same day starts after the day's last entry"
+- [x] Increasing a cell extends its entry — `timesheet.spec.ts` › "increasing a cell extends its entry"
+- [x] Lowering a cell below its other entries opens the entries list — `timesheet.spec.ts` › "lowering a cell below its other entries opens the list"
+- [x] Clearing a cell deletes its entries, with an Undo toast — `timesheet.spec.ts` › "clearing a cell deletes its entries"
+- [x] Undo restores a cleared cell — `timesheet.spec.ts` › "undo restores a cleared cell"
+- [x] A cleared row stays for the visit, so its other days can be typed — `timesheet.spec.ts` › "a cleared row stays for the visit"
+- [x] Invalid input (text, negative, over 999h) reverts the cell and writes nothing — `timesheet.spec.ts` › "invalid input reverts the cell"
+- [x] A cell total over 24 hours is rejected — `timesheet.spec.ts` › "invalid input reverts the cell"
+- [x] Add a new row — `timesheet.spec.ts` › "add a new row"
+- [x] Copy last week, rows and time — `timesheet.spec.ts` › "copy last week with time"
+- [x] Save and apply a template — `timesheet.spec.ts` › "save and apply a template"
+- [x] Move between cells with the keyboard — `timesheet.spec.ts` › "move between cells with the keyboard"
+- [x] Navigate weeks and back to today — `timesheet.spec.ts` › "navigate weeks"
+
+## Calendar
+
+- [x] Entries show as blocks with the project colour in week and day view — `calendar.spec.ts` › "entries show as blocks in week and day view"
+- [x] Drag on empty space to create an entry — `calendar.spec.ts` › "drag to create an entry"
+- [x] Drag a block to move it — `calendar.spec.ts` › "move and resize an entry by dragging"
+- [x] Drag a block's edge to resize it — `calendar.spec.ts` › "move and resize an entry by dragging"
+- [x] Click a block to edit it — `calendar.spec.ts` › "click a block to edit it"
+- [x] The running timer shows as a growing block — `calendar.spec.ts` › "the running timer shows as a block"
+- [x] Overlapping entries sit side by side — `calendar.spec.ts` › "overlapping entries sit side by side"
+- [x] Navigate days and weeks and back to today — `calendar.spec.ts` › "navigate days and weeks"
+- [x] Drags past the edges of the day (above 00:00, below 24:00, out of the column) stay inside it — `calendar.spec.ts` › "drags past the edges of the day stay inside it"
+- [x] A block dropped where it no longer fits the day is pulled back inside it — `calendar.spec.ts` › "a block dropped where it no longer fits the day is pulled back inside it"
+- [x] The current time line shows on today — `calendar.spec.ts` › "the current time line shows on today"
+
+## Entry views
+
+- [x] The same entry shows identically in the tracker, timesheet and calendar — `entry-views.spec.ts` › "an entry edited in the timesheet changes in the tracker and the calendar"
+- [x] Editing an entry in one view updates the others — `entry-views.spec.ts` › "an entry edited in the timesheet changes in the tracker and the calendar"
+
 ## Tenant isolation
 
 - [x] A member of one workspace cannot open another workspace's pages — `tenant-isolation.spec.ts` › "a member of one workspace cannot open another workspace's pages"
 - [x] The workspace switcher lists only the user's own workspaces — `tenant-isolation.spec.ts` › "the switcher only lists the user's own workspaces"
+- [x] A project id from another workspace is not found, on every project page — `project-detail.spec.ts` › "a project id from another workspace is not found"
 
 ## Small screens (375px)
 

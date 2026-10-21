@@ -1,12 +1,21 @@
 "use client";
 
+import { hasMinRole, type Role } from "@timekeep/core";
 import { cn } from "@timekeep/ui/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { NAV_GROUPS } from "./nav-items";
 
-export function SidebarNav({ slug, onNavigate }: { slug: string; onNavigate?: () => void }) {
+export function SidebarNav({
+  slug,
+  role,
+  onNavigate,
+}: {
+  slug: string;
+  role: Role;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
 
   return (
@@ -17,28 +26,30 @@ export function SidebarNav({ slug, onNavigate }: { slug: string; onNavigate?: ()
             {group.label}
           </p>
           <ul className="flex flex-col gap-0.5">
-            {group.items.map((item) => {
-              const href = item.href(slug);
-              const active = pathname === href || pathname.startsWith(`${href}/`);
-              return (
-                <li key={href}>
-                  <Link
-                    href={href}
-                    onClick={onNavigate}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                      "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                      "focus-visible:ring-sidebar-ring focus-visible:outline-none focus-visible:ring-2",
-                      active && "bg-sidebar-accent text-sidebar-accent-foreground",
-                    )}
-                  >
-                    <item.icon className="size-4 shrink-0" />
-                    {item.label}
-                  </Link>
-                </li>
-              );
-            })}
+            {group.items
+              .filter((item) => !item.minRole || hasMinRole(role, item.minRole))
+              .map((item) => {
+                const href = item.href(slug);
+                const active = pathname === href || pathname.startsWith(`${href}/`);
+                return (
+                  <li key={href}>
+                    <Link
+                      href={href}
+                      onClick={onNavigate}
+                      aria-current={active ? "page" : undefined}
+                      className={cn(
+                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                        "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                        "focus-visible:ring-sidebar-ring focus-visible:outline-none focus-visible:ring-2",
+                        active && "bg-sidebar-accent text-sidebar-accent-foreground",
+                      )}
+                    >
+                      <item.icon className="size-4 shrink-0" />
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
           </ul>
         </div>
       ))}

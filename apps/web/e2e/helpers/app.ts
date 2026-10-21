@@ -8,12 +8,26 @@ export function uniqueEmail(prefix: string): string {
   return `${prefix}.${Date.now()}.${Math.random().toString(36).slice(2, 7)}@e2e.test`;
 }
 
+/** Waits until the app shell has hydrated, so clicks on its buttons are handled. */
+export async function waitForApp(page: Page) {
+  await expect(page.locator('main[data-hydrated="true"]')).toBeVisible();
+}
+
 export async function signIn(page: Page, email: string, password = DEMO_PASSWORD) {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/w\/[^/]+\/tracker/);
+  await waitForApp(page);
+}
+
+/** Opens the workspace switcher; retries like openUserMenu for the same reason. */
+export async function openWorkspaceSwitcher(page: Page) {
+  await expect(async () => {
+    await page.getByRole("button", { name: "Switch workspace" }).click();
+    await expect(page.getByRole("menu")).toBeVisible({ timeout: 1_500 });
+  }).toPass({ timeout: 15_000 });
 }
 
 /**

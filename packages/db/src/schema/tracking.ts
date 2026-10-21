@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   smallint,
@@ -12,45 +13,9 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
+import { project, tag, task } from "./catalog";
 import { timestamps } from "./columns";
 import { workspace } from "./workspace";
-
-/** Phase 1 stub: name + colour. Phase 2 adds client, billable default, visibility, archived. */
-export const project = pgTable(
-  "project",
-  {
-    id: text("id").primaryKey(),
-    workspaceId: text("workspace_id")
-      .notNull()
-      .references(() => workspace.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    /** `#rrggbb` from the core palette */
-    color: text("color").notNull(),
-    ...timestamps,
-  },
-  (t) => [
-    uniqueIndex("project_workspace_name_uq").on(t.workspaceId, t.name),
-    index("project_workspace_id_idx").on(t.workspaceId),
-  ],
-).enableRLS();
-
-/** Phase 1 stub: name + colour. Phase 2 adds archived + usage counts. */
-export const tag = pgTable(
-  "tag",
-  {
-    id: text("id").primaryKey(),
-    workspaceId: text("workspace_id")
-      .notNull()
-      .references(() => workspace.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    color: text("color").notNull(),
-    ...timestamps,
-  },
-  (t) => [
-    uniqueIndex("tag_workspace_name_uq").on(t.workspaceId, t.name),
-    index("tag_workspace_id_idx").on(t.workspaceId),
-  ],
-).enableRLS();
 
 /**
  * A tracked block of time. `end IS NULL` means the timer is running; the
@@ -70,8 +35,7 @@ export const timeEntry = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     description: text("description").notNull().default(""),
     projectId: text("project_id").references(() => project.id, { onDelete: "set null" }),
-    /** No FK until Phase 2 creates `task`. */
-    taskId: text("task_id"),
+    taskId: text("task_id").references(() => task.id, { onDelete: "set null" }),
     billable: boolean("billable").notNull().default(false),
     start: timestamp("start", { withTimezone: true }).notNull(),
     /** null = running */
@@ -84,6 +48,7 @@ export const timeEntry = pgTable(
   (t) => [
     index("time_entry_workspace_user_start_idx").on(t.workspaceId, t.userId, t.start.desc()),
     index("time_entry_project_id_idx").on(t.projectId),
+    index("time_entry_task_id_idx").on(t.taskId),
     uniqueIndex("time_entry_one_running_uq")
       .on(t.workspaceId, t.userId)
       .where(sql`"end" IS NULL AND "deleted_at" IS NULL`),
@@ -128,9 +93,36 @@ export const userSettings = pgTable("user_settings", {
   ...timestamps,
 }).enableRLS();
 
-export type Project = typeof project.$inferSelect;
-export type Tag = typeof tag.$inferSelect;
+/** One timesheet row: the details new entries from that row get. */
+export interface TimesheetTemplateRow {
+  projectId: string | null;
+  taskId: string | null;
+  description: string;
+}
+
+/** A user's saved set of timesheet rows, applied to any week. */
+export const timesheetTemplate = pgTable(
+  "timesheet_template",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    rows: jsonb("rows").$type<TimesheetTemplateRow[]>().notNull().default(sql`'[]'::jsonb`),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("timesheet_template_user_name_uq").on(t.workspaceId, t.userId, t.name),
+    index("timesheet_template_user_idx").on(t.workspaceId, t.userId),
+  ],
+).enableRLS();
+
 export type TimeEntry = typeof timeEntry.$inferSelect;
 export type NewTimeEntry = typeof timeEntry.$inferInsert;
 export type TimeEntryTag = typeof timeEntryTag.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
+export type TimesheetTemplate = typeof timesheetTemplate.$inferSelect;

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createManualEntrySchema,
-  createProjectSchema,
+  projectInputSchema,
   DEFAULT_TRACKER_SETTINGS,
   ENTRY_DESCRIPTION_MAX,
   entryDetailsSchema,
@@ -76,10 +76,10 @@ describe("entry payloads", () => {
     expect(entryIdsSchema.safeParse({ ids: ["a"] }).success).toBe(true);
   });
 
-  it("createProjectSchema trims the name and validates the colour", () => {
-    expect(createProjectSchema.parse({ name: "  Website  " })).toEqual({ name: "Website" });
-    expect(createProjectSchema.safeParse({ name: "   " }).success).toBe(false);
-    expect(createProjectSchema.safeParse({ name: "x", color: "blue" }).success).toBe(false);
+  it("projectInputSchema trims the name and validates the colour", () => {
+    expect(projectInputSchema.parse({ name: "  Website  " })).toMatchObject({ name: "Website" });
+    expect(projectInputSchema.safeParse({ name: "   " }).success).toBe(false);
+    expect(projectInputSchema.safeParse({ name: "x", color: "blue" }).success).toBe(false);
   });
 });
 

@@ -8,6 +8,7 @@
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
     "./migrate": "./src/migrate.ts",
+    "./migrations-status": "./src/migrations-status.ts",
     "./e2e-tenant": "./src/e2e-tenant.ts",
     "./seed": "./src/seed.ts"
   },

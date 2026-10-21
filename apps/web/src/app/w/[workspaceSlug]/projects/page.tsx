@@ -1,17 +1,64 @@
-import { FolderKanbanIcon } from "lucide-react";
+import { canManageCatalog, projectListQuerySchema } from "@timekeep/core";
+import { getDb } from "@timekeep/db";
 import type { Metadata } from "next";
 
-import { ComingSoon } from "@/components/coming-soon";
+import { PageHeader } from "@/components/page-header";
+import { NewProjectButton } from "@/components/projects/project-dialog";
+import { ProjectsTable } from "@/components/projects/projects-table";
+import { ProjectsToolbar } from "@/components/projects/projects-toolbar";
+import { listClientOptions } from "@/server/catalog/clients";
+import { listProjects } from "@/server/catalog/projects";
+import { requireWorkspacePage } from "@/server/workspace-access";
 
 export const metadata: Metadata = { title: "Projects" };
 
-export default function ProjectsPage() {
+export default async function ProjectsPage({
+  params,
+  searchParams,
+}: PageProps<"/w/[workspaceSlug]/projects">) {
+  const { workspaceSlug } = await params;
+  const raw = await searchParams;
+  const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/projects`);
+  const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  const canManage = canManageCatalog(ctx.role);
+
+  // Unknown or malformed filters fall back to the defaults rather than erroring.
+  const parsed = projectListQuerySchema.safeParse({
+    q: typeof raw.q === "string" ? raw.q : undefined,
+    clientId: typeof raw.client === "string" && raw.client ? raw.client : undefined,
+    status: raw.status,
+    billing: raw.billing,
+    access: raw.access,
+    sort: raw.sort,
+    dir: raw.dir,
+  });
+  const query = parsed.success ? parsed.data : projectListQuerySchema.parse({});
+
+  const db = getDb();
+  const [projects, clients] = await Promise.all([
+    listProjects(db, viewer, query),
+    listClientOptions(db, ctx.workspace.id),
+  ]);
+
   return (
-    <ComingSoon
-      icon={FolderKanbanIcon}
-      title="Projects"
-      description="Organise time by client, project and task, with access control and estimates."
-      phase={2}
-    />
+    <>
+      <PageHeader
+        title="Projects"
+        description={
+          canManage
+            ? "What time is tracked against. Group projects by client and control who can see them."
+            : "The projects you can track time on."
+        }
+        actions={canManage ? <NewProjectButton slug={workspaceSlug} clients={clients} /> : null}
+      />
+      <ProjectsToolbar query={query} clients={clients} />
+      <ProjectsTable
+        slug={workspaceSlug}
+        projects={projects}
+        clients={clients}
+        query={query}
+        canManage={canManage}
+      />
+    </>
   );
 }

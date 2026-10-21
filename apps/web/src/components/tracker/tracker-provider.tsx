@@ -1,6 +1,12 @@
 "use client";
 
-import { formatClock, type TrackerSettingsInput, type ViewerPrefs } from "@timekeep/core";
+import {
+  canManageCatalog,
+  formatClock,
+  type Role,
+  type TrackerSettingsInput,
+  type ViewerPrefs,
+} from "@timekeep/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
@@ -35,12 +41,15 @@ import { trackSave, useIsSaving } from "./saving-store";
 import { createTrackerChannel, type TrackerChannel } from "./tracker-channel";
 import { useTrackerCache } from "./use-tracker-cache";
 import { useIdleDetection, usePomodoro, useReminders } from "./use-tracker-helpers";
+import { pruneDraft } from "./draft-prune";
 
 export type RunningPatch = Partial<EntryDraft> & { start?: string };
 
 interface TrackerContextValue {
   slug: string;
   workspaceId: string;
+  /** Owner or admin: may create projects and tags from the pickers. */
+  canManage: boolean;
   viewer: ViewerPrefs;
   settings: TrackerSettingsInput;
   running: TimeEntryDTO | null;
@@ -151,6 +160,7 @@ function useLeaveWarning(saving: boolean) {
 export interface TrackerProviderProps {
   slug: string;
   workspaceId: string;
+  role: Role;
   viewer: ViewerPrefs;
   settings: TrackerSettingsInput;
   initialRunning: TimeEntryDTO | null;
@@ -160,6 +170,7 @@ export interface TrackerProviderProps {
 export function TrackerProvider({
   slug,
   workspaceId,
+  role,
   viewer,
   settings,
   initialRunning,
@@ -249,11 +260,14 @@ export function TrackerProvider({
       try {
         // A project or tag still being created belongs on this entry.
         if (!details) await draftWritesSettled();
-        const result = await trackSave(() =>
-          startTimerAction(slug, details ?? draftRef.current),
-        );
+        const result = await trackSave(() => startTimerAction(slug, details ?? draftRef.current));
         if (!result.ok) {
           toast.error(result.error);
+          // The options may be stale (a project archived meanwhile): refetch
+          // them and drop from the draft what the workspace no longer offers.
+          await cache.invalidateOptions();
+          const fresh = cache.getOptions();
+          if (fresh) setDraft(pruneDraft(draftRef.current, fresh));
           return false;
         }
         applyStart(result.data);
@@ -264,7 +278,7 @@ export function TrackerProvider({
         finish();
       }
     },
-    [slug, applyStart, begin, finish],
+    [slug, applyStart, begin, finish, cache, setDraft],
   );
 
   const stop = useCallback(
@@ -378,6 +392,7 @@ export function TrackerProvider({
     () => ({
       slug,
       workspaceId,
+      canManage: canManageCatalog(role),
       viewer,
       settings,
       running,
@@ -396,6 +411,7 @@ export function TrackerProvider({
     [
       slug,
       workspaceId,
+      role,
       viewer,
       settings,
       running,
