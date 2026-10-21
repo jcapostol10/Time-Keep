@@ -117,8 +117,13 @@ export function movedRange(
 ): { start: Date; end: Date } {
   const durationMs = new Date(range.end).getTime() - new Date(range.start).getTime();
   const durationMinutes = durationMs / 60_000;
-  const latestStart = Math.max(0, MINUTES_PER_DAY - durationMinutes);
-  const start = slotInstant(dayKey, snapMinutes(Math.min(startMinutes, latestStart)), tz);
+  // The latest start is the last slot the block still fits after; rounding it
+  // to the nearest slot could push the end past midnight.
+  const latestStart = Math.max(
+    0,
+    Math.floor((MINUTES_PER_DAY - durationMinutes) / SLOT_MINUTES) * SLOT_MINUTES,
+  );
+  const start = slotInstant(dayKey, Math.min(snapMinutes(startMinutes), latestStart), tz);
   return { start, end: new Date(start.getTime() + durationMs) };
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  MAX_TIMESHEET_CELL_SECONDS,
   buildTimesheet,
   planCellChange,
   rowKeyString,
@@ -148,6 +149,24 @@ describe("planCellChange", () => {
       entryId: "late",
       end: new Date("2026-03-09T16:00:00.000Z"), // 00:00 local next day
     });
+  });
+
+  it("falls back to 09:00 when the day's last entry ends on the next day", () => {
+    // "After the last entry" would land on Tuesday; the cell is Monday's.
+    const late = entryAt("late", day, "23:30", 60, { projectId: "px" });
+    expect(plan([], 3600, [late])).toEqual({
+      kind: "create",
+      start: new Date("2026-03-09T01:00:00.000Z"),
+      end: new Date("2026-03-09T02:00:00.000Z"),
+    });
+  });
+
+  it("rejects a total over 24 hours (80 typed for 8.0) before writing anything", () => {
+    expect(MAX_TIMESHEET_CELL_SECONDS).toBe(24 * 3600);
+    const reject = { kind: "reject", message: "A day holds at most 24 hours." };
+    expect(plan([], 80 * 3600, [])).toEqual(reject);
+    expect(plan([entryAt("a", day, "09:00", 60)], 25 * 3600)).toEqual(reject);
+    expect(plan([], 24 * 3600, [])).toMatchObject({ kind: "create" });
   });
 
   it("ignores a negative or unchanged value on an empty cell", () => {

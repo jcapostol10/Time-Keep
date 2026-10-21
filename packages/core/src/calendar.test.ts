@@ -118,6 +118,14 @@ describe("movedRange", () => {
       end: new Date("2026-03-09T16:00:00.000Z"),
     });
   });
+
+  it("keeps a block dropped at the bottom of the day inside it", () => {
+    // 50 minutes: the latest start is 23:00, not 23:10 rounded up to 23:15.
+    const range = { start: "2026-03-09T02:00:00.000Z", end: "2026-03-09T02:50:00.000Z" };
+    const moved = movedRange(range, "2026-03-09", 1439, MANILA);
+    expect(moved.start.toISOString()).toBe("2026-03-09T15:00:00.000Z");
+    expect(moved.end.toISOString()).toBe("2026-03-09T15:50:00.000Z");
+  });
 });
 
 describe("resizedRange", () => {

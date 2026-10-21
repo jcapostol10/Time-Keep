@@ -109,17 +109,22 @@ export function buildTimesheet(args: {
 }
 
 export const TIMESHEET_DEFAULT_START = { hours: 9, minutes: 0 } as const;
+/** A cell is one day; more than this is a typo (80 for 8.0), not a day's work. */
+export const MAX_TIMESHEET_CELL_SECONDS = 24 * 3600;
 
 export type CellPlan =
   | { kind: "noop" }
   | { kind: "create"; start: Date; end: Date }
   | { kind: "update"; entryId: string; end: Date }
   | { kind: "delete"; entryIds: string[] }
-  | { kind: "choose"; entries: TimesheetEntry[] };
+  | { kind: "choose"; entries: TimesheetEntry[] }
+  | { kind: "reject"; message: string };
 
 /**
  * What typing a new total into a cell means:
- * - an empty cell creates one entry at 09:00 local, or after the day's last entry;
+ * - a total over 24 hours is rejected (a day cell cannot hold more);
+ * - an empty cell creates one entry at 09:00 local, or after the day's last
+ *   entry when that still ends on the day;
  * - zero deletes the cell's entries;
  * - one entry gets its end moved;
  * - several: the last one (latest start) grows or shrinks, is deleted when it
@@ -138,6 +143,9 @@ export function planCellChange(args: {
   const sum = entries.reduce((n, e) => n + e.durationSeconds, 0);
   const target = Math.max(0, Math.floor(args.newSeconds));
   if (target === sum) return { kind: "noop" };
+  if (target > MAX_TIMESHEET_CELL_SECONDS) {
+    return { kind: "reject", message: "A day holds at most 24 hours." };
+  }
 
   if (entries.length === 0) {
     const onDay = args.dayEntries.filter(
@@ -147,9 +155,11 @@ export function planCellChange(args: {
       const end = new Date(e.end);
       return !latest || end > latest ? end : latest;
     }, null);
+    // After the day's last entry, unless that already ends on the next day.
     const start =
-      latestEnd ??
-      zonedDateTimeToInstant({ date: args.dayKey, ...TIMESHEET_DEFAULT_START }, args.tz);
+      latestEnd && localDateKey(latestEnd, args.tz) === args.dayKey
+        ? latestEnd
+        : zonedDateTimeToInstant({ date: args.dayKey, ...TIMESHEET_DEFAULT_START }, args.tz);
     return { kind: "create", start, end: new Date(start.getTime() + target * 1000) };
   }
 
