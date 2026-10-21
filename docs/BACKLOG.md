@@ -11,7 +11,17 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 - [ ] After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
 - [ ] Timesheet rows added by hand live only for the page visit (templates persist); consider keeping them per week in local storage.
-- [ ] Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands (fast locally, visible on a slow connection). Patch the range query before the write.
+- [ ] Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands (fast locally, visible on a slow connection). Timesheet cells likewise show the old value until the refetch lands. Patch the range query before the write.
+- [ ] The Tags page's "New tag" never reports a duplicate: it is find-or-create, so an existing name toasts "created", drops the chosen colour, and may return an archived tag the list hides. The page should refuse a duplicate like clients and projects do (the picker's inline create keeps find-or-create).
+- [ ] `/tracker-options` calls `listTags`, which computes usage counts the picker discards, on every entry write. Add a flag to skip the counts there.
+- [ ] `dateRangeSchema` has no maximum span, so the range route will return a user's entries for any period. Cap it (a year).
+- [ ] Calendar blocks have `role=button` and `tabIndex=0` but no Enter/Space handler, so they cannot be opened from the keyboard.
+- [ ] The calendar loads entries whose start falls in the week, so an entry begun late on the previous week's last day is not drawn on the first day. Fetch from one day earlier; `blockOnDay` already clips.
+- [ ] Members see every client name in the projects-page filter, including archived clients and clients whose projects are all private to them.
+- [ ] ArrowLeft and ArrowRight move between timesheet cells even mid-text, so the caret cannot move within "1:30". Move between cells only when the caret is at the edge.
+- [ ] Copy last week has no duplicate guard (copying twice doubles every entry) and one archived project or done task aborts the whole copy without saying which entry.
+- [ ] Small cleanups: `reassignProjectEntries` and `softDeleteProjectEntries` do not set `updatedAt`; `createTask` inserts the task and its assignees outside a transaction; `copyWeek` divides by `86_400_000` (rounded, so safe, but against the convention's spirit).
+- [ ] `profile.ts` and `team.ts` still return any `Error`'s message to the user (Better Auth messages are user-facing there, so they were left out of `userErrorMessage`); audit them and unify.
 
 ## E2E suite
 
