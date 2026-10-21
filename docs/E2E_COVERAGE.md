@@ -171,7 +171,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Overlapping entries sit side by side — `calendar.spec.ts` › "overlapping entries sit side by side"
 - [x] Navigate days and weeks and back to today — `calendar.spec.ts` › "navigate days and weeks"
 - [x] Drags past the edges of the day (above 00:00, below 24:00, out of the column) stay inside it — `calendar.spec.ts` › "drags past the edges of the day stay inside it"
-- [x] A block moved past the bottom of the day stays inside it — `calendar.spec.ts` › "a block moved past the bottom of the day stays inside it"
+- [x] A block dropped where it no longer fits the day is pulled back inside it — `calendar.spec.ts` › "a block dropped where it no longer fits the day is pulled back inside it"
 - [x] The current time line shows on today — `calendar.spec.ts` › "the current time line shows on today"
 
 ## Entry views

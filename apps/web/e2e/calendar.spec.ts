@@ -167,7 +167,7 @@ test.describe("calendar", () => {
     await page.keyboard.press("Escape");
   });
 
-  test("a block moved past the bottom of the day stays inside it", async ({
+  test("a block dropped where it no longer fits the day is pulled back inside it", async ({
     page,
     freshUser,
     trackerPage,
@@ -176,9 +176,9 @@ test.describe("calendar", () => {
     await addManualEntry(page, { description: "Late", start: "20:00", duration: "1" });
     await openCalendar(page, freshUser.slug, "day");
     await scrollToMinutes(page, 20 * 60);
-    // 500 minutes down in 50-minute steps: the last sample still over the column is
-    // 23:50, a 23:15 start by grab offset, which only fits the day clamped to 23:00.
-    await dragBlock(page, block(page, "Late, No project, 1:00:00"), 0, Math.round((500 / 15) * SLOT_PX));
+    // Dropped with the pointer at 23:45 (grabbed at its middle, so a 23:15 start),
+    // where an hour no longer fits: the latest start that does is 23:00.
+    await dragBlock(page, block(page, "Late, No project, 1:00:00"), 0, 13 * SLOT_PX);
     await waitForSaves(page);
     await expect(block(page, "Late, No project, 1:00:00")).toHaveCSS("top", `${23 * 4 * SLOT_PX}px`);
 
