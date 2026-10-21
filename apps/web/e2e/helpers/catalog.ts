@@ -75,5 +75,12 @@ export async function createProjectViaUi(
   if (opts.visibility) await dialog.getByRole("radio", { name: opts.visibility }).click();
   await dialog.getByRole("button", { name: "Create project" }).click();
   await expect(dialog).toBeHidden();
-  await expect(projectRow(page, name)).toBeVisible();
+  // With a client, the row that carries it: the same name may already exist
+  // under another client, and two matches would be a strict-mode violation.
+  const row = opts.client
+    ? projectRow(page, name).filter({
+        has: page.getByRole("cell", { name: opts.client, exact: true }),
+      })
+    : projectRow(page, name);
+  await expect(row).toBeVisible();
 }
