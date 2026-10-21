@@ -132,6 +132,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The picker groups projects by client, favourites first — `project-picker.spec.ts` › "the picker groups projects by client with favourites first"
 - [x] A member cannot see or pick a private project they are not on — `project-picker.spec.ts` › "a member cannot see or pick a private project they are not on"
 - [x] Members cannot create projects or tags from the pickers — `project-picker.spec.ts` › "members cannot create projects or tags from the pickers"
+- [x] A rejected Start refreshes a stale picker and drops the dead project from the draft — `projects.spec.ts` › "a stale picker refreshes when Start is rejected"
 
 ## Tags
 
@@ -169,6 +170,9 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The running timer shows as a growing block — `calendar.spec.ts` › "the running timer shows as a block"
 - [x] Overlapping entries sit side by side — `calendar.spec.ts` › "overlapping entries sit side by side"
 - [x] Navigate days and weeks and back to today — `calendar.spec.ts` › "navigate days and weeks"
+- [x] Drags past the edges of the day (above 00:00, below 24:00, out of the column) stay inside it — `calendar.spec.ts` › "drags past the edges of the day stay inside it"
+- [x] A block moved past the bottom of the day stays inside it — `calendar.spec.ts` › "a block moved past the bottom of the day stays inside it"
+- [x] The current time line shows on today — `calendar.spec.ts` › "the current time line shows on today"
 
 ## Entry views
 
@@ -179,6 +183,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 - [x] A member of one workspace cannot open another workspace's pages — `tenant-isolation.spec.ts` › "a member of one workspace cannot open another workspace's pages"
 - [x] The workspace switcher lists only the user's own workspaces — `tenant-isolation.spec.ts` › "the switcher only lists the user's own workspaces"
+- [x] A project id from another workspace is not found, on every project page — `project-detail.spec.ts` › "a project id from another workspace is not found"
 
 ## Small screens (375px)
 

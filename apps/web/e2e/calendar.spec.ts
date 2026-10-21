@@ -134,6 +134,67 @@ test.describe("calendar", () => {
     await expect(b).toHaveAttribute("data-column", "1");
   });
 
+  test("drags past the edges of the day stay inside it", async ({ page, freshUser }) => {
+    const today = dateKey(new Date(), freshUser.timezone);
+    await openCalendar(page, freshUser.slug, "day");
+    const dialog = page.getByRole("dialog", { name: "New entry" });
+
+    // Up past 00:00: from 01:00 to well above the grid.
+    await scrollToMinutes(page, 0);
+    const top = await dayPoint(page, today, 60);
+    await drag(page, top, { x: top.x, y: Math.max(0, top.y - 200) });
+    await expect(dialog.getByRole("textbox", { name: "Start time" })).toHaveValue("00:00");
+    await expect(dialog.getByRole("textbox", { name: "End time" })).toHaveValue("01:00");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+
+    // Down past 24:00: from 23:00 to well below the column.
+    await scrollToMinutes(page, 23 * 60);
+    const bottom = await dayPoint(page, today, 23 * 60);
+    await drag(page, bottom, { x: bottom.x, y: bottom.y + 300 });
+    await expect(dialog.getByRole("textbox", { name: "Start time" })).toHaveValue("23:00");
+    await expect(dialog.getByRole("textbox", { name: "End time" })).toHaveValue("00:00");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+
+    // Sideways out of the column (over the sidebar) keeps the day.
+    await scrollToMinutes(page, 8 * 60);
+    const from = await dayPoint(page, today, 9 * 60);
+    const to = await dayPoint(page, today, 10 * 60);
+    await drag(page, from, { x: 5, y: to.y });
+    await expect(dialog.getByRole("textbox", { name: "Start time" })).toHaveValue("09:00");
+    await expect(dialog.getByRole("textbox", { name: "End time" })).toHaveValue("10:00");
+    await page.keyboard.press("Escape");
+  });
+
+  test("a block moved past the bottom of the day stays inside it", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Late", start: "20:00", duration: "1" });
+    await openCalendar(page, freshUser.slug, "day");
+    await scrollToMinutes(page, 20 * 60);
+    // 500 minutes down in 50-minute steps: the last sample still over the column is
+    // 23:50, a 23:15 start by grab offset, which only fits the day clamped to 23:00.
+    await dragBlock(page, block(page, "Late, No project, 1:00:00"), 0, Math.round((500 / 15) * SLOT_PX));
+    await waitForSaves(page);
+    await expect(block(page, "Late, No project, 1:00:00")).toHaveCSS("top", `${23 * 4 * SLOT_PX}px`);
+
+    await trackerPage();
+    const row = entry(page, "Late");
+    await expect(row.getByRole("textbox", { name: "Start time" })).toHaveValue("23:00");
+    await expect(row.getByRole("textbox", { name: "End time" })).toHaveValue("00:00");
+  });
+
+  test("the current time line shows on today", async ({ page, freshUser }) => {
+    const today = dateKey(new Date(), freshUser.timezone);
+    await openCalendar(page, freshUser.slug, "week");
+    await expect(dayColumn(page, today).getByTestId("now-line")).toBeVisible();
+    await expect(page.getByTestId("now-line")).toHaveCount(1);
+  });
+
   test("navigate days and weeks", async ({ page, freshUser }) => {
     await openCalendar(page, freshUser.slug, "week");
     const label = page.getByTestId("period-label");

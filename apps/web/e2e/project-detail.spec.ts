@@ -147,4 +147,21 @@ test.describe("project detail", () => {
     await page.goto(href!);
     await expect(page.getByRole("heading", { name: "We couldn't find that page" })).toBeVisible();
   });
+
+  test("a project id from another workspace is not found", async ({
+    page,
+    freshUser,
+    demoUser,
+  }) => {
+    await createProjectViaUi(page, freshUser.slug, "Theirs");
+    await openProject(page, freshUser.slug, "Theirs");
+    const id = new URL(page.url()).pathname.split("/").pop();
+    if (!id) throw new Error("no project id in the url");
+    // The demo owner is an admin elsewhere; here the id must read as unknown.
+    await demoUser("owner");
+    for (const path of ["", "/settings", "/access"]) {
+      await page.goto(`/w/demo/projects/${id}${path}`);
+      await expect(page.getByRole("heading", { name: "We couldn't find that page" })).toBeVisible();
+    }
+  });
 });
