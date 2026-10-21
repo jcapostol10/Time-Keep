@@ -12,7 +12,6 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
 - [ ] Timesheet rows added by hand live only for the page visit (templates persist); consider keeping them per week in local storage.
 - [ ] Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands (fast locally, visible on a slow connection). Patch the range query before the write.
-- [ ] A member whose picker still lists a project that was just archived or made private gets the server's message on Start, but the picker only refreshes after the next options fetch (30 s stale time). Refetch options when a start is rejected.
 
 ## E2E suite
 
@@ -32,6 +31,7 @@ Nothing open.
 
 ## Done
 
+- [x] A member whose picker still listed a project that was just archived or made private got the server's message on Start, but the picker only refreshed after the next options fetch, and the draft kept the dead project. Done 2026-10-21 ("tracker: a rejected Start refreshes the options and prunes the draft").
 - [x] Add `pnpm --filter @timekeep/web e2e:coverage` to the commands table in `CLAUDE.md`. Done 2026-10-20 ("docs: e2e:coverage in the commands table").
 - [x] Remote runs use `retries: 2`, which hides flaky tests unless someone reads the report. Fail the job on flaky tests, or report them in the job summary. Done 2026-10-20 ("e2e: a flaky test fails the run in CI"): failOnFlakyTests is on in CI and remote runs; a probe that passes only on retry exited 0 before and 1 after.
 - [x] `fixtures.spec.ts` "two tests get different fresh users" depends on test order. Done 2026-10-20 ("e2e: fresh users near noon, with clear errors and an API slug"): replaced by "every freshUser is a new account with its own workspace", which signs up a second user itself; it fails when signUpFreshUser reuses an account.

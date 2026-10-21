@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures";
+import { waitForApp } from "./helpers/app";
 import {
   clientRow,
   createClientViaUi,
@@ -136,6 +137,36 @@ test.describe("projects", () => {
     await today(page).getByRole("button", { name: 'Continue "Legacy work"' }).click();
     await expect(page.getByText("This project is archived.")).toBeVisible();
     await expect(timer(page).getByRole("button", { name: "Start" })).toBeVisible();
+  });
+
+  test("a stale picker refreshes when Start is rejected", async ({ page, freshUser }) => {
+    await createProjectViaUi(page, freshUser.slug, "Stale");
+    // A second tab keeps the tracker, and its options, from before the archive.
+    const stale = await page.context().newPage();
+    await stale.goto(`/w/${freshUser.slug}/tracker`);
+    await waitForApp(stale);
+    await pickProject(stale, "Stale");
+
+    await page.goto(`/w/${freshUser.slug}/projects`);
+    await waitForApp(page);
+    await page.getByRole("checkbox", { name: "Select Stale" }).check();
+    await page.getByRole("button", { name: "Archive" }).click();
+    await expect(projectRow(page, "Stale")).toHaveCount(0);
+
+    await stale.bringToFront();
+    await timer(stale).getByRole("combobox", { name: "Description" }).fill("Too late");
+    await timer(stale).getByRole("button", { name: "Start" }).click();
+    await expect(stale.getByText("This project is archived.")).toBeVisible();
+    // The picker refreshed and the dead project left the draft, so Start works again.
+    await expect(projectButton(stale)).toHaveAccessibleName("Project: none");
+    await projectButton(stale).click();
+    await stale.getByRole("combobox", { name: "Search projects" }).fill("Stale");
+    await expect(stale.getByRole("option", { name: "Stale", exact: true })).toHaveCount(0);
+    await stale.keyboard.press("Escape");
+    await timer(stale).getByRole("button", { name: "Start" }).click();
+    await expect(timer(stale).getByRole("button", { name: "Stop" })).toBeVisible();
+    await timer(stale).getByRole("button", { name: "Stop" }).click();
+    await expect(timer(stale).getByRole("button", { name: "Start" })).toBeVisible();
   });
 
   test("project names are unique per client", async ({ page, freshUser }) => {

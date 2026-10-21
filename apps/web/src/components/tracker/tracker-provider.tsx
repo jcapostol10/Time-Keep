@@ -41,6 +41,7 @@ import { trackSave, useIsSaving } from "./saving-store";
 import { createTrackerChannel, type TrackerChannel } from "./tracker-channel";
 import { useTrackerCache } from "./use-tracker-cache";
 import { useIdleDetection, usePomodoro, useReminders } from "./use-tracker-helpers";
+import { pruneDraft } from "./draft-prune";
 
 export type RunningPatch = Partial<EntryDraft> & { start?: string };
 
@@ -262,6 +263,11 @@ export function TrackerProvider({
         const result = await trackSave(() => startTimerAction(slug, details ?? draftRef.current));
         if (!result.ok) {
           toast.error(result.error);
+          // The options may be stale (a project archived meanwhile): refetch
+          // them and drop from the draft what the workspace no longer offers.
+          await cache.invalidateOptions();
+          const fresh = cache.getOptions();
+          if (fresh) setDraft(pruneDraft(draftRef.current, fresh));
           return false;
         }
         applyStart(result.data);
@@ -272,7 +278,7 @@ export function TrackerProvider({
         finish();
       }
     },
-    [slug, applyStart, begin, finish],
+    [slug, applyStart, begin, finish, cache, setDraft],
   );
 
   const stop = useCallback(
