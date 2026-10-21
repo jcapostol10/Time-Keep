@@ -17,6 +17,7 @@ import {
 } from "@timekeep/db";
 
 import type { TagDTO } from "@/lib/catalog-types";
+import type { EntryTag } from "@/lib/tracker-types";
 
 import { CatalogError, isUniqueViolation } from "./errors";
 
@@ -59,13 +60,45 @@ export async function listTags(
   return rows.map((r) => toDTO(r, usage));
 }
 
-/** Find-or-create by name (unique per workspace), as the Phase 1 inline create did. */
+/**
+ * What the pickers need: active tags as id, name and colour. No usage counts,
+ * which the tags page shows and which cost a group-by over every live entry.
+ */
+export async function listTagOptions(db: Executor, workspaceId: string): Promise<EntryTag[]> {
+  return db.query.tag.findMany({
+    where: and(eq(tag.workspaceId, workspaceId), eq(tag.archived, false)),
+    orderBy: asc(tag.name),
+    columns: { id: true, name: true, color: true },
+  });
+}
+
+/**
+ * Creates a tag by name (unique per workspace). The pickers' inline create
+ * reuses an existing name, as the Phase 1 inline create did; the tags page
+ * refuses it, since silently returning another tag would drop the chosen
+ * colour and could hand back an archived tag the list hides.
+ */
 export async function createTag(
   db: Executor,
   workspaceId: string,
   input: TagInput,
+  opts: { onDuplicate: "reuse" | "refuse" } = { onDuplicate: "reuse" },
 ): Promise<TagDTO> {
   const name = input.name.trim();
+  if (opts.onDuplicate === "refuse") {
+    const existing = await db.query.tag.findFirst({
+      where: and(eq(tag.workspaceId, workspaceId), eq(tag.name, name)),
+      columns: { archived: true },
+    });
+    if (existing) {
+      throw new CatalogError(
+        "CONFLICT",
+        existing.archived
+          ? `${DUPLICATE_NAME} It is archived; show archived tags to restore it.`
+          : DUPLICATE_NAME,
+      );
+    }
+  }
   await db
     .insert(tag)
     .values({ id: randomUUID(), workspaceId, name, color: input.color ?? pickColor(name) })

@@ -38,6 +38,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [ ] Avatar upload rejects an image over the size limit — gap
 - [ ] Change date format, time format and week start — gap
 - [ ] Save timer settings (idle detection, Pomodoro, reminders) and see them after a reload — gap
+- [x] Send yourself a test email from Profile settings — `profile.spec.ts` › "send a test email"
 
 ## Time Tracker: timer bar
 
@@ -136,6 +137,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Tags
 
+- [x] A duplicate tag name is refused on the Tags page (the picker's inline create reuses it) — `tags.spec.ts` › "a duplicate tag name is refused on the Tags page"
 - [x] Create a tag — `tags.spec.ts` › "create and rename a tag"
 - [x] Rename a tag — `tags.spec.ts` › "create and rename a tag"
 - [x] An archived tag stays on entries but cannot be added — `tags.spec.ts` › "an archived tag stays on entries but cannot be added"

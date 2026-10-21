@@ -1,7 +1,7 @@
 import { getDb } from "@timekeep/db";
 
 import { listPickerProjects } from "@/server/catalog/projects";
-import { listTags } from "@/server/catalog/tags";
+import { listTagOptions } from "@/server/catalog/tags";
 import { listRecentDescriptions } from "@/server/time-entries";
 import { accessErrorResponse, requireWorkspaceAccess } from "@/server/workspace-access";
 
@@ -17,7 +17,7 @@ export async function GET(
     const scope = { workspaceId: access.workspace.id, userId: access.user.id, role: access.role };
     const [projects, tagRows, recent] = await Promise.all([
       listPickerProjects(db, scope),
-      listTags(db, scope.workspaceId, { includeArchived: false }),
+      listTagOptions(db, scope.workspaceId),
       listRecentDescriptions(db, scope),
     ]);
     const tags = tagRows.map((t) => ({ id: t.id, name: t.name, color: t.color }));

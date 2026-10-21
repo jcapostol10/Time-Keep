@@ -94,4 +94,16 @@ test.describe("tags", () => {
       entry(page, "Reviewed work").getByRole("button", { name: /^Tags:/ }),
     ).toHaveAccessibleName("Tags: none");
   });
+
+  test("a duplicate tag name is refused on the Tags page", async ({ page, freshUser }) => {
+    await createTagViaUi(page, freshUser.slug, "urgent");
+    await page.getByRole("button", { name: "New tag" }).click();
+    const dialog = page.getByRole("dialog", { name: "New tag" });
+    await dialog.getByLabel("Name").fill("urgent");
+    await dialog.getByRole("button", { name: "Create tag" }).click();
+    await expect(dialog.getByText("A tag with this name already exists.")).toBeVisible();
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(tagRow(page, "urgent")).toHaveCount(1);
+  });
 });

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../../test/db";
 import { createManualEntry, type EntryScope, listEntriesInRange } from "../time-entries";
-import { createTag, deleteTag, listTags, updateTag } from "./tags";
+import { createTag, deleteTag, listTagOptions, listTags, updateTag } from "./tags";
 
 const handle = connectTestDb();
 const db = handle.db;
@@ -54,6 +54,27 @@ describe("tags service", () => {
       ["old", 1, true],
     ]);
     expect(await listTags(db, other.workspaceId, { includeArchived: true })).toEqual([]);
+  });
+
+  it("lists picker options as id, name and colour, archived excluded, no usage counts", async () => {
+    const beta = await createTag(db, scope.workspaceId, { name: "beta" });
+    const alpha = await createTag(db, scope.workspaceId, { name: "alpha" });
+    await updateTag(db, scope.workspaceId, beta.id, { archived: true });
+    expect(await listTagOptions(db, scope.workspaceId)).toEqual([
+      { id: alpha.id, name: "alpha", color: alpha.color },
+    ]);
+  });
+
+  it("the tags page refuses a duplicate name; the picker reuses it", async () => {
+    const first = await createTag(db, scope.workspaceId, { name: "urgent", color: "#112233" });
+    expect((await createTag(db, scope.workspaceId, { name: "urgent" })).id).toBe(first.id);
+    await expect(
+      createTag(db, scope.workspaceId, { name: "urgent" }, { onDuplicate: "refuse" }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "A tag with this name already exists." });
+    await updateTag(db, scope.workspaceId, first.id, { archived: true });
+    await expect(
+      createTag(db, scope.workspaceId, { name: "urgent" }, { onDuplicate: "refuse" }),
+    ).rejects.toThrow(/archived/);
   });
 
   it("renames, recolours and archives; names stay unique", async () => {
