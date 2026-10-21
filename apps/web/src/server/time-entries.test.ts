@@ -991,6 +991,9 @@ describe("time entries service", () => {
       expect(await countProjectEntries(db, scope.workspaceId, web.id)).toBe(0);
       const movedMine = (await range(scope)).find((e) => e.id === mine.id);
       expect(movedMine).toMatchObject({ projectId: app.id, taskId: null, task: null });
+      expect(new Date(movedMine!.updatedAt).getTime()).toBeGreaterThan(
+        new Date(mine.updatedAt).getTime(),
+      );
       expect((await range(memberScope)).map((e) => [e.id, e.projectId])).toEqual([
         [theirs.id, app.id],
       ]);
@@ -1004,6 +1007,11 @@ describe("time entries service", () => {
       const kept = await createManualEntry(db, scope, manual({}, 60));
 
       expect(await softDeleteProjectEntries(db, scope.workspaceId, web.id)).toBe(2);
+      const stamped = await db
+        .select({ updatedAt: timeEntry.updatedAt })
+        .from(timeEntry)
+        .where(eq(timeEntry.projectId, web.id));
+      expect(stamped.every((r) => r.updatedAt.getTime() > NOW.getTime())).toBe(true);
       expect((await range(scope)).map((r) => r.id)).toEqual([kept.id]);
       expect(await range(memberScope)).toEqual([]);
     });

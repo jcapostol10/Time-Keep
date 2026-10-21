@@ -15,6 +15,7 @@ import {
   startOfWeekInZone,
   weekBounds,
   zonedDateTimeToInstant,
+  daysBetweenInZone,
 } from "./time";
 
 const MANILA = "Asia/Manila";
@@ -192,5 +193,18 @@ describe("monthBoundsInZone", () => {
     const { monthStart, monthEnd } = monthBoundsInZone(new Date("2026-03-15T12:00:00.000Z"), "America/New_York");
     expect(monthStart.toISOString()).toBe("2026-03-01T05:00:00.000Z"); // EST
     expect(monthEnd.toISOString()).toBe("2026-04-01T04:00:00.000Z"); // EDT
+  });
+});
+
+describe("daysBetweenInZone", () => {
+  it("counts local calendar days, unchanged by a daylight-saving change", () => {
+    // New York springs forward on 2026-03-08: Sat 00:00 EST to Mon 00:00 EDT is 47 hours.
+    const sat = new Date("2026-03-07T05:00:00.000Z");
+    const mon = new Date("2026-03-09T04:00:00.000Z");
+    expect(daysBetweenInZone(sat, mon, "America/New_York")).toBe(2);
+    expect(daysBetweenInZone(mon, sat, "America/New_York")).toBe(-2);
+    const week = new Date("2026-03-08T16:00:00.000Z");
+    expect(daysBetweenInZone(week, new Date("2026-03-15T16:00:00.000Z"), "Asia/Manila")).toBe(7);
+    expect(daysBetweenInZone(week, week, "Asia/Manila")).toBe(0);
   });
 });

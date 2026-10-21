@@ -125,7 +125,7 @@ export async function listTasks(
 }
 
 export async function createTask(
-  db: Executor,
+  db: Database,
   viewer: Viewer,
   projectId: string,
   input: TaskInput,
@@ -134,21 +134,24 @@ export async function createTask(
   const assigneeIds = [...new Set(input.assigneeIds)];
   await assertMembers(db, viewer.workspaceId, assigneeIds);
   const id = randomUUID();
-  try {
-    await db.insert(task).values({
-      id,
-      workspaceId: viewer.workspaceId,
-      projectId,
-      name: input.name.trim(),
-    });
-  } catch (error) {
-    if (isUniqueViolation(error, "task_project_name_uq")) {
-      throw new CatalogError("CONFLICT", DUPLICATE_NAME);
+  // The task and its assignees land together or not at all.
+  return db.transaction(async (tx) => {
+    try {
+      await tx.insert(task).values({
+        id,
+        workspaceId: viewer.workspaceId,
+        projectId,
+        name: input.name.trim(),
+      });
+    } catch (error) {
+      if (isUniqueViolation(error, "task_project_name_uq")) {
+        throw new CatalogError("CONFLICT", DUPLICATE_NAME);
+      }
+      throw error;
     }
-    throw error;
-  }
-  await replaceAssignees(db, id, assigneeIds);
-  return toDTO(await requireVisibleTask(db, viewer, id), undefined);
+    await replaceAssignees(tx, id, assigneeIds);
+    return toDTO(await requireVisibleTask(tx, viewer, id), undefined);
+  });
 }
 
 export async function updateTask(

@@ -682,7 +682,7 @@ export async function reassignProjectEntries(
 ): Promise<number> {
   const rows = await db
     .update(timeEntry)
-    .set({ projectId: toProjectId, taskId: null })
+    .set({ projectId: toProjectId, taskId: null, updatedAt: new Date() })
     .where(projectEntriesWhere(workspaceId, fromProjectId))
     .returning({ id: timeEntry.id });
   return rows.length;
@@ -696,7 +696,7 @@ export async function softDeleteProjectEntries(
 ): Promise<number> {
   const rows = await db
     .update(timeEntry)
-    .set({ deletedAt: new Date() })
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
     .where(projectEntriesWhere(workspaceId, projectId))
     .returning({ id: timeEntry.id });
   return rows.length;

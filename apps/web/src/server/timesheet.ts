@@ -2,7 +2,8 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { addDaysInZone, shiftEntriesByDays, type TimesheetTemplateInput } from "@timekeep/core";
+import { addDaysInZone, shiftEntriesByDays, type TimesheetTemplateInput,
+  daysBetweenInZone, } from "@timekeep/core";
 import { and, asc, type Database, eq, timesheetTemplate } from "@timekeep/db";
 
 import type { TimesheetTemplateDTO } from "@/lib/catalog-types";
@@ -85,7 +86,7 @@ export async function copyWeek(
   scope: EntryScope,
   args: { fromWeekStart: Date; toWeekStart: Date; tz: string },
 ): Promise<TimeEntryDTO[]> {
-  const days = Math.round((args.toWeekStart.getTime() - args.fromWeekStart.getTime()) / 86_400_000);
+  const days = daysBetweenInZone(args.fromWeekStart, args.toWeekStart, args.tz);
   if (days === 0) throw new TimeEntryError("INVALID", "Choose a different week.");
   const source = await listEntriesInRange(db, scope, {
     from: args.fromWeekStart,
