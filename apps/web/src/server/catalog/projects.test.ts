@@ -141,15 +141,15 @@ describe("projects service", () => {
     await createProject(db, owner, { name: "Site", clientId: acme.id });
     await createProject(db, owner, { name: "Site", clientId: globex.id });
     const loose = await createProject(db, owner, { name: "Site" });
-    await expect(createProject(db, owner, { name: "Site", clientId: acme.id })).rejects.toMatchObject(
-      { code: "CONFLICT" },
-    );
+    await expect(
+      createProject(db, owner, { name: "Site", clientId: acme.id }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
     await expect(createProject(db, owner, { name: "Site" })).rejects.toMatchObject({
       code: "CONFLICT",
     });
-    await expect(
-      updateProject(db, owner, loose.id, { clientId: acme.id }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(updateProject(db, owner, loose.id, { clientId: acme.id })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
     const foreignClient = await createClient(db, outsider.workspaceId, clientInput("Theirs"));
     await expect(
       updateProject(db, owner, loose.id, { clientId: foreignClient.id }),
@@ -164,9 +164,9 @@ describe("projects service", () => {
     await setProjectMembers(db, owner, secret.id, [member.userId]);
     const seen = await getProject(db, member, secret.id);
     expect(seen).toMatchObject({ name: "Secret", memberIds: [member.userId], memberCount: 1 });
-    await expect(setProjectMembers(db, owner, secret.id, [outsider.userId])).rejects.toMatchObject(
-      { code: "INVALID" },
-    );
+    await expect(setProjectMembers(db, owner, secret.id, [outsider.userId])).rejects.toMatchObject({
+      code: "INVALID",
+    });
     await setProjectMembers(db, owner, secret.id, []);
     await expect(getProject(db, member, secret.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
@@ -210,9 +210,9 @@ describe("projects service", () => {
     await expect(getProject(db, owner, web.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     const mine = await listEntriesInRange(db, owner as EntryScope, range);
     expect(mine.map((e) => [e.projectId, e.taskId])).toEqual([[app.id, null]]);
-    expect((await listEntriesInRange(db, member as EntryScope, range)).map((e) => e.projectId)).toEqual(
-      [app.id],
-    );
+    expect(
+      (await listEntriesInRange(db, member as EntryScope, range)).map((e) => e.projectId),
+    ).toEqual([app.id]);
 
     await deleteProject(db, owner, app.id, { mode: "delete" });
     expect(await listEntriesInRange(db, owner as EntryScope, range)).toEqual([]);
@@ -261,6 +261,10 @@ describe("projects service", () => {
       { userId: owner.userId, name: "Alice A", seconds: 5400 },
       { userId: member.userId, name: "Carol C", seconds: 2700 },
     ]);
-    expect(status).toMatchObject({ billableSeconds: 6300, nonBillableSeconds: 1800, totalSeconds: 8100 });
+    expect(status).toMatchObject({
+      billableSeconds: 6300,
+      nonBillableSeconds: 1800,
+      totalSeconds: 8100,
+    });
   });
 });

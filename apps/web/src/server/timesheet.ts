@@ -2,8 +2,12 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { addDaysInZone, shiftEntriesByDays, type TimesheetTemplateInput,
-  daysBetweenInZone, } from "@timekeep/core";
+import {
+  addDaysInZone,
+  shiftEntriesByDays,
+  type TimesheetTemplateInput,
+  daysBetweenInZone,
+} from "@timekeep/core";
 import { and, asc, type Database, eq, timesheetTemplate } from "@timekeep/db";
 
 import type { TimesheetTemplateDTO } from "@/lib/catalog-types";

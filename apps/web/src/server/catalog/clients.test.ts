@@ -2,7 +2,13 @@ import type { ClientInput } from "@timekeep/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../../test/db";
-import { createClient, deleteClient, listClientOptions, listClients, updateClient } from "./clients";
+import {
+  createClient,
+  deleteClient,
+  listClientOptions,
+  listClients,
+  updateClient,
+} from "./clients";
 import { createProject } from "./projects";
 import type { Viewer } from "./viewer";
 
@@ -96,10 +102,17 @@ describe("clients service", () => {
       currency: "PHP",
       archived: true,
     });
-    expect(updated).toMatchObject({ name: "Acme Corp", notes: "Net 30", currency: "PHP", archived: true });
-    await expect(updateClient(db, other.workspaceId, acme.id, { name: "X" })).rejects.toMatchObject({
-      code: "NOT_FOUND",
+    expect(updated).toMatchObject({
+      name: "Acme Corp",
+      notes: "Net 30",
+      currency: "PHP",
+      archived: true,
     });
+    await expect(updateClient(db, other.workspaceId, acme.id, { name: "X" })).rejects.toMatchObject(
+      {
+        code: "NOT_FOUND",
+      },
+    );
   });
 
   it("deletes only an unused client", async () => {

@@ -183,14 +183,20 @@ describe("parseTimeOfDay", () => {
 
 describe("monthBoundsInZone", () => {
   it("returns the local month as [start, next month start) instants", () => {
-    const { monthStart, monthEnd } = monthBoundsInZone(new Date("2026-03-31T20:00:00.000Z"), "Asia/Manila");
+    const { monthStart, monthEnd } = monthBoundsInZone(
+      new Date("2026-03-31T20:00:00.000Z"),
+      "Asia/Manila",
+    );
     // 2026-04-01 04:00 Manila → April
     expect(monthStart.toISOString()).toBe("2026-03-31T16:00:00.000Z");
     expect(monthEnd.toISOString()).toBe("2026-04-30T16:00:00.000Z");
   });
 
   it("keeps midnight across a daylight-saving change", () => {
-    const { monthStart, monthEnd } = monthBoundsInZone(new Date("2026-03-15T12:00:00.000Z"), "America/New_York");
+    const { monthStart, monthEnd } = monthBoundsInZone(
+      new Date("2026-03-15T12:00:00.000Z"),
+      "America/New_York",
+    );
     expect(monthStart.toISOString()).toBe("2026-03-01T05:00:00.000Z"); // EST
     expect(monthEnd.toISOString()).toBe("2026-04-01T04:00:00.000Z"); // EDT
   });

@@ -71,12 +71,12 @@ describe("tasks service", () => {
     const done = await updateTask(db, owner, design.id, { status: "DONE", assigneeIds: [] });
     expect(done).toMatchObject({ status: "DONE", assigneeIds: [] });
 
-    expect((await listTasks(db, owner, web.id)).map((t) => [t.name, t.status, t.trackedSeconds])).toEqual(
-      [
-        ["QA", "ACTIVE", 0],
-        ["Visual design", "DONE", 2700],
-      ],
-    );
+    expect(
+      (await listTasks(db, owner, web.id)).map((t) => [t.name, t.status, t.trackedSeconds]),
+    ).toEqual([
+      ["QA", "ACTIVE", 0],
+      ["Visual design", "DONE", 2700],
+    ]);
   });
 
   it("requires assignees to be workspace members", async () => {

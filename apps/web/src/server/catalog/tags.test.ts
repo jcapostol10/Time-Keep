@@ -85,7 +85,9 @@ describe("tags service", () => {
       color: "#123456",
     });
     expect(updated).toMatchObject({ name: "visual", color: "#123456", archived: false });
-    await expect(updateTag(db, scope.workspaceId, design.id, { name: "dev" })).rejects.toMatchObject({
+    await expect(
+      updateTag(db, scope.workspaceId, design.id, { name: "dev" }),
+    ).rejects.toMatchObject({
       code: "CONFLICT",
     });
     await expect(updateTag(db, other.workspaceId, design.id, { name: "x" })).rejects.toMatchObject({
@@ -105,9 +107,9 @@ describe("tags service", () => {
       to: new Date(NOW.getTime() + 3_600_000 * 2),
     });
     expect(rows.map((e) => e.tagIds)).toEqual([[keep.id], []]);
-    expect((await listTags(db, scope.workspaceId, { includeArchived: true })).map((t) => t.name)).toEqual(
-      ["keep"],
-    );
+    expect(
+      (await listTags(db, scope.workspaceId, { includeArchived: true })).map((t) => t.name),
+    ).toEqual(["keep"]);
     await expect(deleteTag(db, other.workspaceId, keep.id)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
