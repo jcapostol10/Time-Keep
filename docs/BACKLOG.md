@@ -9,6 +9,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## App
 
+- [ ] `sign-up-form.tsx` maps `USER_ALREADY_EXISTS` to the email field, but Better Auth 1.7.7 emits `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; moot while `requireEmailVerification` answers a duplicate sign-up with a generic success (predates Phase 2). A refused password-reset send also looks like success, by Better Auth's design, which keeps account existence private.
 - [ ] After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
 - [ ] Timesheet rows added by hand live only for the page visit (templates persist); consider keeping them per week in local storage.
 - [ ] Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands (fast locally, visible on a slow connection). Timesheet cells likewise show the old value until the refetch lands. Patch the range query before the write.
@@ -20,6 +21,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## E2E suite
 
+- [ ] `ci.yml` skips its pull_request job for same-repository PRs (the push already ran). GitHub counts a skipped job as a passing required check, so if branch protection is ever added, require the push run's check explicitly; none exists today.
 - [ ] Against the dev server, three workers occasionally close an open picker mid-test (Next recompiles routes on demand and pushes updates); the production-server run (see the CLAUDE.md commands) is stable. Consider making `pnpm e2e` build and start a production server locally.
 - [ ] The suite runs spec files with 3 workers to stay under 10 minutes on a preview; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). If a new spec writes to the demo tenant, check it against the others or give it its own project in the Playwright config.
 - [ ] Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
@@ -38,7 +40,7 @@ Nothing open.
 - [x] `/tracker-options` called `listTags`, which computed usage counts the picker discards, on every entry write; the pickers now read `listTagOptions`. Done 2026-10-22 ("tags: picker options without usage counts; the Tags page refuses a duplicate").
 - [x] `dateRangeSchema` had no maximum span; a range is now at most a year (366 days). Done 2026-10-22 ("core: a date range is at most a year").
 - [x] The Tags page's "New tag" never reported a duplicate (find-or-create dropped the colour and could return an archived tag); the page now refuses it, naming the archived case, while the picker's inline create still reuses. Done 2026-10-22 ("tags: picker options without usage counts; the Tags page refuses a duplicate").
-- [x] Small cleanups: bulk project changes stamp `updatedAt`; `createTask` is one transaction; `copyWeek` counts days in the zone (`daysBetweenInZone`). Done 2026-10-22 ("entries: bulk project changes stamp updatedAt; createTask is atomic; copyWeek counts days in the zone").
+- [x] Small cleanups: `createTask` and `updateTask` are one transaction each; `copyWeek` counts days in the zone (`daysBetweenInZone`); bulk project changes already stamped `updatedAt` through Drizzle's `$onUpdate` (the item's premise was wrong), and the tests now guard that. Done 2026-10-22 ("entries: bulk project changes stamp updatedAt; createTask is atomic; copyWeek counts days in the zone").
 - [x] `profile.ts` and `team.ts` returned any `Error`'s message to the user; `userErrorMessage` now passes Better Auth's `APIError` through and both modules use it. Done 2026-10-22 ("actions: Better Auth errors pass through the shared mapping; profile and team use it").
 - [x] CI ran only on pull requests and pushes to `main`, so a branch pushed without a PR reached Vercel with a stale lockfile unchecked; it now runs on every push of this repository's branches (the PR trigger stays for forks). Done 2026-10-22 ("ci: run on every push of this repository's branches").
 - [x] A member whose picker still listed a project that was just archived or made private got the server's message on Start, but the picker only refreshed after the next options fetch, and the draft kept the dead project. Done 2026-10-21 ("tracker: a rejected Start refreshes the options and prunes the draft").

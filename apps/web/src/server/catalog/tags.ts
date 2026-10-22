@@ -85,24 +85,30 @@ export async function createTag(
   opts: { onDuplicate: "reuse" | "refuse" } = { onDuplicate: "reuse" },
 ): Promise<TagDTO> {
   const name = input.name.trim();
+  const values = { id: randomUUID(), workspaceId, name, color: input.color ?? pickColor(name) };
   if (opts.onDuplicate === "refuse") {
-    const existing = await db.query.tag.findFirst({
-      where: and(eq(tag.workspaceId, workspaceId), eq(tag.name, name)),
-      columns: { archived: true },
-    });
-    if (existing) {
+    // One insert: a check-then-insert would let a concurrent create slip through as "created".
+    try {
+      await db.insert(tag).values(values);
+    } catch (error) {
+      if (!isUniqueViolation(error, "tag_workspace_name_uq")) throw error;
+      const existing = await db.query.tag.findFirst({
+        where: and(eq(tag.workspaceId, workspaceId), eq(tag.name, name)),
+        columns: { archived: true },
+      });
       throw new CatalogError(
         "CONFLICT",
-        existing.archived
+        existing?.archived
           ? `${DUPLICATE_NAME} It is archived; show archived tags to restore it.`
           : DUPLICATE_NAME,
       );
     }
+  } else {
+    await db
+      .insert(tag)
+      .values(values)
+      .onConflictDoNothing({ target: [tag.workspaceId, tag.name] });
   }
-  await db
-    .insert(tag)
-    .values({ id: randomUUID(), workspaceId, name, color: input.color ?? pickColor(name) })
-    .onConflictDoNothing({ target: [tag.workspaceId, tag.name] });
   const row = await db.query.tag.findFirst({
     where: and(eq(tag.workspaceId, workspaceId), eq(tag.name, name)),
   });

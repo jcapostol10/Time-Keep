@@ -155,33 +155,34 @@ export async function createTask(
 }
 
 export async function updateTask(
-  db: Executor,
+  db: Database,
   viewer: Viewer,
   taskId: string,
   patch: TaskPatch,
 ): Promise<TaskDTO> {
   const row = await requireVisibleTask(db, viewer, taskId);
-  if (patch.assigneeIds !== undefined) {
-    const assigneeIds = [...new Set(patch.assigneeIds)];
-    await assertMembers(db, viewer.workspaceId, assigneeIds);
-    await replaceAssignees(db, taskId, assigneeIds);
-  }
-  if (patch.name !== undefined || patch.status !== undefined) {
-    try {
-      await db
-        .update(task)
-        .set({
-          ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-          ...(patch.status !== undefined ? { status: patch.status } : {}),
-        })
-        .where(eq(task.id, taskId));
-    } catch (error) {
-      if (isUniqueViolation(error, "task_project_name_uq")) {
-        throw new CatalogError("CONFLICT", DUPLICATE_NAME);
+  const assigneeIds = patch.assigneeIds === undefined ? undefined : [...new Set(patch.assigneeIds)];
+  if (assigneeIds) await assertMembers(db, viewer.workspaceId, assigneeIds);
+  // Assignees and the rename land together: a refused name must not leave new assignees behind.
+  await db.transaction(async (tx) => {
+    if (assigneeIds) await replaceAssignees(tx, taskId, assigneeIds);
+    if (patch.name !== undefined || patch.status !== undefined) {
+      try {
+        await tx
+          .update(task)
+          .set({
+            ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+            ...(patch.status !== undefined ? { status: patch.status } : {}),
+          })
+          .where(eq(task.id, taskId));
+      } catch (error) {
+        if (isUniqueViolation(error, "task_project_name_uq")) {
+          throw new CatalogError("CONFLICT", DUPLICATE_NAME);
+        }
+        throw error;
       }
-      throw error;
     }
-  }
+  });
   const usage = await usageByTask(db, row.projectId);
   return toDTO(await requireVisibleTask(db, viewer, taskId), usage.get(taskId));
 }
