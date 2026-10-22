@@ -180,7 +180,10 @@ test.describe("calendar", () => {
     // where an hour no longer fits: the latest start that does is 23:00.
     await dragBlock(page, block(page, "Late, No project, 1:00:00"), 0, 13 * SLOT_PX);
     await waitForSaves(page);
-    await expect(block(page, "Late, No project, 1:00:00")).toHaveCSS("top", `${23 * 4 * SLOT_PX}px`);
+    await expect(block(page, "Late, No project, 1:00:00")).toHaveCSS(
+      "top",
+      `${23 * 4 * SLOT_PX}px`,
+    );
 
     await trackerPage();
     const row = entry(page, "Late");

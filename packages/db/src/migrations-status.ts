@@ -25,7 +25,9 @@ export function readJournal(): JournalEntry[] {
 
 function isUndefinedTable(error: unknown): boolean {
   const cause = (error as { cause?: unknown })?.cause ?? error;
-  return typeof cause === "object" && cause !== null && (cause as { code?: string }).code === "42P01";
+  return (
+    typeof cause === "object" && cause !== null && (cause as { code?: string }).code === "42P01"
+  );
 }
 
 /**

@@ -52,6 +52,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Formatting
+        run: pnpm format:check
+
       # e2e runs against Vercel previews (e2e-preview.yml); Docker serves the
       # integration tests only.
       - name: Start Postgres, Mailpit and object storage
