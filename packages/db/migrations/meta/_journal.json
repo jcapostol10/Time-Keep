@@ -43,6 +43,13 @@
       "when": 1792470085649,
       "tag": "0005_phase2_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792679299883,
+      "tag": "0006_test_email_limit",
+      "breakpoints": true
     }
   ]
 }

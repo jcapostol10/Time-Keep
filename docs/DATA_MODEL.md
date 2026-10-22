@@ -210,6 +210,8 @@ Per-user tracker preferences. The row is created on first save; until then the d
 | reminder_days | smallint[] | `{1,2,3,4,5}` | 0 = Sunday … 6 = Saturday |
 | reminder_start_minutes | smallint | 540 | minutes after local midnight (09:00) |
 | reminder_end_minutes | smallint | 1020 | 17:00 |
+| test_email_sent_at | timestamptz | null | last "Send me a test email" (Profile settings) |
+| test_email_count | smallint | 0 | sends in the day that started at test_email_sent_at; 5 a day, a minute apart |
 | created_at, updated_at | timestamptz | | |
 
 ### timesheet_template

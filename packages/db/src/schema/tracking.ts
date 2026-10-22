@@ -90,6 +90,9 @@ export const userSettings = pgTable("user_settings", {
   /** Minutes since local midnight. */
   reminderStartMinutes: smallint("reminder_start_minutes").notNull().default(540),
   reminderEndMinutes: smallint("reminder_end_minutes").notNull().default(1020),
+  /** The test-email limit (core test-email.ts): the last send and how many that day. */
+  testEmailSentAt: timestamp("test_email_sent_at", { withTimezone: true }),
+  testEmailCount: smallint("test_email_count").notNull().default(0),
   ...timestamps,
 }).enableRLS();
 
@@ -112,7 +115,10 @@ export const timesheetTemplate = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    rows: jsonb("rows").$type<TimesheetTemplateRow[]>().notNull().default(sql`'[]'::jsonb`),
+    rows: jsonb("rows")
+      .$type<TimesheetTemplateRow[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     ...timestamps,
   },
   (t) => [

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AuthCard } from "@/components/auth/auth-card";
+import { ResendVerification } from "@/components/auth/resend-verification";
 
 export const metadata: Metadata = { title: "Check your email" };
 
@@ -50,6 +51,7 @@ export default async function CheckEmailPage({ searchParams }: PageProps<"/check
           {email ? <strong className="font-medium">{email}</strong> : "your email address"}.
         </p>
         <p className="text-muted-foreground text-sm">{copy.hint}</p>
+        {type === "verify" && email ? <ResendVerification email={email} /> : null}
         {process.env.NODE_ENV !== "production" ? (
           <p className="text-muted-foreground text-xs">
             Local dev: emails land in{" "}

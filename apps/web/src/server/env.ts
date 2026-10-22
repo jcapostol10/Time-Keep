@@ -56,23 +56,14 @@ const schema = z.object({
 
 export type Env = z.infer<typeof schema> & { APP_URL: string };
 
-/** Senders that only work before a domain is verified; production must not boot with them. */
-const PLACEHOLDER_SENDER = /@(timekeep\.local|resend\.dev)\b/i;
-
-const schemaWithGuards = schema.superRefine((e, ctx) => {
-  if (e.VERCEL_ENV === "production" && PLACEHOLDER_SENDER.test(e.MAIL_FROM)) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["MAIL_FROM"],
-      message:
-        "MAIL_FROM must use a verified sending domain in production (docs/BACKLOG.md, production email)",
-    });
-  }
-});
-
-/** Parses and validates an environment: process.env in the app, their own in tests. */
+/**
+ * Parses and validates an environment: process.env in the app, their own in
+ * tests. Configuration that only matters for one feature (a placeholder mail
+ * sender) is checked by that feature, never here: a throw from env() would
+ * fail every request of the app, and the build never calls it.
+ */
 export function parseEnv(raw: Record<string, string | undefined>): Env {
-  const parsed = schemaWithGuards.safeParse(raw);
+  const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`);
     throw new Error(`Invalid environment:\n${issues.join("\n")}`);

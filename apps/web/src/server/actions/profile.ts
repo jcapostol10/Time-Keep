@@ -14,7 +14,13 @@ import { headers } from "next/headers";
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
 import { userErrorMessage } from "@/server/actions/errors";
 import { getAuth } from "@/server/auth";
-import { sendEmail } from "@/server/mail";
+import {
+  isTransportError,
+  MailConfigurationError,
+  sendEmail,
+  withoutAddresses,
+} from "@/server/mail";
+import { recordTestEmail } from "@/server/queries/user-settings";
 import { requireSession } from "@/server/session";
 import { deleteObject, objectKeyFromUrl, uploadObject } from "@/server/storage";
 
@@ -40,32 +46,41 @@ export async function updateProfileAction(input: unknown): Promise<ActionResult>
 }
 
 /**
- * Saves the browser's timezone for users who have none yet (Google sign-up
- * does not capture it). Never overwrites a timezone the user chose.
- */
-/**
  * A message to the signed-in person, so they can see that TimeKeep's email
  * reaches them, and so an owner can check a new production sender without
- * creating accounts. Unlike other actions it shows the provider's reason on
- * failure: that reason is the point of the check.
+ * creating accounts. Limited per person (core test-email.ts): each one costs
+ * provider quota. Unlike other actions it shows the provider's reason on
+ * failure, minus any host it names: that reason is the point of the check.
  */
 export async function sendTestEmailAction(): Promise<ActionResult> {
   const { user } = await requireSession("/account");
+  const gate = await recordTestEmail(getDb(), user.id);
+  if (!gate.allowed) return fail(gate.reason);
   try {
-    await sendEmail({
+    const mode = await sendEmail({
       to: user.email,
       subject: "TimeKeep test email",
       title: "Email works",
       intro: `This message confirms that TimeKeep can reach you at ${user.email}.`,
       outro: "Sent from Profile settings. Nothing else to do.",
     });
+    if (mode === "dropped")
+      return fail("Previews only deliver to test addresses; nothing was sent.");
     return ok(undefined);
   } catch (error) {
     console.error("[mail] test email failed", error);
-    return fail(`Could not send: ${error instanceof Error ? error.message : "unknown error"}`);
+    if (error instanceof MailConfigurationError) return fail(error.message);
+    if (isTransportError(error) && error instanceof Error) {
+      return fail(`Could not send: ${withoutAddresses(error.message)}`);
+    }
+    return fail(userErrorMessage(error));
   }
 }
 
+/**
+ * Saves the browser's timezone for users who have none yet (Google sign-up
+ * does not capture it). Never overwrites a timezone the user chose.
+ */
 export async function setTimezoneIfUnsetAction(
   timezone: unknown,
 ): Promise<ActionResult<{ updated: boolean }>> {

@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   DEFAULT_TRACKER_SETTINGS,
+  testEmailAllowance,
   type TrackerSettingsInput,
   WEEK_START_DAYS,
   type WeekStartDay,
@@ -56,4 +57,31 @@ export async function upsertTrackerSettings(
     .returning();
   if (!row) throw new Error("Settings could not be saved");
   return toSettings(row);
+}
+
+/**
+ * Records a test email if the person may send one now, else says why not.
+ * The limit lives in the database: serverless instances share no memory.
+ */
+export async function recordTestEmail(
+  db: Database,
+  userId: string,
+  now = new Date(),
+): Promise<{ allowed: true } | { allowed: false; reason: string }> {
+  const row = await db.query.userSettings.findFirst({
+    where: eq(userSettings.userId, userId),
+    columns: { testEmailSentAt: true, testEmailCount: true },
+  });
+  const verdict = testEmailAllowance({
+    lastSentAt: row?.testEmailSentAt ?? null,
+    countInDay: row?.testEmailCount ?? 0,
+    now,
+  });
+  if (!verdict.allowed) return verdict;
+  const stamp = { testEmailSentAt: now, testEmailCount: verdict.countInDay };
+  await db
+    .insert(userSettings)
+    .values({ userId, ...stamp })
+    .onConflictDoUpdate({ target: userSettings.userId, set: { ...stamp, updatedAt: now } });
+  return { allowed: true };
 }

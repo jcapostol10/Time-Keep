@@ -37,11 +37,7 @@ export function SignUpForm({ googleEnabled, next }: { googleEnabled: boolean; ne
       callbackURL: next,
     });
     if (error) {
-      // A taken address, or mail that could not reach it, belongs under the email field.
-      const field =
-        error.code === "USER_ALREADY_EXISTS" || error.code === "EMAIL_SEND_FAILED"
-          ? "email"
-          : "password";
+      const field = error.code === "USER_ALREADY_EXISTS" ? "email" : "password";
       form.setError(field, { message: authErrorMessage(error) });
       return;
     }

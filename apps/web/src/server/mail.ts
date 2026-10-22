@@ -6,6 +6,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 import { getDb } from "@timekeep/db";
 
 import { env } from "./env";
+import { mailSenderProblem } from "./mail-config";
 import { captureEmail, previewMailMode } from "./mail-capture";
 
 let transporter: Transporter | undefined;
@@ -74,18 +75,31 @@ export function renderEmail(content: EmailContent): { html: string; text: string
   return { html, text };
 }
 
-export async function sendEmail(args: { to: string; subject: string } & EmailContent) {
+/** Production mail with a sender no provider will accept; only sends fail, never the app. */
+export class MailConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MailConfigurationError";
+  }
+}
+
+/** Sends, or on a preview captures or drops the message; says which. */
+export async function sendEmail(
+  args: { to: string; subject: string } & EmailContent,
+): Promise<"sent" | "captured" | "dropped"> {
   const { html, text } = renderEmail(args);
   const mode = previewMailMode(env(), args.to);
   if (mode === "capture") {
     // Preview deployments: store e2e mail instead of sending; e2e reads /api/test/emails.
     await captureEmail(getDb(), { to: args.to, subject: args.subject, html, text });
-    return;
+    return "captured";
   }
   if (mode === "drop") {
     console.warn(`[mail] preview: dropped "${args.subject}" to a non-e2e recipient`);
-    return;
+    return "dropped";
   }
+  const problem = mailSenderProblem(env());
+  if (problem) throw new MailConfigurationError(problem);
   await getTransporter().sendMail({
     from: env().MAIL_FROM,
     to: args.to,
@@ -93,6 +107,45 @@ export async function sendEmail(args: { to: string; subject: string } & EmailCon
     html,
     text,
   });
+  return "sent";
+}
+
+/** nodemailer's errors carry a code (ECONNECTION, EAUTH, EENVELOPE, ...) or the server's response code. */
+export function isTransportError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const e = error as { code?: unknown; responseCode?: unknown };
+  return (
+    (typeof e.code === "string" && /^E[A-Z]+$/.test(e.code)) || typeof e.responseCode === "number"
+  );
+}
+
+/** A provider's message without the hosts it names (an internal address is nobody's business). */
+export function withoutAddresses(message: string): string {
+  return message.replace(/\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/g, "<host>");
+}
+
+/**
+ * The invitation message. The team actions send it themselves: Better Auth
+ * runs its invitation hook in the background and swallows a failure there,
+ * which would look like success to the admin.
+ */
+export function invitationEmail(args: {
+  id: string;
+  appUrl: string;
+  email: string;
+  workspaceName: string;
+  inviterName: string;
+  inviterEmail: string;
+  role: string;
+}): { to: string; subject: string } & EmailContent {
+  return {
+    to: args.email,
+    subject: `${args.inviterName} invited you to ${args.workspaceName} on TimeKeep`,
+    title: `Join ${args.workspaceName}`,
+    intro: `${args.inviterName} (${args.inviterEmail}) invited you to join the workspace "${args.workspaceName}" as ${args.role}.`,
+    cta: { label: "Accept invitation", url: `${args.appUrl}/invite/${args.id}` },
+    outro: "This invitation expires in 7 days.",
+  };
 }
 
 /**
@@ -103,14 +156,14 @@ export async function sendEmail(args: { to: string; subject: string } & EmailCon
 export async function sendEmailOrExplain(
   what: string,
   args: Parameters<typeof sendEmail>[0],
-  send: (args: Parameters<typeof sendEmail>[0]) => Promise<void> = sendEmail,
+  send: (args: Parameters<typeof sendEmail>[0]) => Promise<unknown> = sendEmail,
 ): Promise<void> {
   try {
     await send(args);
   } catch (error) {
     console.error(`[mail] could not send the ${what}`, error);
     throw new APIError("INTERNAL_SERVER_ERROR", {
-      message: `We couldn't send the ${what}. Try again in a minute, or contact support.`,
+      message: `We couldn't send the ${what} right now. Try again later; if it keeps failing, tell your workspace owner.`,
       code: "EMAIL_SEND_FAILED",
     });
   }

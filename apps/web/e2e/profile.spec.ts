@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 import { openUserMenu, signIn } from "./helpers/app";
 import { waitForEmail } from "./helpers/mail";
@@ -32,12 +32,14 @@ test.describe("profile settings", () => {
     await expect(page.getByText("Profile saved")).toBeVisible();
   });
 
-  test("send a test email", async ({ page }) => {
-    await signIn(page, "member2@demo.test");
+  test("send a test email", async ({ page, freshUser }) => {
     await page.goto("/account");
     await page.getByRole("button", { name: "Send me a test email" }).click();
-    await expect(page.getByText("Test email sent to member2@demo.test")).toBeVisible();
-    const message = await waitForEmail("member2@demo.test", { subject: /test email/i });
-    expect(message.Text).toContain("reach you at member2@demo.test");
+    await expect(page.getByText(`Test email sent to ${freshUser.email}`)).toBeVisible();
+    const message = await waitForEmail(freshUser.email, { subject: /test email/i });
+    expect(message.Text).toContain(`reach you at ${freshUser.email}`);
+    // A second one right away is refused: the provider quota is everyone's mail.
+    await page.getByRole("button", { name: "Send me a test email" }).click();
+    await expect(page.getByText(/You can send another test email in/)).toBeVisible();
   });
 });

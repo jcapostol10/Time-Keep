@@ -151,17 +151,10 @@ function buildAuth() {
             fields: { organizationId: "workspaceId" },
           },
         },
-        sendInvitationEmail: async ({ id, email, organization: ws, inviter, role }) => {
-          const url = `${e.APP_URL}/invite/${id}`;
-          await sendEmailOrExplain("invitation email", {
-            to: email,
-            subject: `${inviter.user.name} invited you to ${ws.name} on TimeKeep`,
-            title: `Join ${ws.name}`,
-            intro: `${inviter.user.name} (${inviter.user.email}) invited you to join the workspace "${ws.name}" as ${role}.`,
-            cta: { label: "Accept invitation", url },
-            outro: "This invitation expires in 7 days.",
-          });
-        },
+        // The team actions send the invitation themselves (mail.ts invitationEmail):
+        // Better Auth runs this hook in the background and swallows its errors,
+        // so a refused send would look like success to the admin.
+        sendInvitationEmail: async () => {},
         organizationHooks: {
           afterCreateOrganization: async ({ organization: ws }) => {
             await ensureWorkspaceSettings(db, ws.id);
