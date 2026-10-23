@@ -2,19 +2,31 @@
 
 import { inviteMemberSchema } from "@timekeep/core";
 import { and, eq, getDb, invitation, membership, user } from "@timekeep/db";
-import { APIError } from "better-auth/api";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
+import { userErrorMessage } from "@/server/actions/errors";
 import { getAuth } from "@/server/auth";
-import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
+import { env } from "@/server/env";
+import { invitationEmail, sendEmailOrExplain } from "@/server/mail";
+import { requireWorkspaceAccess } from "@/server/workspace-access";
 
-function errorMessage(error: unknown): string {
-  if (error instanceof WorkspaceAccessError) return error.message;
-  if (error instanceof APIError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong.";
+function invitationMessage(
+  ctx: Awaited<ReturnType<typeof requireWorkspaceAccess>>,
+  id: string,
+  email: string,
+  role: string,
+) {
+  return invitationEmail({
+    id,
+    appUrl: env().APP_URL,
+    email,
+    workspaceName: ctx.workspace.name,
+    inviterName: ctx.user.name,
+    inviterEmail: ctx.user.email,
+    role,
+  });
 }
 
 export async function inviteMemberAction(
@@ -48,11 +60,24 @@ export async function inviteMemberAction(
         resend: true,
       },
     });
+    try {
+      await sendEmailOrExplain(
+        "invitation email",
+        invitationMessage(ctx, result.id, result.email, result.role),
+      );
+    } catch (error) {
+      // Nothing reached the invitee: take the invitation back so the admin can retry.
+      await getAuth().api.cancelInvitation({
+        headers: await headers(),
+        body: { invitationId: result.id },
+      });
+      throw error;
+    }
 
     revalidatePath(`/w/${slug}/team`);
     return ok({ invitationId: result.id });
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -75,7 +100,7 @@ export async function cancelInvitationAction(
     revalidatePath(`/w/${slug}/team`);
     return ok(undefined);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -90,7 +115,7 @@ export async function resendInvitationAction(
     });
     if (!row || row.status !== "pending") return fail("Invitation not found.");
 
-    await getAuth().api.createInvitation({
+    const result = await getAuth().api.createInvitation({
       headers: await headers(),
       body: {
         email: row.email,
@@ -99,10 +124,14 @@ export async function resendInvitationAction(
         resend: true,
       },
     });
+    await sendEmailOrExplain(
+      "invitation email",
+      invitationMessage(ctx, result.id, result.email, result.role),
+    );
 
     revalidatePath(`/w/${slug}/team`);
     return ok(undefined);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }

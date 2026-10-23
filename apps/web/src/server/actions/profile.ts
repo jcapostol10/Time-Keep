@@ -7,13 +7,20 @@ import {
   updateProfileSchema,
 } from "@timekeep/core";
 import { eq, getDb, user } from "@timekeep/db";
-import { APIError } from "better-auth/api";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
+import { userErrorMessage } from "@/server/actions/errors";
 import { getAuth } from "@/server/auth";
+import {
+  isTransportError,
+  MailConfigurationError,
+  sendEmail,
+  withoutAddresses,
+} from "@/server/mail";
+import { recordTestEmail } from "@/server/queries/user-settings";
 import { requireSession } from "@/server/session";
 import { deleteObject, objectKeyFromUrl, uploadObject } from "@/server/storage";
 
@@ -23,12 +30,6 @@ const EXTENSIONS: Record<(typeof AVATAR_MIME_TYPES)[number], string> = {
   "image/webp": "webp",
   "image/gif": "gif",
 };
-
-function errorMessage(error: unknown): string {
-  if (error instanceof APIError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Something went wrong.";
-}
 
 export async function updateProfileAction(input: unknown): Promise<ActionResult> {
   await requireSession("/account");
@@ -40,7 +41,39 @@ export async function updateProfileAction(input: unknown): Promise<ActionResult>
     revalidatePath("/", "layout");
     return ok(undefined);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
+  }
+}
+
+/**
+ * A message to the signed-in person, so they can see that TimeKeep's email
+ * reaches them, and so an owner can check a new production sender without
+ * creating accounts. Limited per person (core test-email.ts): each one costs
+ * provider quota. Unlike other actions it shows the provider's reason on
+ * failure, minus any host it names: that reason is the point of the check.
+ */
+export async function sendTestEmailAction(): Promise<ActionResult> {
+  const { user } = await requireSession("/account");
+  const gate = await recordTestEmail(getDb(), user.id);
+  if (!gate.allowed) return fail(gate.reason);
+  try {
+    const mode = await sendEmail({
+      to: user.email,
+      subject: "TimeKeep test email",
+      title: "Email works",
+      intro: `This message confirms that TimeKeep can reach you at ${user.email}.`,
+      outro: "Sent from Profile settings. Nothing else to do.",
+    });
+    if (mode === "dropped")
+      return fail("Previews only deliver to test addresses; nothing was sent.");
+    return ok(undefined);
+  } catch (error) {
+    console.error("[mail] test email failed", error);
+    if (error instanceof MailConfigurationError) return fail(error.message);
+    if (isTransportError(error) && error instanceof Error) {
+      return fail(`Could not send: ${withoutAddresses(error.message)}`);
+    }
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -64,7 +97,7 @@ export async function setTimezoneIfUnsetAction(
     revalidatePath("/", "layout");
     return ok({ updated: true });
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -99,7 +132,7 @@ export async function uploadAvatarAction(
     revalidatePath("/", "layout");
     return ok({ url });
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 
@@ -112,7 +145,7 @@ export async function removeAvatarAction(): Promise<ActionResult> {
     revalidatePath("/", "layout");
     return ok(undefined);
   } catch (error) {
-    return fail(errorMessage(error));
+    return fail(userErrorMessage(error));
   }
 }
 

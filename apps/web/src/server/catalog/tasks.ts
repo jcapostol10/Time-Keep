@@ -125,7 +125,7 @@ export async function listTasks(
 }
 
 export async function createTask(
-  db: Executor,
+  db: Database,
   viewer: Viewer,
   projectId: string,
   input: TaskInput,
@@ -134,51 +134,55 @@ export async function createTask(
   const assigneeIds = [...new Set(input.assigneeIds)];
   await assertMembers(db, viewer.workspaceId, assigneeIds);
   const id = randomUUID();
-  try {
-    await db.insert(task).values({
-      id,
-      workspaceId: viewer.workspaceId,
-      projectId,
-      name: input.name.trim(),
-    });
-  } catch (error) {
-    if (isUniqueViolation(error, "task_project_name_uq")) {
-      throw new CatalogError("CONFLICT", DUPLICATE_NAME);
-    }
-    throw error;
-  }
-  await replaceAssignees(db, id, assigneeIds);
-  return toDTO(await requireVisibleTask(db, viewer, id), undefined);
-}
-
-export async function updateTask(
-  db: Executor,
-  viewer: Viewer,
-  taskId: string,
-  patch: TaskPatch,
-): Promise<TaskDTO> {
-  const row = await requireVisibleTask(db, viewer, taskId);
-  if (patch.assigneeIds !== undefined) {
-    const assigneeIds = [...new Set(patch.assigneeIds)];
-    await assertMembers(db, viewer.workspaceId, assigneeIds);
-    await replaceAssignees(db, taskId, assigneeIds);
-  }
-  if (patch.name !== undefined || patch.status !== undefined) {
+  // The task and its assignees land together or not at all.
+  return db.transaction(async (tx) => {
     try {
-      await db
-        .update(task)
-        .set({
-          ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-          ...(patch.status !== undefined ? { status: patch.status } : {}),
-        })
-        .where(eq(task.id, taskId));
+      await tx.insert(task).values({
+        id,
+        workspaceId: viewer.workspaceId,
+        projectId,
+        name: input.name.trim(),
+      });
     } catch (error) {
       if (isUniqueViolation(error, "task_project_name_uq")) {
         throw new CatalogError("CONFLICT", DUPLICATE_NAME);
       }
       throw error;
     }
-  }
+    await replaceAssignees(tx, id, assigneeIds);
+    return toDTO(await requireVisibleTask(tx, viewer, id), undefined);
+  });
+}
+
+export async function updateTask(
+  db: Database,
+  viewer: Viewer,
+  taskId: string,
+  patch: TaskPatch,
+): Promise<TaskDTO> {
+  const row = await requireVisibleTask(db, viewer, taskId);
+  const assigneeIds = patch.assigneeIds === undefined ? undefined : [...new Set(patch.assigneeIds)];
+  if (assigneeIds) await assertMembers(db, viewer.workspaceId, assigneeIds);
+  // Assignees and the rename land together: a refused name must not leave new assignees behind.
+  await db.transaction(async (tx) => {
+    if (assigneeIds) await replaceAssignees(tx, taskId, assigneeIds);
+    if (patch.name !== undefined || patch.status !== undefined) {
+      try {
+        await tx
+          .update(task)
+          .set({
+            ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+            ...(patch.status !== undefined ? { status: patch.status } : {}),
+          })
+          .where(eq(task.id, taskId));
+      } catch (error) {
+        if (isUniqueViolation(error, "task_project_name_uq")) {
+          throw new CatalogError("CONFLICT", DUPLICATE_NAME);
+        }
+        throw error;
+      }
+    }
+  });
   const usage = await usageByTask(db, row.projectId);
   return toDTO(await requireVisibleTask(db, viewer, taskId), usage.get(taskId));
 }

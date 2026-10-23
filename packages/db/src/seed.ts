@@ -192,12 +192,22 @@ const DEMO_PROJECTS: {
   visibility: "PUBLIC" | "PRIVATE";
   tasks: string[];
 }[] = [
-  { name: "Website redesign", client: 0, visibility: "PUBLIC", tasks: ["Design", "Development", "QA"] },
+  {
+    name: "Website redesign",
+    client: 0,
+    visibility: "PUBLIC",
+    tasks: ["Design", "Development", "QA"],
+  },
   { name: "Mobile app", client: 1, visibility: "PRIVATE", tasks: ["iOS", "Android"] },
   { name: "Internal", client: null, visibility: "PUBLIC", tasks: ["Meetings", "Admin"] },
 ];
 /** member2 is left off the private project so the demo tenant has a project a member cannot see. */
-const PRIVATE_PROJECT_MEMBERS = ["owner@demo.test", "admin@demo.test", "manager@demo.test", "member1@demo.test"];
+const PRIVATE_PROJECT_MEMBERS = [
+  "owner@demo.test",
+  "admin@demo.test",
+  "manager@demo.test",
+  "member1@demo.test",
+];
 const DEMO_TAGS = ["design", "dev", "meeting", "review"] as const;
 const DEMO_ENTRY_KINDS: {
   description: string;

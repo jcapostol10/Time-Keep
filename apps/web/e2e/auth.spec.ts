@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { signIn, signOut, signUpAndVerify, uniqueEmail } from "./helpers/app";
-import { extractAppLink, waitForEmail } from "./helpers/mail";
+import { deleteAllMessages, extractAppLink, waitForEmail } from "./helpers/mail";
 
 test.describe("authentication", () => {
   test("sign up, verify email, land in a personal workspace, sign out and back in", async ({
@@ -38,6 +38,23 @@ test.describe("authentication", () => {
     await expect(page.getByText("Please verify your email address first.")).toBeVisible();
     await page.getByRole("button", { name: "Resend verification email" }).click();
     await expect(page.getByText("Verification email sent")).toBeVisible();
+  });
+
+  test("the check-email page resends the verification email", async ({ page }) => {
+    const email = uniqueEmail("again");
+    await page.goto("/sign-up");
+    await page.getByLabel("Full name").fill("Again Person");
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill("password123");
+    await page.getByRole("button", { name: "Create account" }).click();
+    await expect(page).toHaveURL(/\/check-email\?type=verify/);
+    await waitForEmail(email, { subject: /verify/i });
+    await deleteAllMessages();
+
+    // Nothing arrived? Resend from here reports a refused send, which sign-up cannot.
+    await page.getByRole("button", { name: "Resend verification email" }).click();
+    await expect(page.getByText("Verification email sent again")).toBeVisible();
+    await waitForEmail(email, { subject: /verify/i });
   });
 
   test("magic link signs an existing user in", async ({ page }) => {

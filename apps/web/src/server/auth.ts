@@ -11,7 +11,7 @@ import { ac, roles } from "@/lib/permissions";
 
 import { trustedOrigins } from "./app-url";
 import { env } from "./env";
-import { sendEmail } from "./mail";
+import { sendEmailOrExplain } from "./mail";
 import { createWorkspace, ensureWorkspaceSettings } from "./workspaces";
 
 const ONE_DAY = 60 * 60 * 24;
@@ -61,7 +61,7 @@ function buildAuth() {
       minPasswordLength: 8,
       requireEmailVerification: true,
       sendResetPassword: async ({ user, url }) => {
-        await sendEmail({
+        await sendEmailOrExplain("password reset email", {
           to: user.email,
           subject: "Reset your TimeKeep password",
           title: "Reset your password",
@@ -77,7 +77,7 @@ function buildAuth() {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
-        await sendEmail({
+        await sendEmailOrExplain("verification email", {
           to: user.email,
           subject: "Verify your email for TimeKeep",
           title: "Confirm your email address",
@@ -118,7 +118,7 @@ function buildAuth() {
       magicLink({
         expiresIn: 60 * 15,
         sendMagicLink: async ({ email, url }) => {
-          await sendEmail({
+          await sendEmailOrExplain("sign-in link", {
             to: email,
             subject: "Your TimeKeep sign-in link",
             title: "Sign in to TimeKeep",
@@ -151,17 +151,10 @@ function buildAuth() {
             fields: { organizationId: "workspaceId" },
           },
         },
-        sendInvitationEmail: async ({ id, email, organization: ws, inviter, role }) => {
-          const url = `${e.APP_URL}/invite/${id}`;
-          await sendEmail({
-            to: email,
-            subject: `${inviter.user.name} invited you to ${ws.name} on TimeKeep`,
-            title: `Join ${ws.name}`,
-            intro: `${inviter.user.name} (${inviter.user.email}) invited you to join the workspace "${ws.name}" as ${role}.`,
-            cta: { label: "Accept invitation", url },
-            outro: "This invitation expires in 7 days.",
-          });
-        },
+        // The team actions send the invitation themselves (mail.ts invitationEmail):
+        // Better Auth runs this hook in the background and swallows its errors,
+        // so a refused send would look like success to the admin.
+        sendInvitationEmail: async () => {},
         organizationHooks: {
           afterCreateOrganization: async ({ organization: ws }) => {
             await ensureWorkspaceSettings(db, ws.id);

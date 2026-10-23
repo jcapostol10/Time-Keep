@@ -1,3 +1,4 @@
+import { APIError } from "better-auth/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CatalogError } from "../catalog/errors";
@@ -17,6 +18,10 @@ describe("userErrorMessage", () => {
     );
     expect(userErrorMessage(new TimeEntryError("INVALID", "This project is archived."))).toBe(
       "This project is archived.",
+    );
+    // Better Auth's own errors are written for the person (wrong password, expired link).
+    expect(userErrorMessage(new APIError("BAD_REQUEST", { message: "Invalid password" }))).toBe(
+      "Invalid password",
     );
   });
 

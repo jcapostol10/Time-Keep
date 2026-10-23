@@ -74,7 +74,8 @@ export function ClientDialog({
     if (!result.ok) {
       const nameError = result.fieldErrors?.name?.[0];
       if (nameError) form.setError("name", { message: nameError });
-      else if (/already exists/.test(result.error)) form.setError("name", { message: result.error });
+      else if (/already exists/.test(result.error))
+        form.setError("name", { message: result.error });
       else toast.error(result.error);
       return;
     }
@@ -173,7 +174,9 @@ export function ClientDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-muted-foreground text-xs">Used for invoicing in a later phase.</p>
+                  <p className="text-muted-foreground text-xs">
+                    Used for invoicing in a later phase.
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}

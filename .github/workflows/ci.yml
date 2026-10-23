@@ -1,8 +1,12 @@
 name: CI
 
+# Every push to a branch of this repository runs CI, so a stale lockfile or a
+# failing test shows up here before a Vercel build or a preview run. The
+# pull_request trigger is for forks, which run without secrets; a PR from this
+# repository's own branch is already covered by its push.
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
 
 concurrency:
@@ -12,6 +16,7 @@ concurrency:
 jobs:
   ci:
     name: lint · typecheck · unit · integration
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -46,6 +51,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Formatting
+        run: pnpm format:check
 
       # e2e runs against Vercel previews (e2e-preview.yml); Docker serves the
       # integration tests only.

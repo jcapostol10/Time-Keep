@@ -21,12 +21,13 @@ import { requireWorkspaceAccess } from "@/server/workspace-access";
 export async function createTagAction(
   slug: string,
   input: unknown,
+  onDuplicate: "reuse" | "refuse" = "reuse",
 ): Promise<ActionResult<EntryTag>> {
   try {
     const ctx = await requireWorkspaceAccess(slug, "admin");
     const parsed = tagInputSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const created = await createTag(getDb(), ctx.workspace.id, parsed.data);
+    const created = await createTag(getDb(), ctx.workspace.id, parsed.data, { onDuplicate });
     return ok({ id: created.id, name: created.name, color: created.color });
   } catch (error) {
     return fail(userErrorMessage(error));

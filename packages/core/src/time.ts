@@ -1,5 +1,5 @@
 import { TZDate } from "@date-fns/tz";
-import { addDays, format, startOfDay, startOfWeek } from "date-fns";
+import { addDays, format, startOfDay, startOfWeek, differenceInCalendarDays } from "date-fns";
 
 import type { TimeFormat, WeekStartDay } from "./schemas";
 
@@ -140,4 +140,9 @@ export function monthBoundsInZone(instant: Date, tz: string): { monthStart: Date
   const start = new TZDate(local.getFullYear(), local.getMonth(), 1, tz);
   const end = new TZDate(local.getFullYear(), local.getMonth() + 1, 1, tz);
   return { monthStart: new Date(start.getTime()), monthEnd: new Date(end.getTime()) };
+}
+
+/** Whole local days from `from` to `to` in the zone (negative when `to` is earlier); DST-safe. */
+export function daysBetweenInZone(from: Date, to: Date, tz: string): number {
+  return differenceInCalendarDays(new TZDate(to, tz), new TZDate(from, tz));
 }

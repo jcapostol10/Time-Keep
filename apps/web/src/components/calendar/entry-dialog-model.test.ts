@@ -23,7 +23,10 @@ describe("entry dialog patch", () => {
   });
 
   it("sends the project together with the task, since a task implies its project", () => {
-    expect(draftChanges(base, { ...base, taskId: "t2" })).toEqual({ projectId: "p1", taskId: "t2" });
+    expect(draftChanges(base, { ...base, taskId: "t2" })).toEqual({
+      projectId: "p1",
+      taskId: "t2",
+    });
     expect(draftChanges(base, { ...base, projectId: null, taskId: null })).toEqual({
       projectId: null,
       taskId: null,

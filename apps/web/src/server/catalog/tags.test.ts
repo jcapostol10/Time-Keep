@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../../test/db";
 import { createManualEntry, type EntryScope, listEntriesInRange } from "../time-entries";
-import { createTag, deleteTag, listTags, updateTag } from "./tags";
+import { createTag, deleteTag, listTagOptions, listTags, updateTag } from "./tags";
 
 const handle = connectTestDb();
 const db = handle.db;
@@ -56,6 +56,27 @@ describe("tags service", () => {
     expect(await listTags(db, other.workspaceId, { includeArchived: true })).toEqual([]);
   });
 
+  it("lists picker options as id, name and colour, archived excluded, no usage counts", async () => {
+    const beta = await createTag(db, scope.workspaceId, { name: "beta" });
+    const alpha = await createTag(db, scope.workspaceId, { name: "alpha" });
+    await updateTag(db, scope.workspaceId, beta.id, { archived: true });
+    expect(await listTagOptions(db, scope.workspaceId)).toEqual([
+      { id: alpha.id, name: "alpha", color: alpha.color },
+    ]);
+  });
+
+  it("the tags page refuses a duplicate name; the picker reuses it", async () => {
+    const first = await createTag(db, scope.workspaceId, { name: "urgent", color: "#112233" });
+    expect((await createTag(db, scope.workspaceId, { name: "urgent" })).id).toBe(first.id);
+    await expect(
+      createTag(db, scope.workspaceId, { name: "urgent" }, { onDuplicate: "refuse" }),
+    ).rejects.toMatchObject({ code: "CONFLICT", message: "A tag with this name already exists." });
+    await updateTag(db, scope.workspaceId, first.id, { archived: true });
+    await expect(
+      createTag(db, scope.workspaceId, { name: "urgent" }, { onDuplicate: "refuse" }),
+    ).rejects.toThrow(/archived/);
+  });
+
   it("renames, recolours and archives; names stay unique", async () => {
     const design = await createTag(db, scope.workspaceId, { name: "design" });
     await createTag(db, scope.workspaceId, { name: "dev" });
@@ -64,7 +85,9 @@ describe("tags service", () => {
       color: "#123456",
     });
     expect(updated).toMatchObject({ name: "visual", color: "#123456", archived: false });
-    await expect(updateTag(db, scope.workspaceId, design.id, { name: "dev" })).rejects.toMatchObject({
+    await expect(
+      updateTag(db, scope.workspaceId, design.id, { name: "dev" }),
+    ).rejects.toMatchObject({
       code: "CONFLICT",
     });
     await expect(updateTag(db, other.workspaceId, design.id, { name: "x" })).rejects.toMatchObject({
@@ -84,9 +107,9 @@ describe("tags service", () => {
       to: new Date(NOW.getTime() + 3_600_000 * 2),
     });
     expect(rows.map((e) => e.tagIds)).toEqual([[keep.id], []]);
-    expect((await listTags(db, scope.workspaceId, { includeArchived: true })).map((t) => t.name)).toEqual(
-      ["keep"],
-    );
+    expect(
+      (await listTags(db, scope.workspaceId, { includeArchived: true })).map((t) => t.name),
+    ).toEqual(["keep"]);
     await expect(deleteTag(db, other.workspaceId, keep.id)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });

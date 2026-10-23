@@ -1,7 +1,15 @@
 import { relations } from "drizzle-orm";
 
 import { account, session, user } from "./auth";
-import { client, project, projectFavorite, projectMember, tag, task, taskAssignee } from "./catalog";
+import {
+  client,
+  project,
+  projectFavorite,
+  projectMember,
+  tag,
+  task,
+  taskAssignee,
+} from "./catalog";
 import { timeEntry, timeEntryTag, timesheetTemplate, userSettings } from "./tracking";
 import { invitation, membership, workspace, workspaceSettings } from "./workspace";
 

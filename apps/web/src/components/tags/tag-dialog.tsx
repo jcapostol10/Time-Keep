@@ -59,7 +59,7 @@ export function TagDialog({
     const payload = { ...values, color: effectiveColor };
     const result = tag
       ? await updateTagAction(slug, tag.id, payload)
-      : await createTagAction(slug, payload);
+      : await createTagAction(slug, payload, "refuse");
     if (!result.ok) {
       if (/already exists/.test(result.error)) form.setError("name", { message: result.error });
       else toast.error(result.error);

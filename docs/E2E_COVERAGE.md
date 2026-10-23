@@ -13,6 +13,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Sign up with email and password, verify the email, land in a personal workspace — `auth.spec.ts` › "sign up, verify email, land in a personal workspace, sign out and back in"
 - [x] Sign out and sign back in with email and password — `auth.spec.ts` › "sign up, verify email, land in a personal workspace, sign out and back in"
 - [x] Unverified users cannot sign in and can resend the verification email — `auth.spec.ts` › "unverified users cannot sign in and can resend the verification email"
+- [x] Resend the verification email from the check-email page — `auth.spec.ts` › "the check-email page resends the verification email"
 - [x] Sign in with a magic link — `auth.spec.ts` › "magic link signs an existing user in"
 - [x] Reset a forgotten password from an emailed link — `auth.spec.ts` › "forgot password sends a reset link that sets a new password"
 - [x] Protected pages redirect to sign-in and return to the original page afterwards — `auth.spec.ts` › "protected routes redirect to sign-in and preserve the destination"
@@ -38,6 +39,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [ ] Avatar upload rejects an image over the size limit — gap
 - [ ] Change date format, time format and week start — gap
 - [ ] Save timer settings (idle detection, Pomodoro, reminders) and see them after a reload — gap
+- [x] Send yourself a test email from Profile settings — `profile.spec.ts` › "send a test email"
 
 ## Time Tracker: timer bar
 
@@ -136,6 +138,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Tags
 
+- [x] A duplicate tag name is refused on the Tags page (the picker's inline create reuses it) — `tags.spec.ts` › "a duplicate tag name is refused on the Tags page"
 - [x] Create a tag — `tags.spec.ts` › "create and rename a tag"
 - [x] Rename a tag — `tags.spec.ts` › "create and rename a tag"
 - [x] An archived tag stays on entries but cannot be added — `tags.spec.ts` › "an archived tag stays on entries but cannot be added"

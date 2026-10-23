@@ -982,7 +982,11 @@ describe("time entries service", () => {
       const web = await createProject(db, scope, { name: "Web" });
       const app = await createProject(db, scope, { name: "App" });
       const design = await addTask(web.id, "Design");
-      const mine = await createManualEntry(db, scope, manual({ projectId: web.id, taskId: design }));
+      const mine = await createManualEntry(
+        db,
+        scope,
+        manual({ projectId: web.id, taskId: design }),
+      );
       const theirs = await createManualEntry(db, memberScope, manual({ projectId: web.id }));
       await createManualEntry(db, scope, manual({ projectId: app.id }, 60));
 
@@ -991,6 +995,9 @@ describe("time entries service", () => {
       expect(await countProjectEntries(db, scope.workspaceId, web.id)).toBe(0);
       const movedMine = (await range(scope)).find((e) => e.id === mine.id);
       expect(movedMine).toMatchObject({ projectId: app.id, taskId: null, task: null });
+      expect(new Date(movedMine!.updatedAt).getTime()).toBeGreaterThan(
+        new Date(mine.updatedAt).getTime(),
+      );
       expect((await range(memberScope)).map((e) => [e.id, e.projectId])).toEqual([
         [theirs.id, app.id],
       ]);
@@ -1003,7 +1010,16 @@ describe("time entries service", () => {
       await createManualEntry(db, memberScope, manual({ projectId: web.id }));
       const kept = await createManualEntry(db, scope, manual({}, 60));
 
+      const stampsOf = () =>
+        db
+          .select({ id: timeEntry.id, updatedAt: timeEntry.updatedAt })
+          .from(timeEntry)
+          .where(eq(timeEntry.projectId, web.id));
+      const before = new Map((await stampsOf()).map((r) => [r.id, r.updatedAt.getTime()]));
       expect(await softDeleteProjectEntries(db, scope.workspaceId, web.id)).toBe(2);
+      const after = await stampsOf();
+      expect(after).toHaveLength(2);
+      expect(after.every((r) => r.updatedAt.getTime() > (before.get(r.id) ?? Infinity))).toBe(true);
       expect((await range(scope)).map((r) => r.id)).toEqual([kept.id]);
       expect(await range(memberScope)).toEqual([]);
     });
@@ -1011,9 +1027,18 @@ describe("time entries service", () => {
     it("the DTO carries the task and the project's client name", async () => {
       const web = await createProject(db, scope, { name: "Web" });
       const design = await addTask(web.id, "Design");
-      const entry = await createManualEntry(db, scope, manual({ projectId: web.id, taskId: design }));
+      const entry = await createManualEntry(
+        db,
+        scope,
+        manual({ projectId: web.id, taskId: design }),
+      );
       expect(entry.task).toEqual({ id: design, name: "Design" });
-      expect(entry.project).toEqual({ id: web.id, name: "Web", color: web.color, clientName: null });
+      expect(entry.project).toEqual({
+        id: web.id,
+        name: "Web",
+        color: web.color,
+        clientName: null,
+      });
       const { started } = await continueEntry(db, scope, entry.id, at(NOW, hours(2)));
       expect(started.task).toEqual({ id: design, name: "Design" });
     });

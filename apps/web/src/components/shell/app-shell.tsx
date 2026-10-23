@@ -56,7 +56,11 @@ export function AppShell({ user, workspace, workspaces, children }: AppShellProp
               <div className="flex h-14 items-center border-b px-5">
                 <Logo />
               </div>
-              <SidebarNav slug={workspace.slug} role={workspace.role} onNavigate={() => setMobileOpen(false)} />
+              <SidebarNav
+                slug={workspace.slug}
+                role={workspace.role}
+                onNavigate={() => setMobileOpen(false)}
+              />
             </SheetContent>
           </Sheet>
 
