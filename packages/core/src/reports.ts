@@ -340,3 +340,46 @@ export function buildWeekly(
   const dayTotals = dayKeys.map((_, i) => result.reduce((n, r) => n + (r.days[i] ?? 0), 0));
   return { rows: result, dayTotals, total: dayTotals.reduce((n, d) => n + d, 0) };
 }
+
+/** Every bucket of a range in order, empty ones included, so a series never skips a quiet day. */
+export function bucketKeys(
+  from: Date,
+  to: Date,
+  bucket: Bucket,
+  prefs: Pick<ViewerPrefs, "timezone" | "weekStart">,
+): { key: string; label: string }[] {
+  const tz = prefs.timezone;
+  const dayLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    month: "short",
+    day: "numeric",
+  });
+  const monthLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    month: "short",
+    year: "numeric",
+  });
+  const out: { key: string; label: string }[] = [];
+  if (bucket === "day") {
+    for (let d = startOfDayInZone(from, tz); d < to; d = addDaysInZone(d, 1, tz)) {
+      out.push({ key: localDateKey(d, tz), label: dayLabel.format(d) });
+    }
+  } else if (bucket === "week") {
+    for (
+      let d = weekBounds(from, tz, prefs.weekStart).weekStart;
+      d < to;
+      d = addDaysInZone(d, 7, tz)
+    ) {
+      out.push({ key: localDateKey(d, tz), label: dayLabel.format(d) });
+    }
+  } else {
+    for (
+      let d = monthBoundsInZone(from, tz).monthStart;
+      d < to;
+      d = monthBoundsInZone(d, tz).monthEnd
+    ) {
+      out.push({ key: localDateKey(d, tz).slice(0, 7), label: monthLabel.format(d) });
+    }
+  }
+  return out;
+}

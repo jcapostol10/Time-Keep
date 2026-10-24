@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   bucketFor,
+  bucketKeys,
   buildWeekly,
   type GroupKey,
   groupRows,
@@ -291,5 +292,43 @@ describe("canReadTeam", () => {
     expect(canReadTeam("admin")).toBe(true);
     expect(canReadTeam("manager")).toBe(true);
     expect(canReadTeam("member")).toBe(false);
+  });
+});
+
+describe("bucketKeys", () => {
+  it("lists every bucket of the range, empty ones included, with labels", () => {
+    const days = bucketKeys(
+      new Date("2026-03-01T16:00:00.000Z"),
+      new Date("2026-03-15T16:00:00.000Z"),
+      "day",
+      MANILA,
+    );
+    expect(days).toHaveLength(14);
+    expect(days[0]).toEqual({ key: "2026-03-02", label: "Mar 2" });
+    expect(days[13]).toEqual({ key: "2026-03-15", label: "Mar 15" });
+    const weeks = bucketKeys(
+      new Date("2026-03-01T16:00:00.000Z"),
+      new Date("2026-04-05T16:00:00.000Z"),
+      "week",
+      MANILA,
+    );
+    expect(weeks.map((w) => w.key)).toEqual([
+      "2026-03-02",
+      "2026-03-09",
+      "2026-03-16",
+      "2026-03-23",
+      "2026-03-30",
+    ]);
+    const months = bucketKeys(
+      new Date("2025-12-31T16:00:00.000Z"),
+      new Date("2026-03-31T16:00:00.000Z"),
+      "month",
+      MANILA,
+    );
+    expect(months).toEqual([
+      { key: "2026-01", label: "Jan 2026" },
+      { key: "2026-02", label: "Feb 2026" },
+      { key: "2026-03", label: "Mar 2026" },
+    ]);
   });
 });
