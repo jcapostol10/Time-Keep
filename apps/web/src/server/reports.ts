@@ -41,6 +41,7 @@ import {
   user,
 } from "@timekeep/db";
 import type { SQL } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import type {
   DetailedCursor,
@@ -65,6 +66,11 @@ import { listMembers } from "./queries/team";
  * Grouping keys and sort columns come from fixed vocabularies and reach SQL
  * as ordinals or columns, never as text from a URL. Members only ever see
  * their own time; team readers (owner, admin, manager) choose whose.
+ *
+ * Every query joins project, client, task and user the same way (spelled
+ * out per select: a generic helper would erase Drizzle's row types); the
+ * tag join is added only when tags are a grouping key, since it multiplies
+ * rows.
  */
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
@@ -79,7 +85,7 @@ function escapeLike(text: string): string {
 }
 
 /** `ids` may carry NONE_ID, meaning rows where the column is null. */
-function idFilter(column: SQL | (typeof timeEntry)["projectId"], ids: string[]): SQL {
+function idFilter(column: AnyPgColumn, ids: string[]): SQL {
   const real = ids.filter((id) => id !== NONE_ID);
   const parts: SQL[] = [];
   if (real.length > 0) parts.push(inArray(column, real));
@@ -91,11 +97,10 @@ function tagFilter(ids: string[], mode: "and" | "or"): SQL {
   const real = ids.filter((id) => id !== NONE_ID);
   const none = sql`not exists (select 1 from ${timeEntryTag} where ${timeEntryTag.timeEntryId} = ${timeEntry.id})`;
   if (real.length === 0) return none;
-  const matching = sql`select 1 from ${timeEntryTag} where ${timeEntryTag.timeEntryId} = ${timeEntry.id} and ${inArray(timeEntryTag.tagId, real)}`;
   const main =
     mode === "and"
       ? sql`(select count(distinct ${timeEntryTag.tagId}) from ${timeEntryTag} where ${timeEntryTag.timeEntryId} = ${timeEntry.id} and ${inArray(timeEntryTag.tagId, real)}) = ${real.length}`
-      : sql`exists (${matching})`;
+      : sql`exists (select 1 from ${timeEntryTag} where ${timeEntryTag.timeEntryId} = ${timeEntry.id} and ${inArray(timeEntryTag.tagId, real)})`;
   return ids.includes(NONE_ID) ? or(main, none)! : main;
 }
 
@@ -127,23 +132,6 @@ const DURATION = sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::int
 const BILLABLE = sql<number>`coalesce(sum(case when ${timeEntry.billable} then ${timeEntry.durationSeconds} else 0 end), 0)::int`;
 const NON_BILLABLE = sql<number>`coalesce(sum(case when ${timeEntry.billable} then 0 else ${timeEntry.durationSeconds} end), 0)::int`;
 const COUNT = sql<number>`count(*)::int`;
-
-/** Joins every report reads; the tag join only when asked (it multiplies rows). */
-function joined<T extends Record<string, unknown>>(db: Executor, fields: T, withTags: boolean) {
-  const base = db
-    .select(fields)
-    .from(timeEntry)
-    .leftJoin(project, eq(project.id, timeEntry.projectId))
-    .leftJoin(client, eq(client.id, project.clientId))
-    .leftJoin(task, eq(task.id, timeEntry.taskId))
-    .innerJoin(user, eq(user.id, timeEntry.userId))
-    .$dynamic();
-  return withTags
-    ? base
-        .leftJoin(timeEntryTag, eq(timeEntryTag.timeEntryId, timeEntry.id))
-        .leftJoin(tag, eq(tag.id, timeEntryTag.tagId))
-    : base;
-}
 
 function localStart(tz: string): SQL {
   return sql`(${timeEntry.start} at time zone ${tz})`;
@@ -200,11 +188,14 @@ function groupExprs(key: GroupKey, prefs: ViewerPrefs): { id: SQL; label: SQL } 
 }
 
 async function aggregateTotals(db: Executor, where: SQL): Promise<ReportTotals> {
-  const [row] = await joined(
-    db,
-    { durationSeconds: DURATION, billableSeconds: BILLABLE, entryCount: COUNT },
-    false,
-  ).where(where);
+  const [row] = await db
+    .select({ durationSeconds: DURATION, billableSeconds: BILLABLE, entryCount: COUNT })
+    .from(timeEntry)
+    .leftJoin(project, eq(project.id, timeEntry.projectId))
+    .leftJoin(client, eq(client.id, project.clientId))
+    .leftJoin(task, eq(task.id, timeEntry.taskId))
+    .innerJoin(user, eq(user.id, timeEntry.userId))
+    .where(where);
   return row ?? EMPTY_TOTALS;
 }
 
@@ -223,21 +214,27 @@ async function groupedRows(
   // Group by ordinal position: the same expression carries a different parameter
   // index in SELECT and GROUP BY, which Postgres would not match.
   const ordinals = keys.flatMap((_, i) => [sql.raw(String(2 * i + 1)), sql.raw(String(2 * i + 2))]);
-  const rows = await joined(
-    db,
-    { ...fields, durationSeconds: DURATION, billableSeconds: BILLABLE, entryCount: COUNT },
-    keys.includes("tag"),
-  )
-    .where(where)
-    .groupBy(...ordinals);
-  return rows.map((r) => {
-    const rec = r as Record<string, unknown>;
+  const base = db
+    .select({ ...fields, durationSeconds: DURATION, billableSeconds: BILLABLE, entryCount: COUNT })
+    .from(timeEntry)
+    .leftJoin(project, eq(project.id, timeEntry.projectId))
+    .leftJoin(client, eq(client.id, project.clientId))
+    .leftJoin(task, eq(task.id, timeEntry.taskId))
+    .innerJoin(user, eq(user.id, timeEntry.userId))
+    .$dynamic();
+  const query = keys.includes("tag")
+    ? base
+        .leftJoin(timeEntryTag, eq(timeEntryTag.timeEntryId, timeEntry.id))
+        .leftJoin(tag, eq(tag.id, timeEntryTag.tagId))
+    : base;
+  const rows: Record<string, unknown>[] = await query.where(where).groupBy(...ordinals);
+  return rows.map((rec) => {
     const out: ReportRow = {
       keys: {},
       totals: {
-        durationSeconds: rec.durationSeconds as number,
-        billableSeconds: rec.billableSeconds as number,
-        entryCount: rec.entryCount as number,
+        durationSeconds: Number(rec.durationSeconds),
+        billableSeconds: Number(rec.billableSeconds),
+        entryCount: Number(rec.entryCount),
       },
     };
     keys.forEach((key, i) => {
@@ -264,11 +261,13 @@ async function seriesRows(
       : bucket === "week"
         ? weekKeyExpr(prefs.timezone, prefs.weekStart)
         : monthKeyExpr(prefs.timezone);
-  const rows = await joined(
-    db,
-    { key: keyExpr, billableSeconds: BILLABLE, nonBillableSeconds: NON_BILLABLE },
-    false,
-  )
+  const rows = await db
+    .select({ key: keyExpr, billableSeconds: BILLABLE, nonBillableSeconds: NON_BILLABLE })
+    .from(timeEntry)
+    .leftJoin(project, eq(project.id, timeEntry.projectId))
+    .leftJoin(client, eq(client.id, project.clientId))
+    .leftJoin(task, eq(task.id, timeEntry.taskId))
+    .innerJoin(user, eq(user.id, timeEntry.userId))
     .where(where)
     .groupBy(sql.raw("1"));
   const byKey = new Map(rows.map((r) => [r.key, r]));
@@ -329,9 +328,8 @@ export async function detailedReport(
     );
   }
   const order = page.dir === "desc" ? desc : asc;
-  const rows = await joined(
-    db,
-    {
+  const rows = await db
+    .select({
       id: timeEntry.id,
       description: timeEntry.description,
       userId: timeEntry.userId,
@@ -346,9 +344,12 @@ export async function detailedReport(
       start: timeEntry.start,
       end: timeEntry.end,
       durationSeconds: timeEntry.durationSeconds,
-    },
-    false,
-  )
+    })
+    .from(timeEntry)
+    .leftJoin(project, eq(project.id, timeEntry.projectId))
+    .leftJoin(client, eq(client.id, project.clientId))
+    .leftJoin(task, eq(task.id, timeEntry.taskId))
+    .innerJoin(user, eq(user.id, timeEntry.userId))
     .where(and(...conds))
     .orderBy(order(sortColumn), order(timeEntry.id))
     .limit(limit + 1);
@@ -421,14 +422,19 @@ export async function weeklyReport(
   const tz = prefs.timezone;
   const week = weekBounds(range.from, tz, prefs.weekStart);
   const where = and(...baseConditions(viewer, eff, { from: week.weekStart, to: week.weekEnd }))!;
-  const idExpr = by === "user" ? sql`${timeEntry.userId}` : sql`${timeEntry.projectId}`;
+  const idExpr =
+    by === "user" ? sql<string>`${timeEntry.userId}` : sql<string | null>`${timeEntry.projectId}`;
   const labelExpr =
-    by === "user" ? sql`${user.name}` : sql`coalesce(${project.name}, 'No project')`;
-  const rows = await joined(
-    db,
-    { id: idExpr, label: labelExpr, dateKey: dateKeyExpr(tz), seconds: DURATION },
-    false,
-  )
+    by === "user"
+      ? sql<string>`${user.name}`
+      : sql<string>`coalesce(${project.name}, 'No project')`;
+  const rows = await db
+    .select({ id: idExpr, label: labelExpr, dateKey: dateKeyExpr(tz), seconds: DURATION })
+    .from(timeEntry)
+    .leftJoin(project, eq(project.id, timeEntry.projectId))
+    .leftJoin(client, eq(client.id, project.clientId))
+    .leftJoin(task, eq(task.id, timeEntry.taskId))
+    .innerJoin(user, eq(user.id, timeEntry.userId))
     .where(where)
     .groupBy(sql.raw("1"), sql.raw("2"), sql.raw("3"));
   const dayKeys = Array.from({ length: 7 }, (_, i) =>
