@@ -16,7 +16,7 @@ export function connectTestDb(): DbHandle {
 /** Wipe every table between tests. Order does not matter thanks to CASCADE. */
 export async function truncateAll(db: Database) {
   await db.execute(
-    sql`TRUNCATE TABLE "captured_email", "timesheet_template", "time_entry_tag", "time_entry", "task_assignee", "task", "project_favorite", "project_member", "project", "client", "tag", "user_settings", "workspace_settings", "invitation", "membership", "workspace", "verification", "account", "session", "user" CASCADE`,
+    sql`TRUNCATE TABLE "export_job", "report_share_link", "captured_email", "timesheet_template", "time_entry_tag", "time_entry", "task_assignee", "task", "project_favorite", "project_member", "project", "client", "tag", "user_settings", "workspace_settings", "invitation", "membership", "workspace", "verification", "account", "session", "user" CASCADE`,
   );
 }
 

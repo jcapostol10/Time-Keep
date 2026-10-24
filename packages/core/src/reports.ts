@@ -46,6 +46,15 @@ export type RangePreset = (typeof RANGE_PRESETS)[number];
 export const BUCKETS = ["day", "week", "month"] as const;
 export type Bucket = (typeof BUCKETS)[number];
 
+export const REPORT_KINDS = ["summary", "detailed", "weekly"] as const;
+export type ReportKind = (typeof REPORT_KINDS)[number];
+export const EXPORT_FORMATS = ["csv", "xlsx", "pdf"] as const;
+export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+export const EXPORT_REPORTS = ["summary", "detailed", "weekly", "project-status"] as const;
+export type ExportReport = (typeof EXPORT_REPORTS)[number];
+export const EXPORT_STATUSES = ["queued", "running", "done", "failed"] as const;
+export type ExportStatus = (typeof EXPORT_STATUSES)[number];
+
 /** The filter value that means "entries without one" (no project, no task, no tag). */
 export const NONE_ID = "none";
 

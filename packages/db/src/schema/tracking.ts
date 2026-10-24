@@ -49,6 +49,10 @@ export const timeEntry = pgTable(
     index("time_entry_workspace_user_start_idx").on(t.workspaceId, t.userId, t.start.desc()),
     index("time_entry_project_id_idx").on(t.projectId),
     index("time_entry_task_id_idx").on(t.taskId),
+    // Team-wide report scans: every stopped, live entry of a workspace by start.
+    index("time_entry_workspace_start_idx")
+      .on(t.workspaceId, t.start)
+      .where(sql`"deleted_at" IS NULL AND "end" IS NOT NULL`),
     uniqueIndex("time_entry_one_running_uq")
       .on(t.workspaceId, t.userId)
       .where(sql`"end" IS NULL AND "deleted_at" IS NULL`),

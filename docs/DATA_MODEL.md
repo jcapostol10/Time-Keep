@@ -25,6 +25,8 @@ time_entry >── task         (nullable, ON DELETE SET NULL)
 time_entry ──< time_entry_tag >── tag
 user ──1 user_settings      (tracker preferences, created lazily)
 user ──< timesheet_template (per workspace)
+workspace ──< report_share_link >── user   (creator; public read-only report links)
+workspace ──< export_job >── user          (large exports built after the response)
 ```
 
 ## Tables
@@ -179,6 +181,7 @@ Indexes:
 
 - `time_entry_workspace_user_start_idx` on `(workspace_id, user_id, start DESC)`: the tracker list and its week pagination.
 - `time_entry_project_id_idx` on `project_id`; `time_entry_task_id_idx` on `task_id`.
+- `time_entry_workspace_start_idx` on `(workspace_id, start) WHERE deleted_at IS NULL AND "end" IS NOT NULL`: team-wide report scans (Phase 3); a member's own report uses the user index above.
 - `time_entry_one_running_uq`: `UNIQUE (workspace_id, user_id) WHERE "end" IS NULL AND "deleted_at" IS NULL`. This enforces invariant 4. Soft-deleted rows are excluded so they can never block a new timer.
 
 Rules (enforced in `apps/web/src/server/time-entries.ts`, the only write path):
@@ -248,9 +251,50 @@ Every table enables RLS (`.enableRLS()` on each `pgTable`, migration `0003`) wit
 
 `workspace_role`, `membership_status`, `time_format`, `duration_format`, `project_visibility`, `task_status` — values come from `packages/core` constants so TypeScript and Postgres agree.
 
+### report_share_link
+
+A read-only public link to a report (`/share/[token]`). The URL carries 32 random bytes; only `token_hash` (sha256) is stored.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| created_by | text → user (cascade) | the link reads as revoked once the creator is no longer an active member |
+| token_hash | text unique | sha256 of the token |
+| kind | enum report_kind | summary, detailed, weekly |
+| query | jsonb | the effective report query (`reportQuerySchema` in core), a member's forced `userIds` included; a relative preset stays relative |
+| prefs | jsonb | the creator's resolved `ViewerPrefs` at creation |
+| title | text | |
+| expires_at | timestamptz? | null = never |
+| revoked_at | timestamptz? | |
+| last_opened_at, open_count | timestamptz?, integer | |
+| created_at, updated_at | timestamptz | |
+
+Index: `(workspace_id, created_at desc)` for the Shared list.
+
+### export_job
+
+An export too large to stream back (over `EXPORT_JOB_THRESHOLD` rows or 4 MB): built after the response, stored in the private export bucket, listed under Reports → Exports.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID; also the object key's name |
+| workspace_id | text → workspace (cascade) | |
+| user_id | text → user (cascade) | only this person can download it |
+| format | enum export_format | csv, xlsx, pdf |
+| report | enum export_report | summary, detailed, weekly, project-status |
+| query | jsonb | the report query |
+| status | enum export_status | queued → running → done / failed |
+| row_count | integer? | |
+| object_key | text? | `exports/<workspace>/<job>.<ext>` in `S3_EXPORT_BUCKET` |
+| error | text? | |
+| created_at, finished_at | timestamptz | |
+| expires_at | timestamptz | the file is deleted after this (7 days) |
+
+Index: `(workspace_id, user_id, created_at desc)`.
+
 ## Planned (later phases)
 
-Phase 3: `report_share_link`, `export_job`.
 Phase 4: `user_group`, `user_group_member`, `rate` (+ rate snapshot columns on `time_entry`), `workspace_settings` extensions.
 Phase 5: `approval_request`, `lock_period`, `time_off_policy`, `time_off_request`, `holiday`, `kiosk`, `kiosk_pin`.
 Phase 6: `expense`, `expense_category`, `invoice`, `invoice_item`, `payment`, `budget`, `custom_field`.
