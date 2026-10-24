@@ -36,3 +36,8 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 export const MEMBERSHIP_STATUSES = ["ACTIVE", "INVITED", "DEACTIVATED"] as const;
 export type MembershipStatus = (typeof MEMBERSHIP_STATUSES)[number];
+
+/** Who reads the whole team's time in reports and the dashboard; Phase 4 narrows a manager to their scope. */
+export function canReadTeam(role: Role): boolean {
+  return role === "owner" || role === "admin" || role === "manager";
+}
