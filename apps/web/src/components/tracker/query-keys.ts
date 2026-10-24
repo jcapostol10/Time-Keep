@@ -9,6 +9,10 @@ export const trackerKeys = {
   range: (slug: string, from: string, to: string) =>
     ["tracker", slug, "entries", "range", from, to] as const,
   options: (slug: string) => ["tracker", slug, "options"] as const,
+  /** Also under `entries`: an inline edit in the Detailed report refetches every report. */
+  report: (slug: string, kind: string, params: string) =>
+    ["tracker", slug, "entries", "report", kind, params] as const,
+  reportOptions: (slug: string) => ["tracker", slug, "report-options"] as const,
   templates: (slug: string) => ["tracker", slug, "templates"] as const,
 };
 
@@ -25,5 +29,8 @@ export const trackerUrls = {
   range: (slug: string, from: string, to: string) =>
     `/api/w/${slug}/time-entries/range?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   options: (slug: string) => `/api/w/${slug}/tracker-options`,
+  report: (slug: string, kind: string, params: string) =>
+    `/api/w/${slug}/reports/${kind}${params ? `?${params}` : ""}`,
+  reportOptions: (slug: string) => `/api/w/${slug}/reports/options`,
   templates: (slug: string) => `/api/w/${slug}/timesheet-templates`,
 };
