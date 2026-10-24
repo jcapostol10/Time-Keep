@@ -1,7 +1,7 @@
 import { TZDate } from "@date-fns/tz";
 import { addDays, format, startOfDay, startOfWeek, differenceInCalendarDays } from "date-fns";
 
-import type { TimeFormat, WeekStartDay } from "./schemas";
+import type { DateFormat, TimeFormat, WeekStartDay } from "./schemas";
 
 /**
  * Timezone-aware calendar helpers. Instants are plain `Date`s (UTC); every
@@ -145,4 +145,29 @@ export function monthBoundsInZone(instant: Date, tz: string): { monthStart: Date
 /** Whole local days from `from` to `to` in the zone (negative when `to` is earlier); DST-safe. */
 export function daysBetweenInZone(from: Date, to: Date, tz: string): number {
   return differenceInCalendarDays(new TZDate(to, tz), new TZDate(from, tz));
+}
+
+/** The local date in one of the supported formats (DATE_FORMATS), DST-safe through Intl. */
+export function formatDateInZone(instant: Date, tz: string, dateFormat: DateFormat): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  const y = get("year");
+  const m = get("month");
+  const d = get("day");
+  switch (dateFormat) {
+    case "yyyy-MM-dd":
+      return `${y}-${m}-${d}`;
+    case "MM/dd/yyyy":
+      return `${m}/${d}/${y}`;
+    case "dd/MM/yyyy":
+      return `${d}/${m}/${y}`;
+    case "dd.MM.yyyy":
+      return `${d}.${m}.${y}`;
+  }
 }
