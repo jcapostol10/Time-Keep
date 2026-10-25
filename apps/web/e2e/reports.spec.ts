@@ -170,6 +170,31 @@ test.describe("reports", () => {
     await expect(page.getByRole("row", { name: "Entry Site work" })).toBeVisible();
   });
 
+  test("select own entries in the detailed report and delete them, with undo", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await addManualEntry(page, { description: "Email", start: "02:05", duration: "0.5" });
+    await openReport(page, freshUser.slug, "detailed");
+    await expect(reportTotal(page)).toHaveText("1:30:00");
+    await page.getByRole("checkbox", { name: "Select Site work" }).check();
+    const bar = page.getByRole("toolbar", { name: "Selected entries" });
+    await expect(bar).toContainText("1 selected");
+    await bar.getByRole("button", { name: "Delete" }).click();
+    await expect(page.getByRole("row", { name: "Entry Site work" })).toHaveCount(0);
+    await expect(reportTotal(page)).toHaveText("0:30:00");
+    await expect(bar).toHaveCount(0);
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByRole("row", { name: "Entry Site work" })).toBeVisible();
+    await expect(reportTotal(page)).toHaveText("1:30:00");
+
+    await page.getByRole("checkbox", { name: "Select all your entries" }).check();
+    await expect(bar).toContainText("2 selected");
+  });
+
   test("the detailed report lists entries and loads more", async ({
     page,
     freshUser,

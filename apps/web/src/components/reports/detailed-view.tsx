@@ -10,13 +10,15 @@ import {
 } from "@timekeep/ui/components/dropdown-menu";
 import { Skeleton } from "@timekeep/ui/components/skeleton";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@timekeep/ui/components/table";
-import { ArrowDownIcon, ArrowUpIcon, Columns3Icon, Loader2Icon } from "lucide-react";
+import { Checkbox } from "@timekeep/ui/components/checkbox";
+import { ArrowDownIcon, ArrowUpIcon, Columns3Icon, Loader2Icon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
 import type { DetailedPaging, DetailedSort } from "@/lib/report-types";
 
 import { useIsSaving } from "../tracker/saving-store";
 import { useTracker } from "../tracker/tracker-provider";
+import { useEntryWrites } from "../tracker/use-entry-writes";
 import { DETAILED_COLUMNS, type DetailedColumn, useHiddenColumns } from "./detailed-columns";
 import { DetailedRow } from "./detailed-row";
 import { useReportQuery } from "./report-url";
@@ -71,6 +73,26 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
   const first = data?.pages[0];
   const entries = data?.pages.flatMap((p) => p.entries) ?? [];
   const show = (key: DetailedColumn) => !hidden.has(key);
+  const writes = useEntryWrites();
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  // Only own entries can be selected; an entry gone after a refetch drops out by itself.
+  const ownIds = entries.filter((e) => e.editable).map((e) => e.id);
+  const selected = ownIds.filter((id) => picked.has(id));
+  const allSelected = ownIds.length > 0 && selected.length === ownIds.length;
+
+  function pick(id: string, on: boolean) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  async function deleteSelected() {
+    const ids = selected;
+    if (await writes.remove(ids)) setPicked(new Set());
+  }
 
   function onSort(sort: DetailedSort) {
     setPaging((p) => ({
@@ -125,9 +147,40 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
+          {selected.length > 0 ? (
+            <div
+              role="toolbar"
+              aria-label="Selected entries"
+              className="bg-muted/50 flex items-center gap-2 border-b px-3 py-2 text-sm"
+            >
+              <span className="font-medium">{selected.length} selected</span>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => void deleteSelected()}
+              >
+                <Trash2Icon /> Delete
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setPicked(new Set())}>
+                Clear
+              </Button>
+            </div>
+          ) : null}
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8 pr-0">
+                  {ownIds.length > 0 ? (
+                    <Checkbox
+                      aria-label="Select all your entries"
+                      checked={allSelected ? true : selected.length > 0 ? "indeterminate" : false}
+                      onCheckedChange={(checked) =>
+                        setPicked(checked === true ? new Set(ownIds) : new Set())
+                      }
+                    />
+                  ) : null}
+                </TableHead>
                 <TableHead>Description</TableHead>
                 {show("project") ? <TableHead>Project</TableHead> : null}
                 {show("client") ? <TableHead>Client</TableHead> : null}
@@ -149,7 +202,13 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
             </TableHeader>
             <TableBody>
               {entries.map((e) => (
-                <DetailedRow key={e.id} entry={e} hidden={hidden} />
+                <DetailedRow
+                  key={e.id}
+                  entry={e}
+                  hidden={hidden}
+                  selected={picked.has(e.id)}
+                  onSelectedChange={(on) => pick(e.id, on)}
+                />
               ))}
             </TableBody>
           </Table>

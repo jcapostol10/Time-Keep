@@ -11,6 +11,7 @@ import {
   withEndTime,
   withStartTime,
 } from "@timekeep/core";
+import { Checkbox } from "@timekeep/ui/components/checkbox";
 import { TableCell, TableRow } from "@timekeep/ui/components/table";
 import { DollarSignIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -37,9 +38,13 @@ function entryName(entry: DetailedEntryDTO) {
 export function DetailedRow({
   entry,
   hidden,
+  selected,
+  onSelectedChange,
 }: {
   entry: DetailedEntryDTO;
   hidden: ReadonlySet<DetailedColumn>;
+  selected: boolean;
+  onSelectedChange: (selected: boolean) => void;
 }) {
   const { slug, viewer, canManage } = useTracker();
   const writes = useEntryWrites();
@@ -76,6 +81,15 @@ export function DetailedRow({
 
   return (
     <TableRow aria-label={`Entry ${entryName(entry)}`} data-entry-id={entry.id}>
+      <TableCell className="w-8 pr-0">
+        {entry.editable ? (
+          <Checkbox
+            aria-label={`Select ${entryName(entry)}`}
+            checked={selected}
+            onCheckedChange={(checked) => onSelectedChange(checked === true)}
+          />
+        ) : null}
+      </TableCell>
       <TableCell className="min-w-48">
         {entry.editable ? (
           <CommitInput

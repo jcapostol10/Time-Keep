@@ -196,6 +196,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A weekly cell opens the detailed report for that project and day — `reports.spec.ts` › "a weekly cell opens the detailed report for that project and day"
 - [x] The detailed report lists entries and loads more — `reports.spec.ts` › "the detailed report lists entries and loads more"
 - [x] Edit an own entry inline in the detailed report — `reports.spec.ts` › "edit the description and duration of an own entry inline"
+- [x] Select own entries in the detailed report and delete them, with Undo — `reports.spec.ts` › "select own entries in the detailed report and delete them, with undo"
 - [x] Another person's entry is read-only in the detailed report — `reports.spec.ts` › "another person's entry is read-only"
 - [x] The column chooser hides a column and remembers it — `reports.spec.ts` › "the column chooser hides a column and remembers it after reload"
 - [x] Sort the detailed report by duration — `reports.spec.ts` › "sort the detailed report by duration"
