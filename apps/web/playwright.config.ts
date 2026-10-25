@@ -55,7 +55,9 @@ export default defineConfig({
     : {
         webServer: {
           // CI builds first and runs the production server; locally reuse `pnpm dev`.
-          command: isCI ? "pnpm start" : "pnpm dev",
+          // Node closes an idle keep-alive socket after 5 s, and a request that reuses it
+          // at that moment fails with ECONNRESET; keep sockets for longer than any pause.
+          command: isCI ? "pnpm start --keepAliveTimeout 70000" : "pnpm dev",
           url: baseURL,
           reuseExistingServer: !isCI,
           timeout: 180_000,
