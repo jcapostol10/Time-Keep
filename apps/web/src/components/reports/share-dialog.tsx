@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReportKind } from "@timekeep/core";
+import { type ReportKind, resolveReportRange } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import {
   Dialog,
@@ -36,8 +36,8 @@ const KIND_TITLES: Record<ReportKind, string> = {
 
 /** Creates a read-only public link to the report as it is now, filters included. */
 export function ShareDialog({ kind }: { kind: ReportKind }) {
-  const { slug } = useTracker();
-  const { params } = useReportQuery();
+  const { slug, viewer } = useTracker();
+  const { query, params } = useReportQuery();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(KIND_TITLES[kind]);
   const [expiry, setExpiry] = useState("never");
@@ -46,7 +46,11 @@ export function ShareDialog({ kind }: { kind: ReportKind }) {
 
   function onOpenChange(next: boolean) {
     setOpen(next);
-    if (!next) {
+    if (next) {
+      // The report and the range it shows now ("Summary report · This week").
+      const range = resolveReportRange(query, viewer, new Date());
+      setTitle(`${KIND_TITLES[kind]} · ${range.label}`);
+    } else {
       setUrl(null);
       setTitle(KIND_TITLES[kind]);
       setExpiry("never");
@@ -81,7 +85,7 @@ export function ShareDialog({ kind }: { kind: ReportKind }) {
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(true)}>
         <Share2Icon /> Share
       </Button>
       <Dialog open={open} onOpenChange={onOpenChange}>

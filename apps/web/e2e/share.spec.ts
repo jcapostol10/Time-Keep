@@ -89,6 +89,18 @@ test.describe("share links", () => {
     await visitor.context().close();
   });
 
+  test("the share title names the report and its range", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await openReport(page, freshUser.slug, "summary");
+    await page.getByRole("button", { name: "Share" }).click();
+    const dialog = page.getByRole("dialog", { name: "Share this report" });
+    await expect(dialog.getByLabel("Title")).toHaveValue("Summary report · This week");
+  });
+
   test("a shared link refuses a second export within seconds", async ({
     page,
     browser,
