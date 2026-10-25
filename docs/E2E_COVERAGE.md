@@ -182,6 +182,15 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The same entry shows identically in the tracker, timesheet and calendar — `entry-views.spec.ts` › "an entry edited in the timesheet changes in the tracker and the calendar"
 - [x] Editing an entry in one view updates the others — `entry-views.spec.ts` › "an entry edited in the timesheet changes in the tracker and the calendar"
 
+## Reports
+
+- [x] The summary shows the range's total, a chart and a grouped table — `reports.spec.ts` › "the summary shows the week's total, a chart and a grouped table"
+- [x] Filter by project (including "Without project") and by tag — `reports.spec.ts` › "filter by project and by tag"
+- [x] Group by client then project shows nested totals — `reports.spec.ts` › "group by client then project shows nested totals"
+- [x] Presets and a custom range change the URL and the totals — `reports.spec.ts` › "presets and a custom range change the URL and the totals"
+- [x] A member cannot widen the Users filter by URL and has no Users filter — `reports.spec.ts` › "a member cannot widen the Users filter by URL"
+- [x] The summary agrees with the tracker's week total — `reports.spec.ts` › "the summary agrees with the tracker's week total"
+
 ## Tenant isolation
 
 - [x] A member of one workspace cannot open another workspace's pages — `tenant-isolation.spec.ts` › "a member of one workspace cannot open another workspace's pages"

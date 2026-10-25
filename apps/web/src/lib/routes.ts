@@ -5,7 +5,8 @@ export const workspaceRoutes = {
   timesheet: (slug: string) => `/w/${slug}/timesheet`,
   calendar: (slug: string) => `/w/${slug}/calendar`,
   dashboard: (slug: string) => `/w/${slug}/dashboard`,
-  reports: (slug: string) => `/w/${slug}/reports`,
+  reports: (slug: string, kind?: "summary" | "detailed" | "weekly") =>
+    `/w/${slug}/reports${kind ? `/${kind}` : ""}`,
   projects: (slug: string) => `/w/${slug}/projects`,
   project: (
     slug: string,
