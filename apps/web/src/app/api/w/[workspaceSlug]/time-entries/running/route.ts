@@ -1,7 +1,7 @@
 import { getDb } from "@timekeep/db";
 
 import { getRunningEntry } from "@/server/time-entries";
-import { accessErrorResponse, requireWorkspaceAccess } from "@/server/workspace-access";
+import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
 
 /** The caller's running timer in this workspace, if any. Polled on window focus. */
 export async function GET(
@@ -18,9 +18,6 @@ export async function GET(
     });
     return Response.json({ running }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return (
-      accessErrorResponse(error) ??
-      Response.json({ error: "Something went wrong." }, { status: 500 })
-    );
+    return routeErrorResponse(error, "time-entries");
   }
 }

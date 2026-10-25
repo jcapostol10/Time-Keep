@@ -3,7 +3,7 @@ import { getDb } from "@timekeep/db";
 import { listPickerProjects } from "@/server/catalog/projects";
 import { listTagOptions } from "@/server/catalog/tags";
 import { listRecentDescriptions } from "@/server/time-entries";
-import { accessErrorResponse, requireWorkspaceAccess } from "@/server/workspace-access";
+import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
 
 /** Picker data for the timer bar: projects, tags and the caller's recent descriptions. */
 export async function GET(
@@ -23,9 +23,6 @@ export async function GET(
     const tags = tagRows.map((t) => ({ id: t.id, name: t.name, color: t.color }));
     return Response.json({ projects, tags, recent }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    return (
-      accessErrorResponse(error) ??
-      Response.json({ error: "Something went wrong." }, { status: 500 })
-    );
+    return routeErrorResponse(error, "tracker");
   }
 }

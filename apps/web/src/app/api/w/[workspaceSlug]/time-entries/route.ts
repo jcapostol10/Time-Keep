@@ -2,7 +2,7 @@ import { isoInstantSchema, resolveViewerPrefs } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 
 import { listEntriesPage } from "@/server/time-entries";
-import { accessErrorResponse, requireWorkspaceAccess } from "@/server/workspace-access";
+import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -31,9 +31,6 @@ export async function GET(
     );
     return Response.json(page, { headers: NO_STORE });
   } catch (error) {
-    return (
-      accessErrorResponse(error) ??
-      Response.json({ error: "Something went wrong." }, { status: 500 })
-    );
+    return routeErrorResponse(error, "time-entries");
   }
 }
