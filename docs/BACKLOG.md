@@ -24,6 +24,18 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; only the preview e2e run exercises `@sparticuz/chromium`. Consider installing Playwright's Chromium in the CI job.
 - [ ] The Detailed report keeps tags and the date read-only (edit them in the tracker), and its sort is per visit, not in the URL.
 - [ ] The `export_report` enum value `project-status` is unused: the Status tab exports the Summary grouped by task then person.
+- [ ] Phase 3 review minors (2026-10-25):
+  - `report-route.ts` and the export route answer non-access errors with a bare 500 and no `console.error`, so a Postgres error in production is invisible. Log before responding.
+  - The Detailed route accepts any `cursorValue`; a malformed one reaches Postgres and returns 500. Validate it (ISO instant or integer) and answer 400.
+  - `expireExportJobs` marks a running job timed out by `createdAt`, so a job retried more than 15 minutes after creation can be flagged failed mid-build (it heals when the build finishes). Track `startedAt`.
+  - Cascade deletes (user or workspace removal, e2e cleanup) delete `export_job` rows but leave their files in the export bucket. Add a 7-day lifecycle rule on the bucket.
+  - PDF export jobs record a row count of 0, so the Exports list and the email say "0 rows".
+  - Filter changes use `history.replaceState`, so Back leaves the reports instead of undoing a filter. Consider `pushState` for discrete changes.
+  - The Users filter lists active members only, while a former member's time still shows in team reports.
+  - The e2e "a member cannot widen the Users filter by URL" uses a made-up id; a real other member's id is the stronger guard.
+  - Test gaps: SQL tests for the week and month group keys, New York's fall-back date, "this year" on 1 January, the 4 MB streaming cap and the share page's 413.
+  - Migration 0007 created `time_entry_workspace_start_idx` without `CONCURRENTLY` (not possible inside a Drizzle migration transaction). Fine at today's size; large indexes later need a separate non-transactional step.
+  - In the 375px filter sheet, Escape after picking from a filter closes the picker but not the sheet; the close button works.
 
 ## E2E suite
 
