@@ -33,6 +33,8 @@ export const reportShareLink = pgTable(
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }),
     openCount: integer("open_count").notNull().default(0),
+    /** The last export from the public page: one per link every few seconds. */
+    lastExportAt: timestamp("last_export_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [

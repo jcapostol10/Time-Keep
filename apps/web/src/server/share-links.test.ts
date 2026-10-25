@@ -13,6 +13,7 @@ import {
 } from "../../test/db";
 import type { Viewer } from "./catalog/viewer";
 import {
+  claimShareExport,
   createShareLink,
   listShareLinks,
   recordShareOpen,
@@ -86,6 +87,27 @@ describe("share links", () => {
       .from(reportShareLink)
       .where(eq(reportShareLink.id, created.id));
     expect(opened).toMatchObject({ openCount: 2, lastOpenedAt: NOW });
+  });
+
+  it("lets a link export once per ten seconds, so a public URL cannot keep Chromium busy", async () => {
+    const created = await createShareLink(
+      db,
+      alice,
+      { kind: "summary", query: QUERY, title: "Throttled" },
+      PREFS,
+      NOW,
+    );
+    const at = (ms: number) => new Date(NOW.getTime() + ms);
+    expect(await claimShareExport(db, created.id, at(0))).toBe(true);
+    expect(await claimShareExport(db, created.id, at(1_000))).toBe(false);
+    expect(await claimShareExport(db, created.id, at(9_999))).toBe(false);
+    expect(await claimShareExport(db, created.id, at(10_000))).toBe(true);
+    // Two requests at the same moment: one wins.
+    const both = await Promise.all([
+      claimShareExport(db, created.id, at(30_000)),
+      claimShareExport(db, created.id, at(30_000)),
+    ]);
+    expect(both.filter(Boolean)).toHaveLength(1);
   });
 
   it("resolves nothing for a wrong, expired or revoked token, or a creator who left", async () => {

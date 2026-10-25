@@ -268,6 +268,7 @@ A read-only public link to a report (`/share/[token]`). The URL carries 32 rando
 | expires_at | timestamptz? | null = never |
 | revoked_at | timestamptz? | |
 | last_opened_at, open_count | timestamptz?, integer | |
+| last_export_at | timestamptz? | last export from the public page: one per link every 10 s (0008) |
 | created_at, updated_at | timestamptz | |
 
 Index: `(workspace_id, created_at desc)` for the Shared list.

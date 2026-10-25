@@ -207,6 +207,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A share link opens without signing in and shows the same total — `share.spec.ts` › "a share link opens without signing in and shows the same total"
 - [x] Revoking a link makes it unavailable (404, same page as an unknown token) — `share.spec.ts` › "revoking a link makes it unavailable"
 - [x] The shared page exports CSV — `share.spec.ts` › "the shared page exports CSV"
+- [x] A shared link refuses a second export within seconds (429) — `share.spec.ts` › "a shared link refuses a second export within seconds"
 - [x] A large export becomes a job: listed under Exports, downloadable, emailed — `reports.spec.ts` › "a large export becomes a job with a download link and an email"
 
 ## Dashboard

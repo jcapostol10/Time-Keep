@@ -14,7 +14,10 @@ import {
   type Database,
   desc,
   eq,
+  isNull,
+  lte,
   membership,
+  or,
   reportShareLink,
   sql,
   user,
@@ -134,6 +137,32 @@ export async function recordShareOpen(db: Database, id: string, now = new Date()
     .update(reportShareLink)
     .set({ openCount: sql`${reportShareLink.openCount} + 1`, lastOpenedAt: now })
     .where(eq(reportShareLink.id, id));
+}
+
+/** Seconds between exports from one public link: each PDF launches Chromium. */
+export const SHARE_EXPORT_INTERVAL_MS = 10_000;
+
+/**
+ * Claims the link's export slot: true at most once per SHARE_EXPORT_INTERVAL_MS. One
+ * conditional UPDATE, so two requests at the same moment cannot both win.
+ */
+export async function claimShareExport(
+  db: Database,
+  id: string,
+  now = new Date(),
+): Promise<boolean> {
+  const cutoff = new Date(now.getTime() - SHARE_EXPORT_INTERVAL_MS);
+  const rows = await db
+    .update(reportShareLink)
+    .set({ lastExportAt: now })
+    .where(
+      and(
+        eq(reportShareLink.id, id),
+        or(isNull(reportShareLink.lastExportAt), lte(reportShareLink.lastExportAt, cutoff)),
+      ),
+    )
+    .returning({ id: reportShareLink.id });
+  return rows.length > 0;
 }
 
 export interface ShareLinkDTO {

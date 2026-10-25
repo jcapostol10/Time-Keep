@@ -3,7 +3,7 @@ import { getDb } from "@timekeep/db";
 import { env } from "@/server/env";
 import { buildExport, countExportRows } from "@/server/report-files";
 import { buildPdfExport } from "@/server/report-pdf";
-import { resolveShareLink } from "@/server/share-links";
+import { claimShareExport, resolveShareLink } from "@/server/share-links";
 
 const MAX_STREAMED_BYTES = 4 * 1024 * 1024;
 
@@ -13,7 +13,8 @@ function attachment(filename: string): string {
 
 /**
  * The shared report as CSV or PDF for someone without an account. There is
- * no one to own an export job, so a report over the threshold is refused.
+ * no one to own an export job, so a report over the threshold is refused, and
+ * one link exports at most once per SHARE_EXPORT_INTERVAL_MS.
  */
 export async function GET(request: Request, ctx: RouteContext<"/share/[token]/export">) {
   const { token } = await ctx.params;
@@ -26,6 +27,14 @@ export async function GET(request: Request, ctx: RouteContext<"/share/[token]/ex
   }
   const req = { report: link.kind, query: link.query, prefs: link.prefs };
   try {
+    // Anyone holding the URL can call this, and a PDF launches Chromium: one export per link
+    // every few seconds, claimed before any report query runs.
+    if (!(await claimShareExport(db, link.id))) {
+      return new Response("This report was just downloaded. Try again in a few seconds.", {
+        status: 429,
+        headers: { "Retry-After": "10" },
+      });
+    }
     if ((await countExportRows(db, link.viewer, req)) > env().EXPORT_JOB_THRESHOLD) {
       return new Response(
         "This report is too large to download from a shared link; ask whoever shared it for the file.",

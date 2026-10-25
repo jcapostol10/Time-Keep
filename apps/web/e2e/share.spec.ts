@@ -88,4 +88,24 @@ test.describe("share links", () => {
     expect(text).toContain("No project,1:00:00");
     await visitor.context().close();
   });
+
+  test("a shared link refuses a second export within seconds", async ({
+    page,
+    browser,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await openReport(page, freshUser.slug, "summary");
+    const url = await createShareLink(page);
+
+    const visitor = await anonymousPage(browser);
+    const first = await visitor.request.get(`${url}/export?format=csv`);
+    expect(first.status()).toBe(200);
+    const second = await visitor.request.get(`${url}/export?format=pdf`);
+    expect(second.status()).toBe(429);
+    expect(await second.text()).toContain("Try again in a few seconds");
+    await visitor.context().close();
+  });
 });
