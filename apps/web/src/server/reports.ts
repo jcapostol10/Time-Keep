@@ -52,7 +52,6 @@ import type {
   ReportFilterOptions,
   SeriesPoint,
   SummaryReport,
-  WeeklyBy,
   WeeklyReport,
 } from "@/lib/report-types";
 
@@ -471,10 +470,10 @@ export async function weeklyReport(
   viewer: Viewer,
   query: ReportQuery,
   prefs: ViewerPrefs,
-  by: WeeklyBy,
   now: Date = new Date(),
 ): Promise<WeeklyReport> {
   const eff = effectiveQuery(query, viewer);
+  const by = eff.weeklyBy;
   const range = resolveReportRange(eff, prefs, now);
   const tz = prefs.timezone;
   const week = weekBounds(range.from, tz, prefs.weekStart);

@@ -44,6 +44,9 @@ export const RANGE_PRESETS = [
 ] as const;
 export type RangePreset = (typeof RANGE_PRESETS)[number];
 
+export const WEEKLY_BYS = ["project", "user"] as const;
+export type WeeklyBy = (typeof WEEKLY_BYS)[number];
+
 export const BUCKETS = ["day", "week", "month"] as const;
 export type Bucket = (typeof BUCKETS)[number];
 
@@ -86,6 +89,8 @@ export const reportQuerySchema = z
       .refine((keys) => new Set(keys).size === keys.length, "Group keys must differ")
       .default(["project"]),
     bucket: z.enum(BUCKETS).optional(),
+    /** The Weekly report's rows: projects, or people (team readers). */
+    weeklyBy: z.enum(WEEKLY_BYS).default("project"),
   })
   .superRefine((q, ctx) => {
     if (q.preset !== "custom") return;
@@ -110,6 +115,7 @@ const SCALAR_KEYS = [
   "billable",
   "description",
   "bucket",
+  "weeklyBy",
 ] as const;
 
 export const DEFAULT_REPORT_QUERY: ReportQuery = reportQuerySchema.parse({});

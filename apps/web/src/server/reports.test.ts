@@ -385,7 +385,7 @@ describe("report engine", () => {
 
   it("lays the week out by user and by project with day totals equal to the summary", async () => {
     const week = q({ from: "2026-03-08T16:00:00.000Z", to: "2026-03-15T16:00:00.000Z" });
-    const byUser = await weeklyReport(db, alice, week, PREFS, "user", NOW);
+    const byUser = await weeklyReport(db, alice, { ...week, weeklyBy: "user" }, PREFS, NOW);
     expect(byUser.dayKeys[0]).toBe("2026-03-09");
     expect(byUser.rows.map((r) => [r.label, r.total])).toEqual([
       ["Alice A", 3.5 * 3600],
@@ -394,7 +394,7 @@ describe("report engine", () => {
     expect(byUser.dayTotals.slice(0, 2)).toEqual([3.5 * 3600, 3 * 3600]);
     const summary = await summaryReport(db, alice, week, PREFS, NOW);
     expect(byUser.total).toBe(summary.totals.durationSeconds);
-    const byProject = await weeklyReport(db, alice, week, PREFS, "project", NOW);
+    const byProject = await weeklyReport(db, alice, week, PREFS, NOW);
     expect(byProject.rows.map((r) => [r.label, r.total])).toEqual([
       ["Web", 4.5 * 3600],
       ["App", 3600],

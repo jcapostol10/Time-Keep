@@ -30,17 +30,17 @@ export default async function WeeklyReportPage({
   const db = getDb();
 
   const [report, options] = await Promise.all([
-    weeklyReport(db, viewer, query, prefs, "project"),
+    weeklyReport(db, viewer, query, prefs),
     reportFilterOptions(db, viewer),
   ]);
   const queryClient = new QueryClient();
-  queryClient.setQueryData(trackerKeys.report(workspaceSlug, "weekly", `${key}|project`), report);
+  queryClient.setQueryData(trackerKeys.report(workspaceSlug, "weekly", key), report);
   queryClient.setQueryData(trackerKeys.reportOptions(workspaceSlug), options);
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       <ReportShell kind="weekly">
-        <WeeklyView initialBy="project" />
+        <WeeklyView />
       </ReportShell>
     </HydrationBoundary>
   );

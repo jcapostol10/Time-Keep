@@ -253,6 +253,27 @@ test.describe("reports", () => {
     await expect(grid.getByRole("row", { name: /^Fresh / })).toContainText("1:00:00");
   });
 
+  test("the weekly export lists people when the grid does", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await openReport(page, freshUser.slug, "weekly");
+    await page.getByRole("combobox", { name: "Rows" }).click();
+    await page.getByRole("option", { name: "People" }).click();
+    await expect(page).toHaveURL(/weeklyBy=user/);
+    await page.getByRole("button", { name: "Export" }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("menuitem", { name: "CSV" }).click(),
+    ]);
+    const text = await readFile((await download.path())!, "utf8");
+    expect(text).toMatch(/\r\nFresh [^,]*,/);
+    expect(text).not.toContain("No project,");
+  });
+
   test("export the summary as CSV", async ({ page, freshUser, trackerPage }) => {
     await trackerPage();
     await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });

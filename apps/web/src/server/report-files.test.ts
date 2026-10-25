@@ -111,6 +111,28 @@ describe("report files", () => {
     expect(sheet.getRow(2).getCell(4).value).toBe(1);
   });
 
+  it("exports the weekly grid by people when the query lists people", async () => {
+    const byPeople = { ...QUERY, weeklyBy: "user" as const };
+    const file = await buildExport(db, viewer, {
+      report: "weekly",
+      format: "csv",
+      query: byPeople,
+      prefs: PREFS,
+      now: NOW,
+    });
+    const text = new TextDecoder().decode(file.body);
+    expect(text).toContain("Alice A,");
+    expect(text).not.toContain("Web,");
+    expect(
+      await countExportRows(db, viewer, {
+        report: "weekly",
+        query: byPeople,
+        prefs: PREFS,
+        now: NOW,
+      }),
+    ).toBe(1);
+  });
+
   it("counts the rows an export would have before building it", async () => {
     expect(
       await countExportRows(db, viewer, {

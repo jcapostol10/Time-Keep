@@ -4,6 +4,7 @@ import type {
   GroupKey,
   ReportGroup,
   ReportTotals,
+  WeeklyBy,
   WeeklyRow,
 } from "@timekeep/core";
 
@@ -54,7 +55,7 @@ export interface DetailedPage {
   totals: ReportTotals | null;
 }
 
-export type WeeklyBy = "user" | "project";
+export type { WeeklyBy };
 
 export interface WeeklyReport {
   weekStart: string;

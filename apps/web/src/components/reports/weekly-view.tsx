@@ -19,9 +19,7 @@ import {
   TableRow,
 } from "@timekeep/ui/components/table";
 import { cn } from "@timekeep/ui/lib/utils";
-import { useState, useSyncExternalStore } from "react";
-
-import type { WeeklyBy } from "@/lib/report-types";
+import { useSyncExternalStore } from "react";
 
 import { useTracker } from "../tracker/tracker-provider";
 import { useReportQuery } from "./report-url";
@@ -30,13 +28,14 @@ import { useReportOptions, useWeekly } from "./use-report";
 const noop = () => () => {};
 
 /** Rows (projects, or people for team readers) over the seven days of the range's week. */
-export function WeeklyView({ initialBy }: { initialBy: WeeklyBy }) {
+export function WeeklyView() {
   const { slug, viewer } = useTracker();
-  const { params } = useReportQuery();
+  const { query, params, set } = useReportQuery();
   const { data: options } = useReportOptions(slug);
   const canListPeople = Boolean(options?.users);
-  const [by, setBy] = useState<WeeklyBy>(initialBy);
-  const { data } = useWeekly(slug, params, canListPeople ? by : "project");
+  // The rows are part of the query, so the URL, exports and share links carry them.
+  const by = canListPeople ? query.weeklyBy : "project";
+  const { data } = useWeekly(slug, params);
   const tz = viewer.timezone;
   const fmt = (seconds: number) => formatDuration(seconds, viewer.durationFormat);
   // Today is only known in the browser; the server renders without the highlight.
@@ -62,7 +61,10 @@ export function WeeklyView({ initialBy }: { initialBy: WeeklyBy }) {
           </p>
         </div>
         {canListPeople ? (
-          <Select value={by} onValueChange={(v) => setBy(v === "user" ? "user" : "project")}>
+          <Select
+            value={by}
+            onValueChange={(v) => set({ weeklyBy: v === "user" ? "user" : "project" })}
+          >
             <SelectTrigger size="sm" aria-label="Rows" className="w-36">
               <SelectValue />
             </SelectTrigger>

@@ -199,6 +199,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Sort the detailed report by duration — `reports.spec.ts` › "sort the detailed report by duration"
 - [x] The weekly grid by project shows day and row totals that match the summary — `reports.spec.ts` › "the weekly grid by project shows day and row totals that match the summary"
 - [x] The weekly grid can list people instead of projects — `reports.spec.ts` › "the weekly grid can list people instead of projects"
+- [x] The weekly export lists people when the grid does — `reports.spec.ts` › "the weekly export lists people when the grid does"
 
 ## Exports and sharing
 

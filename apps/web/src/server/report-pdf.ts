@@ -216,7 +216,7 @@ export async function renderReportHtml(
     });
   }
   if (req.report === "weekly") {
-    const report = await weeklyReport(db, viewer, req.query, req.prefs, "project", now);
+    const report = await weeklyReport(db, viewer, req.query, req.prefs, now);
     return page({
       title,
       workspaceName: req.workspaceName,

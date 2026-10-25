@@ -105,7 +105,7 @@ export async function countExportRows(
       return flattenGroups(report.groups, report.groupBy).length;
     }
     case "weekly": {
-      const report = await weeklyReport(db, viewer, req.query, req.prefs, "project", req.now);
+      const report = await weeklyReport(db, viewer, req.query, req.prefs, req.now);
       return report.rows.length;
     }
   }
@@ -131,7 +131,7 @@ async function exportTable(
         columns: detailedColumns(req.prefs) as ExportColumn<unknown>[],
       };
     case "weekly": {
-      const report = await weeklyReport(db, viewer, req.query, req.prefs, "project", req.now);
+      const report = await weeklyReport(db, viewer, req.query, req.prefs, req.now);
       return {
         rows: report.rows,
         columns: weeklyColumns(report.dayKeys, req.prefs) as ExportColumn<unknown>[],

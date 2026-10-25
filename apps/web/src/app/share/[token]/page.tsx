@@ -37,7 +37,7 @@ export default async function SharedReportPage({ params }: PageProps<"/share/[to
   } else if (link.kind === "weekly") {
     data = {
       kind: "weekly",
-      report: await weeklyReport(db, link.viewer, link.query, link.prefs, "project", now),
+      report: await weeklyReport(db, link.viewer, link.query, link.prefs, now),
     };
   } else {
     const page = await detailedReport(
