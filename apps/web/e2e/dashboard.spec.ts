@@ -1,5 +1,6 @@
 import { expect, test } from "./fixtures";
 import { waitForApp } from "./helpers/app";
+import { reportTotal } from "./helpers/reports";
 import { addManualEntry, createProject, timer } from "./helpers/tracker";
 
 /** The dashboard: a person's own week, and who on the team is tracking now. */
@@ -21,6 +22,25 @@ test.describe("dashboard", () => {
     const most = page.getByRole("list", { name: "Most tracked" });
     await expect(most.getByRole("listitem").first()).toContainText("Site work");
     await expect(most.getByRole("listitem").nth(1)).toContainText("Email");
+  });
+
+  test("a most tracked item opens the detailed report for it", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await createProject(page, "Web");
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await addManualEntry(page, { description: "Email", start: "02:05", duration: "0.5" });
+    await page.goto(`/w/${freshUser.slug}/dashboard`);
+    await waitForApp(page);
+    const most = page.getByRole("list", { name: "Most tracked" });
+    await most.getByRole("link", { name: /Site work/ }).click();
+    await expect(page).toHaveURL(/\/reports\/detailed\?/);
+    await expect(reportTotal(page)).toHaveText("1:00:00");
+    await expect(page.getByRole("row", { name: "Entry Site work" })).toBeVisible();
+    await expect(page.getByRole("row", { name: "Entry Email" })).toHaveCount(0);
   });
 
   test("the Team tab shows who is tracking now within a poll", async ({

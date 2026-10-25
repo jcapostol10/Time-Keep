@@ -1,6 +1,11 @@
 "use client";
 
-import { type DurationFormat, formatDuration, type ReportGroup } from "@timekeep/core";
+import {
+  type DrillStep,
+  type DurationFormat,
+  formatDuration,
+  type ReportGroup,
+} from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import {
   Table,
@@ -12,6 +17,7 @@ import {
   TableRow,
 } from "@timekeep/ui/components/table";
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react";
+import Link from "next/link";
 import { Fragment, useState } from "react";
 
 import type { SummaryReport } from "@/lib/report-types";
@@ -22,13 +28,18 @@ function groupPath(parents: string[], group: ReportGroup): string {
   return [...parents, `${group.key}:${group.id ?? ""}`].join("/");
 }
 
-/** The grouped totals, one level per key, each group collapsible. */
+/**
+ * The grouped totals, one level per key, each group collapsible. With `linkFor`, each
+ * group's name links to the Detailed report behind it (not on the public share page).
+ */
 export function SummaryTable({
   report,
   durationFormat,
+  linkFor,
 }: {
   report: SummaryReport;
   durationFormat: DurationFormat;
+  linkFor?: (steps: DrillStep[]) => string;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const fmt = (seconds: number) => formatDuration(seconds, durationFormat);
@@ -42,9 +53,15 @@ export function SummaryTable({
     });
   }
 
-  function rows(groups: ReportGroup[], level: number, parents: string[]): React.ReactNode {
+  function rows(
+    groups: ReportGroup[],
+    level: number,
+    parents: string[],
+    steps: DrillStep[],
+  ): React.ReactNode {
     return groups.map((g) => {
       const path = groupPath(parents, g);
+      const here = [...steps, { key: g.key, id: g.id }];
       const open = !collapsed.has(path);
       const hasChildren = g.children.length > 0;
       return (
@@ -65,7 +82,13 @@ export function SummaryTable({
               ) : null}
             </TableCell>
             <TableCell style={{ paddingLeft: `${level * 20 + 8}px` }} className="font-medium">
-              {g.label}
+              {linkFor ? (
+                <Link href={linkFor(here)} className="hover:underline">
+                  {g.label}
+                </Link>
+              ) : (
+                g.label
+              )}
             </TableCell>
             <TableCell className="text-right tabular-nums">
               {fmt(g.totals.durationSeconds)}
@@ -77,7 +100,7 @@ export function SummaryTable({
               {g.totals.entryCount}
             </TableCell>
           </TableRow>
-          {hasChildren && open ? rows(g.children, level + 1, [...parents, path]) : null}
+          {hasChildren && open ? rows(g.children, level + 1, [...parents, path], here) : null}
         </Fragment>
       );
     });
@@ -103,7 +126,7 @@ export function SummaryTable({
             <TableHead className="hidden text-right sm:table-cell">Entries</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>{rows(report.groups, 0, [])}</TableBody>
+        <TableBody>{rows(report.groups, 0, [], [])}</TableBody>
         <TableFooter>
           <TableRow>
             <TableCell />

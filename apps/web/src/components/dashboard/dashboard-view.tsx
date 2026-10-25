@@ -13,10 +13,12 @@ import {
 } from "@timekeep/ui/components/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@timekeep/ui/components/tabs";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { fetchJson } from "@/lib/fetch-json";
+import { detailedHref } from "@/lib/report-links";
 import type { DashboardMe, TeamMember } from "@/server/dashboard";
 
 import { DatePresetMenu } from "../reports/date-preset-menu";
@@ -33,7 +35,7 @@ const tooltipStyle = {
 };
 
 function MeTab({ data }: { data: DashboardMe | undefined }) {
-  const { viewer } = useTracker();
+  const { slug, viewer } = useTracker();
   const fmt = (s: number) => formatDuration(s, viewer.durationFormat);
   if (!data) return <Skeleton className="h-64 w-full" />;
   const billableShare =
@@ -132,12 +134,15 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
                     key={`${m.description}|${m.projectName ?? ""}`}
                     className="flex items-baseline justify-between gap-2 text-sm"
                   >
-                    <span className="min-w-0 truncate">
+                    <Link
+                      href={detailedHref(slug, m.detailedParams)}
+                      className="min-w-0 truncate hover:underline"
+                    >
                       {m.description || "(no description)"}
                       {m.projectName ? (
                         <span className="text-muted-foreground"> · {m.projectName}</span>
                       ) : null}
-                    </span>
+                    </Link>
                     <span className="shrink-0 font-medium tabular-nums">{fmt(m.seconds)}</span>
                   </li>
                 ))}

@@ -192,6 +192,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Presets and a custom range change the URL and the totals — `reports.spec.ts` › "presets and a custom range change the URL and the totals"
 - [x] A member cannot widen the Users filter by URL and has no Users filter — `reports.spec.ts` › "a member cannot widen the Users filter by URL"
 - [x] The summary agrees with the tracker's week total — `reports.spec.ts` › "the summary agrees with the tracker's week total"
+- [x] A summary row opens the detailed report filtered to it — `reports.spec.ts` › "a summary row opens the detailed report filtered to it"
+- [x] A weekly cell opens the detailed report for that project and day — `reports.spec.ts` › "a weekly cell opens the detailed report for that project and day"
 - [x] The detailed report lists entries and loads more — `reports.spec.ts` › "the detailed report lists entries and loads more"
 - [x] Edit an own entry inline in the detailed report — `reports.spec.ts` › "edit the description and duration of an own entry inline"
 - [x] Another person's entry is read-only in the detailed report — `reports.spec.ts` › "another person's entry is read-only"
@@ -214,6 +216,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Dashboard
 
 - [x] The dashboard shows this week's total, top project and most tracked — `dashboard.spec.ts` › "the dashboard shows this week's total, top project and most tracked"
+- [x] A most tracked item opens the detailed report for it — `dashboard.spec.ts` › "a most tracked item opens the detailed report for it"
 - [x] The Team tab shows who is tracking now within a poll — `dashboard.spec.ts` › "the Team tab shows who is tracking now within a poll"
 - [x] A member has no Team tab — `dashboard.spec.ts` › "a member has no Team tab"
 

@@ -3,6 +3,8 @@
 import { formatDuration } from "@timekeep/core";
 import { Skeleton } from "@timekeep/ui/components/skeleton";
 
+import { detailedHref, detailedParams } from "@/lib/report-links";
+
 import { useTracker } from "../tracker/tracker-provider";
 import { GroupByControl } from "./group-by-control";
 import { useReportQuery } from "./report-url";
@@ -35,7 +37,13 @@ export function SummaryView() {
       {data ? (
         <>
           <SummaryCharts report={data} durationFormat={viewer.durationFormat} />
-          <SummaryTable report={data} durationFormat={viewer.durationFormat} />
+          <SummaryTable
+            report={data}
+            durationFormat={viewer.durationFormat}
+            linkFor={(steps) =>
+              detailedHref(slug, detailedParams(query, steps, data.range, viewer.timezone))
+            }
+          />
         </>
       ) : (
         <Skeleton className="h-64 w-full" />

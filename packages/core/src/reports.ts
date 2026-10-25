@@ -453,3 +453,65 @@ export function clampRangeToYear(
   const limit = addDaysInZone(to, -MAX_DATE_RANGE_DAYS, tz);
   return { from: from < limit ? limit : from, to };
 }
+
+/** One level of a report group: which key, and the group's id (null = "No …"). */
+export interface DrillStep {
+  key: GroupKey;
+  id: string | null;
+}
+
+/**
+ * The query of the Detailed report behind a group: the report's own filters narrowed to
+ * every step of the path (a date, week or month narrows the range, inside the report's
+ * range). A description narrows by text, as the filter does.
+ */
+export function drillDownQuery(
+  query: ReportQuery,
+  steps: DrillStep[],
+  range: { from: Date; to: Date },
+  prefs: Pick<ViewerPrefs, "timezone">,
+): ReportQuery {
+  const tz = prefs.timezone;
+  const out: ReportQuery = { ...query };
+  let from = range.from;
+  let to = range.to;
+  const narrow = (start: Date, end: Date) => {
+    if (start > from) from = start;
+    if (end < to) to = end;
+  };
+  const dayStart = (key: string) => zonedDateTimeToInstant({ date: key, hours: 0, minutes: 0 }, tz);
+  for (const { key, id } of steps) {
+    const ids = [id ?? NONE_ID];
+    switch (key) {
+      case "project":
+        out.projectIds = ids;
+        break;
+      case "client":
+        out.clientIds = ids;
+        break;
+      case "task":
+        out.taskIds = ids;
+        break;
+      case "tag":
+        out.tagIds = ids;
+        out.tagMode = "or";
+        break;
+      case "user":
+        if (id) out.userIds = [id];
+        break;
+      case "description":
+        out.description = id ?? "";
+        break;
+      case "date":
+        if (id) narrow(dayStart(id), addDaysInZone(dayStart(id), 1, tz));
+        break;
+      case "week":
+        if (id) narrow(dayStart(id), addDaysInZone(dayStart(id), 7, tz));
+        break;
+      case "month":
+        if (id) narrow(dayStart(`${id}-01`), monthBoundsInZone(dayStart(`${id}-01`), tz).monthEnd);
+        break;
+    }
+  }
+  return { ...out, preset: "custom", from: from.toISOString(), to: to.toISOString() };
+}

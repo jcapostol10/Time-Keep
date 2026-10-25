@@ -136,6 +136,40 @@ test.describe("reports", () => {
     await expect(reportTotal(page)).toHaveText(weekTotal);
   });
 
+  test("a summary row opens the detailed report filtered to it", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await createProject(page, "Web");
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await addManualEntry(page, { description: "Email", start: "02:05", duration: "0.5" });
+    await openReport(page, freshUser.slug, "summary");
+    await groupRow(page, "Web").getByRole("link", { name: "Web" }).click();
+    await expect(page).toHaveURL(/\/reports\/detailed\?.*projectIds=/);
+    await expect(reportTotal(page)).toHaveText("1:00:00");
+    await expect(page.getByRole("row", { name: "Entry Site work" })).toBeVisible();
+    await expect(page.getByRole("row", { name: "Entry Email" })).toHaveCount(0);
+  });
+
+  test("a weekly cell opens the detailed report for that project and day", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await createProject(page, "Web");
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await addManualEntry(page, { description: "Email", start: "02:05", duration: "0.5" });
+    await openReport(page, freshUser.slug, "weekly");
+    const grid = page.getByRole("table", { name: "Weekly report" });
+    await grid.getByRole("row", { name: /^Web / }).getByRole("link", { name: "1:00:00" }).click();
+    await expect(page).toHaveURL(/\/reports\/detailed\?/);
+    await expect(reportTotal(page)).toHaveText("1:00:00");
+    await expect(page.getByRole("row", { name: "Entry Site work" })).toBeVisible();
+  });
+
   test("the detailed report lists entries and loads more", async ({
     page,
     freshUser,

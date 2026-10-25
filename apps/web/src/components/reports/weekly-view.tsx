@@ -1,6 +1,11 @@
 "use client";
 
-import { formatDuration, localDateKey, zonedDateTimeToInstant } from "@timekeep/core";
+import {
+  addDaysInZone,
+  formatDuration,
+  localDateKey,
+  zonedDateTimeToInstant,
+} from "@timekeep/core";
 import {
   Select,
   SelectContent,
@@ -19,7 +24,10 @@ import {
   TableRow,
 } from "@timekeep/ui/components/table";
 import { cn } from "@timekeep/ui/lib/utils";
+import Link from "next/link";
 import { useSyncExternalStore } from "react";
+
+import { detailedHref, detailedParams } from "@/lib/report-links";
 
 import { useTracker } from "../tracker/tracker-provider";
 import { useReportQuery } from "./report-url";
@@ -38,6 +46,16 @@ export function WeeklyView() {
   const { data } = useWeekly(slug, params);
   const tz = viewer.timezone;
   const fmt = (seconds: number) => formatDuration(seconds, viewer.durationFormat);
+  /** The Detailed report for one row's day, within the shown week. */
+  const cellHref = (rowId: string | null, day: string, dayKeys: string[], rowsBy: typeof by) => {
+    const start = zonedDateTimeToInstant({ date: dayKeys[0] ?? day, hours: 0, minutes: 0 }, tz);
+    const week = { from: start, to: addDaysInZone(start, 7, tz) };
+    const steps = [
+      { key: rowsBy, id: rowId },
+      { key: "date" as const, id: day },
+    ];
+    return detailedHref(slug, detailedParams(query, steps, week, tz));
+  };
   // Today is only known in the browser; the server renders without the highlight.
   const todayKey = useSyncExternalStore(
     noop,
@@ -117,7 +135,16 @@ export function WeeklyView() {
                           seconds === 0 && "text-muted-foreground",
                         )}
                       >
-                        {seconds === 0 ? "—" : fmt(seconds)}
+                        {seconds === 0 ? (
+                          "—"
+                        ) : (
+                          <Link
+                            href={cellHref(row.id, data.dayKeys[i]!, data.dayKeys, data.by)}
+                            className="hover:underline"
+                          >
+                            {fmt(seconds)}
+                          </Link>
+                        )}
                       </TableCell>
                     ))}
                     <TableCell className="text-right font-semibold tabular-nums">

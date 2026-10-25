@@ -5,6 +5,8 @@ import {
   bucketKeyOfDay,
   bucketKeys,
   clampRangeToYear,
+  DEFAULT_REPORT_QUERY,
+  drillDownQuery,
   buildWeekly,
   type GroupKey,
   groupRows,
@@ -402,5 +404,51 @@ describe("custom range length", () => {
     expect(keepTo.from.toISOString()).toBe("2026-05-31T04:00:00.000Z");
     const short = clampRangeToYear(from, new Date("2025-02-01T05:00:00.000Z"), "from", tz);
     expect(short.to.toISOString()).toBe("2025-02-01T05:00:00.000Z");
+  });
+});
+
+describe("drillDownQuery", () => {
+  const range = {
+    from: new Date("2026-03-01T16:00:00.000Z"), // Mar 2, Manila
+    to: new Date("2026-03-15T16:00:00.000Z"), // Mar 16, Manila
+  };
+  const base = { ...DEFAULT_REPORT_QUERY, preset: "last-week" as const, billable: "yes" as const };
+
+  it("narrows the query to a group path, keeping the other filters", () => {
+    const q = drillDownQuery(
+      base,
+      [
+        { key: "client", id: null },
+        { key: "project", id: "web" },
+        { key: "tag", id: "urgent" },
+        { key: "user", id: "alice" },
+        { key: "task", id: null },
+        { key: "description", id: "Site work" },
+      ],
+      range,
+      MANILA,
+    );
+    expect(q).toMatchObject({
+      clientIds: ["none"],
+      projectIds: ["web"],
+      tagIds: ["urgent"],
+      tagMode: "or",
+      userIds: ["alice"],
+      taskIds: ["none"],
+      description: "Site work",
+      billable: "yes",
+      preset: "custom",
+      from: range.from.toISOString(),
+      to: range.to.toISOString(),
+    });
+  });
+
+  it("narrows the range to a day, week or month, inside the report's range", () => {
+    const day = drillDownQuery(base, [{ key: "date", id: "2026-03-09" }], range, MANILA);
+    expect([day.from, day.to]).toEqual(["2026-03-08T16:00:00.000Z", "2026-03-09T16:00:00.000Z"]);
+    const week = drillDownQuery(base, [{ key: "week", id: "2026-03-09" }], range, MANILA);
+    expect([week.from, week.to]).toEqual(["2026-03-08T16:00:00.000Z", "2026-03-15T16:00:00.000Z"]);
+    const month = drillDownQuery(base, [{ key: "month", id: "2026-03" }], range, MANILA);
+    expect([month.from, month.to]).toEqual([range.from.toISOString(), range.to.toISOString()]);
   });
 });

@@ -9,6 +9,7 @@ import {
 } from "@timekeep/core";
 import { and, asc, type Database, desc, eq, isNull, project, timeEntry } from "@timekeep/db";
 
+import { detailedParams } from "@/lib/report-links";
 import type { SeriesPoint } from "@/lib/report-types";
 
 import type { Viewer } from "./catalog/viewer";
@@ -31,6 +32,8 @@ export interface MostTracked {
   description: string;
   projectName: string | null;
   seconds: number;
+  /** The Detailed report's query string for this description, project and person. */
+  detailedParams: string;
 }
 
 export interface DashboardMe {
@@ -67,6 +70,15 @@ export async function dashboardMe(
         description: d.id ?? "",
         projectName: p.id === null ? null : p.label,
         seconds: p.totals.durationSeconds,
+        detailedParams: detailedParams(
+          own,
+          [
+            { key: "description", id: d.id },
+            { key: "project", id: p.id },
+          ],
+          byActivity.range,
+          prefs.timezone,
+        ),
       })),
     )
     .sort((a, b) => b.seconds - a.seconds || a.description.localeCompare(b.description))
