@@ -9,6 +9,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## App
 
+- [ ] Export jobs run inside the web function after the response (`after()`, within the 300 s budget). Once a worker host exists, enqueue `runExportJob(db, jobId)` on pg-boss instead (decision 1 of the Phase 3 design); the function is already one call, but `apps/worker` cannot import the web app's `server-only` storage and mail modules, so they need a shared package first.
 - [ ] `sign-up-form.tsx` maps `USER_ALREADY_EXISTS` to the email field, but Better Auth 1.7.7 emits `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; moot while `requireEmailVerification` answers a duplicate sign-up with a generic success (predates Phase 2). A refused password-reset send also looks like success, by Better Auth's design, which keeps account existence private.
 - [ ] After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
 - [ ] Timesheet rows added by hand live only for the page visit (templates persist); consider keeping them per week in local storage.

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { expect, test } from "./fixtures";
 import { createClientViaUi, createProjectViaUi } from "./helpers/catalog";
+import { waitForEmail } from "./helpers/mail";
 import {
   detailedRow,
   groupRow,
@@ -267,5 +268,38 @@ test.describe("reports", () => {
     const text = await readFile((await download.path())!, "utf8");
     expect(text).toContain("Project,Duration,Billable,Entries");
     expect(text).toContain("No project,1:00:00,0:00:00,1");
+  });
+
+  test("a large export becomes a job with a download link and an email", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    // e2e runs with EXPORT_JOB_THRESHOLD=5, so six entries make a job.
+    await trackerPage();
+    for (let i = 0; i < 6; i++) {
+      await addManualEntry(page, {
+        description: `Row ${i}`,
+        start: `0${i}:05`,
+        duration: "0.25",
+      });
+    }
+    await openReport(page, freshUser.slug, "detailed");
+    await page.getByRole("button", { name: "Export" }).click();
+    await page.getByRole("menuitem", { name: "CSV" }).click();
+    await expect(page.getByText("This export is large")).toBeVisible();
+    await page.getByRole("link", { name: "Exports", exact: true }).click();
+    const job = page.getByRole("row", { name: /Detailed · CSV/ });
+    await expect(job).toContainText("Ready", { timeout: 30_000 });
+    await expect(job).toContainText("6 rows");
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      job.getByRole("button", { name: "Download" }).click(),
+    ]);
+    const text = await readFile((await download.path())!, "utf8");
+    expect(text).toContain("Row 5");
+    expect(text.trim().split("\r\n")).toHaveLength(7);
+    const email = await waitForEmail(freshUser.email, { subject: /export is ready/i });
+    expect(email.Text).toContain("6 rows");
   });
 });

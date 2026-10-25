@@ -1,8 +1,11 @@
 import { parseReportQuery, REPORT_KINDS, resolveViewerPrefs } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
+import { after } from "next/server";
 import { z } from "zod";
 
-import { buildExport } from "@/server/report-files";
+import { createExportJob, expireExportJobs, runExportJob } from "@/server/export-jobs";
+import { env } from "@/server/env";
+import { buildExport, countExportRows } from "@/server/report-files";
 import { accessErrorResponse, requireWorkspaceAccess } from "@/server/workspace-access";
 
 const requestSchema = z.object({
@@ -10,12 +13,19 @@ const requestSchema = z.object({
   format: z.enum(["csv", "xlsx"]),
 });
 
+/** Vercel Functions answer with at most 4.5 MB; leave room for headers. */
+const MAX_STREAMED_BYTES = 4 * 1024 * 1024;
+
 /** A Content-Disposition value that survives any file name. */
 function attachment(filename: string): string {
   return `attachment; filename="${filename.replace(/[^\w.\- ]+/g, "_")}"`;
 }
 
-/** The current report as a file, for the query in the URL. */
+/**
+ * The current report as a file. Small exports stream back; one over
+ * EXPORT_JOB_THRESHOLD rows (or 4 MB) becomes an export job built after
+ * the response, and the answer is 202 with the job's id.
+ */
 export async function GET(
   request: Request,
   ctx: RouteContext<"/api/w/[workspaceSlug]/reports/export">,
@@ -30,12 +40,26 @@ export async function GET(
     });
     if (!parsed.success) return Response.json({ error: "Invalid export" }, { status: 400 });
 
+    const db = getDb();
     const viewer = { workspaceId: access.workspace.id, userId: access.user.id, role: access.role };
-    const file = await buildExport(getDb(), viewer, {
+    const req = {
       ...parsed.data,
       query: parseReportQuery(params),
       prefs: resolveViewerPrefs(access.user, access.settings),
-    });
+    };
+
+    const queue = async () => {
+      const job = await createExportJob(db, viewer, req);
+      after(async () => {
+        await expireExportJobs(db);
+        await runExportJob(db, job.id);
+      });
+      return Response.json({ jobId: job.id }, { status: 202 });
+    };
+
+    if ((await countExportRows(db, viewer, req)) > env().EXPORT_JOB_THRESHOLD) return queue();
+    const file = await buildExport(db, viewer, req);
+    if (file.body.byteLength > MAX_STREAMED_BYTES) return queue();
     return new Response(Buffer.from(file.body), {
       headers: {
         "Content-Type": file.contentType,

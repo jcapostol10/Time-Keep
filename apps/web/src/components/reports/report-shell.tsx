@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { PageHeader } from "@/components/page-header";
+import { workspaceRoutes } from "@/lib/routes";
 
 import { useTracker } from "../tracker/tracker-provider";
 import { ExportMenu } from "./export-menu";
@@ -58,6 +59,12 @@ export function ReportShell({
             {v.label}
           </Link>
         ))}
+        <Link
+          href={`${workspaceRoutes.reports(slug)}/exports`}
+          className="text-muted-foreground hover:text-foreground -mb-px ml-auto border-b-2 border-transparent px-3 py-2 text-sm font-medium"
+        >
+          Exports
+        </Link>
       </nav>
       <FilterBar />
       {children}
