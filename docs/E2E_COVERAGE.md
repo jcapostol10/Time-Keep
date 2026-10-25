@@ -198,6 +198,10 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The weekly grid by project shows day and row totals that match the summary — `reports.spec.ts` › "the weekly grid by project shows day and row totals that match the summary"
 - [x] The weekly grid can list people instead of projects — `reports.spec.ts` › "the weekly grid can list people instead of projects"
 
+## Exports and sharing
+
+- [x] Export the summary as CSV — `reports.spec.ts` › "export the summary as CSV"
+
 ## Tenant isolation
 
 - [x] A member of one workspace cannot open another workspace's pages — `tenant-isolation.spec.ts` › "a member of one workspace cannot open another workspace's pages"

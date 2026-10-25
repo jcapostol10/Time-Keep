@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { PageHeader } from "@/components/page-header";
 
 import { useTracker } from "../tracker/tracker-provider";
+import { ExportMenu } from "./export-menu";
 import { FilterBar } from "./filter-bar";
 import { reportHref, useReportQuery } from "./report-url";
 
@@ -32,7 +33,15 @@ export function ReportShell({
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Reports" actions={actions} />
+      <PageHeader
+        title="Reports"
+        actions={
+          <>
+            {actions}
+            <ExportMenu kind={kind} />
+          </>
+        }
+      />
       <nav aria-label="Report views" className="flex gap-1 border-b">
         {VIEWS.map((v) => (
           <Link

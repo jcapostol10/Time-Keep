@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import { expect, test } from "./fixtures";
 import { createClientViaUi, createProjectViaUi } from "./helpers/catalog";
 import {
@@ -248,5 +250,22 @@ test.describe("reports", () => {
     await page.getByRole("option", { name: "People" }).click();
     const grid = page.getByRole("table", { name: "Weekly report" });
     await expect(grid.getByRole("row", { name: /^Fresh / })).toContainText("1:00:00");
+  });
+
+  test("export the summary as CSV", async ({ page, freshUser, trackerPage }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await openReport(page, freshUser.slug, "summary");
+    await page.getByRole("button", { name: "Export" }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("menuitem", { name: "CSV" }).click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(
+      /^timekeep-summary-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/,
+    );
+    const text = await readFile((await download.path())!, "utf8");
+    expect(text).toContain("Project,Duration,Billable,Entries");
+    expect(text).toContain("No project,1:00:00,0:00:00,1");
   });
 });
