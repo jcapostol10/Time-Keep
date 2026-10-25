@@ -9,7 +9,7 @@ TimeKeep is a web-based time tracking and timesheet SaaS for teams (functionally
 | `pnpm install` | Install everything (pnpm 10, Node 22+) |
 | `cp .env.example .env` | One root `.env`; every app/package loads it via `dotenv -e ../../.env` |
 | `docker compose up -d --wait` | Postgres 16 (`:5432`), Mailpit (`:8025` UI, `:1025` SMTP), RustFS S3 (`:9000` API, `:9001` console) |
-| `pnpm storage:init` | Create the bucket + public-read policy for `avatars/*`, `logos/*` (any S3-compatible backend) |
+| `pnpm storage:init` | Create the bucket + public-read policy for `avatars/*`, `logos/*`, and the private `S3_EXPORT_BUCKET` for export files (any S3-compatible backend) |
 | `pnpm db:migrate` / `pnpm db:generate` / `pnpm db:seed` / `pnpm db:studio` | Drizzle migrations, generate from schema, demo data, studio |
 | `pnpm bootstrap` | compose up + storage:init + migrate + seed (not `setup`: that is a pnpm built-in and silently shadows package scripts) |
 | `pnpm dev` | Web (`http://localhost:3000`) and worker, via Turborepo |
@@ -19,6 +19,7 @@ TimeKeep is a web-based time tracking and timesheet SaaS for teams (functionally
 | `pnpm --filter @timekeep/web e2e:coverage` | Check `docs/E2E_COVERAGE.md`: every ticked line must name a listed, non-skipped test (runs in CI) |
 | `E2E_BASE_URL=<preview url> pnpm --filter @timekeep/web e2e` | Run the e2e suite against a Vercel preview (also needs `E2E_SECRET`, `VERCEL_AUTOMATION_BYPASS_SECRET`) |
 | `pnpm db:e2e-cleanup` | Delete throwaway `@e2e.test` users, e2e-only workspaces and old captured email |
+| `pnpm db:seed:perf` then `pnpm --filter @timekeep/web report:perf` | Local only: a `perf` workspace with 1,000,000 entries, then time the one-year Summary (fails over 1 s) and print its plans |
 
 Demo login after seeding: `owner@demo.test` / `password123` (also `admin@`, `manager@`, `member1@`, `member2@` — same password). Demo workspace slug: `demo`.
 
@@ -26,23 +27,28 @@ Demo login after seeding: `owner@demo.test` / `password123` (also `admin@`, `man
 
 ```
 apps/web/            Next.js 16 App Router (React 19, TS strict, Tailwind v4 + shadcn/ui)
-  src/app/           routes: (auth)/*, /w/[workspaceSlug]/*, /account, /workspaces/new, /invite/[id], /api/auth
-  src/app/api/w/[workspaceSlug]/*   JSON GET route handlers for client reads (tracker entries, running, options)
+  src/app/           routes: (auth)/*, /w/[workspaceSlug]/*, /account, /workspaces/new, /invite/[id], /api/auth,
+                     /share/[token] (public shared report, no session)
+  src/app/api/w/[workspaceSlug]/*   JSON GET route handlers for client reads (tracker entries, running, options,
+                     reports/*, dashboard/*)
   src/server/        server-only code: auth.ts (Better Auth), env.ts, mail.ts, storage.ts (S3),
                      session.ts, workspace-access.ts, workspaces.ts, time-entries.ts (entry service),
                      timesheet.ts (templates, copy week), catalog/* (clients, projects, tasks, tags),
+                     reports.ts (report engine), report-route.ts, report-files.ts (CSV/Excel),
+                     report-pdf.ts, export-jobs.ts, share-links.ts, dashboard.ts,
                      actions/* (server actions), queries/*
   src/components/    UI; shell/* is the app frame, tracker/*, timesheet/*, calendar/*, clients/*,
-                     projects/*, tags/*, auth/*, team/*, settings/*, account/*
+                     projects/*, tags/*, reports/*, dashboard/*, auth/*, team/*, settings/*, account/*
   src/hooks/         client hooks (use-now: shared 1s clock; use-local-storage)
   src/lib/           isomorphic helpers: auth-client.ts, permissions.ts, routes.ts, action-result.ts,
-                     tracker-types.ts (DTOs), fetch-json.ts, notifications.ts
+                     tracker-types.ts, report-types.ts (DTOs), fetch-json.ts, notifications.ts
   src/proxy.ts       Next 16 "proxy" (was middleware): optimistic cookie check only
   e2e/               Playwright specs + Mailpit helper;  test/ has Vitest DB helpers
 apps/worker/         pg-boss job runner (Node, tsx)
 packages/db/         Drizzle schema (src/schema/*), client.ts, migrate.ts, seed.ts, migrations/
 packages/core/       Pure domain code: roles, zod schemas, slugs, duration + timezone helpers,
-                     entry grouping/editing, tracker rules. Unit tested. No I/O
+                     entry grouping/editing, tracker rules, report query/ranges/grouping,
+                     export columns (report-export.ts). Unit tested. No I/O
 packages/ui/         shadcn/ui components (`@timekeep/ui/components/*`) and the theme (src/styles/globals.css)
 packages/config/     Shared ESLint flat configs and tsconfig presets
 docs/                PRD.md, DATA_MODEL.md, PROGRESS.md, E2E_COVERAGE.md, BACKLOG.md (deferred fixes)
@@ -74,6 +80,9 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md, E2E_COVERAGE.md, BACKLO
 - **Catalog** (clients, projects, tasks, tags): services in `src/server/catalog/*` take a `Viewer` (`workspaceId`, `userId`, `role`) and apply `canSeeProject` from `packages/core/src/catalog.ts` (admins see everything; others see public projects and private ones they are on). A private project a member is not on is "not found", never "forbidden". `trackingBlock` says why details cannot take new time (archived project, done task, archived tag); the entry service applies it on start, manual create, continue, duplicate and detail changes. Owners and admins manage the catalog; members only pick. Patch schemas are explicit (`projectPatchSchema`, `clientPatchSchema`, …): zod 4 `.partial()` keeps field defaults, which would reset untouched columns.
 - Pickers: `ProjectPicker` takes and returns `{ projectId, taskId }` (a task implies its project) and shows the entry's own project/task (`current`) when the options no longer list it; the same for `TagPicker` and archived tags.
 - Timesheet and calendar read the viewer's entries for a range through `/api/w/[slug]/time-entries/range` under the `trackerKeys.range` key, which sits under the tracker's `entries` prefix, so any entry write (`useEntryWrites`, the list's mutations, another tab) refetches every view. Their maths is pure in `packages/core/src/timesheet.ts` and `calendar.ts`.
+- **Reports** (`src/server/reports.ts`): one engine for Summary, Detailed, Weekly, the dashboard, the project Status tab, exports and share links, so their numbers cannot drift. It counts stopped, live entries only, scoped by workspace; `effectiveQuery` pins a member to their own `userIds` whatever the URL says (`canReadTeam`: owner, admin, manager see everyone). Grouping keys, presets, buckets and sort columns are fixed vocabularies in `packages/core/src/reports.ts`, never strings from the URL. The report query is the URL (`parseReportQuery` / `reportQueryToSearchParams`); filter changes use `history.replaceState`, not the router, so no server render runs. Report data sits under `trackerKeys.report`, inside the tracker's `entries` prefix, so any entry write refetches it. SQL groups by ordinal (`sql.raw("1")`): Drizzle numbers the same parameter differently in SELECT and GROUP BY. Duration sums are `::bigint` with `.mapWith(Number)` (`int` overflows at 2^31 s). The Detailed report pages by keyset on `(sort column, id)`.
+- **Exports** read one column record per report (`packages/core/src/report-export.ts`) for CSV (BOM, CRLF) and Excel; the PDF prints a self-contained HTML template in headless Chromium (`report-pdf.ts`). Over `EXPORT_JOB_THRESHOLD` rows (default 10,000) or 4 MB, an export becomes an `export_job` run with `after()` (`runExportJob`, a single call so it can move to pg-boss), stored in the private `S3_EXPORT_BUCKET`, downloaded through a 15-minute presigned URL, and the owner is emailed. Export files never go in the public bucket.
+- **Share links** store only the sha256 of a 32-byte token, plus the effective query and the creator's preferences; they read with the creator's current role. Revoked, expired, unknown, or a creator who left: the same 404.
 - `components/calendar/event-sources.ts` is the extension point for Google/Outlook events; nothing syncs yet.
 - Tracker data flow: the page SSRs the first week into react-query (`HydrationBoundary`); later pages and refetches use the `/api/w/[slug]/...` route handlers; writes are server actions followed by cache updates (`components/tracker/entry-cache.ts`). Everything crossing the boundary is JSON with ISO strings (`lib/tracker-types.ts`), never `Date`.
 - `TrackerProvider` (in the workspace layout) owns the running timer on every workspace page: tab title, S / N / Esc shortcuts, cross-tab sync (BroadcastChannel + refetch on focus), idle detection, Pomodoro and reminders. Components that need the ticking clock use `useTrackerClock()`; everything else uses `useTracker()` so rows do not re-render every second.
@@ -105,6 +114,7 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md, E2E_COVERAGE.md, BACKLO
   - **`pnpm test` must never point at Supabase**: it truncates every table.
 - The app connects through Supavisor in **transaction mode** (port 6543): no named prepared statements, `SET`, `LISTEN/NOTIFY` or session-level advisory locks (transaction-scoped `pg_advisory_xact_lock` is fine). Migrations, seed and cleanup use `DATABASE_URL_SESSION` (port 5432).
 - **Every table enables RLS** (`.enableRLS()` on each `pgTable`) and the `anon`/`authenticated` roles have no privileges on `public`, so Supabase's Data API can read nothing. `rls.test.ts` fails if a new table misses it.
+- Production and previews set `S3_EXPORT_BUCKET=timekeep-exports` (a private Supabase bucket); previews also set `EXPORT_JOB_THRESHOLD=5`, the value the e2e job test uses (Playwright's local web server sets the same).
 - Previews set `MAIL_CAPTURE=true`: email is stored in `captured_email` instead of sent, and the e2e suite reads it from `/api/test/emails` (404 without `E2E_SECRET`, and always in production).
 - `.github/workflows/e2e-preview.yml` runs on every successful preview deployment: seed, e2e against the deployment URL, then cleanup.
 - **Shared-database safety rules.**

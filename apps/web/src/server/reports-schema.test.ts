@@ -10,7 +10,9 @@ const db = handle.db;
 
 function pgCode(error: unknown): string | undefined {
   const cause = (error as { cause?: unknown })?.cause ?? error;
-  return typeof cause === "object" && cause !== null ? (cause as { code?: string }).code : undefined;
+  return typeof cause === "object" && cause !== null
+    ? (cause as { code?: string }).code
+    : undefined;
 }
 
 describe("report share links and export jobs", () => {

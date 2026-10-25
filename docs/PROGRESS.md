@@ -121,9 +121,30 @@ Review (2026-10-21): a fresh reviewer read the whole branch (no Critical, 5 Impo
 
 ## Phase 3 — Reports, dashboard and exports
 
-- [ ] Report engine (SQL aggregation, filters, 3-level grouping, permissions)
-- [ ] Summary / Detailed / Weekly pages, exports (CSV, Excel, PDF), share links, large exports via worker
-- [ ] Dashboard (Me / Team), Project Status tab
+- [x] Report engine: one scoped SQL aggregation over stopped entries, every filter, grouping at up to three levels, members pinned to their own time (`reports.test.ts`, `reports.spec.ts`)
+- [x] Summary / Detailed / Weekly pages, exports (CSV, Excel, PDF), share links, large exports as jobs (`reports.spec.ts`, `share.spec.ts`)
+- [x] Dashboard (Me / Team), Project Status tab on the engine with CSV export (`dashboard.spec.ts`, `project-detail.spec.ts`)
+
+Acceptance checks:
+
+- [x] Totals match between Summary, Detailed, Weekly and the Time Tracker weekly total for the same range (`reports.spec.ts`, "the summary agrees with the tracker's week total" and "the weekly grid by project shows day and row totals that match the summary")
+- [x] A shared link opens in a private window and shows the same numbers (`share.spec.ts`, "a share link opens without signing in and shows the same total")
+- [x] Summary for one year over 1M seeded entries returns in under 1 second locally: median 757 ms (`pnpm db:seed:perf`, then `pnpm --filter @timekeep/web report:perf`; plans in `docs/DATA_MODEL.md`)
+
+Design: `docs/superpowers/specs/2026-10-23-phase-3-design.md`. Plan: `docs/superpowers/plans/2026-10-23-phase-3.md`.
+
+Decisions (the owner agreed on 2026-10-23) and deviations from the prompt:
+
+- Large exports (over `EXPORT_JOB_THRESHOLD` rows, default 10,000, or over 4 MB) run in the web function after the response (`after()`), not in the pg-boss worker, which has no host yet. The file goes to the private `S3_EXPORT_BUCKET`, is listed under Reports → Exports with a 15-minute presigned download, expires after 7 days, and the owner is emailed. Moving `runExportJob` behind pg-boss is in `docs/BACKLOG.md`.
+- PDFs are printed by headless Chromium (`@sparticuz/chromium` on Vercel, Playwright's Chrome locally) from a self-contained HTML template with inline CSS and hand-drawn SVG charts. Recharts draws nothing on the server, so the PDF charts are drawn a second time and look a little different from the screen.
+- Owners, admins and managers see everyone's time; members see their own only, whatever the URL says. Phase 4 narrows managers.
+- Share links: 32 random bytes in the URL, only the sha256 hash stored, optional expiry (7, 30 or 90 days), revocable from Reports → Shared. A link keeps its creator's query and preferences, reads with the creator's current role, and a revoked, expired or unknown token, or a creator who left, gets the same 404. A shared report too large to stream refuses the export (413).
+- The Detailed report edits a person's own entries in place (description, project and task, billable, times, duration); tags and the date stay read-only there. Other people's rows are read-only until Phase 4.
+- Reports and the dashboard count stopped entries only. A running timer shows as "Tracking now" on the Team tab, not in today's bar.
+- The Status tab's CSV is the Summary export grouped by task then person, so there is one export path.
+- Duration sums are `bigint` mapped to `Number`; the Summary's series sums by local day and core's `bucketKeyOfDay` rolls days into weeks and months.
+
+Bugs found by the tests and fixed in this phase: summed durations overflowed a 32-bit integer at 2^31 seconds (found by the perf seed); two quick filter clicks lost the first change; `router.replace` re-rendered the server tree and closed popovers mid-test (filters now use `history.replaceState`); Next 16.4.0's dev server exited under Playwright and 16.4.3 drops a `router.push` followed by `router.refresh` (upgraded with the owner's approval, refreshes removed); a react-query key helper lived in a client module and was called on the server; the manual Add, unlike Start, did not wait for a tag created a moment before and saved the entry without it (since Phase 1).
 
 ## Phase 4 — Team, roles, rates and admin controls
 

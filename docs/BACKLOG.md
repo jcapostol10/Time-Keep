@@ -6,6 +6,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 - [ ] **Production email:** verify a sending domain in Resend and set `MAIL_FROM` to an address on it (Vercel → Production env, then redeploy). Until then, production can only email the Resend account owner, so sign-up verification, password reset and invites fail for everyone else. On our side (2026-10-22): production refuses to boot with a placeholder sender, a failed send tells the person what happened instead of a bare 500, and Profile settings has "Send me a test email" to check the sender.
 - [ ] **Production is behind Vercel Authentication.** Deployment protection covers every deployment, production included, so anyone not signed in to the Vercel team gets a Vercel login page instead of TimeKeep. Fine while it is private; before real customers use it, switch protection to "Standard" (previews only) or add a custom domain outside protection. The e2e workflow only targets previews, so it is unaffected.
+- [ ] **Export bucket:** create the private `timekeep-exports` bucket in Supabase Storage and set `S3_EXPORT_BUCKET=timekeep-exports` in Vercel's production and preview env, plus `EXPORT_JOB_THRESHOLD=5` on previews only. Until then large exports fail on that deployment, and the preview's export-job e2e test fails.
 
 ## App
 
@@ -19,6 +20,10 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] Members see every client name in the projects-page filter, including archived clients and clients whose projects are all private to them.
 - [ ] ArrowLeft and ArrowRight move between timesheet cells even mid-text, so the caret cannot move within "1:30". Move between cells only when the caret is at the edge.
 - [ ] Copy last week has no duplicate guard (copying twice doubles every entry) and one archived project or done task aborts the whole copy without saying which entry.
+- [ ] The one-year Summary over the perf seed takes about 760 ms locally, with the series aggregate on one Postgres worker (the planner estimates one group per row for any expression on `start`). If production reports approach a second, add the day-level rollup table the Phase 3 design keeps as the last resort, maintained by the entry service.
+- [ ] The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; only the preview e2e run exercises `@sparticuz/chromium`. Consider installing Playwright's Chromium in the CI job.
+- [ ] The Detailed report keeps tags and the date read-only (edit them in the tracker), and its sort is per visit, not in the URL.
+- [ ] The `export_report` enum value `project-status` is unused: the Status tab exports the Summary grouped by task then person.
 
 ## E2E suite
 
@@ -27,6 +32,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] The suite runs spec files with 3 workers to stay under 10 minutes on a preview; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). If a new spec writes to the demo tenant, check it against the others or give it its own project in the Playwright config.
 - [ ] Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
 - [ ] Re-prove the 26 coverage ticks carried over from Phases 0–1: break each guarded behaviour once and watch its test fail.
+- [ ] Against the local production server, a Playwright `page.request` call occasionally fails with `ECONNRESET` (seen once in "two tabs never show two running timers", passed on retry): Node closes an idle keep-alive socket just as the client reuses it. Consider raising `keepAliveTimeout` for `next start` in the Playwright web server, or retrying idempotent GETs in the helper.
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)
 
