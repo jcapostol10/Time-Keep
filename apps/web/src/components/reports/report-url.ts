@@ -7,7 +7,7 @@ import {
   reportQueryToSearchParams,
 } from "@timekeep/core";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { workspaceRoutes } from "@/lib/routes";
 
@@ -24,17 +24,21 @@ export function useReportQuery(): {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const query = useMemo(
-    () => parseReportQuery(new URLSearchParams(searchParams.toString())),
-    [searchParams],
-  );
-  const params = useMemo(() => reportQueryToSearchParams(query).toString(), [query]);
+  const current = searchParams.toString();
+  const fromUrl = useMemo(() => parseReportQuery(new URLSearchParams(current)), [current]);
+  // A change shows at once and a second change builds on it, even before the
+  // first navigation lands: until the URL moves, the pending query is the query.
+  const [pending, setPending] = useState<{ base: string; query: ReportQuery } | null>(null);
+  const query = pending && pending.base === current ? pending.query : fromUrl;
+  const params = useMemo(() => reportQueryToSearchParams(fromUrl).toString(), [fromUrl]);
   const set = useCallback(
     (patch: Partial<ReportQuery>) => {
-      const next = reportQueryToSearchParams({ ...query, ...patch }).toString();
+      const nextQuery = { ...query, ...patch };
+      setPending({ base: current, query: nextQuery });
+      const next = reportQueryToSearchParams(nextQuery).toString();
       router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
     },
-    [query, pathname, router],
+    [query, current, pathname, router],
   );
   return { query, params, set };
 }
