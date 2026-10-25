@@ -195,6 +195,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Another person's entry is read-only in the detailed report — `reports.spec.ts` › "another person's entry is read-only"
 - [x] The column chooser hides a column and remembers it — `reports.spec.ts` › "the column chooser hides a column and remembers it after reload"
 - [x] Sort the detailed report by duration — `reports.spec.ts` › "sort the detailed report by duration"
+- [x] The weekly grid by project shows day and row totals that match the summary — `reports.spec.ts` › "the weekly grid by project shows day and row totals that match the summary"
+- [x] The weekly grid can list people instead of projects — `reports.spec.ts` › "the weekly grid can list people instead of projects"
 
 ## Tenant isolation
 

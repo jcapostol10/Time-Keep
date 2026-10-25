@@ -10,6 +10,8 @@ import {
   detailedKey,
   type ReportFilterOptions,
   type SummaryReport,
+  type WeeklyBy,
+  type WeeklyReport,
 } from "@/lib/report-types";
 
 import { trackerKeys, trackerUrls } from "../tracker/query-keys";
@@ -56,6 +58,19 @@ export function useDetailed(slug: string, params: string, paging: DetailedPaging
       ),
     initialPageParam: null as DetailedCursor | null,
     getNextPageParam: (last) => last.nextCursor,
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** The Weekly grid for the week containing the query's range start. */
+export function useWeekly(slug: string, params: string, by: WeeklyBy) {
+  const search = new URLSearchParams(params);
+  search.set("by", by);
+  return useQuery({
+    queryKey: trackerKeys.report(slug, "weekly", `${params}|${by}`),
+    queryFn: () => fetchJson<WeeklyReport>(trackerUrls.report(slug, "weekly", search.toString())),
     staleTime: 10_000,
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,

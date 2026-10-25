@@ -216,4 +216,37 @@ test.describe("reports", () => {
     await page.getByRole("button", { name: "Sort by duration" }).click();
     await expect.poll(names).toEqual(["Entry Long", "Entry Middle", "Entry Short"]);
   });
+
+  test("the weekly grid by project shows day and row totals that match the summary", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await createProject(page, "Web");
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await addManualEntry(page, { description: "Email", start: "02:05", duration: "0.5" });
+    await openReport(page, freshUser.slug, "weekly");
+    const grid = page.getByRole("table", { name: "Weekly report" });
+    await expect(grid.getByRole("row", { name: /^Web / })).toContainText("1:00:00");
+    await expect(grid.getByRole("row", { name: /^No project / })).toContainText("0:30:00");
+    await expect(page.getByTestId("weekly-today-total")).toHaveText("1:30:00");
+    await expect(reportTotal(page)).toHaveText("1:30:00");
+    await page.getByRole("link", { name: "Summary", exact: true }).click();
+    await expect(reportTotal(page)).toHaveText("1:30:00");
+  });
+
+  test("the weekly grid can list people instead of projects", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await openReport(page, freshUser.slug, "weekly");
+    await page.getByRole("combobox", { name: "Rows" }).click();
+    await page.getByRole("option", { name: "People" }).click();
+    const grid = page.getByRole("table", { name: "Weekly report" });
+    await expect(grid.getByRole("row", { name: /^Fresh / })).toContainText("1:00:00");
+  });
 });
