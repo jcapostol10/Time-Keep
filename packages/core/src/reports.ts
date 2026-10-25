@@ -271,9 +271,7 @@ function compareGroups(a: ReportGroup, b: ReportGroup): number {
   return b.totals.durationSeconds - a.totals.durationSeconds || a.label.localeCompare(b.label);
 }
 
-function nest(rows: ReportRow[], keys: GroupKey[]): ReportGroup[] {
-  const key = keys[0];
-  if (!key) return [];
+function bucketBy(rows: ReportRow[], key: GroupKey) {
   const buckets = new Map<string, { value: GroupValue; rows: ReportRow[] }>();
   for (const row of rows) {
     const value = row.keys[key] ?? { id: null, label: "—" };
@@ -282,28 +280,56 @@ function nest(rows: ReportRow[], keys: GroupKey[]): ReportGroup[] {
     bucket.rows.push(row);
     buckets.set(mapKey, bucket);
   }
-  return [...buckets.values()]
-    .map(({ value, rows: inner }) => ({
-      key,
-      id: value.id,
-      label: value.label,
-      totals: inner.reduce((sum, r) => addTotals(sum, r.totals), EMPTY_TOTALS),
-      children: nest(inner, keys.slice(1)),
-    }))
+  return buckets;
+}
+
+const sumTotals = (rows: ReportRow[]) =>
+  rows.reduce((sum, r) => addTotals(sum, r.totals), EMPTY_TOTALS);
+
+/** `prefix`: rows grouped by the first `depth` keys without the tag join, for those levels' totals. */
+function nest(
+  rows: ReportRow[],
+  keys: GroupKey[],
+  prefix?: { rows: ReportRow[]; depth: number },
+): ReportGroup[] {
+  const key = keys[0];
+  if (!key) return [];
+  const own = prefix && prefix.depth > 0 ? bucketBy(prefix.rows, key) : null;
+  return [...bucketBy(rows, key).entries()]
+    .map(([mapKey, { value, rows: inner }]) => {
+      const exact = own?.get(mapKey)?.rows;
+      return {
+        key,
+        id: value.id,
+        label: value.label,
+        totals: exact ? sumTotals(exact) : sumTotals(inner),
+        children: nest(
+          inner,
+          keys.slice(1),
+          exact && prefix ? { rows: exact, depth: prefix.depth - 1 } : undefined,
+        ),
+      };
+    })
     .sort(compareGroups);
 }
 
 /**
  * Nests flat SQL rows into groups, one level per key, with totals at every
  * level. The overall total is the caller's (an ungrouped aggregate): when
- * grouping by tag, an entry with two tags sits under both groups.
+ * grouping by tag, an entry with two tags sits under both groups. Levels
+ * above a tag level would count such an entry once per tag, so their totals
+ * come from `prefixRows`: the same query grouped by the keys before the
+ * first tag key, without the tag join.
  */
 export function groupRows(
   rows: ReportRow[],
   keys: GroupKey[],
   totals: ReportTotals,
+  prefixRows?: ReportRow[],
 ): { groups: ReportGroup[]; totals: ReportTotals } {
-  return { groups: nest(rows, keys), totals };
+  const depth = keys.indexOf("tag");
+  const prefix = prefixRows && depth > 0 ? { rows: prefixRows, depth } : undefined;
+  return { groups: nest(rows, keys, prefix), totals };
 }
 
 export interface WeeklyRow {

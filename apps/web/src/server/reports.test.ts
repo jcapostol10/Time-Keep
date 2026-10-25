@@ -295,6 +295,25 @@ describe("report engine", () => {
     expect(byTag.totals.durationSeconds).toBe(10 * 3600);
   });
 
+  it("keeps the levels above a tag level equal to grouping without tags", async () => {
+    const plain = await summaryReport(db, alice, q({ groupBy: ["client", "project"] }), PREFS, NOW);
+    const tagged = await summaryReport(
+      db,
+      alice,
+      q({ groupBy: ["client", "project", "tag"] }),
+      PREFS,
+      NOW,
+    );
+    const levels = (groups: typeof plain.groups) =>
+      groups.map((g) => [g.label, g.totals, g.children.map((c) => [c.label, c.totals])]);
+    expect(levels(tagged.groups)).toEqual(levels(plain.groups));
+    const web = tagged.groups[0]!.children[0]!;
+    expect(web.totals.durationSeconds).toBe(6.5 * 3600);
+    // The tag level itself still overlaps: an entry with two tags sits under both.
+    const tagSum = web.children.reduce((sum, g) => sum + g.totals.durationSeconds, 0);
+    expect(tagSum).toBeGreaterThan(web.totals.durationSeconds);
+  });
+
   it("dates an entry by its start in the viewer's zone, midnight crossing included", async () => {
     const manila = await summaryReport(db, bob, q({ groupBy: ["date"] }), PREFS, NOW);
     expect(manila.groups.map((g) => [g.id, g.totals.durationSeconds])).toEqual([

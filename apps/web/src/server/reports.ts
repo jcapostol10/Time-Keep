@@ -340,12 +340,16 @@ export async function summaryReport(
   const range = resolveReportRange(eff, prefs, now);
   const where = and(...baseConditions(viewer, eff, range))!;
   const bucket = bucketFor(range.from, range.to, prefs.timezone, eff.bucket);
-  // Two independent scans of the same range, side by side (one connection each).
-  const [rows, { series, totals }] = await Promise.all([
+  // Independent scans of the same range, side by side (one connection each).
+  // Below a tag level the join repeats a multi-tag entry, so the levels above it are
+  // grouped again without the join.
+  const tagAt = eff.groupBy.indexOf("tag");
+  const [rows, { series, totals }, prefixRows] = await Promise.all([
     groupedRows(db, where, eff.groupBy, prefs),
     seriesRows(db, where, bucket, prefs, range),
+    tagAt > 0 ? groupedRows(db, where, eff.groupBy.slice(0, tagAt), prefs) : undefined,
   ]);
-  const { groups } = groupRows(rows, eff.groupBy, totals);
+  const { groups } = groupRows(rows, eff.groupBy, totals, prefixRows);
   return {
     range: { from: range.from.toISOString(), to: range.to.toISOString(), label: range.label },
     bucket,

@@ -217,6 +217,22 @@ const FIXTURE: ReportRow[] = [
 ];
 
 describe("groupRows", () => {
+  it("takes the levels above a tag level from rows grouped without tags", () => {
+    // One 2 h entry on Web tagged urgent and review: the tag join returns it twice.
+    const web = { id: "web", label: "Web" };
+    const tagged: ReportRow[] = [
+      { keys: { project: web, tag: { id: "urgent", label: "urgent" } }, totals: t(7200, 7200, 1) },
+      { keys: { project: web, tag: { id: "review", label: "review" } }, totals: t(7200, 7200, 1) },
+    ];
+    const byProject: ReportRow[] = [{ keys: { project: web }, totals: t(7200, 7200, 1) }];
+    const { groups } = groupRows(tagged, ["project", "tag"], t(7200, 7200, 1), byProject);
+    expect(groups[0]!.totals).toEqual(t(7200, 7200, 1));
+    expect(groups[0]!.children.map((g) => [g.label, g.totals.durationSeconds])).toEqual([
+      ["review", 7200],
+      ["urgent", 7200],
+    ]);
+  });
+
   it("nests three levels with totals at each level, sorted by duration", () => {
     const overall = t(14400, 11400, 9);
     const { groups, totals } = groupRows(FIXTURE, KEYS, overall);
