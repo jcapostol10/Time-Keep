@@ -24,18 +24,6 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; only the preview e2e run exercises `@sparticuz/chromium`. Consider installing Playwright's Chromium in the CI job.
 - [ ] The Detailed report keeps tags and the date read-only (edit them in the tracker), and its sort is per visit, not in the URL.
 - [ ] The `export_report` enum value `project-status` is unused: the Status tab exports the Summary grouped by task then person.
-- [ ] Phase 3 review minors (2026-10-25):
-  - `report-route.ts` and the export route answer non-access errors with a bare 500 and no `console.error`, so a Postgres error in production is invisible. Log before responding.
-  - The Detailed route accepts any `cursorValue`; a malformed one reaches Postgres and returns 500. Validate it (ISO instant or integer) and answer 400.
-  - `expireExportJobs` marks a running job timed out by `createdAt`, so a job retried more than 15 minutes after creation can be flagged failed mid-build (it heals when the build finishes). Track `startedAt`.
-  - Cascade deletes (user or workspace removal, e2e cleanup) delete `export_job` rows but leave their files in the export bucket. Add a 7-day lifecycle rule on the bucket.
-  - PDF export jobs record a row count of 0, so the Exports list and the email say "0 rows".
-  - Filter changes use `history.replaceState`, so Back leaves the reports instead of undoing a filter. Consider `pushState` for discrete changes.
-  - The Users filter lists active members only, while a former member's time still shows in team reports.
-  - The e2e "a member cannot widen the Users filter by URL" uses a made-up id; a real other member's id is the stronger guard.
-  - Test gaps: SQL tests for the week and month group keys, New York's fall-back date, "this year" on 1 January, the 4 MB streaming cap and the share page's 413.
-  - Migration 0007 created `time_entry_workspace_start_idx` without `CONCURRENTLY` (not possible inside a Drizzle migration transaction). Fine at today's size; large indexes later need a separate non-transactional step.
-  - In the 375px filter sheet, Escape after picking from a filter closes the picker but not the sheet; the close button works.
 
 ## E2E suite
 
@@ -44,8 +32,6 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] The suite runs spec files with 3 workers to stay under 10 minutes on a preview; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). If a new spec writes to the demo tenant, check it against the others or give it its own project in the Playwright config.
 - [ ] Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
 - [ ] Re-prove the 26 coverage ticks carried over from Phases 0–1: break each guarded behaviour once and watch its test fail.
-- [ ] Locally the `freshUser` fixture once timed out waiting for the verification email in Mailpit ("archive and unarchive a client", passed on retry, 2026-10-25). If it recurs, lengthen `waitForEmail`'s timeout for sign-up or check Mailpit under three workers.
-- [ ] Against the local production server, a Playwright `page.request` call occasionally fails with `ECONNRESET` (seen once in "two tabs never show two running timers", passed on retry): Node closes an idle keep-alive socket just as the client reuses it. Consider raising `keepAliveTimeout` for `next start` in the Playwright web server, or retrying idempotent GETs in the helper.
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)
 
@@ -57,6 +43,15 @@ Nothing open.
 
 ## Done
 
+- [x] Phase 3 review minors (2026-10-25), all done 2026-10-25:
+  - Report, export and tracker JSON routes answered unexpected errors with a bare 500 and logged nothing; they now log first (`routeErrorResponse`). A malformed Detailed cursor reached Postgres and gave 500; it is now a 400. ("routes: log unexpected failures; a malformed Detailed cursor is a 400")
+  - `expireExportJobs` timed out running jobs by `createdAt`, so a late retry could be failed mid-build; `export_job.started_at` (0009) now dates the build. PDF jobs recorded 0 rows; they record the table's rows. Deleted users and workspaces left export files in the bucket; housekeeping sweeps any export file older than 7 days (a sweep, not a lifecycle rule: Supabase Storage has none). ("exports: time out by build start, record PDF rows, sweep orphaned files")
+  - The Users filter listed active members only; it now adds anyone else with time in the workspace as "(former member)". ("reports: the Users filter offers former members")
+  - Test gaps: week and month group keys, New York's fall-back date, "this year" on 1 January and the shared export's 413 ("tests: week and month keys, New York fall-back, 1 January, shared 413"); the 4 MB streaming cap is in `report-routes.test.ts`.
+  - Filter changes used `replaceState`, so Back left the reports; discrete changes now push a history entry (typing still replaces). In the 375px sheet, a quick Escape after a picker closed nothing, because Radix keeps a closing popover as the top layer until its exit animation ends; popovers no longer animate out. The member Users-filter test now uses another member's real id. ("reports: Back undoes a filter change; Escape closes the filter sheet")
+  - Migration 0007's index was built without `CONCURRENTLY`; nothing to redo at today's size, and CLAUDE.md now gives the procedure for an index on a large table.
+- [x] Locally the `freshUser` fixture once timed out waiting for its verification email. Cause: the auth test "the check-email page resends the verification email" cleared all of Mailpit while other workers waited for their own email; it now deletes only its address's mail (`deleteMessagesTo`, unit-tested against Mailpit). Done 2026-10-25 ("e2e: clear one inbox, not Mailpit; longer keep-alive for the production server").
+- [x] Against the local production server, a `page.request` call once failed with `ECONNRESET`: Node closes an idle keep-alive socket after 5 s. The Playwright web server now runs `next start --keepAliveTimeout 70000`. A race, so no test can show it; watch for a recurrence. Done 2026-10-25 ("e2e: clear one inbox, not Mailpit; longer keep-alive for the production server").
 - [x] `/tracker-options` called `listTags`, which computed usage counts the picker discards, on every entry write; the pickers now read `listTagOptions`. Done 2026-10-22 ("tags: picker options without usage counts; the Tags page refuses a duplicate").
 - [x] `dateRangeSchema` had no maximum span; a range is now at most a year (366 days). Done 2026-10-22 ("core: a date range is at most a year").
 - [x] The Tags page's "New tag" never reported a duplicate (find-or-create dropped the colour and could return an archived tag); the page now refuses it, naming the archived case, while the picker's inline create still reuses. Done 2026-10-22 ("tags: picker options without usage counts; the Tags page refuses a duplicate").

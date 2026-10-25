@@ -33,12 +33,19 @@ export function FilterBar() {
   const { query, set } = useReportQuery();
   const { data: options } = useReportOptions(slug);
   const [text, setText] = useState(query.description);
+  const [shown, setShown] = useState(query.description);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Back (or a link) changed the description: the box follows the URL, or the
+  // debounce below would write the old text straight back.
+  if (shown !== query.description) {
+    setShown(query.description);
+    setText(query.description);
+  }
 
   // Typed text reaches the URL after a pause, not on every key.
   useEffect(() => {
     if (text === query.description) return;
-    const handle = setTimeout(() => set({ description: text }), 400);
+    const handle = setTimeout(() => set({ description: text }, { replace: true }), 400);
     return () => clearTimeout(handle);
   }, [text, query.description, set]);
 

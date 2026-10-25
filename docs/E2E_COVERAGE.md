@@ -189,6 +189,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 - [x] The summary shows the range's total, a chart and a grouped table — `reports.spec.ts` › "the summary shows the week's total, a chart and a grouped table"
 - [x] Filter by project (including "Without project") and by tag — `reports.spec.ts` › "filter by project and by tag"
+- [x] Back undoes a filter change — `reports.spec.ts` › "Back undoes a filter change"
 - [x] Group by client then project shows nested totals — `reports.spec.ts` › "group by client then project shows nested totals"
 - [x] Presets and a custom range change the URL and the totals — `reports.spec.ts` › "presets and a custom range change the URL and the totals"
 - [x] A member cannot widen the Users filter by URL and has no Users filter — `reports.spec.ts` › "a member cannot widen the Users filter by URL"
@@ -232,5 +233,5 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Small screens (375px)
 
 - [ ] The tracker page fits a 375px screen without horizontal scrolling — gap
-- [x] At 375px the report filters fold into a sheet and the page does not scroll sideways — `reports.spec.ts` › "at 375px the filters fold into a sheet and the page does not scroll sideways"
+- [x] At 375px the report filters fold into a sheet (Escape closes it after a picker) and the page does not scroll sideways — `reports.spec.ts` › "at 375px the filters fold into a sheet and the page does not scroll sideways"
 - [ ] The account and settings pages fit a 375px screen without horizontal scrolling — gap
