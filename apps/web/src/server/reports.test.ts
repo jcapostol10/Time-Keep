@@ -6,7 +6,7 @@ import {
   type ViewerPrefs,
   zonedDateTimeToInstant,
 } from "@timekeep/core";
-import { projectMember, task } from "@timekeep/db";
+import { projectMember, task, timeEntry } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -371,6 +371,37 @@ describe("report engine", () => {
       ["App", 3600],
       ["Internal", 3600],
     ]);
+  });
+
+  it("sums beyond 2^31 seconds without overflowing", async () => {
+    // 700 entries of 999 hours: about 2.5 billion seconds, past a 32-bit integer.
+    const hours999 = 999 * 3600;
+    const base = new Date("2025-06-01T00:00:00.000Z").getTime();
+    await db.insert(timeEntry).values(
+      Array.from({ length: 700 }, (_, i) => ({
+        id: randomUUID(),
+        workspaceId: bob.workspaceId,
+        userId: bob.userId,
+        description: "Long",
+        start: new Date(base + i * 3_600_000),
+        end: new Date(base + i * 3_600_000 + hours999 * 1000),
+        durationSeconds: hours999,
+        billable: true,
+      })),
+    );
+    const report = await summaryReport(
+      db,
+      alice,
+      q({ from: "2025-05-31T00:00:00.000Z", to: "2025-07-01T00:00:00.000Z" }),
+      PREFS,
+      NOW,
+    );
+    expect(report.totals).toEqual({
+      durationSeconds: 700 * hours999,
+      billableSeconds: 700 * hours999,
+      entryCount: 700,
+    });
+    expect(report.groups[0]!.totals.durationSeconds).toBe(700 * hours999);
   });
 
   it("offers filter options by role: no users for a member, only visible projects", async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   bucketFor,
+  bucketKeyOfDay,
   bucketKeys,
   buildWeekly,
   type GroupKey,
@@ -330,5 +331,26 @@ describe("bucketKeys", () => {
       { key: "2026-02", label: "Feb 2026" },
       { key: "2026-03", label: "Mar 2026" },
     ]);
+  });
+});
+
+describe("bucketKeyOfDay", () => {
+  it("maps a local day to its day, week or month key", () => {
+    expect(bucketKeyOfDay("2026-03-09", "day", 1)).toBe("2026-03-09");
+    expect(bucketKeyOfDay("2026-03-09", "month", 1)).toBe("2026-03");
+    expect(bucketKeyOfDay("2026-03-09", "week", 1)).toBe("2026-03-09"); // a Monday
+    expect(bucketKeyOfDay("2026-03-15", "week", 1)).toBe("2026-03-09"); // its Sunday
+    expect(bucketKeyOfDay("2026-03-15", "week", 0)).toBe("2026-03-15"); // Sunday starts
+    expect(bucketKeyOfDay("2026-03-14", "week", 6)).toBe("2026-03-14"); // Saturday starts
+    expect(bucketKeyOfDay("2026-01-01", "week", 1)).toBe("2025-12-29"); // across a year
+  });
+
+  it("agrees with bucketKeys across a DST change", () => {
+    const from = new Date("2026-02-22T05:00:00.000Z");
+    const to = new Date("2026-04-19T04:00:00.000Z");
+    const weeks = new Set(bucketKeys(from, to, "week", NY_SUNDAY).map((w) => w.key));
+    for (const { key } of bucketKeys(from, to, "day", NY_SUNDAY)) {
+      expect(weeks.has(bucketKeyOfDay(key, "week", NY_SUNDAY.weekStart))).toBe(true);
+    }
   });
 });

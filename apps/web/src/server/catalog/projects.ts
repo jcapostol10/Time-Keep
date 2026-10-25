@@ -85,7 +85,7 @@ async function trackedByProject(db: Executor, viewer: Viewer): Promise<Map<strin
   const rows = await db
     .select({
       projectId: timeEntry.projectId,
-      seconds: sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::int`,
+      seconds: sql`coalesce(sum(${timeEntry.durationSeconds}), 0)::bigint`.mapWith(Number),
     })
     .from(timeEntry)
     .where(

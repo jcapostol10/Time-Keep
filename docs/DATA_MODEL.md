@@ -293,6 +293,37 @@ An export too large to stream back (over `EXPORT_JOB_THRESHOLD` rows or 4 MB): b
 
 Index: `(workspace_id, user_id, created_at desc)`.
 
+## Report performance (Phase 3)
+
+`pnpm db:seed:perf` builds a local `perf` workspace (25 people, 1,000,000 stopped entries over three years); `pnpm --filter @timekeep/web report:perf` times the one-year Summary grouped by client and project (334k entries) and fails over one second. Recorded 2026-10-25 on the local Postgres 16 container (default `shared_buffers` 128 MB, smaller than the 255 MB table) with the machine's CPU otherwise busy:
+
+| Run | Median |
+| --- | --- |
+| Three sequential queries, `to_char` week key per row | 1258 ms |
+| Two concurrent queries, totals summed from the series, series by local day rolled up in code | 757 ms |
+
+What the plans show:
+
+- Both remaining queries scan the table sequentially: a year is a third of the workspace, so the partial `time_entry_workspace_start_idx` loses to a scan here. It earns its keep on narrower ranges.
+- The grouped query runs as a parallel hash aggregate (2 workers, about 330 ms). The planner removes the unused `project`, `client` and `task` left joins.
+- The series query stays on one worker (about 600 ms): Postgres estimates one group per row for any expression on `start`, so it never chooses a partial aggregate. Grouping by `(start at time zone tz)::date` (one conversion per row) and rolling days into weeks or months with `bucketKeyOfDay` keeps it cheap. A per-row `to_char` or week expression cost twice as much.
+- Not needed yet: a `work_mem` bump (aggregates use under 4 MB) or the day-level rollup table the spec keeps as the last resort.
+
+```
+HashAggregate (actual time=592.219..592.820 rows=366 loops=1)
+  Group Key: ((start AT TIME ZONE 'Asia/Manila'::text))::date
+  ->  Seq Scan on time_entry (actual time=19.497..481.535 rows=334124 loops=1)
+        Filter: (deleted_at IS NULL) AND ("end" IS NOT NULL) AND start in range AND workspace_id = 'perf-ws'
+Execution Time: 595.854 ms
+
+Finalize GroupAggregate (actual time=311.359..328.777 rows=13 loops=1)
+  ->  Gather Merge (Workers Launched: 2)
+        ->  Partial HashAggregate (rows=13 loops=3)
+              ->  Hash Left Join (client) -> Hash Left Join (project)
+                    ->  Parallel Seq Scan on time_entry (rows=111375 loops=3)
+Execution Time: 329.085 ms
+```
+
 ## Planned (later phases)
 
 Phase 4: `user_group`, `user_group_member`, `rate` (+ rate snapshot columns on `time_entry`), `workspace_settings` extensions.

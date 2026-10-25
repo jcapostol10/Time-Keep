@@ -383,3 +383,16 @@ export function bucketKeys(
   }
   return out;
 }
+
+/**
+ * The bucket key ("YYYY-MM-DD" week start or "YYYY-MM") of a local day key, matching
+ * bucketKeys. Calendar arithmetic on a date, not an instant, so no time zone is involved.
+ */
+export function bucketKeyOfDay(dayKey: string, bucket: Bucket, weekStart: number): string {
+  if (bucket === "day") return dayKey;
+  if (bucket === "month") return dayKey.slice(0, 7);
+  const [y, m, d] = dayKey.split("-").map(Number) as [number, number, number];
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const back = (weekday - weekStart + 7) % 7;
+  return new Date(Date.UTC(y, m - 1, d - back)).toISOString().slice(0, 10);
+}

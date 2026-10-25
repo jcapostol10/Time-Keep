@@ -3,6 +3,7 @@ import "server-only";
 import {
   addDaysInZone,
   bucketFor,
+  bucketKeyOfDay,
   bucketKeys,
   buildWeekly,
   canReadTeam,
@@ -128,26 +129,46 @@ function baseConditions(
   return conds;
 }
 
-const DURATION = sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::int`;
-const BILLABLE = sql<number>`coalesce(sum(case when ${timeEntry.billable} then ${timeEntry.durationSeconds} else 0 end), 0)::int`;
-const NON_BILLABLE = sql<number>`coalesce(sum(case when ${timeEntry.billable} then 0 else ${timeEntry.durationSeconds} end), 0)::int`;
+// Sums are bigint: a 32-bit int overflows at 2^31 seconds (68 years of time, one year of a
+// 300-person company). node-postgres returns bigint as text, so mapWith(Number).
+const DURATION = sql`coalesce(sum(${timeEntry.durationSeconds}), 0)::bigint`.mapWith(Number);
+const BILLABLE =
+  sql`coalesce(sum(case when ${timeEntry.billable} then ${timeEntry.durationSeconds} else 0 end), 0)::bigint`.mapWith(
+    Number,
+  );
+const NON_BILLABLE =
+  sql`coalesce(sum(case when ${timeEntry.billable} then 0 else ${timeEntry.durationSeconds} end), 0)::bigint`.mapWith(
+    Number,
+  );
 const COUNT = sql<number>`count(*)::int`;
 
 function localStart(tz: string): SQL {
   return sql`(${timeEntry.start} at time zone ${tz})`;
 }
 
+function dayDateExpr(tz: string): SQL {
+  return sql`(${localStart(tz)})::date`;
+}
+
+function weekDateExpr(tz: string, weekStart: number): SQL {
+  // The date of the week's first day, by the viewer's week start (0 = Sunday, as Postgres' dow).
+  return sql`((${localStart(tz)})::date - ((((extract(dow from ${localStart(tz)}))::int - ${weekStart}) % 7 + 7) % 7))`;
+}
+
+function monthDateExpr(tz: string): SQL {
+  return sql`(date_trunc('month', ${localStart(tz)}))::date`;
+}
+
 function dateKeyExpr(tz: string): SQL<string> {
-  return sql<string>`to_char(${localStart(tz)}, 'YYYY-MM-DD')`;
+  return sql<string>`to_char(${dayDateExpr(tz)}, 'YYYY-MM-DD')`;
 }
 
 function weekKeyExpr(tz: string, weekStart: number): SQL<string> {
-  // The date of the week's first day, by the viewer's week start (0 = Sunday, as Postgres' dow).
-  return sql<string>`to_char((${localStart(tz)})::date - ((((extract(dow from ${localStart(tz)}))::int - ${weekStart}) % 7 + 7) % 7), 'YYYY-MM-DD')`;
+  return sql<string>`to_char(${weekDateExpr(tz, weekStart)}, 'YYYY-MM-DD')`;
 }
 
 function monthKeyExpr(tz: string): SQL<string> {
-  return sql<string>`to_char(${localStart(tz)}, 'YYYY-MM')`;
+  return sql<string>`to_char(${monthDateExpr(tz)}, 'YYYY-MM')`;
 }
 
 /** The id and label expressions of a grouping key. */
@@ -254,29 +275,58 @@ async function seriesRows(
   bucket: SummaryReport["bucket"],
   prefs: ViewerPrefs,
   range: { from: Date; to: Date },
-): Promise<SeriesPoint[]> {
-  const keyExpr =
-    bucket === "day"
-      ? dateKeyExpr(prefs.timezone)
-      : bucket === "week"
-        ? weekKeyExpr(prefs.timezone, prefs.weekStart)
-        : monthKeyExpr(prefs.timezone);
-  const rows = await db
-    .select({ key: keyExpr, billableSeconds: BILLABLE, nonBillableSeconds: NON_BILLABLE })
+): Promise<{ series: SeriesPoint[]; totals: ReportTotals }> {
+  // Sum by local day, the cheapest key per row (one time zone conversion), then roll the few
+  // hundred days up into weeks or months here. Formatting per row, or a week expression,
+  // cost a single-worker scan of a year of entries twice as long.
+  const grouped = db
+    .select({
+      d: sql`${dayDateExpr(prefs.timezone)}`.as("d"),
+      b: BILLABLE.as("b"),
+      nb: NON_BILLABLE.as("nb"),
+      n: COUNT.as("n"),
+    })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
     .leftJoin(client, eq(client.id, project.clientId))
     .leftJoin(task, eq(task.id, timeEntry.taskId))
     .innerJoin(user, eq(user.id, timeEntry.userId))
     .where(where)
-    .groupBy(sql.raw("1"));
-  const byKey = new Map(rows.map((r) => [r.key, r]));
-  return bucketKeys(range.from, range.to, bucket, prefs).map(({ key, label }) => ({
+    .groupBy(sql.raw("1"))
+    .as("series");
+  const days = await db
+    .select({
+      day: sql<string>`to_char(${grouped.d}, 'YYYY-MM-DD')`,
+      billableSeconds: sql`${grouped.b}`.mapWith(Number),
+      nonBillableSeconds: sql`${grouped.nb}`.mapWith(Number),
+      entryCount: sql`${grouped.n}`.mapWith(Number),
+    })
+    .from(grouped);
+  const rows = new Map<string, { billableSeconds: number; nonBillableSeconds: number }>();
+  for (const d of days) {
+    const key = bucketKeyOfDay(d.day, bucket, prefs.weekStart);
+    const acc = rows.get(key) ?? { billableSeconds: 0, nonBillableSeconds: 0 };
+    acc.billableSeconds += d.billableSeconds;
+    acc.nonBillableSeconds += d.nonBillableSeconds;
+    rows.set(key, acc);
+  }
+  // Every entry lands in exactly one bucket (no tag join here), so the buckets add up to the
+  // report's totals and the summary needs no third scan.
+  const totals = days.reduce<ReportTotals>(
+    (acc, r) => ({
+      durationSeconds: acc.durationSeconds + r.billableSeconds + r.nonBillableSeconds,
+      billableSeconds: acc.billableSeconds + r.billableSeconds,
+      entryCount: acc.entryCount + r.entryCount,
+    }),
+    EMPTY_TOTALS,
+  );
+  const series = bucketKeys(range.from, range.to, bucket, prefs).map(({ key, label }) => ({
     key,
     label,
-    billableSeconds: byKey.get(key)?.billableSeconds ?? 0,
-    nonBillableSeconds: byKey.get(key)?.nonBillableSeconds ?? 0,
+    billableSeconds: rows.get(key)?.billableSeconds ?? 0,
+    nonBillableSeconds: rows.get(key)?.nonBillableSeconds ?? 0,
   }));
+  return { series, totals };
 }
 
 export async function summaryReport(
@@ -289,11 +339,13 @@ export async function summaryReport(
   const eff = effectiveQuery(query, viewer);
   const range = resolveReportRange(eff, prefs, now);
   const where = and(...baseConditions(viewer, eff, range))!;
-  const totals = await aggregateTotals(db, where);
-  const rows = await groupedRows(db, where, eff.groupBy, prefs);
-  const { groups } = groupRows(rows, eff.groupBy, totals);
   const bucket = bucketFor(range.from, range.to, prefs.timezone, eff.bucket);
-  const series = await seriesRows(db, where, bucket, prefs, range);
+  // Two independent scans of the same range, side by side (one connection each).
+  const [rows, { series, totals }] = await Promise.all([
+    groupedRows(db, where, eff.groupBy, prefs),
+    seriesRows(db, where, bucket, prefs, range),
+  ]);
+  const { groups } = groupRows(rows, eff.groupBy, totals);
   return {
     range: { from: range.from.toISOString(), to: range.to.toISOString(), label: range.label },
     bucket,

@@ -12,7 +12,8 @@
     "e2e": "dotenv -e ../../.env -- playwright test",
     "storage:init": "dotenv -e ../../.env -- tsx scripts/storage-init.ts",
     "vercel-build": "tsx scripts/vercel-build.ts",
-    "e2e:coverage": "tsx scripts/coverage-check.ts"
+    "e2e:coverage": "tsx scripts/coverage-check.ts",
+    "report:perf": "dotenv -e ../../.env -- tsx --conditions=react-server scripts/report-perf.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
