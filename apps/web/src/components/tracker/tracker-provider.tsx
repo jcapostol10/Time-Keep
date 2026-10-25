@@ -56,6 +56,8 @@ interface TrackerContextValue {
   pending: boolean;
   draft: EntryDraft;
   setDraft: (patch: Partial<EntryDraft>) => void;
+  /** The draft once picker creates in flight (a new project or tag) have landed in it. */
+  settledDraft: () => Promise<EntryDraft>;
   start: (details?: EntryDraft) => Promise<boolean>;
   stop: (end?: Date) => Promise<boolean>;
   toggle: () => Promise<boolean>;
@@ -253,6 +255,10 @@ export function TrackerProvider({
     draftRef.current = { ...draftRef.current, ...patch };
     setDraftState(draftRef.current);
   }, []);
+  const settledDraft = useCallback(async () => {
+    await draftWritesSettled();
+    return draftRef.current;
+  }, []);
 
   const start = useCallback(
     async (details?: EntryDraft) => {
@@ -399,6 +405,7 @@ export function TrackerProvider({
       pending,
       draft,
       setDraft,
+      settledDraft,
       start,
       stop,
       toggle,
@@ -418,6 +425,7 @@ export function TrackerProvider({
       pending,
       draft,
       setDraft,
+      settledDraft,
       start,
       stop,
       toggle,
