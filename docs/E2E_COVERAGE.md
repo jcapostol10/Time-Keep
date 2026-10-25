@@ -202,6 +202,9 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 - [x] Export the summary as CSV — `reports.spec.ts` › "export the summary as CSV"
 - [x] Export the summary as PDF — `reports.spec.ts` › "export the summary as PDF"
+- [x] A share link opens without signing in and shows the same total — `share.spec.ts` › "a share link opens without signing in and shows the same total"
+- [x] Revoking a link makes it unavailable (404, same page as an unknown token) — `share.spec.ts` › "revoking a link makes it unavailable"
+- [x] The shared page exports CSV — `share.spec.ts` › "the shared page exports CSV"
 - [x] A large export becomes a job: listed under Exports, downloadable, emailed — `reports.spec.ts` › "a large export becomes a job with a download link and an email"
 
 ## Tenant isolation

@@ -12,6 +12,7 @@ import { useTracker } from "../tracker/tracker-provider";
 import { ExportMenu } from "./export-menu";
 import { FilterBar } from "./filter-bar";
 import { reportHref, useReportQuery } from "./report-url";
+import { ShareDialog } from "./share-dialog";
 
 const VIEWS: { kind: ReportKind; label: string }[] = [
   { kind: "summary", label: "Summary" },
@@ -39,6 +40,7 @@ export function ReportShell({
         actions={
           <>
             {actions}
+            <ShareDialog kind={kind} />
             <ExportMenu kind={kind} />
           </>
         }
@@ -64,6 +66,12 @@ export function ReportShell({
           className="text-muted-foreground hover:text-foreground -mb-px ml-auto border-b-2 border-transparent px-3 py-2 text-sm font-medium"
         >
           Exports
+        </Link>
+        <Link
+          href={`${workspaceRoutes.reports(slug)}/shared`}
+          className="text-muted-foreground hover:text-foreground -mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium"
+        >
+          Shared
         </Link>
       </nav>
       <FilterBar />
