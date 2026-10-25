@@ -2,6 +2,7 @@
 
 import {
   addDaysInZone,
+  clampRangeToYear,
   localDateKey,
   RANGE_PRESETS,
   type RangePreset,
@@ -61,20 +62,20 @@ export function DatePresetMenu({
   function setDate(which: "from" | "to", value: string) {
     if (!DATE_KEY.test(value)) return;
     const day = zonedDateTimeToInstant({ date: value, hours: 0, minutes: 0 }, tz);
+    let from: Date;
+    let to: Date;
     if (which === "from") {
-      const to = query.to ? new Date(query.to) : addDaysInZone(day, 1, tz);
-      onChange({
-        from: day.toISOString(),
-        to: (to > day ? to : addDaysInZone(day, 1, tz)).toISOString(),
-      });
+      from = day;
+      const current = query.to ? new Date(query.to) : addDaysInZone(day, 1, tz);
+      to = current > day ? current : addDaysInZone(day, 1, tz);
     } else {
-      const to = addDaysInZone(day, 1, tz);
-      const from = query.from ? new Date(query.from) : day;
-      onChange({
-        from: (from < to ? from : day).toISOString(),
-        to: to.toISOString(),
-      });
+      to = addDaysInZone(day, 1, tz);
+      const current = query.from ? new Date(query.from) : day;
+      from = current < to ? current : day;
     }
+    // A year at most: the end not just changed follows.
+    const range = clampRangeToYear(from, to, which, tz);
+    onChange({ from: range.from.toISOString(), to: range.to.toISOString() });
   }
 
   return (

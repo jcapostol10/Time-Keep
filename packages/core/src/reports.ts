@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { ViewerPrefs } from "./prefs";
+import { MAX_DATE_RANGE_DAYS } from "./schemas";
 import {
   addDaysInZone,
   daysBetweenInZone,
@@ -60,6 +61,10 @@ export const NONE_ID = "none";
 
 const idList = z.array(z.string().min(1).max(64)).max(100).default([]);
 
+// A span between two instants, not a date shifted by days, so milliseconds are fine; the
+// hour covers a daylight-saving change inside a range of exactly MAX_DATE_RANGE_DAYS local days.
+const MAX_RANGE_MS = MAX_DATE_RANGE_DAYS * 86_400_000 + 3_600_000;
+
 export const reportQuerySchema = z
   .object({
     preset: z.enum(RANGE_PRESETS).default("this-week"),
@@ -88,6 +93,8 @@ export const reportQuerySchema = z
       ctx.addIssue({ code: "custom", path: ["from"], message: "A custom range needs its dates" });
     } else if (Date.parse(q.to) <= Date.parse(q.from)) {
       ctx.addIssue({ code: "custom", path: ["to"], message: "The range must end after it starts" });
+    } else if (Date.parse(q.to) - Date.parse(q.from) > MAX_RANGE_MS) {
+      ctx.addIssue({ code: "custom", path: ["to"], message: "Pick a range of at most one year." });
     }
   });
 
@@ -421,4 +428,22 @@ export function bucketKeyOfDay(dayKey: string, bucket: Bucket, weekStart: number
   const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
   const back = (weekday - weekStart + 7) % 7;
   return new Date(Date.UTC(y, m - 1, d - back)).toISOString().slice(0, 10);
+}
+
+/**
+ * A picked custom range kept to MAX_DATE_RANGE_DAYS local days: the end the person did not
+ * just change moves. Ranges the server would refuse never reach the URL.
+ */
+export function clampRangeToYear(
+  from: Date,
+  to: Date,
+  keep: "from" | "to",
+  tz: string,
+): { from: Date; to: Date } {
+  if (keep === "from") {
+    const limit = addDaysInZone(from, MAX_DATE_RANGE_DAYS, tz);
+    return { from, to: to > limit ? limit : to };
+  }
+  const limit = addDaysInZone(to, -MAX_DATE_RANGE_DAYS, tz);
+  return { from: from < limit ? limit : from, to };
 }

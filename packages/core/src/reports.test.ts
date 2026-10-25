@@ -4,6 +4,7 @@ import {
   bucketFor,
   bucketKeyOfDay,
   bucketKeys,
+  clampRangeToYear,
   buildWeekly,
   type GroupKey,
   groupRows,
@@ -368,5 +369,38 @@ describe("bucketKeyOfDay", () => {
     for (const { key } of bucketKeys(from, to, "day", NY_SUNDAY)) {
       expect(weeks.has(bucketKeyOfDay(key, "week", NY_SUNDAY.weekStart))).toBe(true);
     }
+  });
+});
+
+describe("custom range length", () => {
+  it("refuses a custom range longer than a year, so a URL cannot ask for a century", () => {
+    const year = {
+      preset: "custom",
+      from: "2025-10-25T00:00:00.000Z",
+      to: "2026-10-26T00:00:00.000Z",
+    };
+    expect(reportQuerySchema.safeParse(year).success).toBe(true);
+    const century = {
+      preset: "custom",
+      from: "1926-01-01T00:00:00.000Z",
+      to: "2026-01-01T00:00:00.000Z",
+    };
+    expect(reportQuerySchema.safeParse(century).success).toBe(false);
+    const params = new URLSearchParams({ ...century, bucket: "day" });
+    expect(parseReportQuery(params).preset).toBe("this-week");
+  });
+
+  it("clamps the other end of a picked range to a year", () => {
+    const tz = "America/New_York";
+    const from = new Date("2025-01-01T05:00:00.000Z");
+    const to = new Date("2027-06-01T04:00:00.000Z");
+    const keepFrom = clampRangeToYear(from, to, "from", tz);
+    expect(keepFrom.from).toEqual(from);
+    expect(keepFrom.to.toISOString()).toBe("2026-01-02T05:00:00.000Z");
+    const keepTo = clampRangeToYear(from, to, "to", tz);
+    expect(keepTo.to).toEqual(to);
+    expect(keepTo.from.toISOString()).toBe("2026-05-31T04:00:00.000Z");
+    const short = clampRangeToYear(from, new Date("2025-02-01T05:00:00.000Z"), "from", tz);
+    expect(short.to.toISOString()).toBe("2025-02-01T05:00:00.000Z");
   });
 });
