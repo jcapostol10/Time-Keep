@@ -190,6 +190,11 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Presets and a custom range change the URL and the totals — `reports.spec.ts` › "presets and a custom range change the URL and the totals"
 - [x] A member cannot widen the Users filter by URL and has no Users filter — `reports.spec.ts` › "a member cannot widen the Users filter by URL"
 - [x] The summary agrees with the tracker's week total — `reports.spec.ts` › "the summary agrees with the tracker's week total"
+- [x] The detailed report lists entries and loads more — `reports.spec.ts` › "the detailed report lists entries and loads more"
+- [x] Edit an own entry inline in the detailed report — `reports.spec.ts` › "edit the description and duration of an own entry inline"
+- [x] Another person's entry is read-only in the detailed report — `reports.spec.ts` › "another person's entry is read-only"
+- [x] The column chooser hides a column and remembers it — `reports.spec.ts` › "the column chooser hides a column and remembers it after reload"
+- [x] Sort the detailed report by duration — `reports.spec.ts` › "sort the detailed report by duration"
 
 ## Tenant isolation
 

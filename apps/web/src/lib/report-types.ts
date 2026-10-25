@@ -72,3 +72,14 @@ export interface ReportFilterOptions {
   tasks: { id: string; name: string; projectId: string }[];
   tags: EntryTag[];
 }
+
+export interface DetailedPaging {
+  sort: DetailedSort;
+  dir: "asc" | "desc";
+  limit: number;
+}
+
+/** The key part that identifies a Detailed listing: the query and how it is paged. */
+export function detailedKey(params: string, paging: DetailedPaging): string {
+  return `${params}|${paging.sort}|${paging.dir}|${paging.limit}`;
+}

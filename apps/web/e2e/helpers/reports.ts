@@ -52,3 +52,7 @@ export async function trackerWeekTotal(page: Page): Promise<string> {
   if (!match) throw new Error(`No week total in "${text}"`);
   return match[1]!;
 }
+
+/** A Detailed report row by the entry's description. */
+export const detailedRow = (page: Page, description: string) =>
+  page.getByRole("row", { name: `Entry ${description}`, exact: true });

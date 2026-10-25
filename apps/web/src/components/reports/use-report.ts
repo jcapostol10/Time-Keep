@@ -1,9 +1,16 @@
 "use client";
 
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import { fetchJson } from "@/lib/fetch-json";
-import type { ReportFilterOptions, SummaryReport } from "@/lib/report-types";
+import {
+  type DetailedCursor,
+  type DetailedPage,
+  type DetailedPaging,
+  detailedKey,
+  type ReportFilterOptions,
+  type SummaryReport,
+} from "@/lib/report-types";
 
 import { trackerKeys, trackerUrls } from "../tracker/query-keys";
 
@@ -24,5 +31,33 @@ export function useReportOptions(slug: string) {
     queryKey: trackerKeys.reportOptions(slug),
     queryFn: () => fetchJson<ReportFilterOptions>(trackerUrls.reportOptions(slug)),
     staleTime: 60_000,
+  });
+}
+
+function detailedUrl(params: string, paging: DetailedPaging, cursor: DetailedCursor | null) {
+  const search = new URLSearchParams(params);
+  search.set("sort", paging.sort);
+  search.set("dir", paging.dir);
+  search.set("limit", String(paging.limit));
+  if (cursor) {
+    search.set("cursorValue", cursor.value);
+    search.set("cursorId", cursor.id);
+  }
+  return search.toString();
+}
+
+/** Keyset pages of the Detailed report; an entry write refetches from the first page. */
+export function useDetailed(slug: string, params: string, paging: DetailedPaging) {
+  return useInfiniteQuery({
+    queryKey: trackerKeys.report(slug, "detailed", detailedKey(params, paging)),
+    queryFn: ({ pageParam }) =>
+      fetchJson<DetailedPage>(
+        trackerUrls.report(slug, "detailed", detailedUrl(params, paging, pageParam)),
+      ),
+    initialPageParam: null as DetailedCursor | null,
+    getNextPageParam: (last) => last.nextCursor,
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
   });
 }
