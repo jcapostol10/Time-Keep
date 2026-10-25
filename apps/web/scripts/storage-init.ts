@@ -1,6 +1,7 @@
 /**
  * Prepare the S3-compatible bucket for local development and CI:
- * create it if missing and allow anonymous reads of avatars and logos.
+ * create it if missing and allow anonymous reads of avatars and logos, and
+ * create the private export bucket (no policy: presigned URLs only).
  * Works against RustFS, MinIO, LocalStack or real S3, so no vendor CLI is needed.
  *
  *   pnpm storage:init   (reads S3_* from the root .env)
@@ -19,6 +20,7 @@ const bucket = process.env.S3_BUCKET ?? "timekeep";
 const accessKeyId = process.env.S3_ACCESS_KEY_ID ?? "rustfsadmin";
 const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY ?? "rustfsadmin";
 const publicUrl = (process.env.S3_PUBLIC_URL ?? `${endpoint}/${bucket}`).replace(/\/$/, "");
+const exportBucket = process.env.S3_EXPORT_BUCKET ?? "timekeep-exports";
 
 /** Object key prefixes that must be readable without credentials. */
 const PUBLIC_PREFIXES = ["avatars/*", "logos/*", "public/*"];
@@ -52,13 +54,13 @@ async function waitForEndpoint(attempts = 30): Promise<void> {
   }
 }
 
-async function ensureBucket(): Promise<void> {
+async function ensureBucket(name: string): Promise<void> {
   try {
-    await client.send(new HeadBucketCommand({ Bucket: bucket }));
-    console.info(`[storage] bucket "${bucket}" exists`);
+    await client.send(new HeadBucketCommand({ Bucket: name }));
+    console.info(`[storage] bucket "${name}" exists`);
   } catch {
-    await client.send(new CreateBucketCommand({ Bucket: bucket }));
-    console.info(`[storage] created bucket "${bucket}"`);
+    await client.send(new CreateBucketCommand({ Bucket: name }));
+    console.info(`[storage] created bucket "${name}"`);
   }
 }
 
@@ -99,7 +101,9 @@ const isSupabase = new URL(endpoint).hostname.endsWith(".supabase.co");
 
 async function main() {
   await waitForEndpoint();
-  await ensureBucket();
+  await ensureBucket(bucket);
+  // Private: no policy, so only presigned URLs can read it (create it as private in Supabase).
+  await ensureBucket(exportBucket);
   if (isSupabase) {
     console.info(
       "[storage] Supabase Storage: skipping bucket policy (the bucket is public in Supabase)",
