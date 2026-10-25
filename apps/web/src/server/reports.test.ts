@@ -326,6 +326,109 @@ describe("report engine", () => {
     ]);
   });
 
+  it("groups by week from the viewer's week start, in the viewer's zone", async () => {
+    const byKey = (r: { groups: { id: string | null; totals: { durationSeconds: number } }[] }) =>
+      r.groups.map((g) => [g.id, g.totals.durationSeconds]).sort();
+    // Manila, Monday weeks: Mar 3 + Mar 4, then Mar 9 + Mar 10.
+    const manila = await summaryReport(
+      db,
+      alice,
+      q({ groupBy: ["week"], userIds: [alice.userId] }),
+      PREFS,
+      NOW,
+    );
+    expect(byKey(manila)).toEqual([
+      ["2026-03-02", 1.5 * 3600],
+      ["2026-03-09", 3.5 * 3600],
+    ]);
+    // In New York the Mar 9 09:00 Manila entry is Sunday Mar 8 evening: a Sunday week
+    // starts with it, a Monday week ends with it.
+    const sunday = await summaryReport(
+      db,
+      alice,
+      q({ groupBy: ["week"], userIds: [alice.userId] }),
+      NY,
+      NOW,
+    );
+    expect(byKey(sunday)).toEqual([
+      ["2026-03-01", 1.5 * 3600],
+      ["2026-03-08", 3.5 * 3600],
+    ]);
+    const monday = await summaryReport(
+      db,
+      alice,
+      q({ groupBy: ["week"], userIds: [alice.userId] }),
+      { ...NY, weekStart: 1 },
+      NOW,
+    );
+    expect(byKey(monday)).toEqual([
+      ["2026-03-02", 3 * 3600],
+      ["2026-03-09", 2 * 3600],
+    ]);
+  });
+
+  it("groups by month in the viewer's zone, not UTC's", async () => {
+    // 00:30 on Apr 1 in Manila is still Mar 31 in UTC.
+    await entry(alice, {
+      description: "Month end",
+      date: "2026-03-31",
+      start: "23:00",
+      hours: 0.5,
+    });
+    await entry(alice, { description: "New month", date: "2026-04-01", start: "00:30", hours: 1 });
+    const report = await summaryReport(
+      db,
+      alice,
+      q({
+        groupBy: ["month"],
+        userIds: [alice.userId],
+        from: "2026-02-28T16:00:00.000Z",
+        to: "2026-04-30T16:00:00.000Z",
+      }),
+      PREFS,
+      NOW,
+    );
+    expect(report.groups.map((g) => [g.id, g.totals.durationSeconds])).toEqual([
+      ["2026-03", 5.5 * 3600],
+      ["2026-04", 3600],
+    ]);
+  });
+
+  it("dates entries by their New York day across the fall-back change", async () => {
+    const scope = alice;
+    const add = (description: string, start: string, hours: number) =>
+      createManualEntry(db, scope, {
+        description,
+        projectId: null,
+        taskId: null,
+        tagIds: [],
+        billable: false,
+        start: new Date(start),
+        end: new Date(new Date(start).getTime() + hours * 3_600_000),
+      });
+    // 01:30 EDT, the first of the two 01:30s on Nov 1 2026.
+    await add("Early", "2026-11-01T05:30:00.000Z", 1);
+    // 23:30 EST on Nov 1: a fixed -04:00 offset would put it on Nov 2.
+    await add("Late", "2026-11-02T04:30:00.000Z", 0.5);
+    // 00:30 EST on Nov 2.
+    await add("Next day", "2026-11-02T05:30:00.000Z", 0.25);
+    const report = await summaryReport(
+      db,
+      alice,
+      q({ groupBy: ["date"], from: "2026-11-01T04:00:00.000Z", to: "2026-11-03T05:00:00.000Z" }),
+      NY,
+      new Date("2026-11-04T12:00:00.000Z"),
+    );
+    expect(report.groups.map((g) => [g.id, g.totals.durationSeconds])).toEqual([
+      ["2026-11-01", 1.5 * 3600],
+      ["2026-11-02", 0.25 * 3600],
+    ]);
+    expect(report.series.map((p) => [p.key, p.nonBillableSeconds])).toEqual([
+      ["2026-11-01", 1.5 * 3600],
+      ["2026-11-02", 0.25 * 3600],
+    ]);
+  });
+
   it("builds a day series over the range with empty days, whose sum is the total", async () => {
     const report = await summaryReport(db, alice, q(), PREFS, NOW);
     expect(report.bucket).toBe("day");
