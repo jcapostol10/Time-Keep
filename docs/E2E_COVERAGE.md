@@ -207,6 +207,12 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The shared page exports CSV — `share.spec.ts` › "the shared page exports CSV"
 - [x] A large export becomes a job: listed under Exports, downloadable, emailed — `reports.spec.ts` › "a large export becomes a job with a download link and an email"
 
+## Dashboard
+
+- [x] The dashboard shows this week's total, top project and most tracked — `dashboard.spec.ts` › "the dashboard shows this week's total, top project and most tracked"
+- [x] The Team tab shows who is tracking now within a poll — `dashboard.spec.ts` › "the Team tab shows who is tracking now within a poll"
+- [x] A member has no Team tab — `dashboard.spec.ts` › "a member has no Team tab"
+
 ## Tenant isolation
 
 - [x] A member of one workspace cannot open another workspace's pages — `tenant-isolation.spec.ts` › "a member of one workspace cannot open another workspace's pages"
