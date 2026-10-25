@@ -1,6 +1,7 @@
 "use client";
 
 import { NONE_ID } from "@timekeep/core";
+import { Button } from "@timekeep/ui/components/button";
 import { Input } from "@timekeep/ui/components/input";
 import {
   Select,
@@ -9,6 +10,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@timekeep/ui/components/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@timekeep/ui/components/sheet";
+import { FilterIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useTracker } from "../tracker/tracker-provider";
@@ -17,12 +27,13 @@ import { MultiSelectFilter } from "./multi-select-filter";
 import { useReportQuery } from "./report-url";
 import { useReportOptions } from "./use-report";
 
-/** Every filter writes to the URL; the bar wraps at narrow widths. */
+/** Every filter writes to the URL; below md they sit in a sheet behind a "Filters" button. */
 export function FilterBar() {
   const { slug, viewer } = useTracker();
   const { query, set } = useReportQuery();
   const { data: options } = useReportOptions(slug);
   const [text, setText] = useState(query.description);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   // Typed text reaches the URL after a pause, not on every key.
   useEffect(() => {
@@ -31,9 +42,18 @@ export function FilterBar() {
     return () => clearTimeout(handle);
   }, [text, query.description, set]);
 
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <DatePresetMenu query={query} prefs={viewer} onChange={set} />
+  const active = [
+    query.userIds.length > 0,
+    query.clientIds.length > 0,
+    query.projectIds.length > 0,
+    query.taskIds.length > 0,
+    query.tagIds.length > 0,
+    query.billable !== "all",
+    query.description !== "",
+  ].filter(Boolean).length;
+
+  const filters = (
+    <>
       {options?.users ? (
         <MultiSelectFilter
           label="Users"
@@ -105,6 +125,29 @@ export function FilterBar() {
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
+    </>
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <DatePresetMenu query={query} prefs={viewer} onChange={set} />
+      <div className="hidden flex-wrap items-center gap-2 md:flex">{filters}</div>
+      {/* Below md the filters fold into a sheet; the range stays in the bar. */}
+      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+        <SheetTrigger asChild>
+          <Button type="button" variant="outline" size="sm" className="md:hidden">
+            <FilterIcon />
+            {active > 0 ? `Filters (${active})` : "Filters"}
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Filters</SheetTitle>
+            <SheetDescription>Every change applies at once.</SheetDescription>
+          </SheetHeader>
+          <div className="flex flex-col items-start gap-2 px-4 pb-6">{filters}</div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

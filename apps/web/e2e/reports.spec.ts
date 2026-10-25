@@ -64,6 +64,34 @@ test.describe("reports", () => {
     await expect(reportTotal(page)).toHaveText("1:00:00");
   });
 
+  test("at 375px the filters fold into a sheet and the page does not scroll sideways", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await trackerPage();
+    await createProject(page, "Web");
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await addManualEntry(page, { description: "Email", start: "02:05", duration: "0.5" });
+    await openReport(page, freshUser.slug, "summary");
+    await expect(reportTotal(page)).toHaveText("1:30:00");
+    await expect(page.getByRole("button", { name: /^Projects:/ })).toBeHidden();
+    await page.getByRole("button", { name: "Filters" }).click();
+    const sheet = page.getByRole("dialog", { name: "Filters" });
+    await expect(sheet).toBeVisible();
+    await toggleFilter(page, "Projects", "Web");
+    await expect(page).toHaveURL(/projectIds=/);
+    await sheet.getByRole("button", { name: "Close" }).click();
+    await expect(sheet).toBeHidden();
+    await expect(reportTotal(page)).toHaveText("1:00:00");
+    await expect(page.getByRole("button", { name: "Filters (1)" })).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
   test("group by client then project shows nested totals", async ({
     page,
     freshUser,

@@ -45,14 +45,17 @@ export function ReportShell({
           </>
         }
       />
-      <nav aria-label="Report views" className="flex gap-1 border-b">
+      <nav
+        aria-label="Report views"
+        className="flex gap-1 overflow-x-auto border-b [scrollbar-width:none]"
+      >
         {VIEWS.map((v) => (
           <Link
             key={v.kind}
             href={reportHref(slug, v.kind, params)}
             aria-current={v.kind === kind ? "page" : undefined}
             className={cn(
-              "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+              "shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors",
               v.kind === kind
                 ? "border-primary text-foreground"
                 : "text-muted-foreground hover:text-foreground border-transparent",
@@ -63,13 +66,13 @@ export function ReportShell({
         ))}
         <Link
           href={`${workspaceRoutes.reports(slug)}/exports`}
-          className="text-muted-foreground hover:text-foreground -mb-px ml-auto border-b-2 border-transparent px-3 py-2 text-sm font-medium"
+          className="text-muted-foreground hover:text-foreground ml-auto shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-medium"
         >
           Exports
         </Link>
         <Link
           href={`${workspaceRoutes.reports(slug)}/shared`}
-          className="text-muted-foreground hover:text-foreground -mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium"
+          className="text-muted-foreground hover:text-foreground shrink-0 whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-medium"
         >
           Shared
         </Link>
