@@ -6,7 +6,7 @@ import {
   type ReportQuery,
   reportQueryToSearchParams,
 } from "@timekeep/core";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
 import { workspaceRoutes } from "@/lib/routes";
@@ -22,7 +22,6 @@ export function useReportQuery(): {
   set: (patch: Partial<ReportQuery>) => void;
 } {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
   const current = searchParams.toString();
   const fromUrl = useMemo(() => parseReportQuery(new URLSearchParams(current)), [current]);
@@ -36,9 +35,11 @@ export function useReportQuery(): {
       const nextQuery = { ...query, ...patch };
       setPending({ base: current, query: nextQuery });
       const next = reportQueryToSearchParams(nextQuery).toString();
-      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+      // History API, not router.replace: Next keeps useSearchParams in step without a
+      // server render of the page; react-query fetches the new report on its own.
+      window.history.replaceState(null, "", next ? `${pathname}?${next}` : pathname);
     },
-    [query, current, pathname, router],
+    [query, current, pathname],
   );
   return { query, params, set };
 }
