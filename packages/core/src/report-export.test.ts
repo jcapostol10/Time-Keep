@@ -187,3 +187,30 @@ describe("formatDateInZone", () => {
     ).toBe("10/03/2026");
   });
 });
+
+describe("toCsv formula cells", () => {
+  it("defuses text a spreadsheet would run as a formula", () => {
+    const cols = [{ key: "d", header: "Description", value: (r: { d: string | number }) => r.d }];
+    const csv = toCsv(
+      [
+        { d: '=HYPERLINK("https://evil.example","Open")' },
+        { d: "+1+1" },
+        { d: "-2+3" },
+        { d: "@SUM(A1)" },
+        { d: "\tTabbed" },
+        { d: "Plain = fine" },
+        { d: -5 },
+      ],
+      cols,
+    );
+    expect(csv.split("\r\n").slice(1, 8)).toEqual([
+      `"'=HYPERLINK(""https://evil.example"",""Open"")"`,
+      "'+1+1",
+      "'-2+3",
+      "'@SUM(A1)",
+      "'\tTabbed",
+      "Plain = fine",
+      "-5",
+    ]);
+  });
+});

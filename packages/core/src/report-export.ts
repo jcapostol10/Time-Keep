@@ -148,7 +148,10 @@ export function weeklyColumns(
 
 function csvCell(value: string | number | null): string {
   if (value === null || value === undefined) return "";
-  const text = String(value);
+  // Text a spreadsheet would run as a formula (=, +, -, @, tab or CR first) gets a leading
+  // apostrophe, so a description cannot become a live link or command in Excel.
+  const text =
+    typeof value === "string" && /^[=+\-@\t\r]/.test(value) ? `'${value}` : String(value);
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
