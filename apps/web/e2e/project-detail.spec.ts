@@ -1,8 +1,11 @@
+import { readFile } from "node:fs/promises";
+
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
 import { waitForApp } from "./helpers/app";
 import { createProjectViaUi, projectRow, rowAction } from "./helpers/catalog";
+import { dateKey, daysAgo } from "./helpers/timesheet";
 import { addManualEntry, pickProject } from "./helpers/tracker";
 
 /** A project's detail pages: tasks, access, status and settings (admins only). */
@@ -82,6 +85,31 @@ test.describe("project detail", () => {
     await expect(projectRow(page, name)).toBeVisible();
   });
 
+  test("the status tab exports CSV and opens the same numbers in reports", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await createProjectViaUi(page, freshUser.slug, "Status export");
+    await trackerPage();
+    await pickProject(page, "Status export");
+    await addManualEntry(page, { description: "Status work", start: "00:05", duration: "1.5" });
+    await openProject(page, freshUser.slug, "Status export");
+    await tab(page, "Status").click();
+    await expect(page.getByTestId("status-total")).toHaveText("1:30:00");
+
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("link", { name: "Export CSV" }).click(),
+    ]);
+    const text = await readFile((await download.path())!, "utf8");
+    expect(text).toContain("Task,Person,Duration");
+    expect(text).toContain("No task,Fresh Tester,1:30:00");
+
+    await page.getByRole("link", { name: "Open in reports" }).click();
+    await expect(page.getByTestId("report-total")).toHaveText("1:30:00");
+  });
+
   test("the status tab sums time by task and member", async ({ page, freshUser, trackerPage }) => {
     await createProjectViaUi(page, freshUser.slug, "Website");
     await trackerPage();
@@ -101,6 +129,39 @@ test.describe("project detail", () => {
     const byMember = page.getByRole("table", { name: "Time by member" });
     await expect(byMember.getByRole("row", { name: /Fresh Tester/ })).toContainText("1:30:00");
     await expect(page.getByTestId("status-total")).toHaveText("1:30:00");
+  });
+
+  test("the status tab adds weekly bars when the range is longer than a month", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await createProjectViaUi(page, freshUser.slug, "Website");
+    await trackerPage();
+    await pickProject(page, "Website");
+    await addManualEntry(page, { description: "Design", start: "00:05", duration: "1" });
+
+    await openProject(page, freshUser.slug, "Website");
+    await tab(page, "Status").click();
+    await page
+      .getByRole("group", { name: "Range" })
+      .getByRole("button", { name: "This week" })
+      .click();
+    await expect(page.getByTestId("status-total")).toHaveText("1:00:00");
+    await expect(page.getByTestId("status-weeks")).toHaveCount(0);
+
+    const tz = freshUser.timezone;
+    const status = new URL(page.url());
+    status.search = new URLSearchParams({
+      from: dateKey(daysAgo(60), tz),
+      to: dateKey(new Date(), tz),
+    }).toString();
+    await page.goto(status.toString());
+    await waitForApp(page);
+    await expect(page.getByTestId("status-total")).toHaveText("1:00:00");
+    const weeks = page.getByTestId("status-weeks");
+    await expect(weeks).toBeVisible();
+    await expect(weeks.locator("svg").first()).toBeVisible();
   });
 
   test("edit project settings, mark it as a template, archive and unarchive it", async ({

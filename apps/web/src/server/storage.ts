@@ -1,6 +1,12 @@
 import "server-only";
 
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { env } from "./env";
 
@@ -52,4 +58,46 @@ export function objectKeyFromUrl(url: string | null | undefined): string | null 
   if (!url) return null;
   const base = `${env().S3_PUBLIC_URL.replace(/\/$/, "")}/`;
   return url.startsWith(base) ? url.slice(base.length) : null;
+}
+
+/**
+ * Report exports live in their own private bucket (S3_EXPORT_BUCKET): the
+ * main bucket is public on Supabase, which has no per-prefix policies.
+ */
+export async function uploadExport(args: {
+  key: string;
+  body: Uint8Array;
+  contentType: string;
+}): Promise<void> {
+  await getClient().send(
+    new PutObjectCommand({
+      Bucket: env().S3_EXPORT_BUCKET,
+      Key: args.key,
+      Body: args.body,
+      ContentType: args.contentType,
+      CacheControl: "private, no-store",
+    }),
+  );
+}
+
+/** A short-lived download link that saves the file under `filename`. */
+export async function presignedExportUrl(
+  key: string,
+  ttlSeconds: number,
+  filename: string,
+): Promise<string> {
+  const safe = filename.replace(/[^\w.\- ]+/g, "_");
+  return getSignedUrl(
+    getClient(),
+    new GetObjectCommand({
+      Bucket: env().S3_EXPORT_BUCKET,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename="${safe}"`,
+    }),
+    { expiresIn: ttlSeconds },
+  );
+}
+
+export async function deleteExport(key: string): Promise<void> {
+  await getClient().send(new DeleteObjectCommand({ Bucket: env().S3_EXPORT_BUCKET, Key: key }));
 }

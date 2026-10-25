@@ -50,6 +50,20 @@
       "when": 1792679299883,
       "tag": "0006_test_email_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792822734136,
+      "tag": "0007_phase3_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792908011739,
+      "tag": "0008_share_export_throttle",
+      "breakpoints": true
     }
   ]
 }

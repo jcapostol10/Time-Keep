@@ -146,6 +146,34 @@ test.describe("timer bar", () => {
     await expect(tagsButton(page)).toHaveAccessibleName("Tags: design");
   });
 
+  test("a tag created just before a manual Add stays on the entry", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await slowCreates(page);
+    await timer(page).getByRole("button", { name: "Manual mode" }).click();
+    await timer(page).getByRole("combobox", { name: "Description" }).fill("Hurried manual work");
+    const start = timer(page).getByRole("textbox", { name: "Start time" });
+    await start.fill("00:05");
+    await start.press("Tab");
+    const duration = timer(page).getByRole("textbox", { name: "Duration" });
+    await duration.fill("1");
+    await duration.press("Tab");
+    await tagsButton(page).click();
+    await page.getByRole("combobox", { name: "Search tags" }).fill("design");
+    await page.getByRole("option", { name: "Create tag “design”" }).click();
+    await page.keyboard.press("Escape");
+    await timer(page).getByRole("button", { name: "Add" }).click();
+
+    const tags = entry(page, "Hurried manual work").getByRole("button", { name: /^Tags:/ });
+    await expect(tags).toHaveAccessibleName("Tags: design");
+    await waitForSaves(page);
+    await trackerPage();
+    await expect(tags).toHaveAccessibleName("Tags: design");
+  });
+
   test("a project created just before Start stays on the entry", async ({
     page,
     freshUser: _user,

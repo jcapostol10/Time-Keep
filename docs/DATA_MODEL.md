@@ -25,6 +25,8 @@ time_entry >── task         (nullable, ON DELETE SET NULL)
 time_entry ──< time_entry_tag >── tag
 user ──1 user_settings      (tracker preferences, created lazily)
 user ──< timesheet_template (per workspace)
+workspace ──< report_share_link >── user   (creator; public read-only report links)
+workspace ──< export_job >── user          (large exports built after the response)
 ```
 
 ## Tables
@@ -179,6 +181,7 @@ Indexes:
 
 - `time_entry_workspace_user_start_idx` on `(workspace_id, user_id, start DESC)`: the tracker list and its week pagination.
 - `time_entry_project_id_idx` on `project_id`; `time_entry_task_id_idx` on `task_id`.
+- `time_entry_workspace_start_idx` on `(workspace_id, start) WHERE deleted_at IS NULL AND "end" IS NOT NULL`: team-wide report scans (Phase 3); a member's own report uses the user index above.
 - `time_entry_one_running_uq`: `UNIQUE (workspace_id, user_id) WHERE "end" IS NULL AND "deleted_at" IS NULL`. This enforces invariant 4. Soft-deleted rows are excluded so they can never block a new timer.
 
 Rules (enforced in `apps/web/src/server/time-entries.ts`, the only write path):
@@ -248,9 +251,82 @@ Every table enables RLS (`.enableRLS()` on each `pgTable`, migration `0003`) wit
 
 `workspace_role`, `membership_status`, `time_format`, `duration_format`, `project_visibility`, `task_status` — values come from `packages/core` constants so TypeScript and Postgres agree.
 
+### report_share_link
+
+A read-only public link to a report (`/share/[token]`). The URL carries 32 random bytes; only `token_hash` (sha256) is stored.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| created_by | text → user (cascade) | the link reads as revoked once the creator is no longer an active member |
+| token_hash | text unique | sha256 of the token |
+| kind | enum report_kind | summary, detailed, weekly |
+| query | jsonb | the effective report query (`reportQuerySchema` in core), a member's forced `userIds` included; a relative preset stays relative |
+| prefs | jsonb | the creator's resolved `ViewerPrefs` at creation |
+| title | text | |
+| expires_at | timestamptz? | null = never |
+| revoked_at | timestamptz? | |
+| last_opened_at, open_count | timestamptz?, integer | |
+| last_export_at | timestamptz? | last export from the public page: one per link every 10 s (0008) |
+| created_at, updated_at | timestamptz | |
+
+Index: `(workspace_id, created_at desc)` for the Shared list.
+
+### export_job
+
+An export too large to stream back (over `EXPORT_JOB_THRESHOLD` rows or 4 MB): built after the response, stored in the private export bucket, listed under Reports → Exports.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID; also the object key's name |
+| workspace_id | text → workspace (cascade) | |
+| user_id | text → user (cascade) | only this person can download it |
+| format | enum export_format | csv, xlsx, pdf |
+| report | enum export_report | summary, detailed, weekly, project-status |
+| query | jsonb | the report query |
+| status | enum export_status | queued → running → done / failed |
+| row_count | integer? | |
+| object_key | text? | `exports/<workspace>/<job>.<ext>` in `S3_EXPORT_BUCKET` |
+| error | text? | |
+| created_at, finished_at | timestamptz | |
+| expires_at | timestamptz | the file is deleted after this (7 days) |
+
+Index: `(workspace_id, user_id, created_at desc)`.
+
+## Report performance (Phase 3)
+
+`pnpm db:seed:perf` builds a local `perf` workspace (25 people, 1,000,000 stopped entries over three years); `pnpm --filter @timekeep/web report:perf` times the one-year Summary grouped by client and project (334k entries) and fails over one second. Recorded 2026-10-25 on the local Postgres 16 container (default `shared_buffers` 128 MB, smaller than the 255 MB table) with the machine's CPU otherwise busy:
+
+| Run | Median |
+| --- | --- |
+| Three sequential queries, `to_char` week key per row | 1258 ms |
+| Two concurrent queries, totals summed from the series, series by local day rolled up in code | 757 ms |
+
+What the plans show:
+
+- Both remaining queries scan the table sequentially: a year is a third of the workspace, so the partial `time_entry_workspace_start_idx` loses to a scan here. It earns its keep on narrower ranges.
+- The grouped query runs as a parallel hash aggregate (2 workers, about 330 ms). The planner removes the unused `project`, `client` and `task` left joins.
+- The series query stays on one worker (about 600 ms): Postgres estimates one group per row for any expression on `start`, so it never chooses a partial aggregate. Grouping by `(start at time zone tz)::date` (one conversion per row) and rolling days into weeks or months with `bucketKeyOfDay` keeps it cheap. A per-row `to_char` or week expression cost twice as much.
+- Not needed yet: a `work_mem` bump (aggregates use under 4 MB) or the day-level rollup table the spec keeps as the last resort.
+
+```
+HashAggregate (actual time=592.219..592.820 rows=366 loops=1)
+  Group Key: ((start AT TIME ZONE 'Asia/Manila'::text))::date
+  ->  Seq Scan on time_entry (actual time=19.497..481.535 rows=334124 loops=1)
+        Filter: (deleted_at IS NULL) AND ("end" IS NOT NULL) AND start in range AND workspace_id = 'perf-ws'
+Execution Time: 595.854 ms
+
+Finalize GroupAggregate (actual time=311.359..328.777 rows=13 loops=1)
+  ->  Gather Merge (Workers Launched: 2)
+        ->  Partial HashAggregate (rows=13 loops=3)
+              ->  Hash Left Join (client) -> Hash Left Join (project)
+                    ->  Parallel Seq Scan on time_entry (rows=111375 loops=3)
+Execution Time: 329.085 ms
+```
+
 ## Planned (later phases)
 
-Phase 3: `report_share_link`, `export_job`.
 Phase 4: `user_group`, `user_group_member`, `rate` (+ rate snapshot columns on `time_entry`), `workspace_settings` extensions.
 Phase 5: `approval_request`, `lock_period`, `time_off_policy`, `time_off_request`, `holiday`, `kiosk`, `kiosk_pin`.
 Phase 6: `expense`, `expense_category`, `invoice`, `invoice_item`, `payment`, `budget`, `custom_field`.

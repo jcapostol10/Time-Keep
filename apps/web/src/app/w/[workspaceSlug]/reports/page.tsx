@@ -1,17 +1,9 @@
-import { BarChart3Icon } from "lucide-react";
-import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-import { ComingSoon } from "@/components/coming-soon";
+import { workspaceRoutes } from "@/lib/routes";
 
-export const metadata: Metadata = { title: "Reports" };
-
-export default function ReportsPage() {
-  return (
-    <ComingSoon
-      icon={BarChart3Icon}
-      title="Reports"
-      description="Summary, detailed and weekly reports with filters, sharing and exports."
-      phase={3}
-    />
-  );
+/** Reports open on the Summary view. */
+export default async function ReportsPage({ params }: PageProps<"/w/[workspaceSlug]/reports">) {
+  const { workspaceSlug } = await params;
+  redirect(workspaceRoutes.reports(workspaceSlug, "summary"));
 }

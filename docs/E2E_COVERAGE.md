@@ -50,6 +50,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Search the project picker and clear the project — `timer-bar.spec.ts` › "search the project picker and clear the project"
 - [x] Pick several tags, including one created inline — `timer-bar.spec.ts` › "pick several tags, including one created inline"
 - [x] Start right after creating a tag: the tag stays on the entry — `timer-bar.spec.ts` › "a tag created just before Start stays on the entry"
+- [x] Add a manual entry right after creating a tag: the tag stays on the entry — `timer-bar.spec.ts` › "a tag created just before a manual Add stays on the entry"
 - [x] Start right after creating a project: the project stays on the entry — `timer-bar.spec.ts` › "a project created just before Start stays on the entry"
 - [x] The billable toggle is saved with the entry — `timer-bar.spec.ts` › "the billable toggle is saved with the entry"
 - [x] Description autocomplete fills project, tags and billable from a recent entry — `timer-bar.spec.ts` › "autocomplete fills project, tags and billable from a recent entry"
@@ -122,6 +123,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Delete a task; its entries keep the project — `project-picker.spec.ts` › "delete a task; its entries keep the project"
 - [x] Make a project private and pick its members — `project-detail.spec.ts` › "make a project private and pick its members"
 - [x] The status tab sums time by task and member for a date range — `project-detail.spec.ts` › "the status tab sums time by task and member"
+- [x] The status tab adds weekly bars when the range is longer than a month — `project-detail.spec.ts` › "the status tab adds weekly bars when the range is longer than a month"
+- [x] The status tab exports CSV and opens the same numbers in reports — `project-detail.spec.ts` › "the status tab exports CSV and opens the same numbers in reports"
 - [x] Edit project settings, mark it as a template, archive and unarchive it — `project-detail.spec.ts` › "edit project settings, mark it as a template, archive and unarchive it"
 - [x] Members cannot open project detail — `project-detail.spec.ts` › "members cannot open project detail"
 - [x] The Budget and Rates tabs say which phase brings them — `project-detail.spec.ts` › "the Budget and Rates tabs say which phase brings them"
@@ -182,6 +185,44 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The same entry shows identically in the tracker, timesheet and calendar — `entry-views.spec.ts` › "an entry edited in the timesheet changes in the tracker and the calendar"
 - [x] Editing an entry in one view updates the others — `entry-views.spec.ts` › "an entry edited in the timesheet changes in the tracker and the calendar"
 
+## Reports
+
+- [x] The summary shows the range's total, a chart and a grouped table — `reports.spec.ts` › "the summary shows the week's total, a chart and a grouped table"
+- [x] Filter by project (including "Without project") and by tag — `reports.spec.ts` › "filter by project and by tag"
+- [x] Group by client then project shows nested totals — `reports.spec.ts` › "group by client then project shows nested totals"
+- [x] Presets and a custom range change the URL and the totals — `reports.spec.ts` › "presets and a custom range change the URL and the totals"
+- [x] A member cannot widen the Users filter by URL and has no Users filter — `reports.spec.ts` › "a member cannot widen the Users filter by URL"
+- [x] The summary agrees with the tracker's week total — `reports.spec.ts` › "the summary agrees with the tracker's week total"
+- [x] A summary row opens the detailed report filtered to it — `reports.spec.ts` › "a summary row opens the detailed report filtered to it"
+- [x] A weekly cell opens the detailed report for that project and day — `reports.spec.ts` › "a weekly cell opens the detailed report for that project and day"
+- [x] The detailed report lists entries and loads more — `reports.spec.ts` › "the detailed report lists entries and loads more"
+- [x] Edit an own entry inline in the detailed report — `reports.spec.ts` › "edit the description and duration of an own entry inline"
+- [x] Select own entries in the detailed report and delete them, with Undo — `reports.spec.ts` › "select own entries in the detailed report and delete them, with undo"
+- [x] Another person's entry is read-only in the detailed report — `reports.spec.ts` › "another person's entry is read-only"
+- [x] The column chooser hides a column and remembers it — `reports.spec.ts` › "the column chooser hides a column and remembers it after reload"
+- [x] Sort the detailed report by duration — `reports.spec.ts` › "sort the detailed report by duration"
+- [x] The weekly grid by project shows day and row totals that match the summary — `reports.spec.ts` › "the weekly grid by project shows day and row totals that match the summary"
+- [x] The weekly grid can list people instead of projects — `reports.spec.ts` › "the weekly grid can list people instead of projects"
+- [x] The weekly export lists people when the grid does — `reports.spec.ts` › "the weekly export lists people when the grid does"
+
+## Exports and sharing
+
+- [x] Export the summary as CSV — `reports.spec.ts` › "export the summary as CSV"
+- [x] Export the summary as PDF — `reports.spec.ts` › "export the summary as PDF"
+- [x] The share title defaults to the report and its range — `share.spec.ts` › "the share title names the report and its range"
+- [x] A share link opens without signing in and shows the same total — `share.spec.ts` › "a share link opens without signing in and shows the same total"
+- [x] Revoking a link makes it unavailable (404, same page as an unknown token) — `share.spec.ts` › "revoking a link makes it unavailable"
+- [x] The shared page exports CSV — `share.spec.ts` › "the shared page exports CSV"
+- [x] A shared link refuses a second export within seconds (429) — `share.spec.ts` › "a shared link refuses a second export within seconds"
+- [x] A large export becomes a job: listed under Exports, downloadable, emailed — `reports.spec.ts` › "a large export becomes a job with a download link and an email"
+
+## Dashboard
+
+- [x] The dashboard shows this week's total, top project and most tracked — `dashboard.spec.ts` › "the dashboard shows this week's total, top project and most tracked"
+- [x] A most tracked item opens the detailed report for it — `dashboard.spec.ts` › "a most tracked item opens the detailed report for it"
+- [x] The Team tab shows who is tracking now within a poll — `dashboard.spec.ts` › "the Team tab shows who is tracking now within a poll"
+- [x] A member has no Team tab — `dashboard.spec.ts` › "a member has no Team tab"
+
 ## Tenant isolation
 
 - [x] A member of one workspace cannot open another workspace's pages — `tenant-isolation.spec.ts` › "a member of one workspace cannot open another workspace's pages"
@@ -191,4 +232,5 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Small screens (375px)
 
 - [ ] The tracker page fits a 375px screen without horizontal scrolling — gap
+- [x] At 375px the report filters fold into a sheet and the page does not scroll sideways — `reports.spec.ts` › "at 375px the filters fold into a sheet and the page does not scroll sideways"
 - [ ] The account and settings pages fit a 375px screen without horizontal scrolling — gap

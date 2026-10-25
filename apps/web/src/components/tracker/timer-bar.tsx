@@ -81,7 +81,7 @@ function RunningDescription({
 
 export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
   const tracker = useTracker();
-  const { slug, running, draft, setDraft, pending, canManage } = tracker;
+  const { slug, running, draft, setDraft, settledDraft, pending, canManage } = tracker;
   const { createManual } = useEntryMutations();
   const [storedMode, setMode] = useLocalStorage<Mode>("timekeep:tracker-mode", "timer");
   const mode: Mode = running ? "timer" : storedMode;
@@ -180,7 +180,9 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
           <ManualEntryFields
             draft={draft}
             onSubmit={async (input) => {
-              const ok = await createManual(input);
+              // A project or tag still being created belongs on this entry, as on Start.
+              const details = await settledDraft();
+              const ok = await createManual({ ...input, ...details });
               if (ok) setDraft(EMPTY_DRAFT);
               return ok;
             }}

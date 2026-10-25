@@ -47,7 +47,6 @@ export function WorkspaceSwitcher({
     }
     startTransition(() => {
       router.push(workspaceRoutes.tracker(ws.slug));
-      router.refresh();
     });
   }
 
@@ -56,7 +55,7 @@ export function WorkspaceSwitcher({
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="h-9 max-w-56 justify-between gap-2 px-2 font-semibold"
+          className="h-9 min-w-0 max-w-56 shrink justify-between gap-2 px-2 font-semibold"
           aria-label="Switch workspace"
           disabled={pending}
         >

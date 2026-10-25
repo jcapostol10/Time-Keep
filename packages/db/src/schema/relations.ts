@@ -11,6 +11,7 @@ import {
   taskAssignee,
 } from "./catalog";
 import { timeEntry, timeEntryTag, timesheetTemplate, userSettings } from "./tracking";
+import { exportJob, reportShareLink } from "./reports";
 import { invitation, membership, workspace, workspaceSettings } from "./workspace";
 
 export const userRelations = relations(user, ({ many, one }) => ({
@@ -133,4 +134,17 @@ export const timesheetTemplateRelations = relations(timesheetTemplate, ({ one })
     references: [workspace.id],
   }),
   user: one(user, { fields: [timesheetTemplate.userId], references: [user.id] }),
+}));
+
+export const reportShareLinkRelations = relations(reportShareLink, ({ one }) => ({
+  workspace: one(workspace, {
+    fields: [reportShareLink.workspaceId],
+    references: [workspace.id],
+  }),
+  creator: one(user, { fields: [reportShareLink.createdBy], references: [user.id] }),
+}));
+
+export const exportJobRelations = relations(exportJob, ({ one }) => ({
+  workspace: one(workspace, { fields: [exportJob.workspaceId], references: [workspace.id] }),
+  user: one(user, { fields: [exportJob.userId], references: [user.id] }),
 }));

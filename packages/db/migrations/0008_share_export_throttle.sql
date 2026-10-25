@@ -1,0 +1,1 @@
+ALTER TABLE "report_share_link" ADD COLUMN "last_export_at" timestamp with time zone;

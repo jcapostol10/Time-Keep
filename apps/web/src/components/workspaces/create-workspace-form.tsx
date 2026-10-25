@@ -35,7 +35,6 @@ export function CreateWorkspaceForm() {
     }
     toast.success("Workspace created");
     router.push(workspaceRoutes.tracker(result.data.slug));
-    router.refresh();
   }
 
   return (

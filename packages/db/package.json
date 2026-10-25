@@ -19,7 +19,8 @@
     "db:migrate": "dotenv -e ../../.env -- tsx src/migrate.ts",
     "db:seed": "dotenv -e ../../.env -- tsx src/seed.ts",
     "db:studio": "dotenv -e ../../.env -- drizzle-kit studio",
-    "db:e2e-cleanup": "dotenv -e ../../.env -- tsx src/e2e-cleanup.ts"
+    "db:e2e-cleanup": "dotenv -e ../../.env -- tsx src/e2e-cleanup.ts",
+    "db:seed:perf": "dotenv -e ../../.env -- tsx src/seed-perf.ts"
   },
   "dependencies": {
     "@timekeep/core": "workspace:*",

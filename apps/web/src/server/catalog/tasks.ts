@@ -38,7 +38,7 @@ async function usageByTask(
   const rows = await db
     .select({
       taskId: timeEntry.taskId,
-      seconds: sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::int`,
+      seconds: sql`coalesce(sum(${timeEntry.durationSeconds}), 0)::bigint`.mapWith(Number),
       entries: sql<number>`count(*)::int`,
     })
     .from(timeEntry)

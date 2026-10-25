@@ -21,7 +21,8 @@
     "format:check": "prettier --check .",
     "storage:init": "pnpm --filter @timekeep/web storage:init",
     "bootstrap": "docker compose up -d --wait && pnpm storage:init && pnpm db:migrate && pnpm db:seed",
-    "db:e2e-cleanup": "pnpm --filter @timekeep/db db:e2e-cleanup"
+    "db:e2e-cleanup": "pnpm --filter @timekeep/db db:e2e-cleanup",
+    "db:seed:perf": "pnpm --filter @timekeep/db db:seed:perf"
   },
   "devDependencies": {
     "dotenv-cli": "^10.0.0",

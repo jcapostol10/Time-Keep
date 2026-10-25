@@ -1,7 +1,9 @@
 import {
   addDaysInZone,
+  DEFAULT_REPORT_QUERY,
   localDateKey,
   monthBoundsInZone,
+  reportQueryToSearchParams,
   resolveViewerPrefs,
   zonedDateTimeToInstant,
 } from "@timekeep/core";
@@ -45,10 +47,13 @@ export default async function ProjectStatusPage({
     tz,
   );
 
-  const status = await getProjectStatus(getDb(), viewer, projectId, {
-    from,
-    to: to > from ? to : addDaysInZone(from, 1, tz),
-  });
+  const status = await getProjectStatus(
+    getDb(),
+    viewer,
+    projectId,
+    { from, to: to > from ? to : addDaysInZone(from, 1, tz) },
+    prefs,
+  );
 
   return (
     <StatusTab
@@ -58,6 +63,15 @@ export default async function ProjectStatusPage({
       timezone={tz}
       weekStart={prefs.weekStart}
       durationFormat={prefs.durationFormat}
+      reportParams={reportQueryToSearchParams({
+        ...DEFAULT_REPORT_QUERY,
+        preset: "custom",
+        from: from.toISOString(),
+        to: (to > from ? to : addDaysInZone(from, 1, tz)).toISOString(),
+        projectIds: [projectId],
+        groupBy: ["task", "user"],
+      }).toString()}
+      slug={workspaceSlug}
     />
   );
 }

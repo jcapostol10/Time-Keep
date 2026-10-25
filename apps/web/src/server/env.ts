@@ -52,6 +52,12 @@ const schema = z.object({
   S3_ACCESS_KEY_ID: z.string().default("rustfsadmin"),
   S3_SECRET_ACCESS_KEY: z.string().default("rustfsadmin"),
   S3_PUBLIC_URL: z.string().url().default("http://localhost:9000/timekeep"),
+  /** Private bucket for report exports; downloads go through presigned URLs only. */
+  S3_EXPORT_BUCKET: z.string().default("timekeep-exports"),
+  /** Exports with more rows than this are built after the response, as an export job. */
+  EXPORT_JOB_THRESHOLD: z.coerce.number().int().min(1).default(10_000),
+  /** Local only: a Chrome or Chromium binary for PDF exports (Playwright's works). */
+  CHROME_PATH: optionalString,
 });
 
 export type Env = z.infer<typeof schema> & { APP_URL: string };

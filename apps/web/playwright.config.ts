@@ -61,6 +61,11 @@ export default defineConfig({
           timeout: 180_000,
           stdout: "ignore" as const,
           stderr: "pipe" as const,
+          // Six entries make an export job in e2e (production keeps 10,000).
+          env: {
+            ...process.env,
+            EXPORT_JOB_THRESHOLD: process.env.EXPORT_JOB_THRESHOLD ?? "5",
+          } as Record<string, string>,
         },
       }),
 });
