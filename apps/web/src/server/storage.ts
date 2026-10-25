@@ -3,6 +3,7 @@ import "server-only";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -100,4 +101,24 @@ export async function presignedExportUrl(
 
 export async function deleteExport(key: string): Promise<void> {
   await getClient().send(new DeleteObjectCommand({ Bucket: env().S3_EXPORT_BUCKET, Key: key }));
+}
+
+/**
+ * Deletes export files last written before `olderThan`, up to one listing
+ * page (1,000 keys) per call; the next call takes the rest. Returns how many
+ * it deleted. One delete per key: not every S3-compatible backend accepts
+ * the batch call the way the SDK sends it.
+ */
+export async function sweepExports(olderThan: Date, prefix = "exports/"): Promise<number> {
+  const bucket = env().S3_EXPORT_BUCKET;
+  const listing = await getClient().send(
+    new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix }),
+  );
+  const old = (listing.Contents ?? []).filter(
+    (o) => o.Key && o.LastModified && o.LastModified < olderThan,
+  );
+  for (const o of old) {
+    await getClient().send(new DeleteObjectCommand({ Bucket: bucket, Key: o.Key }));
+  }
+  return old.length;
 }

@@ -19,6 +19,7 @@ import {
   isNotNull,
   lt,
   membership,
+  sql,
   user,
   workspace,
 } from "@timekeep/db";
@@ -31,7 +32,7 @@ import { env } from "./env";
 import { sendEmail } from "./mail";
 import { buildExport, type ExportFile } from "./report-files";
 import { buildPdfExport } from "./report-pdf";
-import { deleteExport, presignedExportUrl, uploadExport } from "./storage";
+import { deleteExport, presignedExportUrl, sweepExports, uploadExport } from "./storage";
 
 /**
  * Exports too large to stream back. A job is built after the response
@@ -195,7 +196,7 @@ async function defaultBuild(
 export async function runExportJob(db: Database, jobId: string, options: RunOptions = {}) {
   const [job] = await db
     .update(exportJob)
-    .set({ status: "running", error: null })
+    .set({ status: "running", error: null, startedAt: options.now ?? new Date() })
     .where(and(eq(exportJob.id, jobId), eq(exportJob.status, "queued")))
     .returning();
   if (!job) return;
@@ -271,7 +272,7 @@ export async function retryExportJob(db: Database, viewer: Viewer, jobId: string
     throw new CatalogError("INVALID", "Only a failed export can be retried.");
   const [row] = await db
     .update(exportJob)
-    .set({ status: "queued", error: null, finishedAt: null })
+    .set({ status: "queued", error: null, startedAt: null, finishedAt: null })
     .where(eq(exportJob.id, job.id))
     .returning();
   if (!row) throw new CatalogError("NOT_FOUND", "Export not found.");
@@ -280,8 +281,9 @@ export async function retryExportJob(db: Database, viewer: Viewer, jobId: string
 
 /**
  * Housekeeping, run with every new export: deletes files past their expiry
- * and fails jobs that have been running too long (a function killed
- * mid-build never finishes them).
+ * (and any export file older than the keep period, which catches files whose
+ * row a user or workspace deletion took away) and fails jobs whose build has
+ * been running too long (a function killed mid-build never finishes them).
  */
 export async function expireExportJobs(db: Database, now = new Date()) {
   const expired = await db
@@ -292,13 +294,20 @@ export async function expireExportJobs(db: Database, now = new Date()) {
     if (row.objectKey) await deleteExport(row.objectKey).catch(() => undefined);
     await db.update(exportJob).set({ objectKey: null }).where(eq(exportJob.id, row.id));
   }
+  await sweepExports(new Date(now.getTime() - KEEP_DAYS * 24 * 3_600_000)).catch((error: unknown) =>
+    console.error("[exports] could not sweep old files", error),
+  );
   await db
     .update(exportJob)
     .set({ status: "failed", error: "The export timed out.", finishedAt: now })
     .where(
       and(
         eq(exportJob.status, "running"),
-        lt(exportJob.createdAt, new Date(now.getTime() - STUCK_MINUTES * 60_000)),
+        // Rows started by code from before started_at existed have only createdAt.
+        lt(
+          sql`coalesce(${exportJob.startedAt}, ${exportJob.createdAt})`,
+          new Date(now.getTime() - STUCK_MINUTES * 60_000),
+        ),
       ),
     );
 }

@@ -169,4 +169,41 @@ describe("export jobs", () => {
       error: "The export timed out.",
     });
   });
+
+  it("times out a job by when its build started, so a late retry is not failed mid-build", async () => {
+    const job = await createExportJob(db, alice, {
+      report: "detailed",
+      format: "csv",
+      query: QUERY,
+      prefs: PREFS,
+      now: NOW,
+    });
+    const retriedAt = new Date(NOW.getTime() + 60 * 60_000);
+    let statusMidBuild: string | undefined;
+    await runExportJob(db, job.id, {
+      now: retriedAt,
+      notify: vi.fn().mockResolvedValue(undefined),
+      build: async () => {
+        // Another export's housekeeping runs while this one builds.
+        await expireExportJobs(db, new Date(retriedAt.getTime() + 60_000));
+        const [row] = await db.select().from(exportJob).where(eq(exportJob.id, job.id));
+        statusMidBuild = row?.status;
+        return {
+          filename: "x.csv",
+          contentType: "text/csv",
+          body: new Uint8Array([1]),
+          rowCount: 1,
+        };
+      },
+    });
+    expect(statusMidBuild).toBe("running");
+    const [row] = await db.select().from(exportJob).where(eq(exportJob.id, job.id));
+    expect(row?.startedAt?.toISOString()).toBe(retriedAt.toISOString());
+
+    // Still stuck 15 minutes after its start: failed.
+    await db.update(exportJob).set({ status: "running" }).where(eq(exportJob.id, job.id));
+    await expireExportJobs(db, new Date(retriedAt.getTime() + 16 * 60_000));
+    const [stuck] = await db.select().from(exportJob).where(eq(exportJob.id, job.id));
+    expect(stuck).toMatchObject({ status: "failed", error: "The export timed out." });
+  });
 });

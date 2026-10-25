@@ -51,7 +51,7 @@ describe("PDF export", () => {
   });
 
   it("renders the summary as self-contained HTML: title, range, filters, charts, escaped table", async () => {
-    const html = await renderReportHtml(db, viewer, {
+    const { html, rowCount } = await renderReportHtml(db, viewer, {
       report: "summary",
       query: { ...QUERY, billable: "yes" },
       prefs: PREFS,
@@ -68,6 +68,8 @@ describe("PDF export", () => {
     expect(html.match(/<svg/g)?.length).toBe(2);
     // Nothing loaded from elsewhere: the browser never navigates.
     expect(html).not.toMatch(/<(link|script)\b/);
+    // The PDF job records the table's rows, as CSV and Excel jobs do.
+    expect(rowCount).toBe(1);
   });
 
   it.skipIf(!localChromePath())(
