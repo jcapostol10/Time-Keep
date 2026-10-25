@@ -266,5 +266,34 @@ describe("projects service", () => {
       nonBillableSeconds: 1800,
       totalSeconds: 8100,
     });
+    expect(status.weeks).toBeNull();
+  });
+
+  it("adds weekly totals when the range is longer than a month", async () => {
+    const web = await createProject(db, owner, { name: "Web" });
+    await entry(owner, web.id, 60);
+    await entry(owner, web.id, 30, { startOffset: 14 * 24 * 60 }); // two weeks later
+    const prefs = {
+      timezone: "Asia/Manila",
+      timeFormat: "24h",
+      dateFormat: "yyyy-MM-dd",
+      weekStart: 1,
+      durationFormat: "hh:mm:ss",
+    } as const;
+    const status = await getProjectStatus(
+      db,
+      owner,
+      web.id,
+      { from: new Date("2026-02-28T16:00:00.000Z"), to: new Date("2026-04-30T16:00:00.000Z") },
+      prefs,
+    );
+    expect(status.weeks).not.toBeNull();
+    const weeks = status.weeks!;
+    expect(weeks[0]!.key).toBe("2026-02-23"); // the Monday of the week holding Mar 1
+    expect(weeks.reduce((n, w) => n + w.seconds, 0)).toBe(status.totalSeconds);
+    expect(weeks.filter((w) => w.seconds > 0).map((w) => [w.key, w.seconds])).toEqual([
+      ["2026-03-09", 3600],
+      ["2026-03-23", 1800],
+    ]);
   });
 });

@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  bucketFor,
   DEFAULT_REPORT_QUERY,
   canManageCatalog,
   type DeleteProjectMode,
@@ -10,7 +11,16 @@ import {
   type ProjectInput,
   type ProjectListQuery,
   type ProjectPatch,
+  type ViewerPrefs,
 } from "@timekeep/core";
+
+const UTC_PREFS: ViewerPrefs = {
+  timezone: "UTC",
+  timeFormat: "24h",
+  dateFormat: "yyyy-MM-dd",
+  weekStart: 1,
+  durationFormat: "hh:mm:ss",
+};
 import {
   and,
   asc,
@@ -449,31 +459,36 @@ export async function getProjectStatus(
   viewer: Viewer,
   projectId: string,
   range: { from: Date; to: Date },
+  // Task and person groups do not depend on a zone; the weekly bars do.
+  prefs: ViewerPrefs = UTC_PREFS,
 ): Promise<ProjectStatus> {
   await requireVisibleProject(db, viewer, projectId);
   // Through the report engine, so the tab and the reports cannot disagree. Lazy:
-  // reports.ts imports this module. Task and person groups do not depend on a zone.
+  // reports.ts imports this module.
   const { summaryReport } = await import("../reports");
+  // Past a month the tab adds a bar per week (the engine's series, in the viewer's weeks).
+  const weekly = bucketFor(range.from, range.to, prefs.timezone) !== "day";
   const query = {
     ...DEFAULT_REPORT_QUERY,
     preset: "custom" as const,
     from: range.from.toISOString(),
     to: range.to.toISOString(),
     projectIds: [projectId],
+    bucket: "week" as const,
   };
-  const prefs = {
-    timezone: "UTC",
-    timeFormat: "24h",
-    dateFormat: "yyyy-MM-dd",
-    weekStart: 1,
-    durationFormat: "hh:mm:ss",
-  } as const;
   const [byTask, byUser] = await Promise.all([
     summaryReport(db, viewer, { ...query, groupBy: ["task"] }, prefs),
     summaryReport(db, viewer, { ...query, groupBy: ["user"] }, prefs),
   ]);
   const totals = byTask.totals;
   return {
+    weeks: weekly
+      ? byTask.series.map((p) => ({
+          key: p.key,
+          label: p.label,
+          seconds: p.billableSeconds + p.nonBillableSeconds,
+        }))
+      : null,
     from: range.from.toISOString(),
     to: range.to.toISOString(),
     byTask: byTask.groups.map((g) => ({

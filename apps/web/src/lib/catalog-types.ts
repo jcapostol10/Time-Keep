@@ -39,6 +39,8 @@ export interface ProjectDetail extends ProjectListItem {
 export interface ProjectStatus {
   from: string;
   to: string;
+  /** Time per week of the range when it is longer than a month; null otherwise. */
+  weeks: { key: string; label: string; seconds: number }[] | null;
   byTask: { taskId: string | null; name: string; seconds: number }[];
   byMember: { userId: string; name: string; seconds: number }[];
   billableSeconds: number;

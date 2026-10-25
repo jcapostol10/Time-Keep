@@ -22,6 +22,7 @@ import {
 } from "@timekeep/ui/components/table";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import type { ProjectStatus } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
@@ -133,6 +134,40 @@ export function StatusTab({
         <Stat label="Billable" value={fmt(status.billableSeconds)} />
         <Stat label="Non-billable" value={fmt(status.nonBillableSeconds)} />
       </div>
+
+      {status.weeks ? (
+        <figure className="bg-card h-40 rounded-lg border p-3" data-testid="status-weeks">
+          <figcaption className="sr-only">Time by week</figcaption>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={status.weeks} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                tickLine={false}
+                axisLine={{ stroke: "var(--border)" }}
+              />
+              <YAxis
+                tickFormatter={(s: number) => `${Math.round(s / 360) / 10}h`}
+                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                width={36}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "var(--popover)",
+                  borderColor: "var(--border)",
+                  color: "var(--popover-foreground)",
+                  borderRadius: 8,
+                  fontSize: 12,
+                }}
+                formatter={(v) => [fmt(Number(v ?? 0)), "Time"]}
+              />
+              <Bar dataKey="seconds" fill="var(--chart-1)" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </figure>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Breakdown

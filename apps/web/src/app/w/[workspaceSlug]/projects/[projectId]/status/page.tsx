@@ -47,10 +47,13 @@ export default async function ProjectStatusPage({
     tz,
   );
 
-  const status = await getProjectStatus(getDb(), viewer, projectId, {
-    from,
-    to: to > from ? to : addDaysInZone(from, 1, tz),
-  });
+  const status = await getProjectStatus(
+    getDb(),
+    viewer,
+    projectId,
+    { from, to: to > from ? to : addDaysInZone(from, 1, tz) },
+    prefs,
+  );
 
   return (
     <StatusTab
