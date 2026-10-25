@@ -46,8 +46,9 @@ export function SignInForm({ googleEnabled, next }: { googleEnabled: boolean; ne
       form.setError("password", { message: authErrorMessage(error) });
       return;
     }
+    // A push alone: the destination is a dynamic page and renders fresh; a refresh
+    // right after it re-renders /sign-in instead and the push is dropped (Next 16.4.3).
     router.push(next);
-    router.refresh();
   }
 
   async function resendVerification() {

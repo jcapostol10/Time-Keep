@@ -47,7 +47,6 @@ export function WorkspaceSwitcher({
     }
     startTransition(() => {
       router.push(workspaceRoutes.tracker(ws.slug));
-      router.refresh();
     });
   }
 

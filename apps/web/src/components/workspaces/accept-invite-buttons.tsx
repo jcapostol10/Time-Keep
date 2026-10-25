@@ -29,7 +29,6 @@ export function AcceptInviteButtons({
     }
     toast.success("Welcome aboard!");
     router.push(slug ? workspaceRoutes.tracker(slug) : "/");
-    router.refresh();
   }
 
   async function reject() {
@@ -41,7 +40,6 @@ export function AcceptInviteButtons({
       return;
     }
     router.push("/");
-    router.refresh();
   }
 
   return (
