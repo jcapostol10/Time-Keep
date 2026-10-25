@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  DEFAULT_REPORT_QUERY,
   canManageCatalog,
   type DeleteProjectMode,
   pickColor,
@@ -16,12 +17,10 @@ import {
   client,
   type Database,
   eq,
-  gte,
   ilike,
   inArray,
   isNotNull,
   isNull,
-  lt,
   membership,
   or,
   project,
@@ -30,7 +29,6 @@ import {
   sql,
   task,
   timeEntry,
-  user,
 } from "@timekeep/db";
 import type { SQL } from "drizzle-orm";
 
@@ -453,53 +451,43 @@ export async function getProjectStatus(
   range: { from: Date; to: Date },
 ): Promise<ProjectStatus> {
   await requireVisibleProject(db, viewer, projectId);
-  const rows = await db
-    .select({
-      taskId: timeEntry.taskId,
-      taskName: task.name,
-      userId: timeEntry.userId,
-      userName: user.name,
-      billable: timeEntry.billable,
-      seconds: sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::int`,
-    })
-    .from(timeEntry)
-    .leftJoin(task, eq(task.id, timeEntry.taskId))
-    .innerJoin(user, eq(user.id, timeEntry.userId))
-    .where(
-      and(
-        eq(timeEntry.workspaceId, viewer.workspaceId),
-        eq(timeEntry.projectId, projectId),
-        isNull(timeEntry.deletedAt),
-        isNotNull(timeEntry.end),
-        gte(timeEntry.start, range.from),
-        lt(timeEntry.start, range.to),
-      ),
-    )
-    .groupBy(timeEntry.taskId, task.name, timeEntry.userId, user.name, timeEntry.billable);
-
-  const byTask = new Map<string | null, { name: string; seconds: number }>();
-  const byMember = new Map<string, { name: string; seconds: number }>();
-  let billableSeconds = 0;
-  let nonBillableSeconds = 0;
-  for (const r of rows) {
-    const t = byTask.get(r.taskId) ?? { name: r.taskName ?? "No task", seconds: 0 };
-    t.seconds += r.seconds;
-    byTask.set(r.taskId, t);
-    const m = byMember.get(r.userId) ?? { name: r.userName, seconds: 0 };
-    m.seconds += r.seconds;
-    byMember.set(r.userId, m);
-    if (r.billable) billableSeconds += r.seconds;
-    else nonBillableSeconds += r.seconds;
-  }
-  const bySeconds = <T extends { seconds: number; name: string }>(a: T, b: T) =>
-    b.seconds - a.seconds || a.name.localeCompare(b.name);
+  // Through the report engine, so the tab and the reports cannot disagree. Lazy:
+  // reports.ts imports this module. Task and person groups do not depend on a zone.
+  const { summaryReport } = await import("../reports");
+  const query = {
+    ...DEFAULT_REPORT_QUERY,
+    preset: "custom" as const,
+    from: range.from.toISOString(),
+    to: range.to.toISOString(),
+    projectIds: [projectId],
+  };
+  const prefs = {
+    timezone: "UTC",
+    timeFormat: "24h",
+    dateFormat: "yyyy-MM-dd",
+    weekStart: 1,
+    durationFormat: "hh:mm:ss",
+  } as const;
+  const [byTask, byUser] = await Promise.all([
+    summaryReport(db, viewer, { ...query, groupBy: ["task"] }, prefs),
+    summaryReport(db, viewer, { ...query, groupBy: ["user"] }, prefs),
+  ]);
+  const totals = byTask.totals;
   return {
     from: range.from.toISOString(),
     to: range.to.toISOString(),
-    byTask: [...byTask].map(([taskId, v]) => ({ taskId, ...v })).sort(bySeconds),
-    byMember: [...byMember].map(([userId, v]) => ({ userId, ...v })).sort(bySeconds),
-    billableSeconds,
-    nonBillableSeconds,
-    totalSeconds: billableSeconds + nonBillableSeconds,
+    byTask: byTask.groups.map((g) => ({
+      taskId: g.id,
+      name: g.label,
+      seconds: g.totals.durationSeconds,
+    })),
+    byMember: byUser.groups.map((g) => ({
+      userId: g.id ?? "",
+      name: g.label,
+      seconds: g.totals.durationSeconds,
+    })),
+    billableSeconds: totals.billableSeconds,
+    nonBillableSeconds: totals.durationSeconds - totals.billableSeconds,
+    totalSeconds: totals.durationSeconds,
   };
 }

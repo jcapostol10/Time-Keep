@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
@@ -80,6 +82,31 @@ test.describe("project detail", () => {
     await demoUser("member1");
     await page.goto("/w/demo/projects");
     await expect(projectRow(page, name)).toBeVisible();
+  });
+
+  test("the status tab exports CSV and opens the same numbers in reports", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await createProjectViaUi(page, freshUser.slug, "Status export");
+    await trackerPage();
+    await pickProject(page, "Status export");
+    await addManualEntry(page, { description: "Status work", start: "00:05", duration: "1.5" });
+    await openProject(page, freshUser.slug, "Status export");
+    await tab(page, "Status").click();
+    await expect(page.getByTestId("status-total")).toHaveText("1:30:00");
+
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("link", { name: "Export CSV" }).click(),
+    ]);
+    const text = await readFile((await download.path())!, "utf8");
+    expect(text).toContain("Task,Person,Duration");
+    expect(text).toContain("No task,Fresh Tester,1:30:00");
+
+    await page.getByRole("link", { name: "Open in reports" }).click();
+    await expect(page.getByTestId("report-total")).toHaveText("1:30:00");
   });
 
   test("the status tab sums time by task and member", async ({ page, freshUser, trackerPage }) => {

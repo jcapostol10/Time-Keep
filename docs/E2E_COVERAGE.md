@@ -122,6 +122,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Delete a task; its entries keep the project — `project-picker.spec.ts` › "delete a task; its entries keep the project"
 - [x] Make a project private and pick its members — `project-detail.spec.ts` › "make a project private and pick its members"
 - [x] The status tab sums time by task and member for a date range — `project-detail.spec.ts` › "the status tab sums time by task and member"
+- [x] The status tab exports CSV and opens the same numbers in reports — `project-detail.spec.ts` › "the status tab exports CSV and opens the same numbers in reports"
 - [x] Edit project settings, mark it as a template, archive and unarchive it — `project-detail.spec.ts` › "edit project settings, mark it as a template, archive and unarchive it"
 - [x] Members cannot open project detail — `project-detail.spec.ts` › "members cannot open project detail"
 - [x] The Budget and Rates tabs say which phase brings them — `project-detail.spec.ts` › "the Budget and Rates tabs say which phase brings them"

@@ -20,9 +20,11 @@ import {
   TableHeader,
   TableRow,
 } from "@timekeep/ui/components/table";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 import type { ProjectStatus } from "@/lib/catalog-types";
+import { workspaceRoutes } from "@/lib/routes";
 
 /** Tracked time on the project by task and by member for an inclusive date range. */
 export function StatusTab({
@@ -32,6 +34,8 @@ export function StatusTab({
   timezone,
   weekStart,
   durationFormat,
+  reportParams,
+  slug,
 }: {
   status: ProjectStatus;
   fromKey: string;
@@ -39,6 +43,9 @@ export function StatusTab({
   timezone: string;
   weekStart: WeekStartDay;
   durationFormat: DurationFormat;
+  /** The project and range as a report query, for the export and the reports link. */
+  reportParams: string;
+  slug: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -104,6 +111,21 @@ export function StatusTab({
             className="w-40"
           />
         </label>
+        <div className="ml-auto flex gap-2">
+          <Button asChild size="sm" variant="outline">
+            <a
+              href={`/api/w/${slug}/reports/export?${reportParams}&report=summary&format=csv`}
+              download
+            >
+              Export CSV
+            </a>
+          </Button>
+          <Button asChild size="sm" variant="ghost">
+            <Link href={`${workspaceRoutes.reports(slug, "summary")}?${reportParams}`}>
+              Open in reports
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
