@@ -509,6 +509,36 @@ export async function weeklyReport(
 }
 
 /** The filter bar's options, by role: members get no Users filter. */
+/**
+ * People with time in the workspace who are not active members (deactivated,
+ * or their membership is gone): team reports still count their entries, so
+ * the Users filter must offer them. A loose index scan over
+ * time_entry_workspace_user_start_idx: one probe per person, not one row
+ * per entry.
+ */
+async function formerMembers(
+  db: Executor,
+  workspaceId: string,
+  activeIds: Set<string>,
+): Promise<{ id: string; name: string }[]> {
+  const result = await db.execute<{ id: string; name: string }>(sql`
+    with recursive people(user_id) as (
+      (select user_id from time_entry where workspace_id = ${workspaceId} order by user_id limit 1)
+      union all
+      select (
+        select te.user_id from time_entry te
+        where te.workspace_id = ${workspaceId} and te.user_id > people.user_id
+        order by te.user_id limit 1
+      )
+      from people where people.user_id is not null
+    )
+    select u.id, u.name from people join "user" u on u.id = people.user_id order by u.name, u.id
+  `);
+  return result.rows
+    .filter((r) => !activeIds.has(r.id))
+    .map((r) => ({ id: r.id, name: `${r.name} (former member)` }));
+}
+
 export async function reportFilterOptions(
   db: Executor,
   viewer: Viewer,
@@ -521,10 +551,12 @@ export async function reportFilterOptions(
     listPickerProjects(db, viewer),
     listTagOptions(db, viewer.workspaceId),
   ]);
+  const active = members?.filter((m) => m.status === "ACTIVE") ?? null;
+  const former = active
+    ? await formerMembers(db, viewer.workspaceId, new Set(active.map((m) => m.userId)))
+    : [];
   return {
-    users: members
-      ? members.filter((m) => m.status === "ACTIVE").map((m) => ({ id: m.userId, name: m.name }))
-      : null,
+    users: active ? [...active.map((m) => ({ id: m.userId, name: m.name })), ...former] : null,
     clients: clients.filter((c) => !c.archived).map((c) => ({ id: c.id, name: c.name })),
     projects,
     tasks: projects.flatMap((p) =>

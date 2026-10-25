@@ -6,7 +6,7 @@ import {
   type ViewerPrefs,
   zonedDateTimeToInstant,
 } from "@timekeep/core";
-import { projectMember, task, timeEntry } from "@timekeep/db";
+import { and, eq, membership, projectMember, task, timeEntry } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -448,5 +448,34 @@ describe("report engine", () => {
     expect(forBob.projects.map((p) => p.name).sort()).toEqual(["App", "Internal", "Web"]);
     expect(forBob.clients.map((c) => c.name)).toEqual(["Acme", "Globex"]);
     expect(forBob.tags.map((t) => t.name)).toEqual(["review", "urgent"]);
+  });
+
+  it("lists former members whose time is still in the reports, after the active ones", async () => {
+    const fay = await createTestUser(db, "Fay F");
+    await addMember(db, alice.workspaceId, fay.id, "member");
+    const fayScope = { workspaceId: alice.workspaceId, userId: fay.id, role: "member" as const };
+    await entry(fayScope, {
+      description: "Handover",
+      date: "2026-03-09",
+      start: "09:00",
+      hours: 2,
+    });
+    await db
+      .delete(membership)
+      .where(and(eq(membership.workspaceId, alice.workspaceId), eq(membership.userId, fay.id)));
+    // Deactivated, but never tracked here: nothing to filter by.
+    const gus = await createTestUser(db, "Gus G");
+    await addMember(db, alice.workspaceId, gus.id, "member", "DEACTIVATED");
+
+    const options = await reportFilterOptions(db, alice);
+    expect(options.users?.map((u) => u.name)).toEqual([
+      "Alice A",
+      "Max M",
+      "Bob B",
+      "Fay F (former member)",
+    ]);
+    expect(options.users?.at(-1)?.id).toBe(fay.id);
+    const report = await summaryReport(db, alice, q({ userIds: [fay.id] }), PREFS, NOW);
+    expect(report.totals.durationSeconds).toBe(2 * 3600);
   });
 });
