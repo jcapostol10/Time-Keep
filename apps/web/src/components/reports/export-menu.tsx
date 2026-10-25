@@ -21,6 +21,7 @@ import { useReportQuery } from "./report-url";
 const FORMATS = [
   { format: "csv", label: "CSV" },
   { format: "xlsx", label: "Excel" },
+  { format: "pdf", label: "PDF" },
 ] as const;
 
 /** The file name from a Content-Disposition header. */

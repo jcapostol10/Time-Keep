@@ -8,6 +8,13 @@ const nextConfig: NextConfig = {
   // Cache Components can be adopted later per route once there is static content.
   cacheComponents: false,
   reactStrictMode: true,
+  // PDF exports launch Chromium: keep it out of the bundle, and trace its compressed
+  // binary into the functions that print (the export route, the Exports page's retry).
+  serverExternalPackages: ["puppeteer-core", "@sparticuz/chromium", "playwright-core"],
+  outputFileTracingIncludes: {
+    "/api/w/[workspaceSlug]/reports/export": ["./node_modules/@sparticuz/chromium/bin/**"],
+    "/w/[workspaceSlug]/reports/exports": ["./node_modules/@sparticuz/chromium/bin/**"],
+  },
   images: {
     remotePatterns: [
       {

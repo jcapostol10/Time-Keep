@@ -30,6 +30,7 @@ import type { Viewer } from "./catalog/viewer";
 import { env } from "./env";
 import { sendEmail } from "./mail";
 import { buildExport, type ExportFile } from "./report-files";
+import { buildPdfExport } from "./report-pdf";
 import { deleteExport, presignedExportUrl, uploadExport } from "./storage";
 
 /**
@@ -166,13 +167,26 @@ async function defaultBuild(
   });
   if (!member || member.status !== "ACTIVE") throw new Error("The creator is no longer a member");
   viewer.role = member.role;
-  if (job.format === "pdf" || job.report === "project-status") {
-    throw new Error(`Unsupported export: ${job.report} as ${job.format}`);
+  if (job.report === "project-status") {
+    throw new Error("Project status exports stream; they never become jobs");
+  }
+  const query = reportQuerySchema.parse(request.query);
+  if (job.format === "pdf") {
+    const ws = await db.query.workspace.findFirst({
+      where: eq(workspace.id, job.workspaceId),
+      columns: { name: true },
+    });
+    return buildPdfExport(db, viewer, {
+      report: job.report,
+      query,
+      prefs: request.prefs,
+      workspaceName: ws?.name ?? "",
+    });
   }
   return buildExport(db, viewer, {
     report: job.report,
     format: job.format,
-    query: reportQuerySchema.parse(request.query),
+    query,
     prefs: request.prefs,
   });
 }

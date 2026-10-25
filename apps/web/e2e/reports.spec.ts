@@ -302,4 +302,18 @@ test.describe("reports", () => {
     const email = await waitForEmail(freshUser.email, { subject: /export is ready/i });
     expect(email.Text).toContain("6 rows");
   });
+
+  test("export the summary as PDF", async ({ page, freshUser, trackerPage }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await openReport(page, freshUser.slug, "summary");
+    await page.getByRole("button", { name: "Export" }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent("download", { timeout: 60_000 }),
+      page.getByRole("menuitem", { name: "PDF" }).click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/\.pdf$/);
+    const bytes = await readFile((await download.path())!);
+    expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
 });

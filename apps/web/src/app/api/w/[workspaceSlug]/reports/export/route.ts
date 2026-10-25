@@ -6,11 +6,12 @@ import { z } from "zod";
 import { createExportJob, expireExportJobs, runExportJob } from "@/server/export-jobs";
 import { env } from "@/server/env";
 import { buildExport, countExportRows } from "@/server/report-files";
+import { buildPdfExport } from "@/server/report-pdf";
 import { accessErrorResponse, requireWorkspaceAccess } from "@/server/workspace-access";
 
 const requestSchema = z.object({
   report: z.enum(REPORT_KINDS),
-  format: z.enum(["csv", "xlsx"]),
+  format: z.enum(["csv", "xlsx", "pdf"]),
 });
 
 /** Vercel Functions answer with at most 4.5 MB; leave room for headers. */
@@ -58,7 +59,10 @@ export async function GET(
     };
 
     if ((await countExportRows(db, viewer, req)) > env().EXPORT_JOB_THRESHOLD) return queue();
-    const file = await buildExport(db, viewer, req);
+    const file =
+      req.format === "pdf"
+        ? await buildPdfExport(db, viewer, { ...req, workspaceName: access.workspace.name })
+        : await buildExport(db, viewer, { ...req, format: req.format });
     if (file.body.byteLength > MAX_STREAMED_BYTES) return queue();
     return new Response(Buffer.from(file.body), {
       headers: {
