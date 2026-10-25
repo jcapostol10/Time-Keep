@@ -456,7 +456,8 @@ export async function detailedReport(
           id: last.id,
         }
       : null;
-  const totals = await aggregateTotals(db, and(...base)!);
+  // The range's totals are the first page's; later pages (an export's loop, Load more) skip them.
+  const totals = page.cursor ? null : await aggregateTotals(db, and(...base)!);
   return {
     range: { from: range.from.toISOString(), to: range.to.toISOString(), label: range.label },
     entries,

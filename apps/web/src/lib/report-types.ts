@@ -50,7 +50,8 @@ export interface DetailedPage {
   range: { from: string; to: string; label: string };
   entries: DetailedEntryDTO[];
   nextCursor: DetailedCursor | null;
-  totals: ReportTotals;
+  /** The whole range's totals, on the first page only (null with a cursor). */
+  totals: ReportTotals | null;
 }
 
 export type WeeklyBy = "user" | "project";

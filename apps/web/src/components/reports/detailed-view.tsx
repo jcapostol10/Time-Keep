@@ -86,9 +86,11 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
         <div>
           <p className="text-muted-foreground text-sm">{first?.range.label ?? "…"}</p>
           <p className="text-3xl font-semibold tabular-nums" data-testid="report-total">
-            {first ? formatDuration(first.totals.durationSeconds, viewer.durationFormat) : "…"}
+            {first?.totals
+              ? formatDuration(first.totals.durationSeconds, viewer.durationFormat)
+              : "…"}
           </p>
-          {first ? (
+          {first?.totals ? (
             <p className="text-muted-foreground text-sm">
               {first.totals.entryCount} {first.totals.entryCount === 1 ? "entry" : "entries"}
             </p>

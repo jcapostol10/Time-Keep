@@ -51,7 +51,7 @@ export default async function SharedReportPage({ params }: PageProps<"/share/[to
     data = {
       kind: "detailed",
       entries: page.entries,
-      totalSeconds: page.totals.durationSeconds,
+      totalSeconds: page.totals?.durationSeconds ?? 0,
       more: page.nextCursor !== null,
     };
   }

@@ -98,7 +98,7 @@ export async function countExportRows(
         { sort: "start", dir: "desc", limit: 1 },
         req.now,
       );
-      return first.totals.entryCount;
+      return first.totals?.entryCount ?? 0;
     }
     case "summary": {
       const report = await summaryReport(db, viewer, req.query, req.prefs, req.now);

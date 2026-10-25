@@ -343,12 +343,22 @@ describe("report engine", () => {
     });
   });
 
+  it("sums the range on the first page only, so an export's page loop does not repeat it", async () => {
+    const page = (cursor?: { value: string; id: string }) =>
+      detailedReport(db, alice, q(), PREFS, { cursor, sort: "start", dir: "desc", limit: 3 }, NOW);
+    const p1 = await page();
+    expect(p1.totals).toMatchObject({ entryCount: 8, durationSeconds: 10 * 3600 });
+    const p2 = await page(p1.nextCursor!);
+    expect(p2.entries).toHaveLength(3);
+    expect(p2.totals).toBeNull();
+  });
+
   it("pages entries by keyset, stable across an insert, and sorts by duration", async () => {
     const page = (cursor?: { value: string; id: string }, sort: "start" | "duration" = "start") =>
       detailedReport(db, alice, q(), PREFS, { cursor, sort, dir: "desc", limit: 3 }, NOW);
     const p1 = await page();
     expect(p1.entries).toHaveLength(3);
-    expect(p1.totals.entryCount).toBe(8);
+    expect(p1.totals?.entryCount).toBe(8);
     expect(p1.entries[0]!.description).toBe("Build");
     expect(p1.entries.map((e) => e.editable)).toEqual([true, false, false]);
     expect(p1.nextCursor).not.toBeNull();

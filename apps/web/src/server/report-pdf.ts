@@ -239,7 +239,7 @@ export async function renderReportHtml(
       now,
     );
     entries.push(...p.entries);
-    totals = p.totals;
+    if (p.totals) totals = p.totals;
     cursor = p.nextCursor ?? undefined;
   } while (cursor);
   return page({
