@@ -124,6 +124,21 @@ describe("resolveReportRange", () => {
     expect(iso(r.from, r.to)).toEqual(["2026-03-08T05:00:00.000Z", "2026-03-15T04:00:00.000Z"]);
   });
 
+  it("takes the year from the viewer's zone in the first minutes of 1 January", () => {
+    // 00:30 on 1 Jan 2026 in Manila is still 31 Dec 2025 in UTC.
+    const newYear = new Date("2025-12-31T16:30:00.000Z");
+    expect(iso(at("this-year", MANILA, newYear).from, at("this-year", MANILA, newYear).to)).toEqual(
+      ["2025-12-31T16:00:00.000Z", "2026-12-31T16:00:00.000Z"],
+    );
+    expect(iso(at("last-year", MANILA, newYear).from, at("last-year", MANILA, newYear).to)).toEqual(
+      ["2024-12-31T16:00:00.000Z", "2025-12-31T16:00:00.000Z"],
+    );
+    // 23:30 on 31 Dec 2025 in New York is already 2026 in UTC.
+    const lastNight = new Date("2026-01-01T04:30:00.000Z");
+    const ny = at("this-year", NY_SUNDAY, lastNight);
+    expect(iso(ny.from, ny.to)).toEqual(["2025-01-01T05:00:00.000Z", "2026-01-01T05:00:00.000Z"]);
+  });
+
   it("crosses the year boundary for last month and last year", () => {
     const r = at("last-month", MANILA, new Date("2026-01-05T04:00:00.000Z"));
     expect(iso(r.from, r.to)).toEqual(["2025-11-30T16:00:00.000Z", "2025-12-31T16:00:00.000Z"]);

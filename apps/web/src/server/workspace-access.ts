@@ -129,6 +129,24 @@ export function accessErrorResponse(error: unknown): Response | null {
   return null;
 }
 
+/** A request a route cannot serve as asked: answered 400 with its message. */
+export class BadRequestError extends Error {}
+
+/**
+ * A JSON route's answer for anything it did not handle: the access error's
+ * status, 400 for a bad request, otherwise 500, logged first so production
+ * shows why.
+ */
+export function routeErrorResponse(error: unknown, scope: string): Response {
+  const access = accessErrorResponse(error);
+  if (access) return access;
+  if (error instanceof BadRequestError) {
+    return Response.json({ error: error.message }, { status: 400 });
+  }
+  console.error(`[${scope}] request failed`, error);
+  return Response.json({ error: "Something went wrong." }, { status: 500 });
+}
+
 /** All workspaces the user can open, for the switcher. */
 export async function listUserWorkspaces(db: Database, userId: string) {
   const rows = await db

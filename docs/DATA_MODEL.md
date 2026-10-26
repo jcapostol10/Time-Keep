@@ -290,9 +290,10 @@ An export too large to stream back (over `EXPORT_JOB_THRESHOLD` rows or 4 MB): b
 | object_key | text? | `exports/<workspace>/<job>.<ext>` in `S3_EXPORT_BUCKET` |
 | error | text? | |
 | created_at, finished_at | timestamptz | |
+| started_at | timestamptz? | when the current build began (0009); a retry clears it. A job still running 15 minutes after `coalesce(started_at, created_at)` is failed as timed out |
 | expires_at | timestamptz | the file is deleted after this (7 days) |
 
-Index: `(workspace_id, user_id, created_at desc)`.
+Index: `(workspace_id, user_id, created_at desc)`. Housekeeping also sweeps any file in the bucket older than 7 days, since a user or workspace deletion cascades the rows away and leaves their files.
 
 ## Report performance (Phase 3)
 

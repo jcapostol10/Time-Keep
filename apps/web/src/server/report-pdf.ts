@@ -189,12 +189,12 @@ const TITLES: Record<ReportKind, string> = {
   weekly: "Weekly report",
 };
 
-/** The report as one self-contained HTML page. */
+/** The report as one self-contained HTML page, and how many rows its table has. */
 export async function renderReportHtml(
   db: Executor,
   viewer: Viewer,
   req: PdfRequest,
-): Promise<string> {
+): Promise<{ html: string; rowCount: number }> {
   const now = req.now ?? new Date();
   const range = resolveReportRange(req.query, req.prefs, now);
   const rangeLabel = formatRangeLabel(range.from, range.to, req.prefs.timezone);
@@ -206,7 +206,7 @@ export async function renderReportHtml(
     const report = await summaryReport(db, viewer, req.query, req.prefs, now);
     const rows = flattenGroups(report.groups, report.groupBy);
     const body = `<div class="charts">${barChart(report.series, req.prefs.durationFormat)}${donut(slicesOf(report))}</div>${table(rows, summaryColumns(report.groupBy, req.prefs))}`;
-    return page({
+    const html = page({
       title,
       workspaceName: req.workspaceName,
       rangeLabel,
@@ -214,10 +214,11 @@ export async function renderReportHtml(
       total: fmt(report.totals.durationSeconds),
       body,
     });
+    return { html, rowCount: rows.length };
   }
   if (req.report === "weekly") {
     const report = await weeklyReport(db, viewer, req.query, req.prefs, now);
-    return page({
+    const html = page({
       title,
       workspaceName: req.workspaceName,
       rangeLabel,
@@ -225,6 +226,7 @@ export async function renderReportHtml(
       total: fmt(report.total),
       body: table(report.rows, weeklyColumns(report.dayKeys, req.prefs)),
     });
+    return { html, rowCount: report.rows.length };
   }
   const entries = [];
   let cursor: { value: string; id: string } | undefined;
@@ -242,7 +244,7 @@ export async function renderReportHtml(
     if (p.totals) totals = p.totals;
     cursor = p.nextCursor ?? undefined;
   } while (cursor);
-  return page({
+  const html = page({
     title,
     workspaceName: req.workspaceName,
     rangeLabel,
@@ -250,6 +252,7 @@ export async function renderReportHtml(
     total: fmt(totals.durationSeconds),
     body: table(entries, detailedColumns(req.prefs)),
   });
+  return { html, rowCount: entries.length };
 }
 
 /** A Chrome binary for local PDFs: CHROME_PATH, else Playwright's Chromium; null when none. */
@@ -305,11 +308,11 @@ export async function buildPdfExport(
 ): Promise<ExportFile> {
   const now = req.now ?? new Date();
   const range = resolveReportRange(req.query, req.prefs, now);
-  const html = await renderReportHtml(db, viewer, { ...req, now });
+  const { html, rowCount } = await renderReportHtml(db, viewer, { ...req, now });
   return {
     filename: exportFilename(req.report, range, req.prefs.timezone, "pdf"),
     contentType: "application/pdf",
     body: await htmlToPdf(html),
-    rowCount: 0,
+    rowCount,
   };
 }

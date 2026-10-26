@@ -7,7 +7,7 @@ import { createExportJob, expireExportJobs, runExportJob } from "@/server/export
 import { env } from "@/server/env";
 import { buildExport, countExportRows } from "@/server/report-files";
 import { buildPdfExport } from "@/server/report-pdf";
-import { accessErrorResponse, requireWorkspaceAccess } from "@/server/workspace-access";
+import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
 
 const requestSchema = z.object({
   report: z.enum(REPORT_KINDS),
@@ -72,9 +72,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    return (
-      accessErrorResponse(error) ??
-      Response.json({ error: "Something went wrong." }, { status: 500 })
-    );
+    return routeErrorResponse(error, "exports");
   }
 }

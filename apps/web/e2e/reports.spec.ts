@@ -64,6 +64,22 @@ test.describe("reports", () => {
     await expect(reportTotal(page)).toHaveText("1:00:00");
   });
 
+  test("Back undoes a filter change", async ({ page, freshUser, trackerPage }) => {
+    await trackerPage();
+    await createProject(page, "Web");
+    await addManualEntry(page, { description: "Site work", start: "00:05", duration: "1" });
+    await addManualEntry(page, { description: "Email", start: "02:05", duration: "0.5" });
+    await openReport(page, freshUser.slug, "summary");
+    await expect(reportTotal(page)).toHaveText("1:30:00");
+
+    await toggleFilter(page, "Projects", "Web");
+    await expect(reportTotal(page)).toHaveText("1:00:00");
+    await page.goBack();
+    await expect(page).toHaveURL(/\/reports\/summary$/);
+    await expect(reportTotal(page)).toHaveText("1:30:00");
+    await expect(page.getByRole("button", { name: "Projects: All" })).toBeVisible();
+  });
+
   test("at 375px the filters fold into a sheet and the page does not scroll sideways", async ({
     page,
     freshUser,
@@ -82,7 +98,8 @@ test.describe("reports", () => {
     await expect(sheet).toBeVisible();
     await toggleFilter(page, "Projects", "Web");
     await expect(page).toHaveURL(/projectIds=/);
-    await sheet.getByRole("button", { name: "Close" }).click();
+    // The picker closed on the first Escape; the next one closes the sheet.
+    await page.keyboard.press("Escape");
     await expect(sheet).toBeHidden();
     await expect(reportTotal(page)).toHaveText("1:00:00");
     await expect(page.getByRole("button", { name: "Filters (1)" })).toBeVisible();
@@ -142,10 +159,28 @@ test.describe("reports", () => {
   });
 
   test("a member cannot widen the Users filter by URL", async ({ page, demoUser }) => {
+    // Another member's real id (from their own session; profile.spec may be renaming them),
+    // and proof, read as the owner, that their total differs.
+    const idOf = async (who: "member1" | "member2") => {
+      await demoUser(who);
+      const res = await page.request.get("/api/auth/get-session");
+      return ((await res.json()) as { user: { id: string } }).user.id;
+    };
+    const member1 = await idOf("member1");
+    const member2 = await idOf("member2");
+    await demoUser("owner");
+    const totalOf = async (id: string) => {
+      const res = await page.request.get(
+        `/api/w/demo/reports/summary?preset=this-year&userIds=${id}`,
+      );
+      return ((await res.json()) as { totals: { durationSeconds: number } }).totals.durationSeconds;
+    };
+    expect(await totalOf(member2)).not.toBe(await totalOf(member1));
+
     await demoUser("member1");
-    await openReport(page, "demo", "summary", "preset=this-month");
+    await openReport(page, "demo", "summary", "preset=this-year");
     const own = await reportTotal(page).textContent();
-    await openReport(page, "demo", "summary", "preset=this-month&userIds=someone-else");
+    await openReport(page, "demo", "summary", `preset=this-year&userIds=${member2}`);
     await expect(reportTotal(page)).toHaveText(own ?? "");
     await expect(page.getByRole("button", { name: /^Users:/ })).toHaveCount(0);
   });

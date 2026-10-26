@@ -56,9 +56,16 @@ async function capturedMessages(to: string, subject?: RegExp): Promise<Message[]
   return body.messages.map((m) => ({ Subject: m.subject, Text: m.text, HTML: m.html }));
 }
 
-export async function deleteAllMessages(): Promise<void> {
+/**
+ * Deletes the mail sent to one address. Never all of Mailpit: other workers
+ * are waiting for their own verification emails.
+ */
+export async function deleteMessagesTo(to: string): Promise<void> {
   if (REMOTE_URL) return; // captured email is pruned by `pnpm db:e2e-cleanup`
-  await fetch(`${MAILPIT_URL}/api/v1/messages`, { method: "DELETE" });
+  const res = await fetch(`${MAILPIT_URL}/api/v1/search?query=${encodeURIComponent(`to:${to}`)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(`Mailpit delete failed: ${res.status}`);
 }
 
 /** Poll until an email to `to` (optionally matching `subject`) arrives; newest wins. */

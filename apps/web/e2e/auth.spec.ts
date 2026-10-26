@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { signIn, signOut, signUpAndVerify, uniqueEmail } from "./helpers/app";
-import { deleteAllMessages, extractAppLink, waitForEmail } from "./helpers/mail";
+import { deleteMessagesTo, extractAppLink, waitForEmail } from "./helpers/mail";
 
 test.describe("authentication", () => {
   test("sign up, verify email, land in a personal workspace, sign out and back in", async ({
@@ -49,7 +49,7 @@ test.describe("authentication", () => {
     await page.getByRole("button", { name: "Create account" }).click();
     await expect(page).toHaveURL(/\/check-email\?type=verify/);
     await waitForEmail(email, { subject: /verify/i });
-    await deleteAllMessages();
+    await deleteMessagesTo(email);
 
     // Nothing arrived? Resend from here reports a refused send, which sign-up cannot.
     await page.getByRole("button", { name: "Resend verification email" }).click();

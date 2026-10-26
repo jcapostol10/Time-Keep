@@ -66,6 +66,8 @@ export const exportJob = pgTable(
     objectKey: text("object_key"),
     error: text("error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** When the current build began (a retry restarts it); the stuck-job timeout counts from here. */
+    startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     /** The file is deleted after this; the row says "expired". */
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
