@@ -6,7 +6,6 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 - [ ] **Production email:** verify a sending domain in Resend and set `MAIL_FROM` to an address on it (Vercel → Production env, then redeploy). Until then, production can only email the Resend account owner, so sign-up verification, password reset and invites fail for everyone else. On our side (2026-10-22): production refuses to boot with a placeholder sender, a failed send tells the person what happened instead of a bare 500, and Profile settings has "Send me a test email" to check the sender.
 - [ ] **Production is behind Vercel Authentication.** Deployment protection covers every deployment, production included, so anyone not signed in to the Vercel team gets a Vercel login page instead of TimeKeep. Fine while it is private; before real customers use it, switch protection to "Standard" (previews only) or add a custom domain outside protection. The e2e workflow only targets previews, so it is unaffected.
-- [ ] **Export bucket:** create the private `timekeep-exports` bucket in Supabase Storage and set `S3_EXPORT_BUCKET=timekeep-exports` in Vercel's production and preview env, plus `EXPORT_JOB_THRESHOLD=5` on previews only. Until then large exports fail on that deployment, and the preview's export-job e2e test fails.
 
 ## App
 
@@ -43,6 +42,7 @@ Nothing open.
 
 ## Done
 
+- [x] **Export bucket:** the owner created the private `timekeep-exports` bucket in Supabase Storage; `S3_EXPORT_BUCKET=timekeep-exports` is set for production and preview, `EXPORT_JOB_THRESHOLD=5` for previews only. The preview e2e passed 123/123 with the export-job test. Done 2026-10-26 ("docs: the export bucket is set up").
 - [x] Phase 3 review minors (2026-10-25), all done 2026-10-25:
   - Report, export and tracker JSON routes answered unexpected errors with a bare 500 and logged nothing; they now log first (`routeErrorResponse`). A malformed Detailed cursor reached Postgres and gave 500; it is now a 400. ("routes: log unexpected failures; a malformed Detailed cursor is a 400")
   - `expireExportJobs` timed out running jobs by `createdAt`, so a late retry could be failed mid-build; `export_job.started_at` (0009) now dates the build. PDF jobs recorded 0 rows; they record the table's rows. Deleted users and workspaces left export files in the bucket; housekeeping sweeps any export file older than 7 days (a sweep, not a lifecycle rule: Supabase Storage has none). ("exports: time out by build start, record PDF rows, sweep orphaned files")
