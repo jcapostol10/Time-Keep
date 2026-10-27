@@ -72,7 +72,11 @@ export const project = pgTable(
   ],
 ).enableRLS();
 
-/** Who may see and track on a PRIVATE project. Phase 4 adds user groups. */
+/**
+ * Who may see and track on a PRIVATE project (groups add more through
+ * `project_group`). `is_manager` marks the project's managers: they edit the
+ * project and read everyone's time on it, on public projects too.
+ */
 export const projectMember = pgTable(
   "project_member",
   {
@@ -82,6 +86,7 @@ export const projectMember = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    isManager: boolean("is_manager").notNull().default(false),
   },
   (t) => [
     primaryKey({ columns: [t.projectId, t.userId] }),

@@ -2,7 +2,7 @@
 
 PostgreSQL (16 locally, Supabase in production) via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
 
-## Entity overview (Phases 0–2)
+## Entity overview (Phases 0–4a)
 
 ```
 user ──< session            (activeWorkspaceId → workspace)
@@ -26,6 +26,9 @@ time_entry ──< time_entry_tag >── tag
 user ──1 user_settings      (tracker preferences, created lazily)
 user ──< timesheet_template (per workspace)
 workspace ──< report_share_link >── user   (creator; public read-only report links)
+workspace ──< user_group ──< user_group_member >── user;  project ──< project_group >── user_group
+workspace ──< managed_user / managed_group   (a manager's people and groups)
+workspace ──< rate   (billable rate history per level);  workspace ──< rate_recalc_job
 workspace ──< export_job >── user          (large exports built after the response)
 ```
 
@@ -134,7 +137,7 @@ Rules (`packages/core/src/catalog.ts`): `canSeeProject` (admins always; otherwis
 
 ### project_member, project_favorite
 
-Both `(project_id → project cascade, user_id → user cascade)` with a composite primary key and an index on `user_id`. Members may see and track on a PRIVATE project (user groups arrive in Phase 4). Favourites are per user: starred in the list, first in the picker.
+Both `(project_id → project cascade, user_id → user cascade)` with a composite primary key and an index on `user_id`. Members may see and track on a PRIVATE project; so may the members of a group in `project_group`. `project_member.is_manager` (boolean, default false) marks the project's managers: they edit the project and read everyone's time on it, public projects included. Favourites are per user: starred in the list, first in the picker.
 
 ### task
 
@@ -174,6 +177,10 @@ Both `(project_id → project cascade, user_id → user cascade)` with a composi
 | start | timestamptz | |
 | end | timestamptz? | `NULL` = running. Reserved word: always quote `"end"` in raw SQL |
 | duration_seconds | integer? | set on stop and on every edit; `NULL` while running |
+| billable_rate_minor | bigint? | the hourly rate the entry was saved with, in minor units (Phase 4) |
+| rate_currency | char(3)? | ISO 4217 code of that rate |
+| rate_source | `rate_level`? | which level answered: `task`, `project_member`, `project`, `member`, `workspace` |
+| amount_minor | bigint? | `round(rate × duration_seconds / 3600)` half up; `NULL` while running or without a rate |
 | deleted_at | timestamptz? | soft delete (Undo restores it) |
 | created_at, updated_at | timestamptz | |
 
@@ -190,6 +197,7 @@ Rules (enforced in `apps/web/src/server/time-entries.ts`, the only write path):
 - Stops and edits lock the row with `SELECT ... FOR UPDATE`; an edit writes `start`/`end`/`duration_seconds` only when the patch changes a time.
 - `end > start`; at most 999 hours; a timer cannot stop more than one minute in the future. A forgotten timer that passes 999 hours is clamped at 999 hours when stopped.
 - An entry that crosses midnight stays one row and is listed under its start date in the viewer's timezone.
+- Rates (Phase 4, decision 3 of the Phase 4 design): a new entry is rated with the rate in force at its start; an edit keeps the rate and recomputes `amount_minor`; only a change of project, task, person or billable switched on re-rates it. A rate change re-rates saved entries only through the `rate_recalc_job` ("Entries from a date" / "All entries"). The rating SQL lives in `packages/db/src/rates-sql.ts`, shared by the entry service, the job and the seed.
 
 ### time_entry_tag
 
@@ -243,6 +251,41 @@ Outgoing email stored instead of sent, on Vercel preview deployments only (`MAIL
 | text | text | |
 | created_at | timestamptz | |
 
+### user_group, user_group_member, project_group
+
+`user_group` (`id`, `workspace_id` cascade, `name` unique per workspace, timestamps); `user_group_member` (`group_id` cascade, `user_id` cascade, PK both, index on `user_id`); `project_group` (`project_id` cascade, `group_id` cascade, PK both): a group's members see and track on that PRIVATE project.
+
+### managed_user, managed_group (manager scope)
+
+A manager's scope is own time, the people in `managed_user` (`workspace_id`, `manager_id`, `user_id`) and the current members of the groups in `managed_group` (`workspace_id`, `manager_id`, `group_id`), plus every entry on a project where they are `project_member.is_manager`. Rows exist only for people with the `manager` role; changing their role away from manager deletes them.
+
+### invitation_group
+
+`(invitation_id → invitation cascade, group_id → user_group cascade)`: the groups an invitee joins when they accept (Better Auth owns `invitation`).
+
+### rate
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| kind | `rate_kind` | `billable` (`cost` is reserved for Phase 6) |
+| level | `rate_level` | `task`, `project_member`, `project`, `member`, `workspace` (most specific first) |
+| user_id | text? → user (cascade) | member and project_member levels |
+| project_id | text? → project (cascade) | project, project_member and task levels |
+| task_id | text? → task (cascade) | task level |
+| amount_minor | bigint? | minor units per hour; `NULL` = no rate at this level from this date (fall through) |
+| currency | char(3) | the workspace currency (one per workspace until Phase 6) |
+| effective_from | timestamptz | the row is in force for entries starting at or after it |
+| created_by | text? → user (set null) | |
+| created_at | timestamptz | |
+
+Rows are never edited: a change adds a row, so the table is the history. `rate_level_target_from_uq` is unique on `(workspace_id, kind, level, user_id, project_id, task_id, effective_from)` NULLS NOT DISTINCT; `rate_lookup_idx` on `(workspace_id, kind, level, project_id, task_id, user_id, effective_from DESC)` serves resolution.
+
+### rate_recalc_job
+
+"Apply to past entries": `id`, `workspace_id`, `created_by`, `from`, `status` (`queued` | `running` | `done` | `failed`), `total`, `processed`, `cursor_start` + `cursor_id` (the last entry done, so Retry resumes there), `error`, `created_at`, `started_at`, `finished_at`. Index on `(workspace_id, created_at DESC)`. Run after the response in keyset batches; one job runs per workspace, and a second request lowers the queued job's `from` instead of adding another.
+
 ## Row-level security
 
 Every table enables RLS (`.enableRLS()` on each `pgTable`, migration `0003`) with no policies, and migration `0004` revokes all privileges on `public` from Supabase's `anon` and `authenticated` roles. Supabase's Data API therefore reads nothing; the app connects as the table owner (`timekeep_app` in production) and is unaffected. New tables must call `.enableRLS()`; `apps/web/src/server/rls.test.ts` fails otherwise.
@@ -269,6 +312,7 @@ A read-only public link to a report (`/share/[token]`). The URL carries 32 rando
 | revoked_at | timestamptz? | |
 | last_opened_at, open_count | timestamptz?, integer | |
 | last_export_at | timestamptz? | last export from the public page: one per link every 10 s (0008) |
+| include_amounts | boolean | default false; amounts show only while the creator may still see them (0010) |
 | created_at, updated_at | timestamptz | |
 
 Index: `(workspace_id, created_at desc)` for the Shared list.
@@ -328,7 +372,7 @@ Execution Time: 329.085 ms
 
 ## Planned (later phases)
 
-Phase 4: `user_group`, `user_group_member`, `rate` (+ rate snapshot columns on `time_entry`), `workspace_settings` extensions.
+Phase 4b: `workspace_settings` extensions (rounding, visibility, creators, required fields, force timer, breaks), `time_entry.type`, `favorite_entry`.
 Phase 5: `approval_request`, `lock_period`, `time_off_policy`, `time_off_request`, `holiday`, `kiosk`, `kiosk_pin`.
 Phase 6: `expense`, `expense_category`, `invoice`, `invoice_item`, `payment`, `budget`, `custom_field`.
 Phase 7: `assignment`, `milestone`.

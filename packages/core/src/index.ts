@@ -7,6 +7,7 @@ export * from "./entry-edit";
 export * from "./entry-grouping";
 export * from "./permissions";
 export * from "./prefs";
+export * from "./rates";
 export * from "./roles";
 export * from "./schemas";
 export * from "./slug";

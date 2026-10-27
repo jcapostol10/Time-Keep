@@ -12,6 +12,7 @@ import {
 } from "./catalog";
 import { timeEntry, timeEntryTag, timesheetTemplate, userSettings } from "./tracking";
 import { exportJob, reportShareLink } from "./reports";
+import { userGroup, userGroupMember } from "./team";
 import { invitation, membership, workspace, workspaceSettings } from "./workspace";
 
 export const userRelations = relations(user, ({ many, one }) => ({
@@ -147,4 +148,14 @@ export const reportShareLinkRelations = relations(reportShareLink, ({ one }) => 
 export const exportJobRelations = relations(exportJob, ({ one }) => ({
   workspace: one(workspace, { fields: [exportJob.workspaceId], references: [workspace.id] }),
   user: one(user, { fields: [exportJob.userId], references: [user.id] }),
+}));
+
+export const userGroupRelations = relations(userGroup, ({ one, many }) => ({
+  workspace: one(workspace, { fields: [userGroup.workspaceId], references: [workspace.id] }),
+  members: many(userGroupMember),
+}));
+
+export const userGroupMemberRelations = relations(userGroupMember, ({ one }) => ({
+  group: one(userGroup, { fields: [userGroupMember.groupId], references: [userGroup.id] }),
+  user: one(user, { fields: [userGroupMember.userId], references: [user.id] }),
 }));

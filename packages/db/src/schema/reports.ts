@@ -1,4 +1,13 @@
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
 import { timestamps } from "./columns";
@@ -35,6 +44,8 @@ export const reportShareLink = pgTable(
     openCount: integer("open_count").notNull().default(0),
     /** The last export from the public page: one per link every few seconds. */
     lastExportAt: timestamp("last_export_at", { withTimezone: true }),
+    /** The creator chose to show amounts; honoured only while they may still see them. */
+    includeAmounts: boolean("include_amounts").notNull().default(false),
     ...timestamps,
   },
   (t) => [
