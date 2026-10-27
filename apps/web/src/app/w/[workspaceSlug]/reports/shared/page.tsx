@@ -5,7 +5,8 @@ import { PageHeader } from "@/components/page-header";
 import { SharedList } from "@/components/reports/shared-list";
 import { listShareLinks } from "@/server/share-links";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { authorize, authorizePage } from "@/server/authz";
+import { authorize } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Shared reports" };
 

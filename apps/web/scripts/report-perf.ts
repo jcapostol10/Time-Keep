@@ -1,6 +1,8 @@
 /**
- * Times the one-year Summary over the perf tenant (pnpm db:seed:perf) and
- * prints the plans of its queries. Fails over the one-second budget.
+ * Times the one-year Summary over the perf tenant (pnpm db:seed:perf), for the
+ * owner and for a scoped manager, and prints the plans of its queries; then
+ * rates all 1,000,000 entries with the "apply to past entries" job. Fails
+ * over the one-second Summary budget or the 300-second function budget.
  *
  *   pnpm --filter @timekeep/web report:perf
  *
@@ -10,9 +12,12 @@ import { DEFAULT_REPORT_QUERY, resolveViewerPrefs, type ReportQuery } from "@tim
 import { createDb, sql } from "@timekeep/db";
 
 import { loadViewer } from "../src/server/authz";
+import type { Viewer } from "../src/server/catalog/viewer";
+import { requestRateRecalc, runRateRecalcJob } from "../src/server/rate-recalc";
 import { summaryReport } from "../src/server/reports";
 
 const BUDGET_MS = 1000;
+const RECALC_BUDGET_MS = 300_000;
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -40,21 +45,35 @@ async function main() {
       groupBy: ["client", "project"],
     };
 
-    await summaryReport(db, viewer, query, prefs); // warm the cache and the pool
-    const runs: number[] = [];
-    for (let i = 0; i < 5; i++) {
-      const t0 = performance.now();
-      const report = await summaryReport(db, viewer, query, prefs);
-      runs.push(performance.now() - t0);
-      if (i === 0) {
-        console.info(`[perf] ${report.totals.entryCount} entries, ${report.series.length} buckets`);
+    // Every entry rated first, by the job a rate change "from the beginning" runs.
+    const { jobId } = await requestRateRecalc(db, "perf-ws", ownerId, new Date(0));
+    const r0 = performance.now();
+    await runRateRecalcJob(db, jobId);
+    const recalcMs = performance.now() - r0;
+    console.info(`[perf] rated every entry in ${(recalcMs / 1000).toFixed(1)} s`);
+
+    async function time(label: string, who: Viewer): Promise<number> {
+      await summaryReport(db, who, query, prefs); // warm the cache and the pool
+      const runs: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        const t0 = performance.now();
+        const report = await summaryReport(db, who, query, prefs);
+        runs.push(performance.now() - t0);
+        if (i === 0) {
+          console.info(
+            `[perf] ${label}: ${report.totals.entryCount} entries, ${report.series.length} buckets, amount ${report.totals.amountMinor}`,
+          );
+        }
       }
+      runs.sort((a, b) => a - b);
+      const mid = runs[2]!;
+      console.info(
+        `[perf] one-year Summary (${label}): median ${mid.toFixed(0)} ms (runs ${runs.map((r) => r.toFixed(0)).join(", ")})`,
+      );
+      return mid;
     }
-    runs.sort((a, b) => a - b);
-    const median = runs[2]!;
-    console.info(
-      `[perf] one-year Summary: median ${median.toFixed(0)} ms (runs ${runs.map((r) => r.toFixed(0)).join(", ")})`,
-    );
+    const manager = await loadViewer(db, "perf-ws", "perf-user-2");
+    const median = Math.max(await time("owner", viewer), await time("manager", manager));
 
     const plans = [
       sql`explain (analyze, buffers, costs off)
@@ -83,6 +102,10 @@ async function main() {
     }
     if (median > BUDGET_MS) {
       console.error(`[perf] over budget: ${median.toFixed(0)} ms > ${BUDGET_MS} ms`);
+      process.exitCode = 1;
+    }
+    if (recalcMs > RECALC_BUDGET_MS) {
+      console.error(`[perf] recalculation over budget: ${(recalcMs / 1000).toFixed(0)} s > 300 s`);
       process.exitCode = 1;
     }
   } finally {

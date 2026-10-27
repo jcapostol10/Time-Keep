@@ -6,7 +6,8 @@ import { getProject } from "@/server/catalog/projects";
 import { listGroups } from "@/server/groups";
 import { listMembers } from "@/server/queries/team";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { authorizePage, authorizeProject } from "@/server/authz";
+import { authorizeProject } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Access" };
 

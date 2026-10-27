@@ -9,7 +9,8 @@ import { trackerKeys } from "@/components/tracker/query-keys";
 import { searchParamsOf } from "@/lib/search-params";
 import { reportFilterOptions, weeklyReport } from "@/server/reports";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { authorize, authorizePage } from "@/server/authz";
+import { authorize } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Weekly report" };
 

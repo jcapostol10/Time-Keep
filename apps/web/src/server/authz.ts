@@ -25,11 +25,11 @@ import {
   userGroupMember,
 } from "@timekeep/db";
 import type { SQL } from "drizzle-orm";
-import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import type { Viewer } from "./catalog/viewer";
-import { type WorkspaceContext, WorkspaceAccessError } from "./workspace-access";
+import { WorkspaceAccessError } from "./access-error";
+import type { WorkspaceContext } from "./workspace-access";
 
 /**
  * Turns a request into an `Actor` for the permission matrix
@@ -195,14 +195,4 @@ export async function authorizeProject(
   const viewer = await viewerFor(ctx);
   assertCan(viewer.actor, action, await projectResource(getDb(), viewer, projectId));
   return viewer;
-}
-
-/** Pages: a refusal renders the not-found page, as requireWorkspacePage does. */
-export async function authorizePage(check: () => Promise<Viewer>): Promise<Viewer> {
-  try {
-    return await check();
-  } catch (error) {
-    if (error instanceof WorkspaceAccessError) notFound();
-    throw error;
-  }
 }

@@ -5,7 +5,8 @@ import { ProjectSettingsTab } from "@/components/projects/project-settings-tab";
 import { listClientOptions } from "@/server/catalog/clients";
 import { getProject, listProjects } from "@/server/catalog/projects";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { authorizePage, authorizeProject } from "@/server/authz";
+import { authorizeProject } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Project settings" };
 

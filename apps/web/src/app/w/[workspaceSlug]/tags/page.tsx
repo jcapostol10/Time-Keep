@@ -7,7 +7,8 @@ import { TagsTable } from "@/components/tags/tags-table";
 import { TagsToolbar } from "@/components/tags/tags-toolbar";
 import { listTags } from "@/server/catalog/tags";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { authorize, authorizePage } from "@/server/authz";
+import { authorize } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Tags" };
 

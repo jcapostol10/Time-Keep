@@ -31,7 +31,7 @@ import type { AssignableRole, TeamFilters, TeamRow } from "@/lib/team-types";
 
 import type { Viewer } from "./catalog/viewer";
 import { getRunningEntry, stopTimer } from "./time-entries";
-import { WorkspaceAccessError } from "./workspace-access";
+import { WorkspaceAccessError } from "./access-error";
 
 /**
  * Running a team: roles, deactivation, removal, ownership and a manager's

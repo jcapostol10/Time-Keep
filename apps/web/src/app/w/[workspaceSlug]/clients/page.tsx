@@ -7,7 +7,8 @@ import { ClientsToolbar } from "@/components/clients/clients-toolbar";
 import { PageHeader } from "@/components/page-header";
 import { type ClientStatusFilter, listClients } from "@/server/catalog/clients";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { authorize, authorizePage } from "@/server/authz";
+import { authorize } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Clients" };
 

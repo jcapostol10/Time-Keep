@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 
 import { EmptyState } from "@/components/empty-state";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { authorize, authorizePage } from "@/server/authz";
+import { authorize } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Budget" };
 

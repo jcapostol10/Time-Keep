@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { ExportsList } from "@/components/reports/exports-list";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { authorize, authorizePage } from "@/server/authz";
+import { authorize } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Exports" };
 

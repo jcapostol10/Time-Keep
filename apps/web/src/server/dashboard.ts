@@ -16,7 +16,7 @@ import { scopeFilter } from "./authz";
 import type { Viewer } from "./catalog/viewer";
 import { listMembers } from "./queries/team";
 import { summaryReport } from "./reports";
-import { WorkspaceAccessError } from "./workspace-access";
+import { WorkspaceAccessError } from "./access-error";
 
 /**
  * The dashboard reads through the report engine, so its numbers are the

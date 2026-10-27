@@ -13,7 +13,8 @@ import type { Metadata } from "next";
 import { StatusTab } from "@/components/projects/status-tab";
 import { getProjectStatus } from "@/server/catalog/projects";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { authorizePage, authorizeProject } from "@/server/authz";
+import { authorizeProject } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Status" };
 

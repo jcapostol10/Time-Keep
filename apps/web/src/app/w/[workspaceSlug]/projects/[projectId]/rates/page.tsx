@@ -11,7 +11,8 @@ import type { Metadata } from "next";
 
 import { RateCell } from "@/components/rates/rate-cell";
 import { RecalcBanner } from "@/components/rates/recalc-banner";
-import { authorize, authorizePage } from "@/server/authz";
+import { authorize } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 import { getProject } from "@/server/catalog/projects";
 import { listTasks } from "@/server/catalog/tasks";
 import { listMembers } from "@/server/queries/team";

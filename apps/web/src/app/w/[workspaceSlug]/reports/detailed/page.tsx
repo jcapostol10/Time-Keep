@@ -10,7 +10,8 @@ import { detailedKey, type DetailedPaging } from "@/lib/report-types";
 import { searchParamsOf } from "@/lib/search-params";
 import { detailedReport, reportFilterOptions } from "@/server/reports";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { authorize, authorizePage } from "@/server/authz";
+import { authorize } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Detailed report" };
 
