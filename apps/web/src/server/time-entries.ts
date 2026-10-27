@@ -7,6 +7,7 @@ import {
   computeDurationSeconds,
   type EntryDetails,
   MAX_ENTRY_SECONDS,
+  needsRerate,
   TIMER_STOP_FUTURE_GRACE_MS,
   trackingBlock,
   validateEntryRange,
@@ -27,12 +28,15 @@ import {
   ne,
   type Project,
   project,
+  rateEntriesSql,
+  rateEntry,
+  recomputeAmount,
   sql,
-  type Tag,
   tag,
+  type Tag,
   task,
-  type TimeEntry,
   timeEntry,
+  type TimeEntry,
   timeEntryTag,
 } from "@timekeep/db";
 
@@ -378,6 +382,7 @@ export async function startTimer(
         .update(timeEntry)
         .set({ end, durationSeconds: computeDurationSeconds(running.start, end) })
         .where(eq(timeEntry.id, running.id));
+      await recomputeAmount(tx, running.id);
       stopped = await loadDTO(tx, scope, running.id);
     }
 
@@ -402,6 +407,7 @@ export async function startTimer(
       throw error;
     }
     if (input.tagIds.length > 0) await replaceTags(tx, id, input.tagIds);
+    await rateEntry(tx, id);
 
     return { started: await loadDTO(tx, scope, id), stopped };
   });
@@ -430,6 +436,7 @@ export async function stopTimer(
       .update(timeEntry)
       .set({ end, durationSeconds: computeDurationSeconds(row.start, end) })
       .where(and(eq(timeEntry.id, row.id), isNull(timeEntry.end)));
+    await recomputeAmount(tx, row.id);
     return loadDTO(tx, scope, row.id);
   });
 }
@@ -464,6 +471,7 @@ export async function createManualEntry(
       durationSeconds: computeDurationSeconds(input.start, input.end),
     });
     if (input.tagIds.length > 0) await replaceTags(tx, id, input.tagIds);
+    await rateEntry(tx, id);
     return loadDTO(tx, scope, id);
   });
 }
@@ -520,6 +528,20 @@ export async function updateEntry(
       })
       .where(eq(timeEntry.id, row.id));
     if (patch.tagIds !== undefined) await replaceTags(tx, row.id, patch.tagIds);
+
+    // Decision 3 of the Phase 4 design: an edit keeps the entry's rate unless
+    // it changes what decides the rate; a new duration only recomputes the amount.
+    const rerate = needsRerate(
+      { userId: row.userId, projectId: row.projectId, taskId: row.taskId, billable: row.billable },
+      {
+        userId: row.userId,
+        projectId: patch.projectId !== undefined ? patch.projectId : row.projectId,
+        taskId: patch.taskId !== undefined ? patch.taskId : row.taskId,
+        billable: patch.billable ?? row.billable,
+      },
+    );
+    if (rerate) await rateEntry(tx, row.id);
+    else if (touchesTimes) await recomputeAmount(tx, row.id);
 
     return loadDTO(tx, scope, row.id);
   });
@@ -590,6 +612,8 @@ export async function duplicateEntry(
     });
     const tagIds = row.tags.map((t) => t.tag.id);
     if (tagIds.length > 0) await replaceTags(tx, id, tagIds);
+    // A copy keeps the original's times, so it takes the rates in force at that start.
+    await rateEntry(tx, id);
     return loadDTO(tx, scope, id);
   });
 }
@@ -674,6 +698,17 @@ export async function reassignProjectEntries(
     .set({ projectId: toProjectId, taskId: null })
     .where(projectEntriesWhere(workspaceId, fromProjectId))
     .returning({ id: timeEntry.id });
+  // A new project decides a new rate.
+  if (rows.length > 0) {
+    await db.execute(
+      rateEntriesSql(
+        inArray(
+          timeEntry.id,
+          rows.map((r) => r.id),
+        ),
+      ),
+    );
+  }
   return rows.length;
 }
 

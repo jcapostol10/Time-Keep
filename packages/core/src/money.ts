@@ -28,7 +28,7 @@ export function parseMoney(input: string, currency: string): number | null {
   const exponent = currencyExponent(currency);
   const [whole = "", fraction = ""] = text.replace(/,/g, "").split(".");
   if (fraction.length > exponent) return null;
-  const scale = 10n ** BigInt(exponent);
+  const scale = BigInt(10) ** BigInt(exponent);
   const minor = BigInt(whole) * scale + BigInt(fraction.padEnd(exponent, "0") || "0");
   if (minor > BigInt(MAX_RATE_MAJOR) * scale) return null;
   return Number(minor);
@@ -36,7 +36,7 @@ export function parseMoney(input: string, currency: string): number | null {
 
 /** round_half_up(rate × seconds / 3600), in minor units. */
 export function amountFor(rateMinor: number, seconds: number): number {
-  return Number((BigInt(rateMinor) * BigInt(seconds) + 1800n) / 3600n);
+  return Number((BigInt(rateMinor) * BigInt(seconds) + BigInt(1800)) / BigInt(3600));
 }
 
 /** 125050, "USD" → "$1,250.50". */

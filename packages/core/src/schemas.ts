@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { RATE_APPLY, RATE_LEVELS } from "./rates";
+
 import { PROJECT_VISIBILITIES, TASK_STATUSES } from "./catalog";
 import { hexColorSchema } from "./colors";
 import { ROLES } from "./roles";
@@ -379,3 +381,22 @@ export const DEFAULT_TRACKER_SETTINGS: TrackerSettingsInput = {
   reminderStartMinutes: 9 * 60,
   reminderEndMinutes: 17 * 60,
 };
+
+/** A rate change from the rate dialog; the server parses the amount with the currency. */
+export const setRateSchema = z.object({
+  level: z.enum(RATE_LEVELS),
+  userId: z.string().min(1).max(64).nullish(),
+  projectId: z.string().min(1).max(64).nullish(),
+  taskId: z.string().min(1).max(64).nullish(),
+  amount: z.string().max(32).nullable(),
+  apply: z.enum(RATE_APPLY),
+  from: z.iso.date().optional(),
+});
+
+/** Which rate's history to read. */
+export const rateTargetSchema = z.object({
+  level: z.enum(RATE_LEVELS),
+  userId: z.string().min(1).max(64).nullish(),
+  projectId: z.string().min(1).max(64).nullish(),
+  taskId: z.string().min(1).max(64).nullish(),
+});

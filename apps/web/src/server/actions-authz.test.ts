@@ -27,6 +27,7 @@ const { updateEntryAction } = await import("./actions/time-entries");
 const { createProjectAction, updateProjectAction } = await import("./actions/projects");
 const { createProject } = await import("./catalog/projects");
 const { inviteMembersAction } = await import("./actions/team");
+const { setRateAction } = await import("./actions/rates");
 const { createManualEntry } = await import("./time-entries");
 
 const handle = connectTestDb();
@@ -104,6 +105,17 @@ describe("server actions ask the permission matrix", () => {
   it("refuses a manager's bulk invite before Better Auth is asked", async () => {
     signIn(users.max!);
     const result = await inviteMembersAction(slug, { emails: "a@x.co", role: "member" });
+    expect(result).toEqual({ ok: false, error: "You don't have permission to do that." });
+  });
+
+  it("refuses a manager setting a rate, even on a project they manage", async () => {
+    signIn(users.max!);
+    const result = await setRateAction(slug, {
+      level: "project",
+      projectId: ids.managed,
+      amount: "100",
+      apply: "new",
+    });
     expect(result).toEqual({ ok: false, error: "You don't have permission to do that." });
   });
 
