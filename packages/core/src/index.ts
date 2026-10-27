@@ -5,6 +5,7 @@ export * from "./currencies";
 export * from "./duration";
 export * from "./entry-edit";
 export * from "./entry-grouping";
+export * from "./permissions";
 export * from "./prefs";
 export * from "./roles";
 export * from "./schemas";

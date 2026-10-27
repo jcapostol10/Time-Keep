@@ -13,6 +13,7 @@
     "storage:init": "dotenv -e ../../.env -- tsx scripts/storage-init.ts",
     "vercel-build": "tsx scripts/vercel-build.ts",
     "e2e:coverage": "tsx scripts/coverage-check.ts",
+    "permissions:doc": "tsx scripts/permissions-doc.ts",
     "report:perf": "dotenv -e ../../.env -- tsx --conditions=react-server scripts/report-perf.ts"
   },
   "dependencies": {
