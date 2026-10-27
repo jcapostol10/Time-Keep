@@ -370,6 +370,13 @@ Finalize GroupAggregate (actual time=311.359..328.777 rows=13 loops=1)
 Execution Time: 329.085 ms
 ```
 
+## Rates and scope at scale (Phase 4a)
+
+Measured on the perf tenant (`pnpm db:seed:perf`: 1,000,000 entries, rates at four levels, a manager of 6 people and 1 project), with `pnpm --filter @timekeep/web report:perf`, 2026-10-27:
+
+- "Apply to past entries" over every entry (`runRateRecalcJob`, batches of 5,000, one `rateEntriesSql` update each): 76.2 s for 1,000,000 entries, inside a function's 300 s. One batch is about 380 ms (a primary-key scan plus five rate-lookup probes per entry).
+- One-year Summary with amounts: owner median 328 ms (334,000 entries), manager median 146 ms (109,000 entries in scope). The amount is one more `sum(bigint)` over a stored column; the scope filter is an `OR` of the manager's own, managed people's and managed projects' entries.
+
 ## Planned (later phases)
 
 Phase 4b: `workspace_settings` extensions (rounding, visibility, creators, required fields, force timer, breaks), `time_entry.type`, `favorite_entry`.

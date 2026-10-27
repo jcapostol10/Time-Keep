@@ -9,7 +9,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## App
 
-- [ ] Export jobs run inside the web function after the response (`after()`, within the 300 s budget). Once a worker host exists, enqueue `runExportJob(db, jobId)` on pg-boss instead (decision 1 of the Phase 3 design); the function is already one call, but `apps/worker` cannot import the web app's `server-only` storage and mail modules, so they need a shared package first.
+- [ ] Export jobs and the rate recalculation job (`runRateRecalcJob`, 76 s for 1M entries) run inside the web function after the response (`after()`, within the 300 s budget). Once a worker host exists, enqueue `runExportJob(db, jobId)` on pg-boss instead (decision 1 of the Phase 3 design); the function is already one call, but `apps/worker` cannot import the web app's `server-only` storage and mail modules, so they need a shared package first.
 - [ ] `sign-up-form.tsx` maps `USER_ALREADY_EXISTS` to the email field, but Better Auth 1.7.7 emits `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; moot while `requireEmailVerification` answers a duplicate sign-up with a generic success (predates Phase 2). A refused password-reset send also looks like success, by Better Auth's design, which keeps account existence private.
 - [ ] After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
 - [ ] Timesheet rows added by hand live only for the page visit (templates persist); consider keeping them per week in local storage.
@@ -23,6 +23,9 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; only the preview e2e run exercises `@sparticuz/chromium`. Consider installing Playwright's Chromium in the CI job.
 - [ ] The Detailed report keeps tags and the date read-only (edit them in the tracker), and its sort is per visit, not in the URL.
 - [ ] The `export_report` enum value `project-status` is unused: the Status tab exports the Summary grouped by task then person.
+- [ ] The rate recalculation re-rates every entry from its date, even when the changed rate can only affect some (a project's rate touches only that project's entries). Narrow the job to the changed level's target once workspaces are large enough for it to matter (1M entries take 76 s today).
+- [ ] The recalculation's batch `UPDATE` (raw SQL) leaves `updated_at` alone, so an entry's DTO does not show that its amount changed; nothing reads amounts from the entry DTO yet.
+- [ ] "New entries only" is effective from today's midnight in the workspace timezone: an entry created after the change but dated earlier keeps the old rate (decision 3: an entry is rated by its date). Clockify's wording suggests "created from now"; revisit if owners find it surprising.
 
 ## E2E suite
 

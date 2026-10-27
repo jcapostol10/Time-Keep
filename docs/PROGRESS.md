@@ -152,11 +152,32 @@ Review (2026-10-25): a fresh reviewer read the whole branch (1 Critical, 5 Impor
 
 ## Phase 4 — Team, roles, rates and admin controls
 
-- [ ] Permission matrix (`can(actor, action, resource)`) + docs/PERMISSIONS.md
-- [ ] Team page (full), groups, CSV import
-- [ ] Rate hierarchy with history and snapshots; amounts in reports
+Delivered in two halves (design: `docs/superpowers/specs/2026-10-27-phase-4-design.md`). Phase 4a (plan: `docs/superpowers/plans/2026-10-27-phase-4a.md`):
+
+- [x] Permission matrix (`can(actor, action, resource)`) + docs/PERMISSIONS.md, every action, route and gated page through `authorize` (`permissions.test.ts`, `authorize-coverage.test.ts`, `permissions.spec.ts`)
+- [x] Team page (full), groups, CSV import; manager scope (`team.test.ts`, `groups.test.ts`, `invites.test.ts`, `manager-scope.test.ts`, `team.spec.ts`)
+- [x] Rate hierarchy with history and snapshots; amounts in reports (`rates.test.ts`, `entry-rates.test.ts`, `rate-recalc.test.ts`, `report-amounts.test.ts`, `rates.spec.ts`, `amounts.spec.ts`)
+
+Phase 4b:
+
 - [ ] Workspace settings (rounding, visibility, required fields, breaks)
 - [ ] Add time for others, bulk edit, split, favourites, templates, audit report, import
+
+Acceptance checks:
+
+- [x] A Manager sees only their team in reports (`team.spec.ts`, "a manager's scope limits their Summary"; `manager-scope.test.ts`)
+- [x] Changing a project rate from today does not change last month's amounts until "apply to past entries" runs (`rates.spec.ts`, "a project rate from today leaves last month's amount alone")
+
+Decisions for 4a (the owner agreed to decisions 1, 2, 4, 9 and 10 on 2026-10-27; decision 3 follows the industry rule at their request):
+
+- A manager's scope is the people they manage (directly or through groups) plus everyone's time on the projects they manage, plus their own. They read time and amounts in it, edit the time of the people they manage, and edit the projects they manage, but not rates and not a project's deletion. A manager with no assignments reads only their own time.
+- Members never see amounts. Owners and admins set rates.
+- A rate change never re-rates saved entries unless asked ("Entries from a date" or "All entries" run the job). A new entry takes the rate in force at its start; an edit keeps the rate and recomputes the amount; only a new person, project or task, or billable switched on, re-rates.
+- One currency per workspace until Phase 6; changing it relabels rates and amounts after a confirmation.
+- Deactivate keeps everything for reactivation; remove keeps only the time. Ownership goes to an active admin who confirms by typing the workspace name. Importing users sends invitations.
+- The recalculation job runs after the response (`after()`), like export jobs; moving both to pg-boss is in `docs/BACKLOG.md`.
+
+Bugs found while building 4a and fixed: `updated_at` mixed the database's and the app server's clocks, so an update could be stamped before its insert (two time-entry tests flaked); `setProjectMembers` deleted a project's managers with its member list; a new user's personal workspace was always UTC, so "New entries only" missed entries early in their day; the recalculation cursor lost microseconds and looped forever on its last entry (found by the perf run).
 
 ## Phase 5 — Approvals, time off, attendance, reminders, kiosk
 

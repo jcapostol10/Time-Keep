@@ -254,9 +254,9 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Permissions
 
-- [ ] A manager opens a project they manage, without its Rates and Budget tabs — `permissions.spec.ts` › "a manager opens a project they manage, without its Rates tab"
-- [ ] A manager gets not-found for a project they do not manage — `permissions.spec.ts` › "a manager gets not-found for a project they do not manage"
-- [ ] A member sees no Clients or Tags in the sidebar — `permissions.spec.ts` › "a member sees no Clients or Tags in the sidebar"
+- [x] A manager opens a project they manage, without its Rates and Budget tabs — `permissions.spec.ts` › "a manager opens a project they manage, without its Rates tab"
+- [x] A manager gets not-found for a project they do not manage — `permissions.spec.ts` › "a manager gets not-found for a project they do not manage"
+- [x] A member sees no Clients or Tags in the sidebar — `permissions.spec.ts` › "a member sees no Clients or Tags in the sidebar"
 
 ## Small screens (375px)
 
