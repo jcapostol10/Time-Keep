@@ -120,6 +120,31 @@ export const inviteMemberSchema = z.object({
 });
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
 
+const memberIdSchema = z.string().min(1).max(64);
+
+export const changeRoleSchema = z.object({
+  userId: memberIdSchema,
+  role: roleSchema.exclude(["owner"]),
+});
+
+export const memberStatusSchema = z.object({
+  userId: memberIdSchema,
+  status: z.enum(["ACTIVE", "DEACTIVATED"]),
+});
+
+/** A manager's people, groups and projects, replaced as a whole. */
+export const managerScopeSchema = z.object({
+  managerId: memberIdSchema,
+  userIds: z.array(memberIdSchema).max(500).default([]),
+  groupIds: z.array(memberIdSchema).max(100).default([]),
+  projectIds: z.array(memberIdSchema).max(500).default([]),
+});
+
+export const transferOwnershipSchema = z.object({
+  userId: memberIdSchema,
+  confirmName: z.string().trim().min(1, "Type the workspace name").max(100),
+});
+
 export const signUpSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   email: emailSchema,

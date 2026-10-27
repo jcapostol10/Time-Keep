@@ -1,6 +1,12 @@
 "use server";
 
-import { inviteMemberSchema } from "@timekeep/core";
+import {
+  changeRoleSchema,
+  inviteMemberSchema,
+  managerScopeSchema,
+  memberStatusSchema,
+  transferOwnershipSchema,
+} from "@timekeep/core";
 import { and, eq, getDb, invitation, membership, user } from "@timekeep/db";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
@@ -10,6 +16,13 @@ import { userErrorMessage } from "@/server/actions/errors";
 import { getAuth } from "@/server/auth";
 import { env } from "@/server/env";
 import { invitationEmail, sendEmailOrExplain } from "@/server/mail";
+import {
+  changeRole,
+  removeMember,
+  setManagerScope,
+  setMemberStatus,
+  transferOwnership,
+} from "@/server/team";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
 import { authorize } from "@/server/authz";
 
@@ -133,6 +146,76 @@ export async function resendInvitationAction(
       invitationMessage(ctx, result.id, result.email, result.role),
     );
 
+    revalidatePath(`/w/${slug}/team`);
+    return ok(undefined);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+/** The Team page, then the per-member rules (owner, self, scope) in server/team.ts. */
+async function teamViewer(slug: string) {
+  const ctx = await requireWorkspaceAccess(slug);
+  return authorize(ctx, "page.view", { kind: "page", page: "team" });
+}
+
+export async function changeRoleAction(slug: string, input: unknown): Promise<ActionResult> {
+  try {
+    const viewer = await teamViewer(slug);
+    const parsed = changeRoleSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    await changeRole(getDb(), viewer, parsed.data.userId, parsed.data.role);
+    revalidatePath(`/w/${slug}/team`);
+    return ok(undefined);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+export async function setMemberStatusAction(slug: string, input: unknown): Promise<ActionResult> {
+  try {
+    const viewer = await teamViewer(slug);
+    const parsed = memberStatusSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    await setMemberStatus(getDb(), viewer, parsed.data.userId, parsed.data.status);
+    revalidatePath(`/w/${slug}/team`);
+    return ok(undefined);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+export async function removeMemberAction(slug: string, userId: string): Promise<ActionResult> {
+  try {
+    const viewer = await teamViewer(slug);
+    await removeMember(getDb(), viewer, userId);
+    revalidatePath(`/w/${slug}/team`);
+    return ok(undefined);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+export async function transferOwnershipAction(slug: string, input: unknown): Promise<ActionResult> {
+  try {
+    const viewer = await teamViewer(slug);
+    const parsed = transferOwnershipSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    await transferOwnership(getDb(), viewer, parsed.data.userId, parsed.data.confirmName);
+    revalidatePath(`/w/${slug}`, "layout");
+    return ok(undefined);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+export async function setManagerScopeAction(slug: string, input: unknown): Promise<ActionResult> {
+  try {
+    const viewer = await teamViewer(slug);
+    const parsed = managerScopeSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    const { managerId, ...scope } = parsed.data;
+    await setManagerScope(getDb(), viewer, managerId, scope);
     revalidatePath(`/w/${slug}/team`);
     return ok(undefined);
   } catch (error) {

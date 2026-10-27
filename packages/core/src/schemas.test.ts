@@ -6,7 +6,11 @@ import {
   currencyCodeSchema,
   dateRangeSchema,
   deleteProjectSchema,
+  changeRoleSchema,
   inviteMemberSchema,
+  managerScopeSchema,
+  memberStatusSchema,
+  transferOwnershipSchema,
   projectInputSchema,
   projectPatchSchema,
   timesheetTemplateInputSchema,
@@ -141,5 +145,39 @@ describe("patch schemas", () => {
     expect(clientPatchSchema.parse({ archived: true })).toEqual({ archived: true });
     expect(clientPatchSchema.parse({ email: "" })).toEqual({ email: "" });
     expect(clientPatchSchema.safeParse({ email: "nope" }).success).toBe(false);
+  });
+});
+
+describe("team schemas", () => {
+  it("assigns any role but owner, and only the two statuses", () => {
+    expect(changeRoleSchema.parse({ userId: "u1", role: "manager" })).toEqual({
+      userId: "u1",
+      role: "manager",
+    });
+    expect(changeRoleSchema.safeParse({ userId: "u1", role: "owner" }).success).toBe(false);
+    expect(memberStatusSchema.safeParse({ userId: "u1", status: "INVITED" }).success).toBe(false);
+    expect(memberStatusSchema.parse({ userId: "u1", status: "DEACTIVATED" }).status).toBe(
+      "DEACTIVATED",
+    );
+  });
+
+  it("defaults a manager's scope to nothing and caps its size", () => {
+    expect(managerScopeSchema.parse({ managerId: "m1" })).toEqual({
+      managerId: "m1",
+      userIds: [],
+      groupIds: [],
+      projectIds: [],
+    });
+    const many = Array.from({ length: 501 }, (_, i) => `u${i}`);
+    expect(managerScopeSchema.safeParse({ managerId: "m1", userIds: many }).success).toBe(false);
+  });
+
+  it("needs the workspace name to transfer ownership", () => {
+    expect(transferOwnershipSchema.safeParse({ userId: "u1", confirmName: "  " }).success).toBe(
+      false,
+    );
+    expect(transferOwnershipSchema.parse({ userId: "u1", confirmName: " Acme " }).confirmName).toBe(
+      "Acme",
+    );
   });
 });
