@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { projectMember } from "@timekeep/db";
+import { eq, projectMember, rate, workspace } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -22,12 +22,17 @@ const session = vi.hoisted(() => ({ current: null as AuthSession | null }));
 vi.mock("./session", () => ({ getSession: async () => session.current }));
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+vi.mock("next/server", async (original) => ({
+  ...(await original<object>()),
+  after: () => undefined,
+}));
 
 const { updateEntryAction } = await import("./actions/time-entries");
 const { createProjectAction, updateProjectAction } = await import("./actions/projects");
 const { createProject } = await import("./catalog/projects");
 const { inviteMembersAction } = await import("./actions/team");
 const { setRateAction } = await import("./actions/rates");
+const { updateWorkspaceSettingsAction } = await import("./actions/workspaces");
 const { createManualEntry } = await import("./time-entries");
 
 const handle = connectTestDb();
@@ -117,6 +122,33 @@ describe("server actions ask the permission matrix", () => {
       apply: "new",
     });
     expect(result).toEqual({ ok: false, error: "You don't have permission to do that." });
+  });
+
+  it("asks before a currency change relabels the workspace's rates", async () => {
+    signIn({ id: ids.olga! });
+    const set = await setRateAction(slug, { level: "workspace", amount: "50", apply: "new" });
+    expect(set.ok).toBe(true);
+    const [ws] = await db.select().from(workspace).where(eq(workspace.slug, slug));
+    const settings = {
+      name: ws!.name,
+      timezone: "UTC",
+      weekStart: 1,
+      timeFormat: "24h",
+      durationFormat: "hh:mm:ss",
+      currency: "PHP",
+    };
+    const refused = await updateWorkspaceSettingsAction(slug, settings);
+    expect(refused).toMatchObject({
+      ok: false,
+      fieldErrors: { currency: [expect.stringMatching(/not converted/)] },
+    });
+    const done = await updateWorkspaceSettingsAction(slug, {
+      ...settings,
+      confirmCurrencyChange: true,
+    });
+    expect(done.ok).toBe(true);
+    const rates = await db.select().from(rate).where(eq(rate.workspaceId, ws!.id));
+    expect(rates.map((r) => r.currency)).toEqual(["PHP"]);
   });
 
   it("lets a manager edit a project they manage, and not one they don't", async () => {

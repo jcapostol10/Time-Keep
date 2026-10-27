@@ -14,11 +14,13 @@ import {
   type Database,
   desc,
   eq,
+  isNotNull,
   isNull,
   membership,
   project,
   rate,
   task,
+  timeEntry,
   user,
   workspaceSettings,
 } from "@timekeep/db";
@@ -237,4 +239,30 @@ export async function currentRate(
 ): Promise<RateDTO | null> {
   const history = await rateHistory(db, viewer, input);
   return history.find((h) => new Date(h.effectiveFrom) <= now) ?? null;
+}
+
+/** Whether a currency change has anything to relabel. */
+export async function workspaceHasRates(db: Pick<Database, "select">, workspaceId: string) {
+  const [row] = await db
+    .select({ id: rate.id })
+    .from(rate)
+    .where(eq(rate.workspaceId, workspaceId))
+    .limit(1);
+  return Boolean(row);
+}
+
+/**
+ * One currency per workspace until Phase 6 (decision 4): a new currency
+ * relabels every rate and rated entry, without converting any amount.
+ */
+export async function relabelWorkspaceCurrency(
+  tx: Pick<Database, "update">,
+  workspaceId: string,
+  currency: string,
+): Promise<void> {
+  await tx.update(rate).set({ currency }).where(eq(rate.workspaceId, workspaceId));
+  await tx
+    .update(timeEntry)
+    .set({ rateCurrency: currency })
+    .where(and(eq(timeEntry.workspaceId, workspaceId), isNotNull(timeEntry.rateCurrency)));
 }
