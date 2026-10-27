@@ -159,6 +159,12 @@ function buildAuth() {
           afterCreateOrganization: async ({ organization: ws }) => {
             await ensureWorkspaceSettings(db, ws.id);
           },
+          // Groups named on the invitation (bulk invite, user import). Imported
+          // lazily: invites.ts reaches back to this module through authz.
+          afterAcceptInvitation: async ({ invitation, user }) => {
+            const { joinInvitedGroups } = await import("./invites");
+            await joinInvitedGroups(db, invitation.id, user.id);
+          },
         },
       }),
 

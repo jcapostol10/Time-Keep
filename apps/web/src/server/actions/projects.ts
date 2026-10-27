@@ -19,6 +19,7 @@ import {
   createProject,
   deleteProject,
   setFavorite,
+  setProjectGroups,
   setProjectMembers,
   setProjectsArchived,
   updateProject,
@@ -158,6 +159,27 @@ export async function setFavoriteAction(
     const ctx = await requireWorkspaceAccess(slug);
     const viewer = await authorizeProject(ctx, "project.view", projectId);
     await setFavorite(getDb(), viewer, projectId, favorite);
+    refresh(slug);
+    return ok(null);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+const projectGroupsSchema = z.object({ groupIds: z.array(z.string().min(1).max(64)).max(100) });
+
+/** Groups whose members may see and track on a private project. */
+export async function setProjectGroupsAction(
+  slug: string,
+  projectId: string,
+  input: unknown,
+): Promise<ActionResult<null>> {
+  try {
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorizeProject(ctx, "project.manageMembers", projectId);
+    const parsed = projectGroupsSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    await setProjectGroups(getDb(), viewer, projectId, parsed.data.groupIds);
     refresh(slug);
     return ok(null);
   } catch (error) {

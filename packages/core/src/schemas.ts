@@ -122,6 +122,13 @@ export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
 
 const memberIdSchema = z.string().min(1).max(64);
 
+/** Pasted addresses (any separators) with one role and optional groups for all of them. */
+export const inviteMembersSchema = z.object({
+  emails: z.string().max(20_000),
+  role: roleSchema.exclude(["owner"]).default("member"),
+  groupIds: z.array(z.string().min(1).max(64)).max(50).default([]),
+});
+
 export const changeRoleSchema = z.object({
   userId: memberIdSchema,
   role: roleSchema.exclude(["owner"]),

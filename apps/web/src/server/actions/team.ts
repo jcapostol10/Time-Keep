@@ -3,8 +3,10 @@
 import {
   changeRoleSchema,
   inviteMemberSchema,
+  inviteMembersSchema,
   managerScopeSchema,
   memberStatusSchema,
+  parseEmailList,
   transferOwnershipSchema,
 } from "@timekeep/core";
 import { and, eq, getDb, invitation, membership, user } from "@timekeep/db";
@@ -15,6 +17,13 @@ import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
 import { userErrorMessage } from "@/server/actions/errors";
 import { getAuth } from "@/server/auth";
 import { env } from "@/server/env";
+import {
+  commitUserImport,
+  type InviteResult,
+  inviteMany,
+  previewUserImport,
+  type SendInvite,
+} from "@/server/invites";
 import { invitationEmail, sendEmailOrExplain } from "@/server/mail";
 import {
   changeRole,
@@ -218,6 +227,92 @@ export async function setManagerScopeAction(slug: string, input: unknown): Promi
     await setManagerScope(getDb(), viewer, managerId, scope);
     revalidatePath(`/w/${slug}/team`);
     return ok(undefined);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+/**
+ * One invitation through Better Auth plus its email; a refused send takes
+ * the invitation back so the address can be retried.
+ */
+function invitationSender(ctx: Awaited<ReturnType<typeof requireWorkspaceAccess>>): SendInvite {
+  return async (email, role) => {
+    const result = await getAuth().api.createInvitation({
+      headers: await headers(),
+      body: { email, role, organizationId: ctx.workspace.id, resend: true },
+    });
+    try {
+      await sendEmailOrExplain(
+        "invitation email",
+        invitationMessage(ctx, result.id, result.email, result.role),
+      );
+    } catch (error) {
+      await getAuth().api.cancelInvitation({
+        headers: await headers(),
+        body: { invitationId: result.id },
+      });
+      throw error;
+    }
+    return { invitationId: result.id };
+  };
+}
+
+/** Many addresses at once, each with its own result (invited, already a member, …). */
+export async function inviteMembersAction(
+  slug: string,
+  input: unknown,
+): Promise<ActionResult<InviteResult[]>> {
+  try {
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorize(ctx, "member.invite");
+    const parsed = inviteMembersSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    const list = parseEmailList(parsed.data.emails);
+    if (list.error) return fail(list.error, { emails: [list.error] });
+    if (list.emails.length + list.invalid.length === 0) {
+      return fail("Enter at least one email address.", { emails: ["Enter an email address"] });
+    }
+    const results = await inviteMany(
+      getDb(),
+      viewer,
+      { emails: list.emails, role: parsed.data.role, groupIds: parsed.data.groupIds },
+      invitationSender(ctx),
+    );
+    revalidatePath(`/w/${slug}/team`);
+    return ok([
+      ...results,
+      ...list.invalid.map((email): InviteResult => ({ email, result: "invalid" })),
+    ]);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+export async function importUsersPreviewAction(
+  slug: string,
+  csv: string,
+): Promise<ActionResult<Awaited<ReturnType<typeof previewUserImport>>>> {
+  try {
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorize(ctx, "import.users");
+    return ok(await previewUserImport(getDb(), viewer, String(csv)));
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+export async function importUsersAction(
+  slug: string,
+  csv: string,
+): Promise<ActionResult<{ invited: number; results: InviteResult[] }>> {
+  try {
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorize(ctx, "import.users");
+    const result = await commitUserImport(getDb(), viewer, String(csv), invitationSender(ctx));
+    if (result.error) return fail(result.error);
+    revalidatePath(`/w/${slug}/team`);
+    return ok({ invited: result.invited, results: result.results });
   } catch (error) {
     return fail(userErrorMessage(error));
   }

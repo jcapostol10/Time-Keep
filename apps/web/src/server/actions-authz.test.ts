@@ -21,10 +21,12 @@ await vi.hoisted(async () => {
 const session = vi.hoisted(() => ({ current: null as AuthSession | null }));
 vi.mock("./session", () => ({ getSession: async () => session.current }));
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 
 const { updateEntryAction } = await import("./actions/time-entries");
 const { createProjectAction, updateProjectAction } = await import("./actions/projects");
 const { createProject } = await import("./catalog/projects");
+const { inviteMembersAction } = await import("./actions/team");
 const { createManualEntry } = await import("./time-entries");
 
 const handle = connectTestDb();
@@ -96,6 +98,12 @@ describe("server actions ask the permission matrix", () => {
   it("refuses a member creating a project with the matrix's 403 message", async () => {
     signIn(users.bob!);
     const result = await createProjectAction(slug, { name: "Nope" });
+    expect(result).toEqual({ ok: false, error: "You don't have permission to do that." });
+  });
+
+  it("refuses a manager's bulk invite before Better Auth is asked", async () => {
+    signIn(users.max!);
+    const result = await inviteMembersAction(slug, { emails: "a@x.co", role: "member" });
     expect(result).toEqual({ ok: false, error: "You don't have permission to do that." });
   });
 
