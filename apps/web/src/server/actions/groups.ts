@@ -13,6 +13,7 @@ import {
   type GroupDTO,
   renameGroup,
   setGroupMembers,
+  setUserGroups,
 } from "@/server/groups";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
 
@@ -78,6 +79,25 @@ export async function setGroupMembersAction(
     const parsed = membersSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     await setGroupMembers(getDb(), viewer, groupId, parsed.data.userIds);
+    revalidatePath(`/w/${slug}/team`);
+    return ok(undefined);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+const userGroupsSchema = z.object({
+  userId: z.string().min(1).max(64),
+  groupIds: z.array(z.string().min(1).max(64)).max(100),
+});
+
+/** A person's groups, from their row on the Team page. */
+export async function setMemberGroupsAction(slug: string, input: unknown): Promise<ActionResult> {
+  try {
+    const viewer = await groupViewer(slug);
+    const parsed = userGroupsSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    await setUserGroups(getDb(), viewer, parsed.data.userId, parsed.data.groupIds);
     revalidatePath(`/w/${slug}/team`);
     return ok(undefined);
   } catch (error) {

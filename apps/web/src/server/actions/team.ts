@@ -2,14 +2,13 @@
 
 import {
   changeRoleSchema,
-  inviteMemberSchema,
   inviteMembersSchema,
   managerScopeSchema,
   memberStatusSchema,
   parseEmailList,
   transferOwnershipSchema,
 } from "@timekeep/core";
-import { and, eq, getDb, invitation, membership, user } from "@timekeep/db";
+import { and, eq, getDb, invitation } from "@timekeep/db";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
@@ -50,59 +49,6 @@ function invitationMessage(
     inviterEmail: ctx.user.email,
     role,
   });
-}
-
-export async function inviteMemberAction(
-  slug: string,
-  input: unknown,
-): Promise<ActionResult<{ invitationId: string }>> {
-  try {
-    const ctx = await requireWorkspaceAccess(slug);
-    await authorize(ctx, "member.invite");
-    const parsed = inviteMemberSchema.safeParse(input);
-    if (!parsed.success) return fromZodError(parsed.error);
-
-    const db = getDb();
-    const existing = await db
-      .select({ id: membership.id })
-      .from(membership)
-      .innerJoin(user, eq(membership.userId, user.id))
-      .where(and(eq(membership.workspaceId, ctx.workspace.id), eq(user.email, parsed.data.email)))
-      .limit(1);
-    if (existing.length > 0) {
-      return fail("That person is already a member of this workspace.", {
-        email: ["Already a member"],
-      });
-    }
-
-    const result = await getAuth().api.createInvitation({
-      headers: await headers(),
-      body: {
-        email: parsed.data.email,
-        role: parsed.data.role,
-        organizationId: ctx.workspace.id,
-        resend: true,
-      },
-    });
-    try {
-      await sendEmailOrExplain(
-        "invitation email",
-        invitationMessage(ctx, result.id, result.email, result.role),
-      );
-    } catch (error) {
-      // Nothing reached the invitee: take the invitation back so the admin can retry.
-      await getAuth().api.cancelInvitation({
-        headers: await headers(),
-        body: { invitationId: result.id },
-      });
-      throw error;
-    }
-
-    revalidatePath(`/w/${slug}/team`);
-    return ok({ invitationId: result.id });
-  } catch (error) {
-    return fail(userErrorMessage(error));
-  }
 }
 
 export async function cancelInvitationAction(

@@ -16,6 +16,8 @@ import {
 
 import { assertCan } from "./authz";
 import { CatalogError, isUniqueViolation } from "./catalog/errors";
+import type { GroupDTO } from "@/lib/team-types";
+
 import type { Viewer } from "./catalog/viewer";
 
 /**
@@ -23,11 +25,7 @@ import type { Viewer } from "./catalog/viewer";
  * filters and a manager's scope. Owners and admins manage them.
  */
 
-export interface GroupDTO {
-  id: string;
-  name: string;
-  memberIds: string[];
-}
+export type { GroupDTO };
 
 const NAME_TAKEN = "A group with that name already exists.";
 
@@ -138,6 +136,44 @@ export async function setGroupMembers(
     await tx.delete(userGroupMember).where(eq(userGroupMember.groupId, groupId));
     if (unique.length > 0) {
       await tx.insert(userGroupMember).values(unique.map((userId) => ({ groupId, userId })));
+    }
+  });
+}
+
+/** One person's groups, replaced as a whole; the groups' other members stay. */
+export async function setUserGroups(
+  db: Database,
+  viewer: Viewer,
+  userId: string,
+  groupIds: string[],
+): Promise<void> {
+  assertCan(viewer.actor, "group.manage", { kind: "none" });
+  const member = await db.query.membership.findFirst({
+    where: and(eq(membership.workspaceId, viewer.workspaceId), eq(membership.userId, userId)),
+    columns: { id: true },
+  });
+  if (!member) throw new CatalogError("NOT_FOUND", "Member not found.");
+  const unique = [...new Set(groupIds)];
+  const here = await db
+    .select({ id: userGroup.id })
+    .from(userGroup)
+    .where(eq(userGroup.workspaceId, viewer.workspaceId));
+  const known = new Set(here.map((g) => g.id));
+  if (unique.some((id) => !known.has(id))) throw new CatalogError("INVALID", "Group not found.");
+  await db.transaction(async (tx) => {
+    if (here.length > 0) {
+      await tx.delete(userGroupMember).where(
+        and(
+          eq(userGroupMember.userId, userId),
+          inArray(
+            userGroupMember.groupId,
+            here.map((g) => g.id),
+          ),
+        ),
+      );
+    }
+    if (unique.length > 0) {
+      await tx.insert(userGroupMember).values(unique.map((groupId) => ({ groupId, userId })));
     }
   });
 }

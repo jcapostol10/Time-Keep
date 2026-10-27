@@ -16,7 +16,14 @@ import {
   setProjectMembers,
 } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
-import { createGroup, deleteGroup, listGroups, renameGroup, setGroupMembers } from "./groups";
+import {
+  createGroup,
+  deleteGroup,
+  listGroups,
+  renameGroup,
+  setGroupMembers,
+  setUserGroups,
+} from "./groups";
 import { WorkspaceAccessError } from "./workspace-access";
 
 const handle = connectTestDb();
@@ -68,6 +75,20 @@ describe("groups", () => {
     expect(await names()).toEqual(["Secret"]);
     await setGroupMembers(db, owner, design.id, []);
     expect(await names()).toEqual([]);
+  });
+
+  it("sets one person's groups, leaving the groups' other members alone", async () => {
+    const owner = await viewer("olga");
+    const design = await createGroup(db, owner, "Design");
+    const ops = await createGroup(db, owner, "Ops");
+    await setGroupMembers(db, owner, design.id, [ids.max!]);
+    await setUserGroups(db, owner, ids.bob!, [design.id, ops.id]);
+    await setUserGroups(db, owner, ids.bob!, [ops.id]);
+    const groups = await listGroups(db, owner);
+    expect(groups.map((g) => [g.name, g.memberIds.sort()])).toEqual([
+      ["Design", [ids.max!]],
+      ["Ops", [ids.bob!]],
+    ]);
   });
 
   it("only adds workspace members to a group", async () => {

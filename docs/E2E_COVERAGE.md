@@ -28,6 +28,16 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Workspace settings are read-only for members and editable by admins — `workspace.spec.ts` › "workspace settings are read-only for members and editable by admins"
 - [ ] Cancel a pending invitation — gap
 - [ ] Change a member's role — gap
+- [x] Invite several people at once and see what happened to each address — `team.spec.ts` › "bulk invite reports each address"
+- [x] Import people from a CSV: preview each row, then invite the ready ones (creating their groups) — `team.spec.ts` › "user import previews and invites"
+- [x] Change a member's role; a member sees the team read-only — `team.spec.ts` › "a member's role, deactivation and removal"
+- [x] Deactivate a member (the workspace closes to them) and reactivate them — `team.spec.ts` › "a member's role, deactivation and removal"
+- [x] Remove a member; their time stays in reports as a former member — `team.spec.ts` › "a member's role, deactivation and removal"
+- [x] Transfer ownership to an admin, confirming with the workspace name — `team.spec.ts` › "transfer ownership to an admin"
+- [x] A manager's scope limits what their Summary shows — `team.spec.ts` › "a manager's scope limits their Summary"
+- [x] Create a group, add members, and filter the members table by group and status — `team.spec.ts` › "groups: filter members, and a group on a private project lets its member track on it"
+- [x] A group on a private project lets its members track on it — `team.spec.ts` › "groups: filter members, and a group on a private project lets its member track on it"
+- [x] The Team page fits a 375px screen — `team.spec.ts` › "the Team page fits a 375px screen"
 
 ## Profile and settings
 

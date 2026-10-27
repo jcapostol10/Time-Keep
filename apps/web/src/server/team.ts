@@ -27,6 +27,8 @@ import {
 
 import { assertCan, loadActor } from "./authz";
 import { CatalogError } from "./catalog/errors";
+import type { AssignableRole, TeamFilters, TeamRow } from "@/lib/team-types";
+
 import type { Viewer } from "./catalog/viewer";
 import { getRunningEntry, stopTimer } from "./time-entries";
 import { WorkspaceAccessError } from "./workspace-access";
@@ -37,32 +39,7 @@ import { WorkspaceAccessError } from "./workspace-access";
  * invitations only), after the permission matrix allows each change.
  */
 
-export type TeamStatus = "ACTIVE" | "INVITED" | "DEACTIVATED";
-export type AssignableRole = Exclude<Role, "owner">;
-
-export interface TeamRow {
-  kind: "member" | "invite";
-  /** membership id, or invitation id for an invite */
-  id: string;
-  userId: string | null;
-  name: string;
-  email: string;
-  image: string | null;
-  role: Role;
-  status: TeamStatus;
-  groups: { id: string; name: string }[];
-  /** The member-level billable rate in force now; null without rate.view or without a rate. */
-  billableRateMinor: number | null;
-  /** A manager's people, groups and projects; null for other roles or without permission. */
-  scope: { userIds: string[]; groupIds: string[]; projectIds: string[] } | null;
-}
-
-export interface TeamFilters {
-  q?: string;
-  role?: Role;
-  groupId?: string;
-  status?: TeamStatus;
-}
+export type { AssignableRole, TeamFilters, TeamRow, TeamStatus } from "@/lib/team-types";
 
 async function target(db: Database, viewer: Viewer, userId: string) {
   const row = await db.query.membership.findFirst({

@@ -31,8 +31,8 @@ export interface FreshUser {
 export async function signUpFreshUser(
   request: APIRequestContext,
   baseURL: string | undefined,
+  name = "Fresh Tester",
 ): Promise<FreshUser> {
-  const name = "Fresh Tester";
   const email = uniqueEmail("fresh");
   const password = DEMO_PASSWORD;
   const timezone = zoneNearNoon();
