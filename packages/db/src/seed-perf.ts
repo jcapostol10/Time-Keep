@@ -1,7 +1,8 @@
 /**
  * A large tenant for report performance work: workspace "perf", 25
  * @perf.test people, 12 projects, 1,000,000 stopped entries over three
- * years (about a third tagged). Local databases only; the e2e seed and
+ * years (about a third tagged), rates at every level, and a manager (person
+ * 2) who manages people 3–8 and project 1. Local databases only; the e2e seed and
  * cleanup never touch @perf.test. Rebuilds from scratch each run.
  *
  *   pnpm db:seed:perf            then   pnpm --filter @timekeep/web report:perf
@@ -44,7 +45,7 @@ async function main() {
     await db.execute(sql`
       insert into membership (id, workspace_id, user_id, role, status)
       select 'perf-m-' || g, 'perf-ws', 'perf-user-' || g,
-             (case when g = 1 then 'owner' else 'member' end)::workspace_role, 'ACTIVE'
+             (case when g = 1 then 'owner' when g = 2 then 'manager' else 'member' end)::workspace_role, 'ACTIVE'
       from generate_series(1, ${USERS}) g`);
     await db.execute(sql`
       insert into client (id, workspace_id, name)
@@ -77,6 +78,19 @@ async function main() {
       insert into time_entry_tag (time_entry_id, tag_id)
       select id, 'perf-t-' || (1 + (hashtext(id) & 2147483647) % 6)
       from time_entry where workspace_id = 'perf-ws' and (hashtext(id) & 2147483647) % 3 = 0`);
+    await db.execute(sql`
+      insert into managed_user (workspace_id, manager_id, user_id)
+      select 'perf-ws', 'perf-user-2', 'perf-user-' || g from generate_series(3, 8) g`);
+    await db.execute(sql`
+      insert into project_member (project_id, user_id, is_manager) values ('perf-p-1', 'perf-user-2', true)`);
+    // Rates at every level, from the beginning; entries are left unrated for the
+    // recalculation timing (report:perf rates them all).
+    await db.execute(sql`
+      insert into rate (id, workspace_id, kind, level, user_id, project_id, task_id, amount_minor, currency, effective_from)
+      values ('perf-r-ws', 'perf-ws', 'billable', 'workspace', null, null, null, 5000, 'USD', 'epoch'),
+             ('perf-r-m', 'perf-ws', 'billable', 'member', 'perf-user-3', null, null, 6000, 'USD', 'epoch'),
+             ('perf-r-p', 'perf-ws', 'billable', 'project', null, 'perf-p-2', null, 8000, 'USD', 'epoch'),
+             ('perf-r-pm', 'perf-ws', 'billable', 'project_member', 'perf-user-4', 'perf-p-2', null, 9000, 'USD', 'epoch')`);
     await db.execute(sql`analyze time_entry`);
     await db.execute(sql`analyze time_entry_tag`);
     console.info(

@@ -13,6 +13,8 @@ import type { Metadata } from "next";
 import { StatusTab } from "@/components/projects/status-tab";
 import { getProjectStatus } from "@/server/catalog/projects";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { authorizeProject } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Status" };
 
@@ -24,8 +26,8 @@ export default async function ProjectStatusPage({
 }: PageProps<"/w/[workspaceSlug]/projects/[projectId]/status">) {
   const { workspaceSlug, projectId } = await params;
   const raw = await searchParams;
-  const ctx = await requireWorkspacePage(workspaceSlug, "admin");
-  const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  const ctx = await requireWorkspacePage(workspaceSlug);
+  const viewer = await authorizePage(() => authorizeProject(ctx, "project.update", projectId));
   const prefs = resolveViewerPrefs(ctx.user, ctx.settings);
   const tz = prefs.timezone;
 

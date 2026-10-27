@@ -3,6 +3,7 @@ import { getDb } from "@timekeep/db";
 
 import { listEntriesPage } from "@/server/time-entries";
 import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
+import { authorize } from "@/server/authz";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -26,8 +27,16 @@ export async function GET(
     const viewer = resolveViewerPrefs(access.user, access.settings);
     const page = await listEntriesPage(
       getDb(),
-      { workspaceId: access.workspace.id, userId: access.user.id, role: access.role },
-      { before, tz: viewer.timezone, weekStart: viewer.weekStart },
+      await authorize(access, "entry.read", {
+        kind: "entry",
+        userId: access.user.id,
+        projectId: null,
+      }),
+      {
+        before,
+        tz: viewer.timezone,
+        weekStart: viewer.weekStart,
+      },
     );
     return Response.json(page, { headers: NO_STORE });
   } catch (error) {

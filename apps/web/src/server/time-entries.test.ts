@@ -10,6 +10,7 @@ import {
   createTestUser,
   createTestWorkspace,
   truncateAll,
+  asViewer,
 } from "../../test/db";
 import { createProject, listPickerProjects } from "./catalog/projects";
 import { createTag, listTags } from "./catalog/tags";
@@ -77,9 +78,9 @@ describe("time entries service", () => {
     const wsB = await createTestWorkspace(db, "Workspace B", bob.id);
     const carol = await createTestUser(db, "Carol C");
     await addMember(db, ws.id, carol.id, "member");
-    scope = { workspaceId: ws.id, userId: alice.id, role: "owner" };
-    otherScope = { workspaceId: wsB.id, userId: bob.id, role: "owner" };
-    memberScope = { workspaceId: ws.id, userId: carol.id, role: "member" };
+    scope = asViewer({ workspaceId: ws.id, userId: alice.id, role: "owner" });
+    otherScope = asViewer({ workspaceId: wsB.id, userId: bob.id, role: "owner" });
+    memberScope = asViewer({ workspaceId: ws.id, userId: carol.id, role: "member" });
   });
 
   describe("startTimer", () => {

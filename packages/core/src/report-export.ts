@@ -1,12 +1,19 @@
 import { formatDuration } from "./duration";
+import { minorToDecimal } from "./money";
 import type { ViewerPrefs } from "./prefs";
 import type { GroupKey, ReportGroup, ReportTotals, WeeklyRow } from "./reports";
 import { formatDateInZone, formatTimeOfDay, zonedDateTimeToInstant } from "./time";
 
 /**
  * Exports read one column record per report. CSV and Excel both come from
- * these definitions, and Phase 4 adds amount columns here, once.
+ * these definitions. With `money` (the viewer may see amounts), amount
+ * columns follow the totals, as plain decimals in the workspace currency.
  */
+
+/** The currency amounts are in; absent when the viewer may not see them. */
+export interface ExportMoney {
+  currency: string;
+}
 export interface ExportColumn<T> {
   key: string;
   header: string;
@@ -26,6 +33,10 @@ export interface DetailedEntry {
   start: string;
   end: string;
   durationSeconds: number;
+  /** The rate the entry was saved with (minor units per hour); null without one or hidden. */
+  rateMinor: number | null;
+  /** Its amount when billable and rated; null otherwise. */
+  amountMinor: number | null;
 }
 
 const GROUP_HEADERS: Record<GroupKey, string> = {
@@ -84,17 +95,45 @@ function totalsColumns<T extends { totals: ReportTotals }>(
 export function summaryColumns(
   groupBy: GroupKey[],
   prefs: Pick<ViewerPrefs, "durationFormat">,
+  money?: ExportMoney,
 ): ExportColumn<FlatSummaryRow>[] {
   const labels = groupBy.map<ExportColumn<FlatSummaryRow>>((key, i) => ({
     key,
     header: GROUP_HEADERS[key],
     value: (r) => r.labels[i] ?? "",
   }));
-  return [...labels, ...totalsColumns<FlatSummaryRow>(prefs)];
+  const amount: ExportColumn<FlatSummaryRow>[] = money
+    ? [
+        {
+          key: "amount",
+          header: `Amount (${money.currency})`,
+          value: (r) => minorToDecimal(r.totals.amountMinor, money.currency),
+        },
+      ]
+    : [];
+  return [...labels, ...totalsColumns<FlatSummaryRow>(prefs), ...amount];
 }
 
-export function detailedColumns(prefs: ViewerPrefs): ExportColumn<DetailedEntry>[] {
+export function detailedColumns(
+  prefs: ViewerPrefs,
+  money?: ExportMoney,
+): ExportColumn<DetailedEntry>[] {
   const tz = prefs.timezone;
+  const amounts: ExportColumn<DetailedEntry>[] = money
+    ? [
+        {
+          key: "rate",
+          header: `Rate (${money.currency})`,
+          value: (e) => (e.rateMinor === null ? null : minorToDecimal(e.rateMinor, money.currency)),
+        },
+        {
+          key: "amount",
+          header: `Amount (${money.currency})`,
+          value: (e) =>
+            e.amountMinor === null ? null : minorToDecimal(e.amountMinor, money.currency),
+        },
+      ]
+    : [];
   return [
     { key: "description", header: "Description", value: (e) => e.description },
     { key: "project", header: "Project", value: (e) => e.projectName },
@@ -123,12 +162,14 @@ export function detailedColumns(prefs: ViewerPrefs): ExportColumn<DetailedEntry>
       header: "Duration",
       value: (e) => formatDuration(e.durationSeconds, prefs.durationFormat),
     },
+    ...amounts,
   ];
 }
 
 export function weeklyColumns(
   dayKeys: string[],
   prefs: Pick<ViewerPrefs, "timezone" | "dateFormat" | "durationFormat">,
+  money?: ExportMoney,
 ): ExportColumn<WeeklyRow>[] {
   const weekday = new Intl.DateTimeFormat("en-US", { timeZone: prefs.timezone, weekday: "short" });
   const days = dayKeys.map<ExportColumn<WeeklyRow>>((dayKey, i) => {
@@ -143,6 +184,15 @@ export function weeklyColumns(
     { key: "name", header: "Name", value: (r) => r.label },
     ...days,
     { key: "total", header: "Total", value: (r) => formatDuration(r.total, prefs.durationFormat) },
+    ...(money
+      ? [
+          {
+            key: "amount",
+            header: `Amount (${money.currency})`,
+            value: (r: WeeklyRow) => minorToDecimal(r.amountMinor, money.currency),
+          },
+        ]
+      : []),
   ];
 }
 

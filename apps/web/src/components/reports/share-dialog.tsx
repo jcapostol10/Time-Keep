@@ -2,6 +2,7 @@
 
 import { type ReportKind, resolveReportRange } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
+import { Checkbox } from "@timekeep/ui/components/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -36,7 +37,8 @@ const KIND_TITLES: Record<ReportKind, string> = {
 
 /** Creates a read-only public link to the report as it is now, filters included. */
 export function ShareDialog({ kind }: { kind: ReportKind }) {
-  const { slug, viewer } = useTracker();
+  const { slug, viewer, canSeeAmounts } = useTracker();
+  const [includeAmounts, setIncludeAmounts] = useState(false);
   const { query, params } = useReportQuery();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(KIND_TITLES[kind]);
@@ -54,6 +56,7 @@ export function ShareDialog({ kind }: { kind: ReportKind }) {
       setUrl(null);
       setTitle(KIND_TITLES[kind]);
       setExpiry("never");
+      setIncludeAmounts(false);
     }
   }
 
@@ -64,6 +67,7 @@ export function ShareDialog({ kind }: { kind: ReportKind }) {
       params,
       title,
       expiresInDays: expiry === "never" ? null : Number(expiry),
+      includeAmounts: canSeeAmounts && includeAmounts,
     });
     setBusy(false);
     if (!result.ok) {
@@ -147,6 +151,18 @@ export function ShareDialog({ kind }: { kind: ReportKind }) {
                   </SelectContent>
                 </Select>
               </div>
+              {canSeeAmounts ? (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="share-amounts"
+                    checked={includeAmounts}
+                    onCheckedChange={(checked) => setIncludeAmounts(checked === true)}
+                  />
+                  <Label htmlFor="share-amounts" className="font-normal">
+                    Include amounts
+                  </Label>
+                </div>
+              ) : null}
             </div>
           )}
           <DialogFooter>

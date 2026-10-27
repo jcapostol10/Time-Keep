@@ -1,6 +1,6 @@
 import "server-only";
 
-import { personalWorkspaceName } from "@timekeep/core";
+import { isValidTimeZone, personalWorkspaceName } from "@timekeep/core";
 import { getDb, schema } from "@timekeep/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -16,6 +16,48 @@ import { createWorkspace, ensureWorkspaceSettings } from "./workspaces";
 
 const ONE_DAY = 60 * 60 * 24;
 
+/**
+ * Better Auth's organization routes the app does not call over HTTP. Team
+ * changes go through server/team.ts and the permission matrix; these routes
+ * check only the caller's role (not a deactivated membership) and would skip
+ * the app's cleanup. Server-side `auth.api.*` calls are not affected: the
+ * list is checked by the HTTP router only.
+ */
+const CLOSED_ORGANIZATION_PATHS = [
+  "add-team-member",
+  "cancel-invitation",
+  "check-slug",
+  "create",
+  "create-role",
+  "create-team",
+  "delete",
+  "delete-role",
+  "get-active-member",
+  "get-active-member-role",
+  "get-full-organization",
+  "get-invitation",
+  "get-organization",
+  "get-role",
+  "has-permission",
+  "invite-member",
+  "leave",
+  "list-invitations",
+  "list-members",
+  "list-roles",
+  "list-team-members",
+  "list-teams",
+  "list-user-invitations",
+  "list-user-teams",
+  "remove-member",
+  "remove-team",
+  "remove-team-member",
+  "set-active-team",
+  "update",
+  "update-member-role",
+  "update-role",
+  "update-team",
+].map((path) => `/organization/${path}`);
+
 function buildAuth() {
   const e = env();
   const db = getDb();
@@ -25,6 +67,7 @@ function buildAuth() {
     baseURL: e.APP_URL,
     secret: e.BETTER_AUTH_SECRET,
     trustedOrigins: trustedOrigins(e),
+    disabledPaths: CLOSED_ORGANIZATION_PATHS,
 
     // Send auth failures (OAuth state mismatch, denied consent, …) to our own page.
     onAPIError: { errorURL: "/auth-error" },
@@ -103,11 +146,14 @@ function buildAuth() {
     databaseHooks: {
       user: {
         create: {
-          // Every new user gets a personal workspace and becomes its OWNER.
+          // Every new user gets a personal workspace and becomes its OWNER, in the
+          // time zone they signed up in (rates start at the workspace's midnight).
           after: async (user) => {
+            const timezone = (user as { timezone?: string | null }).timezone;
             await createWorkspace(db, {
               name: personalWorkspaceName(user.name),
               ownerId: user.id,
+              timezone: timezone && isValidTimeZone(timezone) ? timezone : undefined,
             });
           },
         },
@@ -135,6 +181,10 @@ function buildAuth() {
         creatorRole: "owner",
         allowUserToCreateOrganization: true,
         invitationExpiresIn: ONE_DAY * 7,
+        // Better Auth's defaults (100 each) would cut a bulk invite or a 500-row
+        // import short; seats and plan limits arrive in Phase 8.
+        invitationLimit: 10_000,
+        membershipLimit: 10_000,
         cancelPendingInvitationsOnReInvite: true,
         schema: {
           session: { fields: { activeOrganizationId: "activeWorkspaceId" } },
@@ -158,6 +208,12 @@ function buildAuth() {
         organizationHooks: {
           afterCreateOrganization: async ({ organization: ws }) => {
             await ensureWorkspaceSettings(db, ws.id);
+          },
+          // Groups named on the invitation (bulk invite, user import). Imported
+          // lazily: invites.ts reaches back to this module through authz.
+          afterAcceptInvitation: async ({ invitation, user }) => {
+            const { joinInvitedGroups } = await import("./invites");
+            await joinInvitedGroups(db, invitation.id, user.id);
           },
         },
       }),

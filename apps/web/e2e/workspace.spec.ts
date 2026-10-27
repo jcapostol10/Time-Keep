@@ -27,11 +27,17 @@ test.describe("workspaces", () => {
 
     const inviteeEmail = uniqueEmail("invitee");
     await owner.goto(`/w/${studioSlug}/team`);
-    await owner.getByRole("button", { name: "Invite member" }).click();
-    await owner.getByLabel("Email").fill(inviteeEmail);
-    await owner.getByRole("button", { name: "Send invitation" }).click();
-    await expect(owner.getByText(`Invitation sent to ${inviteeEmail}`)).toBeVisible();
-    await expect(owner.getByRole("cell", { name: inviteeEmail, exact: true })).toBeVisible();
+    await owner.getByRole("button", { name: "Invite members" }).click();
+    const dialog = owner.getByRole("dialog", { name: "Invite members" });
+    await dialog.getByLabel("Email addresses").fill(inviteeEmail);
+    await dialog.getByRole("button", { name: "Send invitations" }).click();
+    await expect(dialog.getByRole("listitem").filter({ hasText: inviteeEmail })).toContainText(
+      "Invited",
+    );
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await expect(
+      owner.getByRole("row").filter({ has: owner.getByText(inviteeEmail, { exact: true }) }),
+    ).toContainText("Invited");
 
     // Invitee signs up with the invited address, then opens the invite link.
     const inviteMessage = await waitForEmail(inviteeEmail, { subject: /invited you/i });
@@ -58,8 +64,12 @@ test.describe("workspaces", () => {
 
     // Owner now sees the new member and no pending invite.
     await owner.reload();
-    await expect(owner.getByRole("cell", { name: /Ivy Invitee/ })).toBeVisible();
-    await expect(owner.getByText("Pending invitations")).toHaveCount(0);
+    await expect(
+      owner.getByRole("row").filter({ has: owner.getByText("Ivy Invitee", { exact: true }) }),
+    ).toBeVisible();
+    await expect(
+      owner.getByRole("row").filter({ hasText: inviteeEmail }).filter({ hasText: "Invited" }),
+    ).toHaveCount(0);
 
     await ownerContext.close();
     await inviteeContext.close();
@@ -69,7 +79,7 @@ test.describe("workspaces", () => {
     await signIn(page, "member1@demo.test");
     await page.goto("/w/demo/team");
     await expect(page.getByRole("heading", { name: "Team", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Invite member" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Invite members" })).toHaveCount(0);
   });
 
   test("workspace settings are read-only for members and editable by admins", async ({ page }) => {

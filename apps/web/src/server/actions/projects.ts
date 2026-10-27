@@ -19,25 +19,21 @@ import {
   createProject,
   deleteProject,
   setFavorite,
+  setProjectGroups,
   setProjectMembers,
   setProjectsArchived,
   updateProject,
 } from "@/server/catalog/projects";
-import type { Viewer } from "@/server/catalog/viewer";
 import { countProjectEntries } from "@/server/time-entries";
+import { authorize, authorizeProject } from "@/server/authz";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
 
-/** Projects are managed by admins only (decision 1 of the Phase 2 design); favourites are per member. */
-
-async function adminViewer(slug: string): Promise<Viewer> {
-  const ctx = await requireWorkspaceAccess(slug, "admin");
-  return { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
-}
-
-async function memberViewer(slug: string): Promise<Viewer> {
-  const ctx = await requireWorkspaceAccess(slug);
-  return { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
-}
+/**
+ * Who may create and edit projects is the permission matrix's: admins
+ * every project, a project's managers their own (not its deletion), anyone
+ * the "who can create projects" setting allows a new one. Favourites are per
+ * member.
+ */
 
 function refresh(slug: string) {
   revalidatePath(workspaceRoutes.projects(slug));
@@ -54,7 +50,8 @@ export async function createProjectAction(
   input: unknown,
 ): Promise<ActionResult<PickerProject>> {
   try {
-    const viewer = await adminViewer(slug);
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorize(ctx, "project.create", { kind: "project", projectId: null });
     const parsed = projectInputSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     const created = await createProject(getDb(), viewer, parsed.data);
@@ -70,7 +67,8 @@ export async function updateProjectAction(
   input: unknown,
 ): Promise<ActionResult<ProjectDetail>> {
   try {
-    const viewer = await adminViewer(slug);
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorizeProject(ctx, "project.update", projectId);
     const parsed = projectPatchSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     const updated = await updateProject(getDb(), viewer, projectId, parsed.data);
@@ -89,9 +87,11 @@ export async function archiveProjectsAction(
   archived: boolean,
 ): Promise<ActionResult<number>> {
   try {
-    const viewer = await adminViewer(slug);
+    const ctx = await requireWorkspaceAccess(slug);
     const parsed = idsSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
+    let viewer = await authorize(ctx, "page.view", { kind: "page", page: "projects" });
+    for (const id of parsed.data.ids) viewer = await authorizeProject(ctx, "project.update", id);
     const n = await setProjectsArchived(getDb(), viewer, parsed.data.ids, archived);
     refresh(slug);
     return ok(n);
@@ -106,7 +106,8 @@ export async function countProjectEntriesAction(
   projectId: string,
 ): Promise<ActionResult<number>> {
   try {
-    const viewer = await adminViewer(slug);
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorizeProject(ctx, "project.delete", projectId);
     return ok(await countProjectEntries(getDb(), viewer.workspaceId, projectId));
   } catch (error) {
     return fail(userErrorMessage(error));
@@ -119,7 +120,8 @@ export async function deleteProjectAction(
   input: unknown,
 ): Promise<ActionResult<null>> {
   try {
-    const viewer = await adminViewer(slug);
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorizeProject(ctx, "project.delete", projectId);
     const parsed = deleteProjectSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     await deleteProject(getDb(), viewer, projectId, parsed.data);
@@ -136,7 +138,8 @@ export async function setProjectMembersAction(
   input: unknown,
 ): Promise<ActionResult<null>> {
   try {
-    const viewer = await adminViewer(slug);
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorizeProject(ctx, "project.manageMembers", projectId);
     const parsed = projectMembersSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     await setProjectMembers(getDb(), viewer, projectId, parsed.data.userIds);
@@ -153,8 +156,30 @@ export async function setFavoriteAction(
   favorite: boolean,
 ): Promise<ActionResult<null>> {
   try {
-    const viewer = await memberViewer(slug);
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorizeProject(ctx, "project.view", projectId);
     await setFavorite(getDb(), viewer, projectId, favorite);
+    refresh(slug);
+    return ok(null);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+const projectGroupsSchema = z.object({ groupIds: z.array(z.string().min(1).max(64)).max(100) });
+
+/** Groups whose members may see and track on a private project. */
+export async function setProjectGroupsAction(
+  slug: string,
+  projectId: string,
+  input: unknown,
+): Promise<ActionResult<null>> {
+  try {
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorizeProject(ctx, "project.manageMembers", projectId);
+    const parsed = projectGroupsSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    await setProjectGroups(getDb(), viewer, projectId, parsed.data.groupIds);
     refresh(slug);
     return ok(null);
   } catch (error) {

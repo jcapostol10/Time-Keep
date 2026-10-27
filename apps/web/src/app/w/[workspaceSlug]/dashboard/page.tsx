@@ -1,5 +1,5 @@
 import {
-  canReadTeam,
+  can,
   parseReportQuery,
   reportQueryToSearchParams,
   resolveViewerPrefs,
@@ -14,6 +14,7 @@ import { trackerKeys } from "@/components/tracker/query-keys";
 import { searchParamsOf } from "@/lib/search-params";
 import { dashboardMe } from "@/server/dashboard";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -24,7 +25,7 @@ export default async function DashboardPage({
   const { workspaceSlug } = await params;
   const raw = await searchParams;
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/dashboard`);
-  const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  const viewer = await viewerFor(ctx);
   const prefs = resolveViewerPrefs(ctx.user, ctx.settings);
   const query = parseReportQuery(searchParamsOf(raw));
   const key = reportQueryToSearchParams(query).toString();
@@ -39,7 +40,7 @@ export default async function DashboardPage({
     <>
       <PageHeader title="Dashboard" />
       <HydrationBoundary state={dehydrate(queryClient)}>
-        <DashboardView canSeeTeam={canReadTeam(ctx.role)} />
+        <DashboardView canSeeTeam={can(viewer.actor, "report.readTeam", { kind: "none" })} />
       </HydrationBoundary>
     </>
   );

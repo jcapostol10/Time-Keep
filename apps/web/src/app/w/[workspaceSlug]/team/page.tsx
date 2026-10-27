@@ -1,104 +1,93 @@
-import { hasMinRole, ROLE_LABELS } from "@timekeep/core";
-import { getDb } from "@timekeep/db";
-import { Avatar, AvatarFallback, AvatarImage } from "@timekeep/ui/components/avatar";
-import { Badge } from "@timekeep/ui/components/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@timekeep/ui/components/table";
+import { can, isRole } from "@timekeep/core";
+import { asc, eq, getDb, project } from "@timekeep/db";
 import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/page-header";
-import { initials } from "@/lib/initials";
-import { InviteDialog } from "@/components/team/invite-dialog";
-import { PendingInvites } from "@/components/team/pending-invites";
-import { listMembers, listPendingInvitations } from "@/server/queries/team";
+import { RecalcBanner } from "@/components/rates/recalc-banner";
+import { TeamView } from "@/components/team/team-view";
+import type { TeamStatus } from "@/lib/team-types";
+import { authorize } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
+import { listGroups } from "@/server/groups";
+import { listTeam } from "@/server/team";
 import { requireWorkspacePage } from "@/server/workspace-access";
 
 export const metadata: Metadata = { title: "Team" };
 
-export default async function TeamPage({ params }: PageProps<"/w/[workspaceSlug]/team">) {
+const STATUSES: TeamStatus[] = ["ACTIVE", "INVITED", "DEACTIVATED"];
+
+/** Members and invites (filters in the URL), and the workspace's groups. */
+export default async function TeamPage({
+  params,
+  searchParams,
+}: PageProps<"/w/[workspaceSlug]/team">) {
   const { workspaceSlug } = await params;
+  const raw = await searchParams;
   const ctx = await requireWorkspacePage(workspaceSlug);
-  const canManage = hasMinRole(ctx.role, "admin");
+  const viewer = await authorizePage(() =>
+    authorize(ctx, "page.view", { kind: "page", page: "team" }),
+  );
+  const text = (v: unknown) => (typeof v === "string" ? v : undefined);
+  const role = text(raw.role);
+  const statusParam = text(raw.status)?.toUpperCase();
+  const status = STATUSES.find((s) => s === statusParam);
 
   const db = getDb();
-  const [members, invites] = await Promise.all([
-    listMembers(db, ctx.workspace.id),
-    canManage ? listPendingInvitations(db, ctx.workspace.id) : Promise.resolve([]),
+  const can_ = (action: Parameters<typeof can>[1]) => can(viewer.actor, action, { kind: "none" });
+  const canManage = can_("member.invite");
+  const [rows, groups, everyone, projects] = await Promise.all([
+    listTeam(db, viewer, {
+      q: text(raw.q),
+      role: role && isRole(role) ? role : undefined,
+      groupId: text(raw.group),
+      status,
+    }),
+    listGroups(db, viewer),
+    // The scope and group dialogs list everyone, whatever the filters show.
+    canManage ? listTeam(db, viewer, {}) : Promise.resolve([]),
+    canManage
+      ? db
+          .select({ id: project.id, name: project.name })
+          .from(project)
+          .where(eq(project.workspaceId, ctx.workspace.id))
+          .orderBy(asc(project.name))
+      : Promise.resolve([]),
   ]);
+  const active = (rows: typeof everyone) =>
+    rows
+      .filter((r) => r.kind === "member" && r.status === "ACTIVE")
+      .map((r) => ({ id: r.userId!, name: r.name }));
 
   return (
     <>
       <PageHeader
         title="Team"
-        description={`${members.length} ${members.length === 1 ? "member" : "members"} in ${ctx.workspace.name}`}
-        actions={canManage ? <InviteDialog slug={workspaceSlug} /> : null}
+        description={`Everyone in ${ctx.workspace.name}, their roles, groups and rates.`}
       />
-
-      <div className="overflow-hidden rounded-lg border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Member</TableHead>
-              <TableHead className="hidden sm:table-cell">Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead className="hidden sm:table-cell">Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {members.map((m) => (
-              <TableRow key={m.membershipId}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar className="size-8">
-                      {m.image ? <AvatarImage src={m.image} alt="" /> : null}
-                      <AvatarFallback className="text-xs">{initials(m.name)}</AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">
-                        {m.name}
-                        {m.userId === ctx.user.id ? (
-                          <span className="text-muted-foreground ml-1 text-xs">(you)</span>
-                        ) : null}
-                      </p>
-                      <p className="text-muted-foreground truncate text-xs sm:hidden">{m.email}</p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground hidden sm:table-cell">
-                  {m.email}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={m.role === "owner" ? "default" : "secondary"}>
-                    {ROLE_LABELS[m.role]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="hidden sm:table-cell">
-                  <Badge variant="outline" className="capitalize">
-                    {m.status.toLowerCase()}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <PendingInvites
+      {can_("rate.view") ? <RecalcBanner slug={workspaceSlug} /> : null}
+      <TeamView
         slug={workspaceSlug}
-        canManage={canManage}
-        invites={invites.map((i) => ({
-          id: i.id,
-          email: i.email,
-          role: i.role,
-          inviterName: i.inviterName,
-          expiresAt: i.expiresAt ? i.expiresAt.toISOString() : null,
-        }))}
+        workspaceName={ctx.workspace.name}
+        meId={ctx.user.id}
+        rows={rows}
+        groups={groups}
+        people={active(everyone)}
+        projects={projects}
+        filters={{
+          q: text(raw.q) ?? "",
+          role: role && isRole(role) ? role : "",
+          group: text(raw.group) ?? "",
+          status: status ?? (text(raw.status) === "all" ? "all" : ""),
+        }}
+        permissions={{
+          manage: canManage,
+          groups: can_("group.manage"),
+          import: can_("import.users"),
+          rates: can_("rate.view"),
+          transfer: can(viewer.actor, "workspace.transferOwnership", { kind: "workspace" }),
+        }}
+        currency={ctx.settings.currency}
+        timezone={ctx.settings.timezone}
       />
     </>
   );

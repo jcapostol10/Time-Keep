@@ -1,5 +1,5 @@
 import { dashboardMe } from "@/server/dashboard";
-import { reportRoute } from "@/server/report-route";
+import { OWN_TIME, reportRoute } from "@/server/report-route";
 
 /** The viewer's own dashboard for the range in the URL. */
 export async function GET(
@@ -7,7 +7,10 @@ export async function GET(
   ctx: RouteContext<"/api/w/[workspaceSlug]/dashboard/me">,
 ) {
   const { workspaceSlug } = await ctx.params;
-  return reportRoute(workspaceSlug, request, ({ db, viewer, prefs, query }) =>
-    dashboardMe(db, viewer, query, prefs),
+  return reportRoute(
+    workspaceSlug,
+    request,
+    ({ db, viewer, prefs, query }) => dashboardMe(db, viewer, query, prefs),
+    OWN_TIME,
   );
 }

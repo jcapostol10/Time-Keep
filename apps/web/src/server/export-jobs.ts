@@ -18,7 +18,6 @@ import {
   exportJob,
   isNotNull,
   lt,
-  membership,
   sql,
   user,
   workspace,
@@ -27,6 +26,7 @@ import {
 import { workspaceRoutes } from "@/lib/routes";
 
 import { CatalogError } from "./catalog/errors";
+import { loadViewer } from "./authz";
 import type { Viewer } from "./catalog/viewer";
 import { env } from "./env";
 import { sendEmail } from "./mail";
@@ -160,14 +160,10 @@ async function defaultBuild(
   job: ExportJob,
   request: StoredRequest,
 ): Promise<ExportFile> {
-  const viewer: Viewer = { workspaceId: job.workspaceId, userId: job.userId, role: "member" };
-  // The creator's role at build time decides whose time is in the file.
-  const member = await db.query.membership.findFirst({
-    where: and(eq(membership.workspaceId, job.workspaceId), eq(membership.userId, job.userId)),
-    columns: { role: true, status: true },
+  // The creator's role and scope at build time decide whose time is in the file.
+  const viewer: Viewer = await loadViewer(db, job.workspaceId, job.userId).catch(() => {
+    throw new Error("The creator is no longer a member");
   });
-  if (!member || member.status !== "ACTIVE") throw new Error("The creator is no longer a member");
-  viewer.role = member.role;
   if (job.report === "project-status") {
     throw new Error("Project status exports stream; they never become jobs");
   }

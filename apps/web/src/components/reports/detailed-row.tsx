@@ -3,6 +3,7 @@
 import {
   formatDateInZone,
   formatDuration,
+  formatMoney,
   formatTimeOfDay,
   localDateKey,
   parseDuration,
@@ -38,20 +39,23 @@ function entryName(entry: DetailedEntryDTO) {
 export function DetailedRow({
   entry,
   hidden,
+  currency,
   selected,
   onSelectedChange,
 }: {
   entry: DetailedEntryDTO;
   hidden: ReadonlySet<DetailedColumn>;
+  /** The workspace currency when the viewer may see amounts; null hides the column. */
+  currency: string | null;
   selected: boolean;
   onSelectedChange: (selected: boolean) => void;
 }) {
-  const { slug, viewer, canManage } = useTracker();
+  const { slug, viewer, canCreate } = useTracker();
   const writes = useEntryWrites();
   const tz = viewer.timezone;
   const times = { start: new Date(entry.start), end: new Date(entry.end) };
   const crossesMidnight = localDateKey(times.end, tz) !== localDateKey(times.start, tz);
-  const show = (key: DetailedColumn) => !hidden.has(key);
+  const show = (key: DetailedColumn) => !hidden.has(key) && (key !== "amount" || currency !== null);
 
   function save(patch: UpdateEntryPatch) {
     void writes.update(entry.id, patch);
@@ -118,7 +122,7 @@ export function DetailedRow({
                 task: entry.taskName ? { name: entry.taskName } : null,
               }}
               compact
-              canCreate={canManage}
+              canCreate={canCreate.project}
               onChange={(sel) => save({ projectId: sel.projectId, taskId: sel.taskId })}
             />
           ) : entry.projectName ? (
@@ -195,6 +199,20 @@ export function DetailedRow({
             />
           ) : (
             <span className="font-semibold">{durationText}</span>
+          )}
+        </TableCell>
+      ) : null}
+      {show("amount") && currency ? (
+        <TableCell className="text-right tabular-nums">
+          {entry.amountMinor === null ? (
+            <span
+              className="text-muted-foreground"
+              title={entry.billable ? "No rate" : "Not billable"}
+            >
+              —
+            </span>
+          ) : (
+            formatMoney(entry.amountMinor, currency)
           )}
         </TableCell>
       ) : null}

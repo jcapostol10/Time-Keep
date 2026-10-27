@@ -2,6 +2,7 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from "@timekeep/ui/components/avatar";
 import { Button } from "@timekeep/ui/components/button";
+import { Checkbox } from "@timekeep/ui/components/checkbox";
 import {
   Command,
   CommandEmpty,
@@ -10,15 +11,20 @@ import {
   CommandItem,
   CommandList,
 } from "@timekeep/ui/components/command";
+import { Label } from "@timekeep/ui/components/label";
 import { Switch } from "@timekeep/ui/components/switch";
 import { XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import type { ProjectDetail } from "@/lib/catalog-types";
 import { initials } from "@/lib/initials";
-import { setProjectMembersAction, updateProjectAction } from "@/server/actions/projects";
+import {
+  setProjectGroupsAction,
+  setProjectMembersAction,
+  updateProjectAction,
+} from "@/server/actions/projects";
 
 interface Member {
   id: string;
@@ -32,13 +38,25 @@ export function AccessTab({
   slug,
   project,
   members,
+  groups,
+  groupIds,
 }: {
   slug: string;
   project: ProjectDetail;
   members: Member[];
+  /** The workspace's groups, and those with access to this project. */
+  groups: { id: string; name: string }[];
+  groupIds: string[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // The ticks follow a click at once, then the server's list once it refreshes.
+  const [checkedGroups, setCheckedGroups] = useState(groupIds);
+  const [shownGroups, setShownGroups] = useState(groupIds);
+  if (shownGroups !== groupIds) {
+    setShownGroups(groupIds);
+    setCheckedGroups(groupIds);
+  }
   const isPrivate = project.visibility === "PRIVATE";
   const onProject = members.filter((m) => project.memberIds.includes(m.id));
   const available = members.filter((m) => !project.memberIds.includes(m.id));
@@ -128,7 +146,39 @@ export function AccessTab({
               </CommandList>
             </Command>
           </div>
-          <p className="text-muted-foreground text-xs">Groups arrive in Phase 4.</p>
+        </section>
+      ) : null}
+      {isPrivate ? (
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold">Groups on this project</h2>
+          {groups.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No groups yet: create them on the Team page to give a whole team access at once.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {groups.map((g) => (
+                <li key={g.id} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`project-group-${g.id}`}
+                    checked={checkedGroups.includes(g.id)}
+                    disabled={pending}
+                    onCheckedChange={(checked) => {
+                      const next =
+                        checked === true
+                          ? [...checkedGroups, g.id]
+                          : checkedGroups.filter((id) => id !== g.id);
+                      setCheckedGroups(next);
+                      run(() => setProjectGroupsAction(slug, project.id, { groupIds: next }));
+                    }}
+                  />
+                  <Label htmlFor={`project-group-${g.id}`} className="font-normal">
+                    {g.name}
+                  </Label>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       ) : null}
     </div>

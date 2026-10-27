@@ -15,6 +15,7 @@ import { listPickerProjects } from "@/server/catalog/projects";
 import { listTags } from "@/server/catalog/tags";
 import { listEntriesInRange, listRecentDescriptions } from "@/server/time-entries";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Calendar" };
 
@@ -28,7 +29,7 @@ export default async function CalendarPage({
   const raw = await searchParams;
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/calendar`);
   const viewer = resolveViewerPrefs(ctx.user, ctx.settings);
-  const scope = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  const scope = await viewerFor(ctx);
   const db = getDb();
 
   // ?view=day|week&date=YYYY-MM-DD; the week containing the date is always loaded.

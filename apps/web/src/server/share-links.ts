@@ -3,7 +3,7 @@ import "server-only";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import {
-  canReadTeam,
+  can,
   type ReportKind,
   type ReportQuery,
   reportQuerySchema,
@@ -25,6 +25,7 @@ import {
 } from "@timekeep/db";
 
 import { CatalogError } from "./catalog/errors";
+import { loadActor } from "./authz";
 import type { Viewer } from "./catalog/viewer";
 import { effectiveQuery } from "./reports";
 
@@ -53,7 +54,14 @@ export interface CreatedShareLink {
 export async function createShareLink(
   db: Database,
   viewer: Viewer,
-  input: { kind: ReportKind; query: ReportQuery; title: string; expiresInDays?: ShareExpiryDays },
+  input: {
+    kind: ReportKind;
+    query: ReportQuery;
+    title: string;
+    expiresInDays?: ShareExpiryDays;
+    /** Show amounts to the link's readers (only while the creator may see them). */
+    includeAmounts?: boolean;
+  },
   prefs: ViewerPrefs,
   now = new Date(),
 ): Promise<CreatedShareLink> {
@@ -69,6 +77,8 @@ export async function createShareLink(
     query: effectiveQuery(input.query, viewer) as unknown as Record<string, unknown>,
     prefs: prefs as unknown as Record<string, unknown>,
     title,
+    includeAmounts:
+      Boolean(input.includeAmounts) && can(viewer.actor, "report.viewAmounts", { kind: "none" }),
     expiresAt: input.expiresInDays
       ? new Date(now.getTime() + input.expiresInDays * 24 * 3_600_000)
       : null,
@@ -119,12 +129,19 @@ export async function resolveShareLink(
   if (!row.role || row.status !== "ACTIVE") return null;
   const query = reportQuerySchema.safeParse(link.query);
   if (!query.success) return null;
-  const viewer: Viewer = { workspaceId: link.workspaceId, userId: link.createdBy, role: row.role };
+  const viewer: Viewer = {
+    workspaceId: link.workspaceId,
+    userId: link.createdBy,
+    role: row.role,
+    actor: await loadActor(db, link.workspaceId, link.createdBy, row.role),
+    // The engine still checks that the creator may see amounts today.
+    hideAmounts: !link.includeAmounts,
+  };
   return {
     id: link.id,
     kind: link.kind,
     title: link.title,
-    // Re-apply the member rule with the creator's current role.
+    // Re-apply the member rule with the creator's current role (the engine adds their scope).
     query: effectiveQuery(query.data, viewer),
     prefs: link.prefs as unknown as ViewerPrefs,
     viewer,
@@ -179,9 +196,14 @@ export interface ShareLinkDTO {
   canRevoke: boolean;
 }
 
-/** Team readers see every link of the workspace; members their own. */
+/** Whether the viewer manages everyone's links (owners, admins) or only their own. */
+function managesAll(viewer: Viewer): boolean {
+  return can(viewer.actor, "shareLink.manage", { kind: "shareLink", createdBy: "" });
+}
+
+/** Owners and admins see every link of the workspace; everyone else their own. */
 export async function listShareLinks(db: Database, viewer: Viewer, now = new Date()) {
-  const team = canReadTeam(viewer.role);
+  const team = managesAll(viewer);
   const rows = await db
     .select({ link: reportShareLink, createdBy: user.name })
     .from(reportShareLink)
@@ -213,7 +235,7 @@ export async function listShareLinks(db: Database, viewer: Viewer, now = new Dat
 }
 
 export async function revokeShareLink(db: Database, viewer: Viewer, id: string, now = new Date()) {
-  const team = canReadTeam(viewer.role);
+  const team = managesAll(viewer);
   const [row] = await db
     .update(reportShareLink)
     .set({ revokedAt: now, updatedAt: now })

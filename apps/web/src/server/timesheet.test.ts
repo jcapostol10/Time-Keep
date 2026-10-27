@@ -6,6 +6,7 @@ import {
   createTestUser,
   createTestWorkspace,
   truncateAll,
+  asViewer,
 } from "../../test/db";
 import { createProject, updateProject } from "./catalog/projects";
 import { createManualEntry, type EntryScope, listEntriesInRange } from "./time-entries";
@@ -51,8 +52,8 @@ describe("timesheet templates and copy week", () => {
     const carol = await createTestUser(db, "Carol C");
     const ws = await createTestWorkspace(db, "Workspace A", alice.id);
     await addMember(db, ws.id, carol.id, "member");
-    scope = { workspaceId: ws.id, userId: alice.id, role: "owner" };
-    other = { workspaceId: ws.id, userId: carol.id, role: "member" };
+    scope = asViewer({ workspaceId: ws.id, userId: alice.id, role: "owner" });
+    other = asViewer({ workspaceId: ws.id, userId: carol.id, role: "member" });
   });
 
   it("saves, lists, replaces and deletes a user's templates", async () => {

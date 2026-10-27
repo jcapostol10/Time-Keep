@@ -1,7 +1,13 @@
 import type { ClientInput } from "@timekeep/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../../test/db";
+import {
+  connectTestDb,
+  createTestUser,
+  createTestWorkspace,
+  truncateAll,
+  asViewer,
+} from "../../../test/db";
 import {
   createClient,
   deleteClient,
@@ -37,8 +43,8 @@ describe("clients service", () => {
     const bob = await createTestUser(db, "Bob B");
     const ws = await createTestWorkspace(db, "Workspace A", alice.id);
     const wsB = await createTestWorkspace(db, "Workspace B", bob.id);
-    viewer = { workspaceId: ws.id, userId: alice.id, role: "owner" };
-    other = { workspaceId: wsB.id, userId: bob.id, role: "owner" };
+    viewer = asViewer({ workspaceId: ws.id, userId: alice.id, role: "owner" });
+    other = asViewer({ workspaceId: wsB.id, userId: bob.id, role: "owner" });
   });
 
   it("creates with defaults and lists with project counts", async () => {

@@ -19,7 +19,11 @@ export interface SeriesPoint {
   nonBillableSeconds: number;
 }
 
+/** The currency amounts are in; null when the viewer may not see amounts (they are 0). */
+export type ReportMoney = { currency: string } | null;
+
 export interface SummaryReport {
+  money: ReportMoney;
   range: { from: string; to: string; label: string };
   bucket: Bucket;
   series: SeriesPoint[];
@@ -48,6 +52,7 @@ export interface DetailedCursor {
 }
 
 export interface DetailedPage {
+  money: ReportMoney;
   range: { from: string; to: string; label: string };
   entries: DetailedEntryDTO[];
   nextCursor: DetailedCursor | null;
@@ -58,6 +63,9 @@ export interface DetailedPage {
 export type { WeeklyBy };
 
 export interface WeeklyReport {
+  money: ReportMoney;
+  /** The week's billable amount (0 when hidden). */
+  amountMinor: number;
   weekStart: string;
   dayKeys: string[];
   by: WeeklyBy;
@@ -69,6 +77,8 @@ export interface WeeklyReport {
 export interface ReportFilterOptions {
   /** null for members: they only ever see their own time. */
   users: { id: string; name: string }[] | null;
+  /** null for members, like users. */
+  groups: { id: string; name: string }[] | null;
   clients: { id: string; name: string }[];
   projects: PickerProject[];
   tasks: { id: string; name: string; projectId: string }[];

@@ -17,13 +17,15 @@ import { UserMenu } from "./user-menu";
 import { WorkspaceSwitcher, type WorkspaceOption } from "./workspace-switcher";
 
 export interface AppShellProps {
+  /** Nav item labels the viewer may not open. */
+  hiddenNav: string[];
   user: { name: string; email: string; image: string | null };
   workspace: WorkspaceOption;
   workspaces: WorkspaceOption[];
   children: React.ReactNode;
 }
 
-export function AppShell({ user, workspace, workspaces, children }: AppShellProps) {
+export function AppShell({ user, workspace, workspaces, hiddenNav, children }: AppShellProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const hydrated = useHydrated();
   const home = workspaceRoutes.tracker(workspace.slug);
@@ -38,7 +40,7 @@ export function AppShell({ user, workspace, workspaces, children }: AppShellProp
           </Link>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <SidebarNav slug={workspace.slug} role={workspace.role} />
+          <SidebarNav slug={workspace.slug} hidden={hiddenNav} />
         </div>
       </aside>
 
@@ -58,7 +60,7 @@ export function AppShell({ user, workspace, workspaces, children }: AppShellProp
               </div>
               <SidebarNav
                 slug={workspace.slug}
-                role={workspace.role}
+                hidden={hiddenNav}
                 onNavigate={() => setMobileOpen(false)}
               />
             </SheetContent>

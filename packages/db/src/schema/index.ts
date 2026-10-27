@@ -5,4 +5,6 @@ export * from "./catalog";
 export * from "./tracking";
 export * from "./mail";
 export * from "./reports";
+export * from "./team";
+export * from "./rates";
 export * from "./relations";

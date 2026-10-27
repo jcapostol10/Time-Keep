@@ -20,15 +20,9 @@ import { notFound, redirect } from "next/navigation";
 import type { AuthSession } from "./auth";
 import { getSession } from "./session";
 
-export class WorkspaceAccessError extends Error {
-  constructor(
-    public readonly status: 401 | 403 | 404,
-    message: string,
-  ) {
-    super(message);
-    this.name = "WorkspaceAccessError";
-  }
-}
+import { WorkspaceAccessError } from "./access-error";
+
+export { WorkspaceAccessError };
 
 export interface WorkspaceContext {
   session: AuthSession["session"];

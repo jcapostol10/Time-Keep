@@ -9,7 +9,7 @@ import { eq, getDb, workspace, workspaceSettings } from "@timekeep/db";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { type z } from "zod";
+import { z } from "zod";
 
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
 import { workspaceRoutes } from "@/lib/routes";
@@ -17,6 +17,8 @@ import { getAuth } from "@/server/auth";
 import { requireSession } from "@/server/session";
 import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
 import { createWorkspace } from "@/server/workspaces";
+import { authorize } from "@/server/authz";
+import { relabelWorkspaceCurrency, workspaceHasRates } from "@/server/rates";
 
 export async function createWorkspaceAction(
   input: unknown,
@@ -50,7 +52,11 @@ export async function switchWorkspaceAction(slug: string): Promise<never> {
   redirect(workspaceRoutes.tracker(slug));
 }
 
-const updateSettingsSchema = workspaceSettingsSchema.extend({ name: workspaceNameSchema });
+const updateSettingsSchema = workspaceSettingsSchema.extend({
+  name: workspaceNameSchema,
+  /** The person saw that a new currency relabels rates without converting them. */
+  confirmCurrencyChange: z.boolean().optional(),
+});
 export type UpdateWorkspaceSettingsInput = z.infer<typeof updateSettingsSchema>;
 
 export async function updateWorkspaceSettingsAction(
@@ -58,18 +64,25 @@ export async function updateWorkspaceSettingsAction(
   input: unknown,
 ): Promise<ActionResult<{ slug: string }>> {
   try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const ctx = await requireWorkspaceAccess(slug);
+    await authorize(ctx, "workspace.update");
     const parsed = updateSettingsSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const { name, ...settings } = parsed.data;
+    const { name, confirmCurrencyChange, ...settings } = parsed.data;
 
     const db = getDb();
+    const newCurrency = settings.currency !== ctx.settings.currency;
+    if (newCurrency && !confirmCurrencyChange && (await workspaceHasRates(db, ctx.workspace.id))) {
+      const message = `Rates and amounts will show in ${settings.currency}; they are not converted.`;
+      return fail(message, { currency: [message] });
+    }
     await db.transaction(async (tx) => {
       await tx.update(workspace).set({ name }).where(eq(workspace.id, ctx.workspace.id));
       await tx
         .update(workspaceSettings)
         .set(settings)
         .where(eq(workspaceSettings.workspaceId, ctx.workspace.id));
+      if (newCurrency) await relabelWorkspaceCurrency(tx, ctx.workspace.id, settings.currency);
     });
 
     revalidatePath(`/w/${slug}`, "layout");

@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
+  char,
   index,
   integer,
   jsonb,
@@ -15,6 +17,7 @@ import {
 import { user } from "./auth";
 import { project, tag, task } from "./catalog";
 import { timestamps } from "./columns";
+import { rateLevelEnum } from "./enums";
 import { workspace } from "./workspace";
 
 /**
@@ -42,6 +45,16 @@ export const timeEntry = pgTable(
     end: timestamp("end", { withTimezone: true }),
     /** Set when the entry stops or is edited; null while running. */
     durationSeconds: integer("duration_seconds"),
+    /**
+     * The billable rate the entry was saved with (minor units per hour) and
+     * where it came from. Kept when the rate changes later, unless the entry
+     * is re-rated (decision 3 of the Phase 4 design).
+     */
+    billableRateMinor: bigint("billable_rate_minor", { mode: "number" }),
+    rateCurrency: char("rate_currency", { length: 3 }),
+    rateSource: rateLevelEnum("rate_source"),
+    /** round(rate × seconds / 3600) in minor units; null while running or without a rate. */
+    amountMinor: bigint("amount_minor", { mode: "number" }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     ...timestamps,
   },

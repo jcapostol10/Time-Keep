@@ -8,6 +8,16 @@ import {
   workspaceNameSchema,
   workspaceSettingsSchema,
 } from "@timekeep/core";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@timekeep/ui/components/alert-dialog";
 import { Button } from "@timekeep/ui/components/button";
 import {
   Form,
@@ -29,6 +39,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { type z } from "zod";
@@ -57,10 +68,18 @@ export function WorkspaceSettingsForm({
   const router = useRouter();
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues });
 
-  async function onSubmit(values: Values) {
-    const result = await updateWorkspaceSettingsAction(slug, values);
+  // A new currency relabels existing rates (decision 4): the server asks first.
+  const [confirmCurrency, setConfirmCurrency] = useState<{
+    values: Values;
+    message: string;
+  } | null>(null);
+
+  async function onSubmit(values: Values, confirmCurrencyChange = false) {
+    const result = await updateWorkspaceSettingsAction(slug, { ...values, confirmCurrencyChange });
     if (!result.ok) {
-      toast.error(result.error);
+      const currency = result.fieldErrors?.currency?.[0];
+      if (currency && !confirmCurrencyChange) setConfirmCurrency({ values, message: currency });
+      else toast.error(result.error);
       return;
     }
     toast.success("Workspace settings saved");
@@ -70,7 +89,11 @@ export function WorkspaceSettingsForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="max-w-xl space-y-6" noValidate>
+      <form
+        onSubmit={form.handleSubmit((values) => onSubmit(values))}
+        className="max-w-xl space-y-6"
+        noValidate
+      >
         <fieldset disabled={readOnly} className="space-y-6">
           <FormField
             control={form.control}
@@ -211,6 +234,29 @@ export function WorkspaceSettingsForm({
           </Button>
         )}
       </form>
+      <AlertDialog
+        open={confirmCurrency !== null}
+        onOpenChange={(open) => (open ? null : setConfirmCurrency(null))}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change the workspace currency?</AlertDialogTitle>
+            <AlertDialogDescription>{confirmCurrency?.message}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep {defaultValues.currency}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const pending = confirmCurrency;
+                setConfirmCurrency(null);
+                if (pending) void onSubmit(pending.values, true);
+              }}
+            >
+              Change currency
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Form>
   );
 }

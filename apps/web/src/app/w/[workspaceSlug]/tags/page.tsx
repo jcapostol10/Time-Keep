@@ -7,6 +7,8 @@ import { TagsTable } from "@/components/tags/tags-table";
 import { TagsToolbar } from "@/components/tags/tags-toolbar";
 import { listTags } from "@/server/catalog/tags";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { authorize } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Tags" };
 
@@ -20,7 +22,8 @@ export default async function TagsPage({
   const { workspaceSlug } = await params;
   const query = await searchParams;
   // Admins only: members get the same not-found page as for an unknown route.
-  const ctx = await requireWorkspacePage(workspaceSlug, "admin", `/w/${workspaceSlug}/tags`);
+  const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/tags`);
+  await authorizePage(() => authorize(ctx, "tag.update"));
   const statusRaw = typeof query.status === "string" ? query.status : "active";
   const status = STATUSES.find((s) => s === statusRaw) ?? "active";
 

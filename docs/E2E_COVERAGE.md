@@ -28,6 +28,16 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Workspace settings are read-only for members and editable by admins — `workspace.spec.ts` › "workspace settings are read-only for members and editable by admins"
 - [ ] Cancel a pending invitation — gap
 - [ ] Change a member's role — gap
+- [x] Invite several people at once and see what happened to each address — `team.spec.ts` › "bulk invite reports each address"
+- [x] Import people from a CSV: preview each row, then invite the ready ones (creating their groups) — `team.spec.ts` › "user import previews and invites"
+- [x] Change a member's role; a member sees the team read-only — `team.spec.ts` › "a member's role, deactivation and removal"
+- [x] Deactivate a member (the workspace closes to them) and reactivate them — `team.spec.ts` › "a member's role, deactivation and removal"
+- [x] Remove a member; their time stays in reports as a former member — `team.spec.ts` › "a member's role, deactivation and removal"
+- [x] Transfer ownership to an admin, confirming with the workspace name — `team.spec.ts` › "transfer ownership to an admin"
+- [x] A manager's scope limits what their Summary shows — `team.spec.ts` › "a manager's scope limits their Summary"
+- [x] Create a group, add members, and filter the members table by group and status — `team.spec.ts` › "groups: filter members, and a group on a private project lets its member track on it"
+- [x] A group on a private project lets its members track on it — `team.spec.ts` › "groups: filter members, and a group on a private project lets its member track on it"
+- [x] The Team page fits a 375px screen — `team.spec.ts` › "the Team page fits a 375px screen"
 
 ## Profile and settings
 
@@ -127,7 +137,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The status tab exports CSV and opens the same numbers in reports — `project-detail.spec.ts` › "the status tab exports CSV and opens the same numbers in reports"
 - [x] Edit project settings, mark it as a template, archive and unarchive it — `project-detail.spec.ts` › "edit project settings, mark it as a template, archive and unarchive it"
 - [x] Members cannot open project detail — `project-detail.spec.ts` › "members cannot open project detail"
-- [x] The Budget and Rates tabs say which phase brings them — `project-detail.spec.ts` › "the Budget and Rates tabs say which phase brings them"
+- [x] The Budget tab says which phase brings it; the Rates tab sets the project's rates — `project-detail.spec.ts` › "the Budget tab says which phase brings it and the Rates tab sets rates"
 
 ## Projects and tasks in the tracker
 
@@ -193,6 +203,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Group by client then project shows nested totals — `reports.spec.ts` › "group by client then project shows nested totals"
 - [x] Presets and a custom range change the URL and the totals — `reports.spec.ts` › "presets and a custom range change the URL and the totals"
 - [x] A member cannot widen the Users filter by URL and has no Users filter — `reports.spec.ts` › "a member cannot widen the Users filter by URL"
+- [x] The Groups filter narrows the summary to the group's members — `reports.spec.ts` › "the Groups filter narrows the summary to the group's members"
 - [x] The summary agrees with the tracker's week total — `reports.spec.ts` › "the summary agrees with the tracker's week total"
 - [x] A summary row opens the detailed report filtered to it — `reports.spec.ts` › "a summary row opens the detailed report filtered to it"
 - [x] A weekly cell opens the detailed report for that project and day — `reports.spec.ts` › "a weekly cell opens the detailed report for that project and day"
@@ -229,6 +240,24 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A member of one workspace cannot open another workspace's pages — `tenant-isolation.spec.ts` › "a member of one workspace cannot open another workspace's pages"
 - [x] The workspace switcher lists only the user's own workspaces — `tenant-isolation.spec.ts` › "the switcher only lists the user's own workspaces"
 - [x] A project id from another workspace is not found, on every project page — `project-detail.spec.ts` › "a project id from another workspace is not found"
+
+## Amounts
+
+- [x] Summary and Detailed show the amount to the owner and not to a member — `amounts.spec.ts` › "Summary and Detailed show the amount to the owner and not to a member"
+- [x] A CSV export carries the Amount column — `amounts.spec.ts` › "a CSV export carries the Amount column"
+
+## Rates
+
+- [x] The workspace default rate is set and shows in its history — `rates.spec.ts` › "the workspace default rate shows in the history"
+- [x] A project rate from today leaves last month's amount alone; "Entries from a date" covering it changes it once the job runs — `rates.spec.ts` › "a project rate from today leaves last month's amount alone"
+- [x] A task rate beats the project rate on a new entry — `rates.spec.ts` › "a task rate beats the project rate on a new entry"
+- [x] The rate dialog fits a 375px screen — `rates.spec.ts` › "the rate dialog fits a 375px screen"
+
+## Permissions
+
+- [x] A manager opens a project they manage, without its Rates and Budget tabs — `permissions.spec.ts` › "a manager opens a project they manage, without its Rates tab"
+- [x] A manager gets not-found for a project they do not manage — `permissions.spec.ts` › "a manager gets not-found for a project they do not manage"
+- [x] A member sees no Clients or Tags in the sidebar — `permissions.spec.ts` › "a member sees no Clients or Tags in the sidebar"
 
 ## Small screens (375px)
 

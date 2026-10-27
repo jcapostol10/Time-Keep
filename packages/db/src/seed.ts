@@ -12,22 +12,27 @@ import {
   zonedDateTimeToInstant,
 } from "@timekeep/core";
 import { hashPassword } from "better-auth/crypto";
-import { inArray, like, sql } from "drizzle-orm";
+import { and, eq, inArray, like, sql } from "drizzle-orm";
 
 import { createDb, type Database, type DbExecutor } from "./client";
 import { e2eOnlyWorkspaceIds, e2eUsersInCustomerWorkspaces } from "./e2e-tenant";
 import { type JournalEntry, listPendingMigrations } from "./migrations-status";
+import { rateEntriesSql } from "./rates-sql";
 import {
   account,
   client,
+  managedUser,
   membership,
   project,
   projectMember,
+  rate,
   tag,
   task,
   timeEntry,
   timeEntryTag,
   user,
+  userGroup,
+  userGroupMember,
   workspace,
   workspaceSettings,
 } from "./schema";
@@ -160,7 +165,8 @@ export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}
       });
     }
 
-    await seedTrackerData(tx, demo.id, ids);
+    const catalog = await seedTrackerData(tx, demo.id, ids);
+    await seedTeamAndRates(tx, demo.id, ids, catalog);
 
     return { workspaceSlug: demo.slug };
   });
@@ -229,7 +235,11 @@ const DEMO_ENTRY_KINDS: {
  * Two weeks of stopped entries (weekdays, 09:00–18:00 Manila) for every demo
  * user, plus one entry for member1 that crosses midnight. No running timers.
  */
-async function seedTrackerData(db: DbExecutor, workspaceId: string, ids: Map<string, string>) {
+async function seedTrackerData(
+  db: DbExecutor,
+  workspaceId: string,
+  ids: Map<string, string>,
+): Promise<{ projectIds: string[]; firstTaskIds: (string | null)[] }> {
   const tz = DEMO_WORKSPACE.timezone;
   const clientIds = DEMO_CLIENTS.map(() => randomUUID());
   await db.insert(client).values(
@@ -366,6 +376,78 @@ async function seedTrackerData(db: DbExecutor, workspaceId: string, ids: Map<str
     if (entries.length > 0) await db.insert(timeEntry).values(entries);
     if (links.length > 0) await db.insert(timeEntryTag).values(links);
   }
+  return { projectIds, firstTaskIds };
+}
+
+/**
+ * Phase 4: two groups; the manager manages member1 and the Mobile app
+ * project; a rate at every level (from before the first entry), and every
+ * seeded entry rated with them through the same SQL the app uses.
+ */
+async function seedTeamAndRates(
+  db: DbExecutor,
+  workspaceId: string,
+  ids: Map<string, string>,
+  catalog: { projectIds: string[]; firstTaskIds: (string | null)[] },
+) {
+  const user = (email: string) => {
+    const id = ids.get(email);
+    if (!id) throw new Error(`seed: ${email} missing`);
+    return id;
+  };
+  const groups = [
+    { name: "Design", members: ["member1@demo.test", "member2@demo.test"] },
+    { name: "Developers", members: ["admin@demo.test", "member2@demo.test"] },
+  ];
+  for (const g of groups) {
+    const groupId = randomUUID();
+    await db.insert(userGroup).values({ id: groupId, workspaceId, name: g.name });
+    await db
+      .insert(userGroupMember)
+      .values(g.members.map((email) => ({ groupId, userId: user(email) })));
+  }
+
+  const manager = user("manager@demo.test");
+  const [website, mobile] = catalog.projectIds;
+  const ios = catalog.firstTaskIds[1];
+  if (!website || !mobile || !ios) throw new Error("seed: projects or tasks missing");
+  await db
+    .insert(managedUser)
+    .values({ workspaceId, managerId: manager, userId: user("member1@demo.test") });
+  // The manager is already on the private Mobile app project; make them its manager.
+  await db
+    .update(projectMember)
+    .set({ isManager: true })
+    .where(and(eq(projectMember.projectId, mobile), eq(projectMember.userId, manager)));
+
+  const effectiveFrom = new Date(0);
+  const owner = user("owner@demo.test");
+  const levels: Omit<
+    typeof rate.$inferInsert,
+    "id" | "workspaceId" | "currency" | "effectiveFrom"
+  >[] = [
+    { level: "workspace", amountMinor: 5000 },
+    { level: "member", userId: user("member2@demo.test"), amountMinor: 6000 },
+    { level: "project", projectId: website, amountMinor: 8000 },
+    {
+      level: "project_member",
+      projectId: website,
+      userId: user("member1@demo.test"),
+      amountMinor: 9000,
+    },
+    { level: "task", projectId: mobile, taskId: ios, amountMinor: 12000 },
+  ];
+  const rates: (typeof rate.$inferInsert)[] = levels.map((r) => ({
+    id: randomUUID(),
+    workspaceId,
+    kind: "billable" as const,
+    currency: "USD",
+    effectiveFrom,
+    createdBy: owner,
+    ...r,
+  }));
+  await db.insert(rate).values(rates);
+  await db.execute(rateEntriesSql(eq(timeEntry.workspaceId, workspaceId)));
 }
 
 const isDirectRun = process.argv[1]?.endsWith("seed.ts") ?? false;

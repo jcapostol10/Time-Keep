@@ -7,6 +7,7 @@ import {
   createTestUser,
   createTestWorkspace,
   truncateAll,
+  asViewer,
 } from "../../test/db";
 import { createClient } from "./catalog/clients";
 import { createProject } from "./catalog/projects";
@@ -64,9 +65,9 @@ describe("dashboard", () => {
     const ws = await createTestWorkspace(db, "Workspace A", a.id);
     await addMember(db, ws.id, b.id, "member");
     await addMember(db, ws.id, c.id, "member");
-    alice = { workspaceId: ws.id, userId: a.id, role: "owner" };
-    bob = { workspaceId: ws.id, userId: b.id, role: "member" };
-    carol = { workspaceId: ws.id, userId: c.id, role: "member" };
+    alice = asViewer({ workspaceId: ws.id, userId: a.id, role: "owner" });
+    bob = asViewer({ workspaceId: ws.id, userId: b.id, role: "member" });
+    carol = asViewer({ workspaceId: ws.id, userId: c.id, role: "member" });
     const blank = { address: "", email: "", notes: "", currency: null };
     const acme = await createClient(db, ws.id, { name: "Acme", ...blank });
     const web = await createProject(db, alice, { name: "Web", clientId: acme.id });

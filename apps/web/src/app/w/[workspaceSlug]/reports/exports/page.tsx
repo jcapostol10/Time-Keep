@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { ExportsList } from "@/components/reports/exports-list";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { authorize } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
 
 export const metadata: Metadata = { title: "Exports" };
 
@@ -11,7 +13,12 @@ export default async function ExportsPage({
   params,
 }: PageProps<"/w/[workspaceSlug]/reports/exports">) {
   const { workspaceSlug } = await params;
-  await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/reports/exports`);
+  const ctx = await requireWorkspacePage(
+    workspaceSlug,
+    "member",
+    `/w/${workspaceSlug}/reports/exports`,
+  );
+  await authorizePage(() => authorize(ctx, "page.view", { kind: "page", page: "reports" }));
   return (
     <>
       <PageHeader

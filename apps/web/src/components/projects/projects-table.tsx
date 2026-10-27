@@ -41,12 +41,15 @@ export function ProjectsTable({
   clients,
   query,
   canManage,
+  editableIds = [],
 }: {
   slug: string;
   projects: ProjectListItem[];
   clients: ClientOption[];
   query: ProjectListQuery;
   canManage: boolean;
+  /** Projects the viewer manages without being an admin: their names link to the detail page. */
+  editableIds?: string[];
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -168,7 +171,7 @@ export function ProjectsTable({
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <ColorDot color={p.color} />
-                    {canManage ? (
+                    {canManage || editableIds.includes(p.id) ? (
                       <Link
                         href={workspaceRoutes.project(slug, p.id)}
                         className="font-medium hover:underline"

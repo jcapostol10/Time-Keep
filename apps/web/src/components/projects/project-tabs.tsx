@@ -15,8 +15,19 @@ const TABS = [
   { label: "Rates", tab: "rates" },
 ] as const;
 
+/** Budget and Rates show money: only for those who may see rates. */
+const MONEY_TABS = new Set<string | undefined>(["budget", "rates"]);
+
 /** Route-backed tabs: each tab is a page under the project, so it has its own URL. */
-export function ProjectTabs({ slug, projectId }: { slug: string; projectId: string }) {
+export function ProjectTabs({
+  slug,
+  projectId,
+  showRates,
+}: {
+  slug: string;
+  projectId: string;
+  showRates: boolean;
+}) {
   const pathname = usePathname();
   return (
     <nav
@@ -24,7 +35,7 @@ export function ProjectTabs({ slug, projectId }: { slug: string; projectId: stri
       aria-label="Project sections"
       className="flex gap-1 overflow-x-auto border-b"
     >
-      {TABS.map(({ label, tab }) => {
+      {TABS.filter(({ tab }) => showRates || !MONEY_TABS.has(tab)).map(({ label, tab }) => {
         const href = workspaceRoutes.project(slug, projectId, tab);
         const active = pathname === href;
         return (

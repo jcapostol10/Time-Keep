@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { RATE_APPLY, RATE_LEVELS } from "./rates";
+
 import { PROJECT_VISIBILITIES, TASK_STATUSES } from "./catalog";
 import { hexColorSchema } from "./colors";
 import { ROLES } from "./roles";
@@ -119,6 +121,38 @@ export const inviteMemberSchema = z.object({
   role: roleSchema.exclude(["owner"]),
 });
 export type InviteMemberInput = z.infer<typeof inviteMemberSchema>;
+
+const memberIdSchema = z.string().min(1).max(64);
+
+/** Pasted addresses (any separators) with one role and optional groups for all of them. */
+export const inviteMembersSchema = z.object({
+  emails: z.string().max(20_000),
+  role: roleSchema.exclude(["owner"]).default("member"),
+  groupIds: z.array(z.string().min(1).max(64)).max(50).default([]),
+});
+
+export const changeRoleSchema = z.object({
+  userId: memberIdSchema,
+  role: roleSchema.exclude(["owner"]),
+});
+
+export const memberStatusSchema = z.object({
+  userId: memberIdSchema,
+  status: z.enum(["ACTIVE", "DEACTIVATED"]),
+});
+
+/** A manager's people, groups and projects, replaced as a whole. */
+export const managerScopeSchema = z.object({
+  managerId: memberIdSchema,
+  userIds: z.array(memberIdSchema).max(500).default([]),
+  groupIds: z.array(memberIdSchema).max(100).default([]),
+  projectIds: z.array(memberIdSchema).max(500).default([]),
+});
+
+export const transferOwnershipSchema = z.object({
+  userId: memberIdSchema,
+  confirmName: z.string().trim().min(1, "Type the workspace name").max(100),
+});
 
 export const signUpSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
@@ -347,3 +381,22 @@ export const DEFAULT_TRACKER_SETTINGS: TrackerSettingsInput = {
   reminderStartMinutes: 9 * 60,
   reminderEndMinutes: 17 * 60,
 };
+
+/** A rate change from the rate dialog; the server parses the amount with the currency. */
+export const setRateSchema = z.object({
+  level: z.enum(RATE_LEVELS),
+  userId: z.string().min(1).max(64).nullish(),
+  projectId: z.string().min(1).max(64).nullish(),
+  taskId: z.string().min(1).max(64).nullish(),
+  amount: z.string().max(32).nullable(),
+  apply: z.enum(RATE_APPLY),
+  from: z.iso.date().optional(),
+});
+
+/** Which rate's history to read. */
+export const rateTargetSchema = z.object({
+  level: z.enum(RATE_LEVELS),
+  userId: z.string().min(1).max(64).nullish(),
+  projectId: z.string().min(1).max(64).nullish(),
+  taskId: z.string().min(1).max(64).nullish(),
+});

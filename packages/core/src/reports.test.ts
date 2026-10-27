@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addTotals,
+  EMPTY_TOTALS,
   bucketFor,
   bucketKeyOfDay,
   bucketKeys,
@@ -18,7 +20,6 @@ import {
   resolveReportRange,
 } from "./reports";
 import type { ViewerPrefs } from "./prefs";
-import { canReadTeam } from "./roles";
 
 const MANILA = { timezone: "Asia/Manila", weekStart: 1 as const };
 const NY_SUNDAY = { timezone: "America/New_York", weekStart: 0 as const };
@@ -40,11 +41,12 @@ describe("report query", () => {
       projectIds: [],
     });
     const params = new URLSearchParams(
-      "preset=last-month&projectIds=p1&projectIds=none&tagIds=t1&tagMode=and&billable=yes&groupBy=client&groupBy=project&description=site",
+      "preset=last-month&groupIds=g1&projectIds=p1&projectIds=none&tagIds=t1&tagMode=and&billable=yes&groupBy=client&groupBy=project&description=site",
     );
     const parsed = parseReportQuery(params);
     expect(parsed).toMatchObject({
       preset: "last-month",
+      groupIds: ["g1"],
       projectIds: ["p1", "none"],
       tagIds: ["t1"],
       tagMode: "and",
@@ -177,6 +179,8 @@ const t = (durationSeconds: number, billableSeconds: number, entryCount: number)
   durationSeconds,
   billableSeconds,
   entryCount,
+  amountMinor: 0,
+  unratedCount: 0,
 });
 const row = (
   keys: Partial<Record<GroupKey, { id: string | null; label: string }>>,
@@ -307,26 +311,17 @@ describe("buildWeekly", () => {
       [
         { id: "web", label: "Web", dateKey: "2026-03-09", seconds: 3600 },
         { id: "web", label: "Web", dateKey: "2026-03-10", seconds: 1800 },
-        { id: "app", label: "App", dateKey: "2026-03-11", seconds: 7200 },
-        { id: "app", label: "App", dateKey: "2026-03-20", seconds: 999 },
+        { id: "app", label: "App", dateKey: "2026-03-11", seconds: 7200, amountMinor: 16000 },
+        { id: "app", label: "App", dateKey: "2026-03-20", seconds: 999, amountMinor: 999 },
       ],
       days,
     );
     expect(rows).toEqual([
-      { id: "app", label: "App", days: [0, 0, 7200, 0, 0, 0, 0], total: 7200 },
-      { id: "web", label: "Web", days: [3600, 1800, 0, 0, 0, 0, 0], total: 5400 },
+      { id: "app", label: "App", days: [0, 0, 7200, 0, 0, 0, 0], total: 7200, amountMinor: 16000 },
+      { id: "web", label: "Web", days: [3600, 1800, 0, 0, 0, 0, 0], total: 5400, amountMinor: 0 },
     ]);
     expect(dayTotals).toEqual([3600, 1800, 7200, 0, 0, 0, 0]);
     expect(total).toBe(12600);
-  });
-});
-
-describe("canReadTeam", () => {
-  it("is true for owners, admins and managers only", () => {
-    expect(canReadTeam("owner")).toBe(true);
-    expect(canReadTeam("admin")).toBe(true);
-    expect(canReadTeam("manager")).toBe(true);
-    expect(canReadTeam("member")).toBe(false);
   });
 });
 
@@ -465,5 +460,35 @@ describe("drillDownQuery", () => {
     expect([week.from, week.to]).toEqual(["2026-03-08T16:00:00.000Z", "2026-03-15T16:00:00.000Z"]);
     const month = drillDownQuery(base, [{ key: "month", id: "2026-03" }], range, MANILA);
     expect([month.from, month.to]).toEqual([range.from.toISOString(), range.to.toISOString()]);
+  });
+});
+
+describe("totals with amounts", () => {
+  it("adds amounts and unrated counts like durations", () => {
+    expect(
+      addTotals(
+        {
+          durationSeconds: 3600,
+          billableSeconds: 3600,
+          entryCount: 1,
+          amountMinor: 5000,
+          unratedCount: 0,
+        },
+        {
+          durationSeconds: 1800,
+          billableSeconds: 1800,
+          entryCount: 2,
+          amountMinor: 2500,
+          unratedCount: 1,
+        },
+      ),
+    ).toEqual({
+      durationSeconds: 5400,
+      billableSeconds: 5400,
+      entryCount: 3,
+      amountMinor: 7500,
+      unratedCount: 1,
+    });
+    expect(EMPTY_TOTALS).toMatchObject({ amountMinor: 0, unratedCount: 0 });
   });
 });

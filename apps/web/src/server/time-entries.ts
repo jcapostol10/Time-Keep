@@ -3,11 +3,11 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
-  canSeeProject,
+  can,
   computeDurationSeconds,
   type EntryDetails,
   MAX_ENTRY_SECONDS,
-  type Role,
+  needsRerate,
   TIMER_STOP_FUTURE_GRACE_MS,
   trackingBlock,
   validateEntryRange,
@@ -28,13 +28,15 @@ import {
   ne,
   type Project,
   project,
-  projectMember,
+  rateEntriesSql,
+  rateEntry,
+  recomputeAmount,
   sql,
-  type Tag,
   tag,
+  type Tag,
   task,
-  type TimeEntry,
   timeEntry,
+  type TimeEntry,
   timeEntryTag,
 } from "@timekeep/db";
 
@@ -47,6 +49,8 @@ import type {
 } from "@/lib/tracker-types";
 
 import { CatalogError } from "./catalog/errors";
+import type { Viewer } from "./catalog/viewer";
+import { projectResource } from "./authz";
 
 /**
  * The single write path for time entries. Server actions and route handlers
@@ -59,11 +63,8 @@ import { CatalogError } from "./catalog/errors";
  * the user may put time on (private projects need membership).
  */
 
-export interface EntryScope {
-  workspaceId: string;
-  userId: string;
-  role: Role;
-}
+/** The person whose entries are read and written, with their role and scope. */
+export type EntryScope = Viewer;
 
 export class TimeEntryError extends Error {
   constructor(
@@ -183,18 +184,10 @@ async function assertDetailsUsable(
   if (projectId) {
     const found = await db.query.project.findFirst({
       where: and(eq(project.id, projectId), eq(project.workspaceId, scope.workspaceId)),
-      columns: { id: true, archived: true, visibility: true },
-      with: {
-        members: { where: eq(projectMember.userId, scope.userId), columns: { userId: true } },
-      },
+      columns: { id: true, archived: true },
     });
     const visible =
-      found &&
-      canSeeProject({
-        role: scope.role,
-        visibility: found.visibility,
-        isMember: found.members.length > 0,
-      });
+      found && can(scope.actor, "project.view", await projectResource(db, scope, projectId));
     if (!found) throw new TimeEntryError("INVALID", "Project not found.");
     // Visibility is a condition for assigning a project; an entry already on a
     // private project the user has since left keeps it (they can still retag it).
@@ -389,6 +382,7 @@ export async function startTimer(
         .update(timeEntry)
         .set({ end, durationSeconds: computeDurationSeconds(running.start, end) })
         .where(eq(timeEntry.id, running.id));
+      await recomputeAmount(tx, running.id);
       stopped = await loadDTO(tx, scope, running.id);
     }
 
@@ -413,6 +407,7 @@ export async function startTimer(
       throw error;
     }
     if (input.tagIds.length > 0) await replaceTags(tx, id, input.tagIds);
+    await rateEntry(tx, id);
 
     return { started: await loadDTO(tx, scope, id), stopped };
   });
@@ -441,6 +436,7 @@ export async function stopTimer(
       .update(timeEntry)
       .set({ end, durationSeconds: computeDurationSeconds(row.start, end) })
       .where(and(eq(timeEntry.id, row.id), isNull(timeEntry.end)));
+    await recomputeAmount(tx, row.id);
     return loadDTO(tx, scope, row.id);
   });
 }
@@ -475,6 +471,7 @@ export async function createManualEntry(
       durationSeconds: computeDurationSeconds(input.start, input.end),
     });
     if (input.tagIds.length > 0) await replaceTags(tx, id, input.tagIds);
+    await rateEntry(tx, id);
     return loadDTO(tx, scope, id);
   });
 }
@@ -531,6 +528,20 @@ export async function updateEntry(
       })
       .where(eq(timeEntry.id, row.id));
     if (patch.tagIds !== undefined) await replaceTags(tx, row.id, patch.tagIds);
+
+    // Decision 3 of the Phase 4 design: an edit keeps the entry's rate unless
+    // it changes what decides the rate; a new duration only recomputes the amount.
+    const rerate = needsRerate(
+      { userId: row.userId, projectId: row.projectId, taskId: row.taskId, billable: row.billable },
+      {
+        userId: row.userId,
+        projectId: patch.projectId !== undefined ? patch.projectId : row.projectId,
+        taskId: patch.taskId !== undefined ? patch.taskId : row.taskId,
+        billable: patch.billable ?? row.billable,
+      },
+    );
+    if (rerate) await rateEntry(tx, row.id);
+    else if (touchesTimes) await recomputeAmount(tx, row.id);
 
     return loadDTO(tx, scope, row.id);
   });
@@ -601,6 +612,8 @@ export async function duplicateEntry(
     });
     const tagIds = row.tags.map((t) => t.tag.id);
     if (tagIds.length > 0) await replaceTags(tx, id, tagIds);
+    // A copy keeps the original's times, so it takes the rates in force at that start.
+    await rateEntry(tx, id);
     return loadDTO(tx, scope, id);
   });
 }
@@ -685,6 +698,17 @@ export async function reassignProjectEntries(
     .set({ projectId: toProjectId, taskId: null })
     .where(projectEntriesWhere(workspaceId, fromProjectId))
     .returning({ id: timeEntry.id });
+  // A new project decides a new rate.
+  if (rows.length > 0) {
+    await db.execute(
+      rateEntriesSql(
+        inArray(
+          timeEntry.id,
+          rows.map((r) => r.id),
+        ),
+      ),
+    );
+  }
   return rows.length;
 }
 

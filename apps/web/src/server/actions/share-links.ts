@@ -9,6 +9,7 @@ import { userErrorMessage } from "@/server/actions/errors";
 import { env } from "@/server/env";
 import { createShareLink, isShareExpiry, revokeShareLink } from "@/server/share-links";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
+import { authorize } from "@/server/authz";
 
 const createSchema = z.object({
   kind: z.enum(REPORT_KINDS),
@@ -16,6 +17,7 @@ const createSchema = z.object({
   params: z.string().max(4000),
   title: z.string().trim().min(1, "Give the link a title").max(120),
   expiresInDays: z.number().int().nullable(),
+  includeAmounts: z.boolean().default(false),
 });
 
 /** Creates a read-only public link to the report as the viewer sees it now. */
@@ -25,11 +27,11 @@ export async function createShareLinkAction(
 ): Promise<ActionResult<{ url: string }>> {
   try {
     const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorize(ctx, "page.view", { kind: "page", page: "reports" });
     const parsed = createSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const { kind, params, title, expiresInDays } = parsed.data;
+    const { kind, params, title, expiresInDays, includeAmounts } = parsed.data;
     if (expiresInDays !== null && !isShareExpiry(expiresInDays)) return fail("Invalid expiry.");
-    const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
     const created = await createShareLink(
       getDb(),
       viewer,
@@ -38,6 +40,7 @@ export async function createShareLinkAction(
         query: parseReportQuery(new URLSearchParams(params)),
         title,
         expiresInDays: expiresInDays ?? undefined,
+        includeAmounts,
       },
       resolveViewerPrefs(ctx.user, ctx.settings),
     );
@@ -50,7 +53,7 @@ export async function createShareLinkAction(
 export async function revokeShareLinkAction(slug: string, id: string): Promise<ActionResult> {
   try {
     const ctx = await requireWorkspaceAccess(slug);
-    const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+    const viewer = await authorize(ctx, "page.view", { kind: "page", page: "reports" });
     await revokeShareLink(getDb(), viewer, id);
     return ok(undefined);
   } catch (error) {

@@ -1,9 +1,11 @@
 import "server-only";
 
 import {
+  type Action,
   isoInstantSchema,
   parseReportQuery,
   type ReportQuery,
+  type Resource,
   resolveViewerPrefs,
   type ViewerPrefs,
 } from "@timekeep/core";
@@ -13,7 +15,13 @@ import { z } from "zod";
 import type { DetailedSort } from "@/lib/report-types";
 
 import type { Viewer } from "./catalog/viewer";
-import { BadRequestError, requireWorkspaceAccess, routeErrorResponse } from "./workspace-access";
+import { authorize } from "./authz";
+import {
+  BadRequestError,
+  requireWorkspaceAccess,
+  routeErrorResponse,
+  type WorkspaceContext,
+} from "./workspace-access";
 
 const pageSchema = z.object({
   sort: z.enum(["start", "duration"]).default("start"),
@@ -55,22 +63,48 @@ export interface ReportRouteArgs {
   params: URLSearchParams;
 }
 
+/** What a report route asks the permission matrix; the Reports page by default. */
+export interface RoutePermission {
+  action: Action;
+  resource?: (access: WorkspaceContext) => Resource;
+}
+
+const REPORTS_PAGE: RoutePermission = {
+  action: "page.view",
+  resource: () => ({ kind: "page", page: "reports" }),
+};
+
+/** The dashboard's Me tab: the viewer's own time. */
+export const OWN_TIME: RoutePermission = {
+  action: "entry.read",
+  resource: (access) => ({ kind: "entry", userId: access.user.id, projectId: null }),
+};
+
+/** The dashboard's Team tab. */
+export const TEAM_TIME: RoutePermission = { action: "report.readTeam" };
+
 /**
  * What every report route does first: the workspace access check, the
- * viewer, their preferences and the query from the URL (an invalid query
+ * permission, the viewer, their preferences and the query from the URL (an invalid query
  * falls back to the defaults, so a stale link still opens).
  */
 export async function reportRoute<T>(
   workspaceSlug: string,
   request: Request,
   handler: (args: ReportRouteArgs) => Promise<T>,
+  permission: RoutePermission = REPORTS_PAGE,
 ): Promise<Response> {
   try {
     const access = await requireWorkspaceAccess(workspaceSlug);
+    const viewer = await authorize(
+      access,
+      permission.action,
+      permission.resource?.(access) ?? { kind: "none" },
+    );
     const params = new URL(request.url).searchParams;
     const body = await handler({
       db: getDb(),
-      viewer: { workspaceId: access.workspace.id, userId: access.user.id, role: access.role },
+      viewer,
       prefs: resolveViewerPrefs(access.user, access.settings),
       query: parseReportQuery(params),
       params,

@@ -6,6 +6,7 @@ import {
   createTestUser,
   createTestWorkspace,
   truncateAll,
+  asViewer,
 } from "../../../test/db";
 import { createManualEntry, type EntryScope, listEntriesInRange } from "../time-entries";
 import { createProject } from "./projects";
@@ -33,9 +34,9 @@ describe("tasks service", () => {
     const ws = await createTestWorkspace(db, "Workspace A", alice.id);
     const wsB = await createTestWorkspace(db, "Workspace B", bob.id);
     await addMember(db, ws.id, carol.id, "member");
-    owner = { workspaceId: ws.id, userId: alice.id, role: "owner" };
-    member = { workspaceId: ws.id, userId: carol.id, role: "member" };
-    outsider = { workspaceId: wsB.id, userId: bob.id, role: "owner" };
+    owner = asViewer({ workspaceId: ws.id, userId: alice.id, role: "owner" });
+    member = asViewer({ workspaceId: ws.id, userId: carol.id, role: "member" });
+    outsider = asViewer({ workspaceId: wsB.id, userId: bob.id, role: "owner" });
   });
 
   it("creates, renames, marks done and lists with tracked time", async () => {

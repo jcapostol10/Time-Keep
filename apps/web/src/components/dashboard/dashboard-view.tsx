@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDuration, formatTimeOfDay } from "@timekeep/core";
+import { formatDuration, formatMoney, formatTimeOfDay } from "@timekeep/core";
 import { Card, CardContent, CardHeader, CardTitle } from "@timekeep/ui/components/card";
 import { Skeleton } from "@timekeep/ui/components/skeleton";
 import {
@@ -68,6 +68,19 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
             {billableShare}%
           </CardContent>
         </Card>
+        {data.money ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-muted-foreground text-sm font-medium">Amount</CardTitle>
+            </CardHeader>
+            <CardContent
+              className="text-2xl font-semibold tabular-nums"
+              data-testid="dashboard-amount"
+            >
+              {formatMoney(data.totals.amountMinor, data.money.currency)}
+            </CardContent>
+          </Card>
+        ) : null}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-muted-foreground text-sm font-medium">Top project</CardTitle>
@@ -156,7 +169,8 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
 }
 
 function TeamTab({ slug, params }: { slug: string; params: string }) {
-  const { viewer } = useTracker();
+  const { viewer, canSeeAmounts, currency: workspaceCurrency } = useTracker();
+  const currency = canSeeAmounts ? workspaceCurrency : null;
   const fmt = (s: number) => formatDuration(s, viewer.durationFormat);
   const { data } = useQuery({
     queryKey: [...trackerKeys.report(slug, "dashboard-team", params)],
@@ -178,6 +192,7 @@ function TeamTab({ slug, params }: { slug: string; params: string }) {
             <TableHead>Member</TableHead>
             <TableHead>Latest activity</TableHead>
             <TableHead className="text-right">Total</TableHead>
+            {currency ? <TableHead className="text-right">Amount</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -209,6 +224,11 @@ function TeamTab({ slug, params }: { slug: string; params: string }) {
               <TableCell className="text-right font-semibold tabular-nums">
                 {fmt(m.totalSeconds)}
               </TableCell>
+              {currency ? (
+                <TableCell className="text-right tabular-nums">
+                  {formatMoney(m.amountMinor, currency)}
+                </TableCell>
+              ) : null}
             </TableRow>
           ))}
         </TableBody>

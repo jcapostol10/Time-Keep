@@ -1,6 +1,5 @@
 "use client";
 
-import { hasMinRole, type Role } from "@timekeep/core";
 import { cn } from "@timekeep/ui/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -9,11 +8,12 @@ import { NAV_GROUPS } from "./nav-items";
 
 export function SidebarNav({
   slug,
-  role,
+  hidden,
   onNavigate,
 }: {
   slug: string;
-  role: Role;
+  /** Item labels the viewer may not open (hiddenNavLabels on the server). */
+  hidden: string[];
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -27,7 +27,7 @@ export function SidebarNav({
           </p>
           <ul className="flex flex-col gap-0.5">
             {group.items
-              .filter((item) => !item.minRole || hasMinRole(role, item.minRole))
+              .filter((item) => !hidden.includes(item.label))
               .map((item) => {
                 const href = item.href(slug);
                 const active = pathname === href || pathname.startsWith(`${href}/`);

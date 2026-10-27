@@ -24,13 +24,14 @@ import {
   updateEntry,
 } from "@/server/time-entries";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
+import { authorize } from "@/server/authz";
 
 export type StartResult = { started: TimeEntryDTO; stopped: TimeEntryDTO | null };
 
-/** Members act only on their own entries until Phase 4 ("add time for others"). */
+/** Everyone acts on their own entries here; Phase 4b adds time for others. */
 async function scopeFor(slug: string): Promise<EntryScope> {
   const ctx = await requireWorkspaceAccess(slug);
-  return { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  return authorize(ctx, "entry.write", { kind: "entry", userId: ctx.user.id, projectId: null });
 }
 
 export async function startTimerAction(

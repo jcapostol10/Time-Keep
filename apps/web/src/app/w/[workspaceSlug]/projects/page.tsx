@@ -1,4 +1,4 @@
-import { canManageCatalog, projectListQuerySchema } from "@timekeep/core";
+import { can, projectListQuerySchema } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 import type { Metadata } from "next";
 
@@ -9,6 +9,7 @@ import { ProjectsToolbar } from "@/components/projects/projects-toolbar";
 import { listClientOptions } from "@/server/catalog/clients";
 import { listProjects } from "@/server/catalog/projects";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Projects" };
 
@@ -19,8 +20,13 @@ export default async function ProjectsPage({
   const { workspaceSlug } = await params;
   const raw = await searchParams;
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/projects`);
-  const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
-  const canManage = canManageCatalog(ctx.role);
+  const viewer = await viewerFor(ctx);
+  // Admins manage every project; a project's managers open their own; the
+  // workspace's "who can create projects" setting decides the New button.
+  const newProject = { kind: "project" as const, projectId: null };
+  const canManage = can(viewer.actor, "project.delete", newProject);
+  const canCreate = can(viewer.actor, "project.create", newProject);
+  const editableIds = [...viewer.actor.managedProjectIds];
 
   // Unknown or malformed filters fall back to the defaults rather than erroring.
   const parsed = projectListQuerySchema.safeParse({
@@ -49,7 +55,7 @@ export default async function ProjectsPage({
             ? "What time is tracked against. Group projects by client and control who can see them."
             : "The projects you can track time on."
         }
-        actions={canManage ? <NewProjectButton slug={workspaceSlug} clients={clients} /> : null}
+        actions={canCreate ? <NewProjectButton slug={workspaceSlug} clients={clients} /> : null}
       />
       <ProjectsToolbar query={query} clients={clients} />
       <ProjectsTable
@@ -58,6 +64,7 @@ export default async function ProjectsPage({
         clients={clients}
         query={query}
         canManage={canManage}
+        editableIds={editableIds}
       />
     </>
   );

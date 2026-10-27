@@ -10,9 +10,10 @@ import { workspaceRoutes } from "@/lib/routes";
 import type { EntryTag } from "@/lib/tracker-types";
 import { userErrorMessage } from "@/server/actions/errors";
 import { createTag, deleteTag, updateTag } from "@/server/catalog/tags";
+import { authorize } from "@/server/authz";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
 
-/** Tags are managed by admins only (decision 1 of the Phase 2 design). */
+/** Who may create and edit tags is the permission matrix's (`tag.*`). */
 
 /**
  * Also the tag picker's inline create; returns the picker's shape and does
@@ -24,7 +25,8 @@ export async function createTagAction(
   onDuplicate: "reuse" | "refuse" = "reuse",
 ): Promise<ActionResult<EntryTag>> {
   try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const ctx = await requireWorkspaceAccess(slug);
+    await authorize(ctx, "tag.create");
     const parsed = tagInputSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     const created = await createTag(getDb(), ctx.workspace.id, parsed.data, { onDuplicate });
@@ -40,7 +42,8 @@ export async function updateTagAction(
   input: unknown,
 ): Promise<ActionResult<TagDTO>> {
   try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const ctx = await requireWorkspaceAccess(slug);
+    await authorize(ctx, "tag.update");
     const parsed = tagPatchSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     const updated = await updateTag(getDb(), ctx.workspace.id, tagId, parsed.data);
@@ -56,7 +59,8 @@ export async function deleteTagAction(
   tagId: string,
 ): Promise<ActionResult<{ affectedEntries: number }>> {
   try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const ctx = await requireWorkspaceAccess(slug);
+    await authorize(ctx, "tag.update");
     const result = await deleteTag(getDb(), ctx.workspace.id, tagId);
     revalidatePath(workspaceRoutes.tags(slug));
     return ok(result);

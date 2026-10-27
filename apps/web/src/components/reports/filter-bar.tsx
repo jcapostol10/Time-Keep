@@ -51,6 +51,7 @@ export function FilterBar() {
 
   const active = [
     query.userIds.length > 0,
+    query.groupIds.length > 0,
     query.clientIds.length > 0,
     query.projectIds.length > 0,
     query.taskIds.length > 0,
@@ -67,6 +68,14 @@ export function FilterBar() {
           options={options.users}
           value={query.userIds}
           onChange={(userIds) => set({ userIds })}
+        />
+      ) : null}
+      {options?.groups && options.groups.length > 0 ? (
+        <MultiSelectFilter
+          label="Groups"
+          options={options.groups}
+          value={query.groupIds}
+          onChange={(groupIds) => set({ groupIds })}
         />
       ) : null}
       <MultiSelectFilter

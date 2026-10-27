@@ -5,6 +5,9 @@ import {
   EXPORT_STATUSES,
   MEMBERSHIP_STATUSES,
   PROJECT_VISIBILITIES,
+  RATE_KINDS,
+  RATE_LEVELS,
+  RATE_RECALC_STATUSES,
   REPORT_KINDS,
   ROLES,
   TASK_STATUSES,
@@ -22,3 +25,6 @@ export const reportKindEnum = pgEnum("report_kind", REPORT_KINDS);
 export const exportFormatEnum = pgEnum("export_format", EXPORT_FORMATS);
 export const exportReportEnum = pgEnum("export_report", EXPORT_REPORTS);
 export const exportStatusEnum = pgEnum("export_status", EXPORT_STATUSES);
+export const rateKindEnum = pgEnum("rate_kind", RATE_KINDS);
+export const rateLevelEnum = pgEnum("rate_level", RATE_LEVELS);
+export const rateRecalcStatusEnum = pgEnum("rate_recalc_status", RATE_RECALC_STATUSES);

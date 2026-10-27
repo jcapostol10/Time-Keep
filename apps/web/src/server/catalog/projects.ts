@@ -5,7 +5,6 @@ import { randomUUID } from "node:crypto";
 import {
   bucketFor,
   DEFAULT_REPORT_QUERY,
-  canManageCatalog,
   type DeleteProjectMode,
   pickColor,
   type ProjectInput,
@@ -35,10 +34,12 @@ import {
   or,
   project,
   projectFavorite,
+  projectGroup,
   projectMember,
   sql,
   task,
   timeEntry,
+  userGroup,
 } from "@timekeep/db";
 import type { SQL } from "drizzle-orm";
 
@@ -46,6 +47,7 @@ import type { ProjectDetail, ProjectListItem, ProjectStatus } from "@/lib/catalo
 import type { PickerProject } from "@/lib/tracker-types";
 
 import { CatalogError, isUniqueViolation } from "./errors";
+import { scopeFilter } from "../authz";
 import { type Viewer, visibleProjectFilter } from "./viewer";
 import { reassignProjectEntries, softDeleteProjectEntries } from "../time-entries";
 
@@ -104,7 +106,8 @@ async function trackedByProject(db: Executor, viewer: Viewer): Promise<Map<strin
         isNull(timeEntry.deletedAt),
         isNotNull(timeEntry.end),
         isNotNull(timeEntry.projectId),
-        canManageCatalog(viewer.role) ? undefined : eq(timeEntry.userId, viewer.userId),
+        // Admins see everyone's time, a manager their scope, a member their own.
+        scopeFilter(viewer.actor),
       ),
     )
     .groupBy(timeEntry.projectId);
@@ -424,10 +427,40 @@ export async function setProjectMembers(
       throw new CatalogError("INVALID", "Only workspace members can be added.");
     }
   }
+  // The project's managers stay on it: their place is part of their scope (team.ts).
   await db.transaction(async (tx) => {
-    await tx.delete(projectMember).where(eq(projectMember.projectId, projectId));
+    await tx
+      .delete(projectMember)
+      .where(and(eq(projectMember.projectId, projectId), eq(projectMember.isManager, false)));
     if (unique.length > 0) {
-      await tx.insert(projectMember).values(unique.map((userId) => ({ projectId, userId })));
+      await tx
+        .insert(projectMember)
+        .values(unique.map((userId) => ({ projectId, userId })))
+        .onConflictDoNothing();
+    }
+  });
+}
+
+/** Groups whose members may see and track on a PRIVATE project, replaced as a whole. */
+export async function setProjectGroups(
+  db: Database,
+  viewer: Viewer,
+  projectId: string,
+  groupIds: string[],
+): Promise<void> {
+  await requireVisibleProject(db, viewer, projectId);
+  const unique = [...new Set(groupIds)];
+  if (unique.length > 0) {
+    const rows = await db
+      .select({ id: userGroup.id })
+      .from(userGroup)
+      .where(and(eq(userGroup.workspaceId, viewer.workspaceId), inArray(userGroup.id, unique)));
+    if (rows.length !== unique.length) throw new CatalogError("INVALID", "Group not found.");
+  }
+  await db.transaction(async (tx) => {
+    await tx.delete(projectGroup).where(eq(projectGroup.projectId, projectId));
+    if (unique.length > 0) {
+      await tx.insert(projectGroup).values(unique.map((groupId) => ({ projectId, groupId })));
     }
   });
 }
@@ -495,12 +528,16 @@ export async function getProjectStatus(
       taskId: g.id,
       name: g.label,
       seconds: g.totals.durationSeconds,
+      amountMinor: g.totals.amountMinor,
     })),
     byMember: byUser.groups.map((g) => ({
       userId: g.id ?? "",
       name: g.label,
       seconds: g.totals.durationSeconds,
+      amountMinor: g.totals.amountMinor,
     })),
+    money: byTask.money,
+    amountMinor: totals.amountMinor,
     billableSeconds: totals.billableSeconds,
     nonBillableSeconds: totals.durationSeconds - totals.billableSeconds,
     totalSeconds: totals.durationSeconds,

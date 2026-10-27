@@ -75,6 +75,8 @@ export const reportQuerySchema = z
     from: z.iso.datetime({ offset: true }).optional(),
     to: z.iso.datetime({ offset: true }).optional(),
     userIds: idList,
+    /** User groups, expanded to their members at query time. */
+    groupIds: idList,
     clientIds: idList,
     projectIds: idList,
     taskIds: idList,
@@ -106,7 +108,15 @@ export const reportQuerySchema = z
 export type ReportQuery = z.infer<typeof reportQuerySchema>;
 export type ReportQueryInput = z.input<typeof reportQuerySchema>;
 
-const ARRAY_KEYS = ["userIds", "clientIds", "projectIds", "taskIds", "tagIds", "groupBy"] as const;
+const ARRAY_KEYS = [
+  "userIds",
+  "groupIds",
+  "clientIds",
+  "projectIds",
+  "taskIds",
+  "tagIds",
+  "groupBy",
+] as const;
 const SCALAR_KEYS = [
   "preset",
   "from",
@@ -242,20 +252,32 @@ export function bucketFor(from: Date, to: Date, tz: string, override?: Bucket): 
   return "month";
 }
 
-/** Every total is a record of measures, so Phase 4 adds amounts as keys. */
+/** Every total is a record of measures. */
 export interface ReportTotals {
   durationSeconds: number;
   billableSeconds: number;
   entryCount: number;
+  /** Billable entries' amounts, in the workspace currency's minor units (0 when hidden). */
+  amountMinor: number;
+  /** Billable entries without a rate, so their amount is missing. */
+  unratedCount: number;
 }
 
-export const EMPTY_TOTALS: ReportTotals = { durationSeconds: 0, billableSeconds: 0, entryCount: 0 };
+export const EMPTY_TOTALS: ReportTotals = {
+  durationSeconds: 0,
+  billableSeconds: 0,
+  entryCount: 0,
+  amountMinor: 0,
+  unratedCount: 0,
+};
 
 export function addTotals(a: ReportTotals, b: ReportTotals): ReportTotals {
   return {
     durationSeconds: a.durationSeconds + b.durationSeconds,
     billableSeconds: a.billableSeconds + b.billableSeconds,
     entryCount: a.entryCount + b.entryCount,
+    amountMinor: a.amountMinor + b.amountMinor,
+    unratedCount: a.unratedCount + b.unratedCount,
   };
 }
 
@@ -350,13 +372,21 @@ export interface WeeklyRow {
   label: string;
   days: number[];
   total: number;
+  /** The row's billable amount for the week (0 when hidden). */
+  amountMinor: number;
 }
 
 /** Rows (users or projects) over the week's day keys; a day without entries is 0. */
 export function buildWeekly(
-  rows: { id: string | null; label: string; dateKey: string; seconds: number }[],
+  rows: {
+    id: string | null;
+    label: string;
+    dateKey: string;
+    seconds: number;
+    amountMinor?: number;
+  }[],
   dayKeys: string[],
-): { rows: WeeklyRow[]; dayTotals: number[]; total: number } {
+): { rows: WeeklyRow[]; dayTotals: number[]; total: number; amountMinor: number } {
   const index = new Map(dayKeys.map((k, i) => [k, i]));
   const byId = new Map<string, WeeklyRow>();
   for (const r of rows) {
@@ -368,16 +398,23 @@ export function buildWeekly(
       label: r.label,
       days: dayKeys.map(() => 0),
       total: 0,
+      amountMinor: 0,
     };
     row.days[col] = (row.days[col] ?? 0) + r.seconds;
     row.total += r.seconds;
+    row.amountMinor += r.amountMinor ?? 0;
     byId.set(mapKey, row);
   }
   const result = [...byId.values()].sort(
     (a, b) => b.total - a.total || a.label.localeCompare(b.label),
   );
   const dayTotals = dayKeys.map((_, i) => result.reduce((n, r) => n + (r.days[i] ?? 0), 0));
-  return { rows: result, dayTotals, total: dayTotals.reduce((n, d) => n + d, 0) };
+  return {
+    rows: result,
+    dayTotals,
+    total: dayTotals.reduce((n, d) => n + d, 0),
+    amountMinor: result.reduce((n, r) => n + r.amountMinor, 0),
+  };
 }
 
 /** Every bucket of a range in order, empty ones included, so a series never skips a quiet day. */

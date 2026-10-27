@@ -14,6 +14,8 @@ export const trackerKeys = {
     ["tracker", slug, "entries", "report", kind, params] as const,
   reportOptions: (slug: string) => ["tracker", slug, "report-options"] as const,
   templates: (slug: string) => ["tracker", slug, "templates"] as const,
+  rates: (slug: string, target: string) => ["tracker", slug, "rates", target] as const,
+  rateRecalc: (slug: string) => ["tracker", slug, "rate-recalc"] as const,
 };
 
 export interface TrackerOptions {
@@ -32,5 +34,7 @@ export const trackerUrls = {
   report: (slug: string, kind: string, params: string) =>
     `/api/w/${slug}/reports/${kind}${params ? `?${params}` : ""}`,
   reportOptions: (slug: string) => `/api/w/${slug}/reports/options`,
+  rates: (slug: string, target: string) => `/api/w/${slug}/rates?${target}`,
+  rateRecalc: (slug: string) => `/api/w/${slug}/rate-recalc`,
   templates: (slug: string) => `/api/w/${slug}/timesheet-templates`,
 };

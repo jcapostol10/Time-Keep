@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDuration } from "@timekeep/core";
+import { formatDuration, formatMoney } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import {
   DropdownMenu,
@@ -72,7 +72,8 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
   );
   const first = data?.pages[0];
   const entries = data?.pages.flatMap((p) => p.entries) ?? [];
-  const show = (key: DetailedColumn) => !hidden.has(key);
+  const money = first?.money ?? null;
+  const show = (key: DetailedColumn) => !hidden.has(key) && (key !== "amount" || money !== null);
   const writes = useEntryWrites();
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
   // Only own entries can be selected; an entry gone after a refetch drops out by itself.
@@ -115,6 +116,7 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
           {first?.totals ? (
             <p className="text-muted-foreground text-sm">
               {first.totals.entryCount} {first.totals.entryCount === 1 ? "entry" : "entries"}
+              {money ? ` · ${formatMoney(first.totals.amountMinor, money.currency)}` : ""}
             </p>
           ) : null}
         </div>
@@ -125,7 +127,7 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {DETAILED_COLUMNS.map((c) => (
+            {DETAILED_COLUMNS.filter((c) => c.key !== "amount" || money).map((c) => (
               <DropdownMenuCheckboxItem
                 key={c.key}
                 checked={!hidden.has(c.key)}
@@ -198,6 +200,7 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
                     <SortButton label="Duration" sort="duration" paging={paging} onSort={onSort} />
                   </TableHead>
                 ) : null}
+                {show("amount") ? <TableHead className="text-right">Amount</TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -206,6 +209,7 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
                   key={e.id}
                   entry={e}
                   hidden={hidden}
+                  currency={money?.currency ?? null}
                   selected={picked.has(e.id)}
                   onSelectedChange={(on) => pick(e.id, on)}
                 />

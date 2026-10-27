@@ -41,8 +41,11 @@ export interface ProjectStatus {
   to: string;
   /** Time per week of the range when it is longer than a month; null otherwise. */
   weeks: { key: string; label: string; seconds: number }[] | null;
-  byTask: { taskId: string | null; name: string; seconds: number }[];
-  byMember: { userId: string; name: string; seconds: number }[];
+  byTask: { taskId: string | null; name: string; seconds: number; amountMinor: number }[];
+  byMember: { userId: string; name: string; seconds: number; amountMinor: number }[];
+  /** The currency amounts are in; null when the viewer may not see them (amounts are 0). */
+  money: { currency: string } | null;
+  amountMinor: number;
   billableSeconds: number;
   nonBillableSeconds: number;
   totalSeconds: number;

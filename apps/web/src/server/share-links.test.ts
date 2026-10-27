@@ -10,6 +10,7 @@ import {
   createTestUser,
   createTestWorkspace,
   truncateAll,
+  asViewer,
 } from "../../test/db";
 import type { Viewer } from "./catalog/viewer";
 import {
@@ -51,9 +52,9 @@ describe("share links", () => {
     const ws = await createTestWorkspace(db, "Workspace A", a.id);
     await addMember(db, ws.id, b.id, "member");
     await addMember(db, ws.id, c.id, "member");
-    alice = { workspaceId: ws.id, userId: a.id, role: "owner" };
-    bob = { workspaceId: ws.id, userId: b.id, role: "member" };
-    carol = { workspaceId: ws.id, userId: c.id, role: "member" };
+    alice = asViewer({ workspaceId: ws.id, userId: a.id, role: "owner" });
+    bob = asViewer({ workspaceId: ws.id, userId: b.id, role: "member" });
+    carol = asViewer({ workspaceId: ws.id, userId: c.id, role: "member" });
   });
 
   it("stores only the token's hash and resolves the token to the stored report", async () => {
@@ -74,7 +75,7 @@ describe("share links", () => {
     expect(resolved).toMatchObject({
       kind: "summary",
       title: "This week",
-      viewer: { workspaceId: alice.workspaceId, userId: alice.userId, role: "owner" },
+      viewer: asViewer({ workspaceId: alice.workspaceId, userId: alice.userId, role: "owner" }),
       prefs: PREFS,
       workspaceName: "Workspace A",
     });

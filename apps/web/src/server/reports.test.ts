@@ -15,6 +15,7 @@ import {
   createTestUser,
   createTestWorkspace,
   truncateAll,
+  asViewer,
 } from "../../test/db";
 import { createClient } from "./catalog/clients";
 import { createProject } from "./catalog/projects";
@@ -106,9 +107,9 @@ describe("report engine", () => {
     const ws = await createTestWorkspace(db, "Workspace A", a.id);
     await addMember(db, ws.id, m.id, "manager");
     await addMember(db, ws.id, b.id, "member");
-    alice = { workspaceId: ws.id, userId: a.id, role: "owner" };
-    max = { workspaceId: ws.id, userId: m.id, role: "manager" };
-    bob = { workspaceId: ws.id, userId: b.id, role: "member" };
+    alice = asViewer({ workspaceId: ws.id, userId: a.id, role: "owner" });
+    max = asViewer({ workspaceId: ws.id, userId: m.id, role: "manager" });
+    bob = asViewer({ workspaceId: ws.id, userId: b.id, role: "member" });
 
     const blank = { address: "", email: "", notes: "", currency: null };
     const acme = await createClient(db, ws.id, { name: "Acme", ...blank });
@@ -229,22 +230,33 @@ describe("report engine", () => {
     });
     const sum = listed.reduce((n, e) => n + (e.durationSeconds ?? 0), 0);
     expect(sum).toBe(3 * 3600);
-    expect(report.totals).toEqual({ durationSeconds: sum, billableSeconds: 7200, entryCount: 3 });
+    // Bob is a member: amounts (and their unrated count) are hidden from him.
+    expect(report.totals).toEqual({
+      durationSeconds: sum,
+      billableSeconds: 7200,
+      entryCount: 3,
+      amountMinor: 0,
+      unratedCount: 0,
+    });
   });
 
-  it("forces a member to their own entries whatever userIds says; team readers choose", async () => {
+  it("forces a member to their own entries whatever userIds says; a manager reads their scope", async () => {
     expect(effectiveQuery(q({ userIds: [alice.userId] }), bob).userIds).toEqual([bob.userId]);
-    expect(effectiveQuery(q({ userIds: [bob.userId] }), max).userIds).toEqual([bob.userId]);
     const asBob = await summaryReport(db, bob, q({ userIds: [alice.userId] }), PREFS, NOW);
     expect(asBob.totals.durationSeconds).toBe(3 * 3600);
-    const asMax = await summaryReport(db, max, q(), PREFS, NOW);
-    expect(asMax.totals).toEqual({
-      durationSeconds: 10 * 3600,
-      billableSeconds: 27000,
-      entryCount: 8,
+    // Max manages Bob: his own 2h and Bob's 3h (manager-scope.test.ts covers the rest).
+    const scoped = asViewer(max, { userIds: [bob.userId] });
+    expect(effectiveQuery(q({ userIds: [bob.userId] }), scoped).userIds).toEqual([bob.userId]);
+    const asMax = await summaryReport(db, scoped, q(), PREFS, NOW);
+    expect(asMax.totals).toMatchObject({
+      durationSeconds: 5 * 3600,
+      billableSeconds: 5 * 3600 - 3600,
+      entryCount: 4,
     });
-    const maxForBob = await summaryReport(db, max, q({ userIds: [bob.userId] }), PREFS, NOW);
+    const maxForBob = await summaryReport(db, scoped, q({ userIds: [bob.userId] }), PREFS, NOW);
     expect(maxForBob.totals.durationSeconds).toBe(3 * 3600);
+    // Without assignments a manager reads only their own time.
+    expect((await summaryReport(db, max, q(), PREFS, NOW)).totals.durationSeconds).toBe(2 * 3600);
   });
 
   it("applies every filter", async () => {
@@ -528,7 +540,7 @@ describe("report engine", () => {
       PREFS,
       NOW,
     );
-    expect(report.totals).toEqual({
+    expect(report.totals).toMatchObject({
       durationSeconds: 700 * hours999,
       billableSeconds: 700 * hours999,
       entryCount: 700,
@@ -556,7 +568,7 @@ describe("report engine", () => {
   it("lists former members whose time is still in the reports, after the active ones", async () => {
     const fay = await createTestUser(db, "Fay F");
     await addMember(db, alice.workspaceId, fay.id, "member");
-    const fayScope = { workspaceId: alice.workspaceId, userId: fay.id, role: "member" as const };
+    const fayScope = asViewer({ workspaceId: alice.workspaceId, userId: fay.id, role: "member" });
     await entry(fayScope, {
       description: "Handover",
       date: "2026-03-09",

@@ -205,7 +205,7 @@ export async function renderReportHtml(
   if (req.report === "summary") {
     const report = await summaryReport(db, viewer, req.query, req.prefs, now);
     const rows = flattenGroups(report.groups, report.groupBy);
-    const body = `<div class="charts">${barChart(report.series, req.prefs.durationFormat)}${donut(slicesOf(report))}</div>${table(rows, summaryColumns(report.groupBy, req.prefs))}`;
+    const body = `<div class="charts">${barChart(report.series, req.prefs.durationFormat)}${donut(slicesOf(report))}</div>${table(rows, summaryColumns(report.groupBy, req.prefs, report.money ?? undefined))}`;
     const html = page({
       title,
       workspaceName: req.workspaceName,
@@ -224,13 +224,14 @@ export async function renderReportHtml(
       rangeLabel,
       filters,
       total: fmt(report.total),
-      body: table(report.rows, weeklyColumns(report.dayKeys, req.prefs)),
+      body: table(report.rows, weeklyColumns(report.dayKeys, req.prefs, report.money ?? undefined)),
     });
     return { html, rowCount: report.rows.length };
   }
   const entries = [];
   let cursor: { value: string; id: string } | undefined;
   let totals = { durationSeconds: 0 };
+  let money: { currency: string } | null = null;
   do {
     const p = await detailedReport(
       db,
@@ -241,6 +242,7 @@ export async function renderReportHtml(
       now,
     );
     entries.push(...p.entries);
+    money = p.money;
     if (p.totals) totals = p.totals;
     cursor = p.nextCursor ?? undefined;
   } while (cursor);
@@ -250,7 +252,7 @@ export async function renderReportHtml(
     rangeLabel,
     filters,
     total: fmt(totals.durationSeconds),
-    body: table(entries, detailedColumns(req.prefs)),
+    body: table(entries, detailedColumns(req.prefs, money ?? undefined)),
   });
   return { html, rowCount: entries.length };
 }

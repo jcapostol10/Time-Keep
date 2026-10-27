@@ -11,6 +11,7 @@ import { listTags } from "@/server/catalog/tags";
 import { listEntriesInRange, listRecentDescriptions } from "@/server/time-entries";
 import { listTemplates } from "@/server/timesheet";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Timesheet" };
 
@@ -24,7 +25,7 @@ export default async function TimesheetPage({
   const raw = await searchParams;
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/timesheet`);
   const viewer = resolveViewerPrefs(ctx.user, ctx.settings);
-  const scope = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  const scope = await viewerFor(ctx);
   const db = getDb();
 
   // ?week=YYYY-MM-DD (any day of the wanted week, in the viewer's zone); default this week.

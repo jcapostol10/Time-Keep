@@ -1,4 +1,4 @@
-import { resolveViewerPrefs } from "@timekeep/core";
+import { resolveViewerPrefs, can } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 
 import { AppShell } from "@/components/shell/app-shell";
@@ -7,6 +7,8 @@ import { TrackerProvider } from "@/components/tracker/tracker-provider";
 import { getTrackerSettings } from "@/server/queries/user-settings";
 import { getRunningEntry } from "@/server/time-entries";
 import { listUserWorkspaces, requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
+import { hiddenNavLabels } from "@/components/shell/nav-items";
 
 export default async function WorkspaceLayout({
   children,
@@ -15,9 +17,10 @@ export default async function WorkspaceLayout({
   const { workspaceSlug } = await params;
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}`);
   const db = getDb();
+  const scope = await viewerFor(ctx);
   const [workspaces, running, trackerSettings] = await Promise.all([
     listUserWorkspaces(db, ctx.user.id),
-    getRunningEntry(db, { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role }),
+    getRunningEntry(db, scope),
     getTrackerSettings(db, ctx.user.id),
   ]);
   const viewer = resolveViewerPrefs(ctx.user, ctx.settings);
@@ -26,7 +29,12 @@ export default async function WorkspaceLayout({
     <TrackerProvider
       slug={ctx.workspace.slug}
       workspaceId={ctx.workspace.id}
-      role={ctx.role}
+      canCreate={{
+        project: can(scope.actor, "project.create", { kind: "project", projectId: null }),
+        tag: can(scope.actor, "tag.create", { kind: "none" }),
+      }}
+      canSeeAmounts={can(scope.actor, "report.viewAmounts", { kind: "none" })}
+      currency={ctx.settings.currency}
       viewer={viewer}
       settings={trackerSettings}
       initialRunning={running}
@@ -40,6 +48,7 @@ export default async function WorkspaceLayout({
           role: ctx.role,
         }}
         workspaces={workspaces.map((w) => ({ id: w.id, name: w.name, slug: w.slug, role: w.role }))}
+        hiddenNav={hiddenNavLabels(scope.actor)}
       >
         {children}
       </AppShell>
