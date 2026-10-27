@@ -39,6 +39,18 @@ export function amountFor(rateMinor: number, seconds: number): number {
   return Number((BigInt(rateMinor) * BigInt(seconds) + BigInt(1800)) / BigInt(3600));
 }
 
+/** 12050, "USD" → "120.50": a plain decimal for spreadsheets (no symbol, no grouping). */
+export function minorToDecimal(minor: number, currency: string): string {
+  const exponent = currencyExponent(currency);
+  const sign = minor < 0 ? "-" : "";
+  const digits = Math.abs(minor)
+    .toString()
+    .padStart(exponent + 1, "0");
+  return exponent > 0
+    ? `${sign}${digits.slice(0, -exponent)}.${digits.slice(-exponent)}`
+    : `${sign}${digits}`;
+}
+
 /** 125050, "USD" → "$1,250.50". */
 export function formatMoney(minor: number, currency: string, locale = "en-US"): string {
   const exponent = currencyExponent(currency);

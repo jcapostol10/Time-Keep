@@ -33,6 +33,8 @@ export default async function WorkspaceLayout({
         project: can(scope.actor, "project.create", { kind: "project", projectId: null }),
         tag: can(scope.actor, "tag.create", { kind: "none" }),
       }}
+      canSeeAmounts={can(scope.actor, "report.viewAmounts", { kind: "none" })}
+      currency={ctx.settings.currency}
       viewer={viewer}
       settings={trackerSettings}
       initialRunning={running}

@@ -17,6 +17,7 @@ const createSchema = z.object({
   params: z.string().max(4000),
   title: z.string().trim().min(1, "Give the link a title").max(120),
   expiresInDays: z.number().int().nullable(),
+  includeAmounts: z.boolean().default(false),
 });
 
 /** Creates a read-only public link to the report as the viewer sees it now. */
@@ -29,7 +30,7 @@ export async function createShareLinkAction(
     const viewer = await authorize(ctx, "page.view", { kind: "page", page: "reports" });
     const parsed = createSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const { kind, params, title, expiresInDays } = parsed.data;
+    const { kind, params, title, expiresInDays, includeAmounts } = parsed.data;
     if (expiresInDays !== null && !isShareExpiry(expiresInDays)) return fail("Invalid expiry.");
     const created = await createShareLink(
       getDb(),
@@ -39,6 +40,7 @@ export async function createShareLinkAction(
         query: parseReportQuery(new URLSearchParams(params)),
         title,
         expiresInDays: expiresInDays ?? undefined,
+        includeAmounts,
       },
       resolveViewerPrefs(ctx.user, ctx.settings),
     );

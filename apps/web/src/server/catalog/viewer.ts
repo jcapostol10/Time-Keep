@@ -14,6 +14,8 @@ export interface Viewer {
   userId: string;
   role: Role;
   actor: Actor;
+  /** A share link made without "Include amounts": reports omit money for its readers. */
+  hideAmounts?: boolean;
 }
 
 /**

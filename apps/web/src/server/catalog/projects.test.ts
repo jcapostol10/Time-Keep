@@ -255,12 +255,12 @@ describe("projects service", () => {
 
     const status = await getProjectStatus(db, owner, web.id, { from: at(-10), to: at(600) });
     expect(status.byTask).toEqual([
-      { taskId: design.id, name: "Design", seconds: 6300 },
-      { taskId: null, name: "No task", seconds: 1800 },
+      { taskId: design.id, name: "Design", seconds: 6300, amountMinor: 0 },
+      { taskId: null, name: "No task", seconds: 1800, amountMinor: 0 },
     ]);
     expect(status.byMember).toEqual([
-      { userId: owner.userId, name: "Alice A", seconds: 5400 },
-      { userId: member.userId, name: "Carol C", seconds: 2700 },
+      { userId: owner.userId, name: "Alice A", seconds: 5400, amountMinor: 0 },
+      { userId: member.userId, name: "Carol C", seconds: 2700, amountMinor: 0 },
     ]);
     expect(status).toMatchObject({
       billableSeconds: 6300,

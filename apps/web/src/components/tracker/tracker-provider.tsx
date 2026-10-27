@@ -42,9 +42,12 @@ export type RunningPatch = Partial<EntryDraft> & { start?: string };
 interface TrackerContextValue {
   slug: string;
   workspaceId: string;
-  /** Owner or admin: may create projects and tags from the pickers. */
   /** Inline create in the pickers: the workspace's "who can create" setting for the viewer. */
   canCreate: { project: boolean; tag: boolean };
+  /** The viewer may see amounts (owners, admins, managers in their scope). */
+  canSeeAmounts: boolean;
+  /** The workspace currency (ISO 4217). */
+  currency: string;
   viewer: ViewerPrefs;
   settings: TrackerSettingsInput;
   running: TimeEntryDTO | null;
@@ -158,6 +161,8 @@ export interface TrackerProviderProps {
   slug: string;
   workspaceId: string;
   canCreate: { project: boolean; tag: boolean };
+  canSeeAmounts: boolean;
+  currency: string;
   viewer: ViewerPrefs;
   settings: TrackerSettingsInput;
   initialRunning: TimeEntryDTO | null;
@@ -168,6 +173,8 @@ export function TrackerProvider({
   slug,
   workspaceId,
   canCreate,
+  canSeeAmounts,
+  currency,
   viewer,
   settings,
   initialRunning,
@@ -394,6 +401,8 @@ export function TrackerProvider({
       slug,
       workspaceId,
       canCreate,
+      canSeeAmounts,
+      currency,
       viewer,
       settings,
       running,
@@ -414,6 +423,8 @@ export function TrackerProvider({
       slug,
       workspaceId,
       canCreate,
+      canSeeAmounts,
+      currency,
       viewer,
       settings,
       running,

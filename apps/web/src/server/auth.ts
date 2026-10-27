@@ -1,6 +1,6 @@
 import "server-only";
 
-import { personalWorkspaceName } from "@timekeep/core";
+import { isValidTimeZone, personalWorkspaceName } from "@timekeep/core";
 import { getDb, schema } from "@timekeep/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -103,11 +103,14 @@ function buildAuth() {
     databaseHooks: {
       user: {
         create: {
-          // Every new user gets a personal workspace and becomes its OWNER.
+          // Every new user gets a personal workspace and becomes its OWNER, in the
+          // time zone they signed up in (rates start at the workspace's midnight).
           after: async (user) => {
+            const timezone = (user as { timezone?: string | null }).timezone;
             await createWorkspace(db, {
               name: personalWorkspaceName(user.name),
               ownerId: user.id,
+              timezone: timezone && isValidTimeZone(timezone) ? timezone : undefined,
             });
           },
         },

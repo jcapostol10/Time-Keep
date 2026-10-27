@@ -10,7 +10,7 @@ import {
 import { and, asc, type Database, desc, eq, isNull, project, timeEntry } from "@timekeep/db";
 
 import { detailedParams } from "@/lib/report-links";
-import type { SeriesPoint } from "@/lib/report-types";
+import type { ReportMoney, SeriesPoint } from "@/lib/report-types";
 
 import { scopeFilter } from "./authz";
 import type { Viewer } from "./catalog/viewer";
@@ -38,6 +38,7 @@ export interface MostTracked {
 }
 
 export interface DashboardMe {
+  money: ReportMoney;
   range: { from: string; to: string; label: string };
   totals: ReportTotals;
   series: SeriesPoint[];
@@ -85,6 +86,7 @@ export async function dashboardMe(
     .sort((a, b) => b.seconds - a.seconds || a.description.localeCompare(b.description))
     .slice(0, 10);
   return {
+    money: byProject.money,
     range: byProject.range,
     totals: byProject.totals,
     series: byProject.series,
@@ -99,6 +101,8 @@ export interface TeamMember {
   name: string;
   image: string | null;
   totalSeconds: number;
+  /** Their billable amount for the range (0 when the viewer may not see amounts). */
+  amountMinor: number;
   /** Their newest entry, running or not. */
   latest: {
     description: string;
@@ -146,7 +150,7 @@ export async function dashboardTeam(
       )
       .orderBy(asc(timeEntry.userId), desc(timeEntry.start)),
   ]);
-  const totals = new Map(byUser.groups.map((g) => [g.id, g.totals.durationSeconds]));
+  const totals = new Map(byUser.groups.map((g) => [g.id, g.totals]));
   const latest = new Map(latestRows.map((r) => [r.userId, r]));
   const scoped = scopeFilter(viewer.actor) !== undefined;
   const listed = (userId: string) =>
@@ -159,7 +163,8 @@ export async function dashboardTeam(
         userId: m.userId,
         name: m.name,
         image: m.image ?? null,
-        totalSeconds: totals.get(m.userId) ?? 0,
+        totalSeconds: totals.get(m.userId)?.durationSeconds ?? 0,
+        amountMinor: totals.get(m.userId)?.amountMinor ?? 0,
         latest: l
           ? {
               description: l.description,

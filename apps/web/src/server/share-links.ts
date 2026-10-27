@@ -54,7 +54,14 @@ export interface CreatedShareLink {
 export async function createShareLink(
   db: Database,
   viewer: Viewer,
-  input: { kind: ReportKind; query: ReportQuery; title: string; expiresInDays?: ShareExpiryDays },
+  input: {
+    kind: ReportKind;
+    query: ReportQuery;
+    title: string;
+    expiresInDays?: ShareExpiryDays;
+    /** Show amounts to the link's readers (only while the creator may see them). */
+    includeAmounts?: boolean;
+  },
   prefs: ViewerPrefs,
   now = new Date(),
 ): Promise<CreatedShareLink> {
@@ -70,6 +77,8 @@ export async function createShareLink(
     query: effectiveQuery(input.query, viewer) as unknown as Record<string, unknown>,
     prefs: prefs as unknown as Record<string, unknown>,
     title,
+    includeAmounts:
+      Boolean(input.includeAmounts) && can(viewer.actor, "report.viewAmounts", { kind: "none" }),
     expiresAt: input.expiresInDays
       ? new Date(now.getTime() + input.expiresInDays * 24 * 3_600_000)
       : null,
@@ -125,6 +134,8 @@ export async function resolveShareLink(
     userId: link.createdBy,
     role: row.role,
     actor: await loadActor(db, link.workspaceId, link.createdBy, row.role),
+    // The engine still checks that the creator may see amounts today.
+    hideAmounts: !link.includeAmounts,
   };
   return {
     id: link.id,

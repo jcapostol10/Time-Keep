@@ -4,6 +4,7 @@ import {
   type DrillStep,
   type DurationFormat,
   formatDuration,
+  formatMoney,
   type ReportGroup,
 } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
@@ -43,6 +44,7 @@ export function SummaryTable({
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const fmt = (seconds: number) => formatDuration(seconds, durationFormat);
+  const money = report.money;
 
   function toggle(path: string) {
     setCollapsed((prev) => {
@@ -99,6 +101,11 @@ export function SummaryTable({
             <TableCell className="hidden text-right tabular-nums sm:table-cell">
               {g.totals.entryCount}
             </TableCell>
+            {money ? (
+              <TableCell className="text-right tabular-nums">
+                {formatMoney(g.totals.amountMinor, money.currency)}
+              </TableCell>
+            ) : null}
           </TableRow>
           {hasChildren && open ? rows(g.children, level + 1, [...parents, path], here) : null}
         </Fragment>
@@ -124,6 +131,7 @@ export function SummaryTable({
             <TableHead className="text-right">Duration</TableHead>
             <TableHead className="hidden text-right sm:table-cell">Billable</TableHead>
             <TableHead className="hidden text-right sm:table-cell">Entries</TableHead>
+            {money ? <TableHead className="text-right">Amount</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>{rows(report.groups, 0, [], [])}</TableBody>
@@ -140,9 +148,21 @@ export function SummaryTable({
             <TableCell className="hidden text-right tabular-nums sm:table-cell">
               {report.totals.entryCount}
             </TableCell>
+            {money ? (
+              <TableCell className="text-right tabular-nums">
+                {formatMoney(report.totals.amountMinor, money.currency)}
+              </TableCell>
+            ) : null}
           </TableRow>
         </TableFooter>
       </Table>
+      {money && report.totals.unratedCount > 0 ? (
+        <p className="text-muted-foreground border-t px-3 py-2 text-xs">
+          {report.totals.unratedCount} billable{" "}
+          {report.totals.unratedCount === 1 ? "entry has" : "entries have"} no rate, so{" "}
+          {report.totals.unratedCount === 1 ? "its amount is" : "their amounts are"} missing.
+        </p>
+      ) : null}
       {report.groupBy.includes("tag") ? (
         <p className="text-muted-foreground border-t px-3 py-2 text-xs">
           An entry with several tags counts under each of them, so tag totals can exceed the total.

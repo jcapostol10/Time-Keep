@@ -18,7 +18,7 @@ import {
 import type { Database } from "@timekeep/db";
 import ExcelJS from "exceljs";
 
-import type { DetailedCursor, DetailedEntryDTO } from "@/lib/report-types";
+import type { DetailedCursor, DetailedEntryDTO, ReportMoney } from "@/lib/report-types";
 
 import type { Viewer } from "./catalog/viewer";
 import { detailedReport, summaryReport, weeklyReport } from "./reports";
@@ -64,8 +64,9 @@ async function allEntries(
   viewer: Viewer,
   req: ExportRequest,
   max = Infinity,
-): Promise<DetailedEntryDTO[]> {
+): Promise<{ entries: DetailedEntryDTO[]; money: ReportMoney }> {
   const out: DetailedEntryDTO[] = [];
+  let money: ReportMoney = null;
   let cursor: DetailedCursor | undefined;
   do {
     const page = await detailedReport(
@@ -77,9 +78,10 @@ async function allEntries(
       req.now,
     );
     out.push(...page.entries);
+    money = page.money;
     cursor = page.nextCursor ?? undefined;
   } while (cursor && out.length < max);
-  return out;
+  return { entries: out, money };
 }
 
 /** How many rows an export of this report would have, without building it. */
@@ -122,19 +124,29 @@ async function exportTable(
       const report = await summaryReport(db, viewer, req.query, req.prefs, req.now);
       return {
         rows: flattenGroups(report.groups, report.groupBy),
-        columns: summaryColumns(report.groupBy, req.prefs) as ExportColumn<unknown>[],
+        columns: summaryColumns(
+          report.groupBy,
+          req.prefs,
+          report.money ?? undefined,
+        ) as ExportColumn<unknown>[],
       };
     }
-    case "detailed":
+    case "detailed": {
+      const { entries, money } = await allEntries(db, viewer, req);
       return {
-        rows: await allEntries(db, viewer, req),
-        columns: detailedColumns(req.prefs) as ExportColumn<unknown>[],
+        rows: entries,
+        columns: detailedColumns(req.prefs, money ?? undefined) as ExportColumn<unknown>[],
       };
+    }
     case "weekly": {
       const report = await weeklyReport(db, viewer, req.query, req.prefs, req.now);
       return {
         rows: report.rows,
-        columns: weeklyColumns(report.dayKeys, req.prefs) as ExportColumn<unknown>[],
+        columns: weeklyColumns(
+          report.dayKeys,
+          req.prefs,
+          report.money ?? undefined,
+        ) as ExportColumn<unknown>[],
       };
     }
   }

@@ -4,6 +4,7 @@ import {
   addDaysInZone,
   type DurationFormat,
   formatDuration,
+  formatMoney,
   localDateKey,
   monthBoundsInZone,
   weekBounds,
@@ -133,6 +134,13 @@ export function StatusTab({
         <Stat label="Total" value={fmt(status.totalSeconds)} testId="status-total" />
         <Stat label="Billable" value={fmt(status.billableSeconds)} />
         <Stat label="Non-billable" value={fmt(status.nonBillableSeconds)} />
+        {status.money ? (
+          <Stat
+            label="Amount"
+            value={formatMoney(status.amountMinor, status.money.currency)}
+            testId="status-amount"
+          />
+        ) : null}
       </div>
 
       {status.weeks ? (

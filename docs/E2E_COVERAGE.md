@@ -230,12 +230,17 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The workspace switcher lists only the user's own workspaces — `tenant-isolation.spec.ts` › "the switcher only lists the user's own workspaces"
 - [x] A project id from another workspace is not found, on every project page — `project-detail.spec.ts` › "a project id from another workspace is not found"
 
+## Amounts
+
+- [x] Summary and Detailed show the amount to the owner and not to a member — `amounts.spec.ts` › "Summary and Detailed show the amount to the owner and not to a member"
+- [x] A CSV export carries the Amount column — `amounts.spec.ts` › "a CSV export carries the Amount column"
+
 ## Rates
 
-- [ ] The workspace default rate is set and shows in its history — `rates.spec.ts` › "the workspace default rate shows in the history"
-- [ ] A project rate from today leaves last month's amount alone; "Entries from a date" covering it changes it once the job runs — `rates.spec.ts` › "a project rate from today leaves last month's amount alone"
-- [ ] A task rate beats the project rate on a new entry — `rates.spec.ts` › "a task rate beats the project rate on a new entry"
-- [ ] The rate dialog fits a 375px screen — `rates.spec.ts` › "the rate dialog fits a 375px screen"
+- [x] The workspace default rate is set and shows in its history — `rates.spec.ts` › "the workspace default rate shows in the history"
+- [x] A project rate from today leaves last month's amount alone; "Entries from a date" covering it changes it once the job runs — `rates.spec.ts` › "a project rate from today leaves last month's amount alone"
+- [x] A task rate beats the project rate on a new entry — `rates.spec.ts` › "a task rate beats the project rate on a new entry"
+- [x] The rate dialog fits a 375px screen — `rates.spec.ts` › "the rate dialog fits a 375px screen"
 
 ## Permissions
 

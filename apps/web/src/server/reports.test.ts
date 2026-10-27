@@ -230,7 +230,14 @@ describe("report engine", () => {
     });
     const sum = listed.reduce((n, e) => n + (e.durationSeconds ?? 0), 0);
     expect(sum).toBe(3 * 3600);
-    expect(report.totals).toEqual({ durationSeconds: sum, billableSeconds: 7200, entryCount: 3 });
+    // Bob is a member: amounts (and their unrated count) are hidden from him.
+    expect(report.totals).toEqual({
+      durationSeconds: sum,
+      billableSeconds: 7200,
+      entryCount: 3,
+      amountMinor: 0,
+      unratedCount: 0,
+    });
   });
 
   it("forces a member to their own entries whatever userIds says; a manager reads their scope", async () => {
@@ -241,7 +248,7 @@ describe("report engine", () => {
     const scoped = asViewer(max, { userIds: [bob.userId] });
     expect(effectiveQuery(q({ userIds: [bob.userId] }), scoped).userIds).toEqual([bob.userId]);
     const asMax = await summaryReport(db, scoped, q(), PREFS, NOW);
-    expect(asMax.totals).toEqual({
+    expect(asMax.totals).toMatchObject({
       durationSeconds: 5 * 3600,
       billableSeconds: 5 * 3600 - 3600,
       entryCount: 4,
@@ -533,7 +540,7 @@ describe("report engine", () => {
       PREFS,
       NOW,
     );
-    expect(report.totals).toEqual({
+    expect(report.totals).toMatchObject({
       durationSeconds: 700 * hours999,
       billableSeconds: 700 * hours999,
       entryCount: 700,

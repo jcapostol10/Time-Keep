@@ -21,10 +21,17 @@ const PREFS: ViewerPrefs = {
   durationFormat: "hh:mm:ss",
 };
 
-const t = (durationSeconds: number, billableSeconds: number, entryCount: number): ReportTotals => ({
+const t = (
+  durationSeconds: number,
+  billableSeconds: number,
+  entryCount: number,
+  amountMinor = 0,
+): ReportTotals => ({
   durationSeconds,
   billableSeconds,
   entryCount,
+  amountMinor,
+  unratedCount: 0,
 });
 const row = (
   keys: Partial<Record<GroupKey, { id: string | null; label: string }>>,
@@ -108,6 +115,8 @@ const ENTRIES: DetailedEntry[] = [
     start: "2026-03-09T01:00:00.000Z",
     end: "2026-03-09T02:30:00.000Z",
     durationSeconds: 5400,
+    rateMinor: null,
+    amountMinor: null,
   },
   {
     id: "e2",
@@ -121,6 +130,8 @@ const ENTRIES: DetailedEntry[] = [
     start: "2026-03-09T15:30:00.000Z",
     end: "2026-03-09T16:30:00.000Z",
     durationSeconds: 3600,
+    rateMinor: null,
+    amountMinor: null,
   },
   {
     id: "e3",
@@ -134,6 +145,8 @@ const ENTRIES: DetailedEntry[] = [
     start: "2026-03-10T04:00:00.000Z",
     end: "2026-03-10T04:15:00.000Z",
     durationSeconds: 900,
+    rateMinor: null,
+    amountMinor: null,
   },
 ];
 
@@ -171,7 +184,10 @@ describe("weekly export", () => {
       "Total",
     ]);
     expect(
-      toCsv([{ id: "web", label: "Web", days: [3600, 1800], total: 5400 }], columns),
+      toCsv(
+        [{ id: "web", label: "Web", days: [3600, 1800], total: 5400, amountMinor: 0 }],
+        columns,
+      ),
     ).toContain("Web,1:00:00,0:30:00,1:30:00");
   });
 });
@@ -212,5 +228,41 @@ describe("toCsv formula cells", () => {
       "Plain = fine",
       "-5",
     ]);
+  });
+});
+
+describe("amounts in exports", () => {
+  const USD = { currency: "USD" };
+
+  it("adds the amount after the totals in the Summary when amounts are visible", () => {
+    const rows = [{ labels: ["Acme", "Web"], totals: t(5400, 3600, 3, 12050) }];
+    const plain = summaryColumns(["client", "project"], PREFS);
+    expect(plain.map((c) => c.header)).toEqual([
+      "Client",
+      "Project",
+      "Duration",
+      "Billable",
+      "Entries",
+    ]);
+    const withMoney = summaryColumns(["client", "project"], PREFS, USD);
+    expect(withMoney.map((c) => c.header).at(-1)).toBe("Amount (USD)");
+    expect(toCsv(rows, withMoney)).toContain("Acme,Web,1:30:00,1:00:00,3,120.50");
+  });
+
+  it("adds the rate and the amount to each Detailed entry", () => {
+    const entry = { ...ENTRIES[0]!, rateMinor: 8000, amountMinor: 12000 };
+    const columns = detailedColumns(PREFS, USD);
+    expect(columns.map((c) => c.header).slice(-2)).toEqual(["Rate (USD)", "Amount (USD)"]);
+    expect(toCsv([entry], columns)).toContain(",1:30:00,80.00,120.00");
+    const unrated = { ...entry, rateMinor: null, amountMinor: null };
+    expect(toCsv([unrated], columns).trimEnd().endsWith(",1:30:00,,")).toBe(true);
+  });
+
+  it("adds each Weekly row's amount after its total", () => {
+    const columns = weeklyColumns(["2026-03-09"], PREFS, { currency: "JPY" });
+    expect(columns.map((c) => c.header).at(-1)).toBe("Amount (JPY)");
+    expect(
+      toCsv([{ id: "web", label: "Web", days: [3600], total: 3600, amountMinor: 5000 }], columns),
+    ).toContain("Web,1:00:00,1:00:00,5000");
   });
 });

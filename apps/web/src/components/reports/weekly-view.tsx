@@ -3,6 +3,7 @@
 import {
   addDaysInZone,
   formatDuration,
+  formatMoney,
   localDateKey,
   zonedDateTimeToInstant,
 } from "@timekeep/core";
@@ -114,12 +115,16 @@ export function WeeklyView() {
                   </TableHead>
                 ))}
                 <TableHead className="text-right">Total</TableHead>
+                {data.money ? <TableHead className="text-right">Amount</TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-muted-foreground py-8 text-center">
+                  <TableCell
+                    colSpan={data.money ? 10 : 9}
+                    className="text-muted-foreground py-8 text-center"
+                  >
                     No time this week.
                   </TableCell>
                 </TableRow>
@@ -150,6 +155,11 @@ export function WeeklyView() {
                     <TableCell className="text-right font-semibold tabular-nums">
                       {fmt(row.total)}
                     </TableCell>
+                    {data.money ? (
+                      <TableCell className="text-right tabular-nums">
+                        {formatMoney(row.amountMinor, data.money.currency)}
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))
               )}
@@ -169,6 +179,11 @@ export function WeeklyView() {
                 <TableCell className="text-right font-semibold tabular-nums">
                   {fmt(data.total)}
                 </TableCell>
+                {data.money ? (
+                  <TableCell className="text-right font-semibold tabular-nums">
+                    {formatMoney(data.amountMinor, data.money.currency)}
+                  </TableCell>
+                ) : null}
               </TableRow>
             </TableFooter>
           </Table>

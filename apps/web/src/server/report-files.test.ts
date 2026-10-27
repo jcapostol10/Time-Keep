@@ -74,9 +74,9 @@ describe("report files", () => {
     expect(file.filename).toBe("timekeep-summary-2026-03-09-2026-03-15.csv");
     expect(file.rowCount).toBe(2);
     const text = new TextDecoder().decode(file.body);
-    expect(text).toContain("Project,Duration,Billable,Entries\r\n");
-    expect(text).toContain("Web,1:30:00,0:00:00,1\r\n");
-    expect(text).toContain("No project,0:30:00,0:00:00,1\r\n");
+    expect(text).toContain("Project,Duration,Billable,Entries,Amount (USD)\r\n");
+    expect(text).toContain("Web,1:30:00,0:00:00,1,0.00\r\n");
+    expect(text).toContain("No project,0:30:00,0:00:00,1,0.00\r\n");
   });
 
   it("builds the detailed CSV with every entry, quoting where needed", async () => {
@@ -112,6 +112,7 @@ describe("report files", () => {
       "Duration",
       "Billable",
       "Entries",
+      "Amount (USD)",
     ]);
     expect(sheet.getRow(2).getCell(1).value).toBe("Web");
     expect(sheet.getRow(2).getCell(4).value).toBe(1);

@@ -14,6 +14,8 @@ export const DETAILED_COLUMNS = [
   { key: "date", label: "Date" },
   { key: "time", label: "Time" },
   { key: "duration", label: "Duration" },
+  /** Only when the viewer may see amounts. */
+  { key: "amount", label: "Amount" },
 ] as const;
 
 export type DetailedColumn = (typeof DETAILED_COLUMNS)[number]["key"];

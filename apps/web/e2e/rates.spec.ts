@@ -67,6 +67,13 @@ test.describe("rates", () => {
       { amount: "50", apply: "All entries, past and future" },
     );
     await waitForRecalc(page);
+    const latestJob = async () =>
+      (
+        (await (await page.request.get(`/api/w/${freshUser.slug}/rate-recalc`)).json()) as {
+          job: { id: string; status: string } | null;
+        }
+      ).job;
+    const applied = await latestJob();
     await openReport(page, freshUser.slug, "summary", around(day));
     await expect(totalRow(page)).toContainText("$100.00");
 
@@ -79,6 +86,8 @@ test.describe("rates", () => {
       amount: "80",
       apply: "New entries only",
     });
+    // No job re-rates past entries for "New entries only".
+    expect(await latestJob()).toEqual(applied);
     await openReport(page, freshUser.slug, "summary", around(day));
     await expect(totalRow(page)).toContainText("$100.00");
 
@@ -141,7 +150,12 @@ test.describe("rates", () => {
       .getByRole("region", { name: "Billable rate" })
       .getByRole("button", { name: "Change rate" })
       .click();
-    await expect(page.getByRole("dialog")).toBeVisible();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    // The dialog is fixed, so the page cannot scroll to what it hides: it must fit itself.
+    const box = await dialog.boundingBox();
+    expect(box?.x).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? Infinity)).toBeLessThanOrEqual(375);
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );

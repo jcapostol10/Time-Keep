@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDuration } from "@timekeep/core";
+import { formatDuration, formatMoney } from "@timekeep/core";
 import { Skeleton } from "@timekeep/ui/components/skeleton";
 
 import { detailedHref, detailedParams } from "@/lib/report-links";
@@ -29,6 +29,7 @@ export function SummaryView() {
             <p className="text-muted-foreground text-sm">
               {formatDuration(data.totals.billableSeconds, viewer.durationFormat)} billable ·{" "}
               {data.totals.entryCount} {data.totals.entryCount === 1 ? "entry" : "entries"}
+              {data.money ? ` · ${formatMoney(data.totals.amountMinor, data.money.currency)}` : ""}
             </p>
           ) : null}
         </div>

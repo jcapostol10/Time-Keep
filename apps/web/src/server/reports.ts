@@ -10,6 +10,7 @@ import {
   EMPTY_TOTALS,
   type GroupKey,
   groupRows,
+  type ReportGroup,
   localDateKey,
   NONE_ID,
   type ReportQuery,
@@ -42,6 +43,7 @@ import {
   user,
   userGroup,
   userGroupMember,
+  workspaceSettings,
 } from "@timekeep/db";
 import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -52,6 +54,7 @@ import type {
   DetailedPage,
   DetailedSort,
   ReportFilterOptions,
+  ReportMoney,
   SeriesPoint,
   SummaryReport,
   WeeklyReport,
@@ -161,6 +164,34 @@ const NON_BILLABLE =
     Number,
   );
 const COUNT = sql<number>`count(*)::int`;
+// Amounts count billable entries only; an unrated billable entry has a null amount.
+const AMOUNT =
+  sql`coalesce(sum(case when ${timeEntry.billable} then ${timeEntry.amountMinor} else 0 end), 0)::bigint`.mapWith(
+    Number,
+  );
+const UNRATED = sql<number>`(count(*) filter (where ${timeEntry.billable} and ${timeEntry.amountMinor} is null))::int`;
+
+/** The workspace currency when the viewer may see amounts, else null (and amounts read 0). */
+async function moneyFor(db: Executor, viewer: Viewer): Promise<ReportMoney> {
+  if (viewer.hideAmounts || !can(viewer.actor, "report.viewAmounts", { kind: "none" })) return null;
+  const settings = await db.query.workspaceSettings.findFirst({
+    where: eq(workspaceSettings.workspaceId, viewer.workspaceId),
+    columns: { currency: true },
+  });
+  return { currency: settings?.currency ?? "USD" };
+}
+
+function hideTotals(t: ReportTotals): ReportTotals {
+  return { ...t, amountMinor: 0, unratedCount: 0 };
+}
+
+function hideGroups(groups: ReportGroup[]): ReportGroup[] {
+  return groups.map((g) => ({
+    ...g,
+    totals: hideTotals(g.totals),
+    children: hideGroups(g.children),
+  }));
+}
 
 function localStart(tz: string): SQL {
   return sql`(${timeEntry.start} at time zone ${tz})`;
@@ -230,7 +261,13 @@ function groupExprs(key: GroupKey, prefs: ViewerPrefs): { id: SQL; label: SQL } 
 
 async function aggregateTotals(db: Executor, where: SQL): Promise<ReportTotals> {
   const [row] = await db
-    .select({ durationSeconds: DURATION, billableSeconds: BILLABLE, entryCount: COUNT })
+    .select({
+      durationSeconds: DURATION,
+      billableSeconds: BILLABLE,
+      entryCount: COUNT,
+      amountMinor: AMOUNT,
+      unratedCount: UNRATED,
+    })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
     .leftJoin(client, eq(client.id, project.clientId))
@@ -256,7 +293,14 @@ async function groupedRows(
   // index in SELECT and GROUP BY, which Postgres would not match.
   const ordinals = keys.flatMap((_, i) => [sql.raw(String(2 * i + 1)), sql.raw(String(2 * i + 2))]);
   const base = db
-    .select({ ...fields, durationSeconds: DURATION, billableSeconds: BILLABLE, entryCount: COUNT })
+    .select({
+      ...fields,
+      durationSeconds: DURATION,
+      billableSeconds: BILLABLE,
+      entryCount: COUNT,
+      amountMinor: AMOUNT,
+      unratedCount: UNRATED,
+    })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
     .leftJoin(client, eq(client.id, project.clientId))
@@ -276,6 +320,8 @@ async function groupedRows(
         durationSeconds: Number(rec.durationSeconds),
         billableSeconds: Number(rec.billableSeconds),
         entryCount: Number(rec.entryCount),
+        amountMinor: Number(rec.amountMinor),
+        unratedCount: Number(rec.unratedCount),
       },
     };
     keys.forEach((key, i) => {
@@ -305,6 +351,8 @@ async function seriesRows(
       b: BILLABLE.as("b"),
       nb: NON_BILLABLE.as("nb"),
       n: COUNT.as("n"),
+      a: AMOUNT.as("a"),
+      u: UNRATED.as("u"),
     })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
@@ -320,6 +368,8 @@ async function seriesRows(
       billableSeconds: sql`${grouped.b}`.mapWith(Number),
       nonBillableSeconds: sql`${grouped.nb}`.mapWith(Number),
       entryCount: sql`${grouped.n}`.mapWith(Number),
+      amountMinor: sql`${grouped.a}`.mapWith(Number),
+      unratedCount: sql`${grouped.u}`.mapWith(Number),
     })
     .from(grouped);
   const rows = new Map<string, { billableSeconds: number; nonBillableSeconds: number }>();
@@ -337,6 +387,8 @@ async function seriesRows(
       durationSeconds: acc.durationSeconds + r.billableSeconds + r.nonBillableSeconds,
       billableSeconds: acc.billableSeconds + r.billableSeconds,
       entryCount: acc.entryCount + r.entryCount,
+      amountMinor: acc.amountMinor + r.amountMinor,
+      unratedCount: acc.unratedCount + r.unratedCount,
     }),
     EMPTY_TOTALS,
   );
@@ -364,19 +416,21 @@ export async function summaryReport(
   // Below a tag level the join repeats a multi-tag entry, so the levels above it are
   // grouped again without the join.
   const tagAt = eff.groupBy.indexOf("tag");
-  const [rows, { series, totals }, prefixRows] = await Promise.all([
+  const [rows, { series, totals }, prefixRows, money] = await Promise.all([
     groupedRows(db, where, eff.groupBy, prefs),
     seriesRows(db, where, bucket, prefs, range),
     tagAt > 0 ? groupedRows(db, where, eff.groupBy.slice(0, tagAt), prefs) : undefined,
+    moneyFor(db, viewer),
   ]);
   const { groups } = groupRows(rows, eff.groupBy, totals, prefixRows);
   return {
+    money,
     range: { from: range.from.toISOString(), to: range.to.toISOString(), label: range.label },
     bucket,
     series,
     groupBy: eff.groupBy,
-    groups,
-    totals,
+    groups: money ? groups : hideGroups(groups),
+    totals: money ? totals : hideTotals(totals),
   };
 }
 
@@ -420,6 +474,8 @@ export async function detailedReport(
       start: timeEntry.start,
       end: timeEntry.end,
       durationSeconds: timeEntry.durationSeconds,
+      rateMinor: timeEntry.billableRateMinor,
+      amountMinor: timeEntry.amountMinor,
     })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
@@ -430,6 +486,7 @@ export async function detailedReport(
     .orderBy(order(sortColumn), order(timeEntry.id))
     .limit(limit + 1);
   const pageRows = rows.slice(0, limit);
+  const money = await moneyFor(db, viewer);
   const ids = pageRows.map((r) => r.id);
   const tagRows =
     ids.length > 0
@@ -459,6 +516,8 @@ export async function detailedReport(
       start: r.start.toISOString(),
       end: (r.end ?? r.start).toISOString(),
       durationSeconds: r.durationSeconds ?? 0,
+      rateMinor: money ? (r.rateMinor ?? null) : null,
+      amountMinor: money && r.billable ? (r.amountMinor ?? null) : null,
       userId: r.userId,
       projectId: r.projectId,
       projectColor: r.projectColor ?? null,
@@ -479,10 +538,11 @@ export async function detailedReport(
   // The range's totals are the first page's; later pages (an export's loop, Load more) skip them.
   const totals = page.cursor ? null : await aggregateTotals(db, and(...base)!);
   return {
+    money,
     range: { from: range.from.toISOString(), to: range.to.toISOString(), label: range.label },
     entries,
     nextCursor,
-    totals,
+    totals: totals && !money ? hideTotals(totals) : totals,
   };
 }
 
@@ -506,7 +566,13 @@ export async function weeklyReport(
       ? sql<string>`${user.name}`
       : sql<string>`coalesce(${project.name}, 'No project')`;
   const rows = await db
-    .select({ id: idExpr, label: labelExpr, dateKey: dateKeyExpr(tz), seconds: DURATION })
+    .select({
+      id: idExpr,
+      label: labelExpr,
+      dateKey: dateKeyExpr(tz),
+      seconds: DURATION,
+      amountMinor: AMOUNT,
+    })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
     .leftJoin(client, eq(client.id, project.clientId))
@@ -523,10 +589,20 @@ export async function weeklyReport(
       label: String(r.label),
       dateKey: String(r.dateKey),
       seconds: Number(r.seconds),
+      amountMinor: Number(r.amountMinor),
     })),
     dayKeys,
   );
-  return { weekStart: week.weekStart.toISOString(), dayKeys, by, ...grid };
+  const money = await moneyFor(db, viewer);
+  return {
+    money,
+    weekStart: week.weekStart.toISOString(),
+    dayKeys,
+    by,
+    ...grid,
+    rows: money ? grid.rows : grid.rows.map((r) => ({ ...r, amountMinor: 0 })),
+    amountMinor: money ? grid.amountMinor : 0,
+  };
 }
 
 /** The filter bar's options, by role: members get no Users filter. */

@@ -144,9 +144,9 @@ export function RateDialog({
             </RadioGroup>
             {apply === "from" ? (
               <div className="space-y-1 pl-6">
-                <Label htmlFor={`${id}-from`}>From</Label>
+                <Label htmlFor={`${id}-from-date`}>From</Label>
                 <Input
-                  id={`${id}-from`}
+                  id={`${id}-from-date`}
                   type="date"
                   value={from}
                   onChange={(e) => setFrom(e.target.value)}
