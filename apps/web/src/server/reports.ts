@@ -6,7 +6,7 @@ import {
   bucketKeyOfDay,
   bucketKeys,
   buildWeekly,
-  canReadTeam,
+  can,
   EMPTY_TOTALS,
   type GroupKey,
   groupRows,
@@ -40,6 +40,8 @@ import {
   timeEntry,
   timeEntryTag,
   user,
+  userGroup,
+  userGroupMember,
 } from "@timekeep/db";
 import type { SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
@@ -55,6 +57,7 @@ import type {
   WeeklyReport,
 } from "@/lib/report-types";
 
+import { scopeFilter } from "./authz";
 import { listClientOptions } from "./catalog/clients";
 import { listPickerProjects } from "./catalog/projects";
 import { listTagOptions } from "./catalog/tags";
@@ -75,9 +78,17 @@ import { listMembers } from "./queries/team";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
 
-/** The query the engine runs: a member's is pinned to their own entries. */
+/**
+ * The query the engine runs: a member's is pinned to their own entries. A
+ * manager's filters stay as given; `scopeFilter` then narrows the rows, so a
+ * person or group outside the scope matches nothing instead of widening it.
+ */
 export function effectiveQuery(query: ReportQuery, viewer: Viewer): ReportQuery {
-  return canReadTeam(viewer.role) ? query : { ...query, userIds: [viewer.userId] };
+  return canReadTeam(viewer) ? query : { ...query, userIds: [viewer.userId], groupIds: [] };
+}
+
+function canReadTeam(viewer: Viewer): boolean {
+  return can(viewer.actor, "report.readTeam", { kind: "none" });
 }
 
 function escapeLike(text: string): string {
@@ -117,7 +128,17 @@ function baseConditions(
     gte(timeEntry.start, range.from),
     lt(timeEntry.start, range.to),
   ];
+  const scope = scopeFilter(viewer.actor);
+  if (scope) conds.push(scope);
   if (eff.userIds.length > 0) conds.push(inArray(timeEntry.userId, eff.userIds));
+  if (eff.groupIds.length > 0) {
+    conds.push(
+      inArray(
+        timeEntry.userId,
+        sql`(select ${userGroupMember.userId} from ${userGroupMember} inner join ${userGroup} on ${userGroup.id} = ${userGroupMember.groupId} where ${userGroup.workspaceId} = ${viewer.workspaceId} and ${inArray(userGroupMember.groupId, eff.groupIds)})`,
+      ),
+    );
+  }
   if (eff.clientIds.length > 0) conds.push(idFilter(project.clientId, eff.clientIds));
   if (eff.projectIds.length > 0) conds.push(idFilter(timeEntry.projectId, eff.projectIds));
   if (eff.taskIds.length > 0) conds.push(idFilter(timeEntry.taskId, eff.taskIds));
@@ -539,24 +560,62 @@ async function formerMembers(
     .map((r) => ({ id: r.id, name: `${r.name} (former member)` }));
 }
 
+/**
+ * The people a scoped reader may filter by: themselves, the people they
+ * manage and anyone with time on a project they manage. null = everyone.
+ */
+async function inScopeUserIds(db: Executor, viewer: Viewer): Promise<Set<string> | null> {
+  if (!scopeFilter(viewer.actor)) return null;
+  const ids = new Set([viewer.userId, ...viewer.actor.managedUserIds]);
+  if (viewer.actor.managedProjectIds.size > 0) {
+    const rows = await db
+      .select({ userId: timeEntry.userId })
+      .from(timeEntry)
+      .where(
+        and(
+          eq(timeEntry.workspaceId, viewer.workspaceId),
+          isNull(timeEntry.deletedAt),
+          inArray(timeEntry.projectId, [...viewer.actor.managedProjectIds]),
+        ),
+      )
+      .groupBy(timeEntry.userId);
+    for (const r of rows) ids.add(r.userId);
+  }
+  return ids;
+}
+
 export async function reportFilterOptions(
   db: Executor,
   viewer: Viewer,
 ): Promise<ReportFilterOptions> {
-  const [members, clients, projects, tags] = await Promise.all([
-    canReadTeam(viewer.role)
-      ? listMembers(db as Database, viewer.workspaceId)
-      : Promise.resolve(null),
+  const team = canReadTeam(viewer);
+  const [members, clients, projects, tags, groups, scope] = await Promise.all([
+    team ? listMembers(db as Database, viewer.workspaceId) : Promise.resolve(null),
     listClientOptions(db, viewer.workspaceId),
     listPickerProjects(db, viewer),
     listTagOptions(db, viewer.workspaceId),
+    team
+      ? db
+          .select({ id: userGroup.id, name: userGroup.name })
+          .from(userGroup)
+          .where(eq(userGroup.workspaceId, viewer.workspaceId))
+          .orderBy(asc(userGroup.name))
+      : Promise.resolve(null),
+    team ? inScopeUserIds(db, viewer) : Promise.resolve(null),
   ]);
+  const inScope = (id: string) => !scope || scope.has(id);
   const active = members?.filter((m) => m.status === "ACTIVE") ?? null;
   const former = active
     ? await formerMembers(db, viewer.workspaceId, new Set(active.map((m) => m.userId)))
     : [];
   return {
-    users: active ? [...active.map((m) => ({ id: m.userId, name: m.name })), ...former] : null,
+    users: active
+      ? [
+          ...active.filter((m) => inScope(m.userId)).map((m) => ({ id: m.userId, name: m.name })),
+          ...former.filter((m) => inScope(m.id)),
+        ]
+      : null,
+    groups,
     clients: clients.filter((c) => !c.archived).map((c) => ({ id: c.id, name: c.name })),
     projects,
     tasks: projects.flatMap((p) =>

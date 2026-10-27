@@ -3,7 +3,13 @@ import { randomUUID } from "node:crypto";
 import { eq, exportJob } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../test/db";
+import {
+  connectTestDb,
+  createTestUser,
+  createTestWorkspace,
+  truncateAll,
+  asViewer,
+} from "../../test/db";
 import { routeParams } from "../../test/route-env";
 import type { AuthSession } from "./auth";
 import type * as ReportFiles from "./report-files";
@@ -73,19 +79,15 @@ describe("report routes", () => {
       user: alice,
       session: { id: randomUUID(), userId: alice.id },
     } as unknown as AuthSession;
-    await createManualEntry(
-      db,
-      { workspaceId, userId: alice.id, role: "owner" },
-      {
-        description: "Site work",
-        projectId: null,
-        taskId: null,
-        tagIds: [],
-        billable: false,
-        start: new Date(Date.now() - 2 * 3_600_000),
-        end: new Date(Date.now() - 3_600_000),
-      },
-    );
+    await createManualEntry(db, asViewer({ workspaceId, userId: alice.id, role: "owner" }), {
+      description: "Site work",
+      projectId: null,
+      taskId: null,
+      tagIds: [],
+      billable: false,
+      start: new Date(Date.now() - 2 * 3_600_000),
+      end: new Date(Date.now() - 3_600_000),
+    });
   });
 
   it("answers a malformed Detailed cursor with 400, not a database error", async () => {

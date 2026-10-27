@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { SharedList } from "@/components/reports/shared-list";
 import { listShareLinks } from "@/server/share-links";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Shared reports" };
 
@@ -18,11 +19,7 @@ export default async function SharedReportsPage({
     "member",
     `/w/${workspaceSlug}/reports/shared`,
   );
-  const links = await listShareLinks(getDb(), {
-    workspaceId: ctx.workspace.id,
-    userId: ctx.user.id,
-    role: ctx.role,
-  });
+  const links = await listShareLinks(getDb(), await viewerFor(ctx));
   return (
     <>
       <PageHeader

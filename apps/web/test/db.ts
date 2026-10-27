@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 
+import { type Actor, DEFAULT_PERMISSION_SETTINGS, type Role } from "@timekeep/core";
 import { createDb, type Database, type DbHandle, membership, sql, user } from "@timekeep/db";
 
+import type { Viewer } from "@/server/catalog/viewer";
 import { createWorkspace } from "@/server/workspaces";
 
 import { assertSafeTestDatabaseUrl } from "./safe-test-db";
@@ -47,4 +49,23 @@ export async function addMember(
   status: "ACTIVE" | "DEACTIVATED" = "ACTIVE",
 ) {
   await db.insert(membership).values({ id: randomUUID(), workspaceId, userId, role, status });
+}
+
+/**
+ * A viewer without a database round trip: owners, admins and members need no
+ * scope; pass a manager's people and projects explicitly (or use authz
+ * `loadViewer` to read them from the tables).
+ */
+export function asViewer(
+  v: { workspaceId: string; userId: string; role: Role },
+  scope: { userIds?: string[]; projectIds?: string[] } = {},
+): Viewer {
+  const actor: Actor = {
+    userId: v.userId,
+    role: v.role,
+    managedUserIds: new Set(scope.userIds ?? []),
+    managedProjectIds: new Set(scope.projectIds ?? []),
+    settings: DEFAULT_PERMISSION_SETTINGS,
+  };
+  return { ...v, actor };
 }

@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../../test/db";
+import {
+  connectTestDb,
+  createTestUser,
+  createTestWorkspace,
+  truncateAll,
+  asViewer,
+} from "../../../test/db";
 import { createManualEntry, type EntryScope, listEntriesInRange } from "../time-entries";
 import { createTag, deleteTag, listTagOptions, listTags, updateTag } from "./tags";
 
@@ -35,8 +41,8 @@ describe("tags service", () => {
     const bob = await createTestUser(db, "Bob B");
     const ws = await createTestWorkspace(db, "Workspace A", alice.id);
     const wsB = await createTestWorkspace(db, "Workspace B", bob.id);
-    scope = { workspaceId: ws.id, userId: alice.id, role: "owner" };
-    other = { workspaceId: wsB.id, userId: bob.id, role: "owner" };
+    scope = asViewer({ workspaceId: ws.id, userId: alice.id, role: "owner" });
+    other = asViewer({ workspaceId: wsB.id, userId: bob.id, role: "owner" });
   });
 
   it("lists with usage counts and hides archived tags unless asked", async () => {

@@ -26,17 +26,18 @@ import {
 import type { Viewer } from "@/server/catalog/viewer";
 import { countProjectEntries } from "@/server/time-entries";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 /** Projects are managed by admins only (decision 1 of the Phase 2 design); favourites are per member. */
 
 async function adminViewer(slug: string): Promise<Viewer> {
   const ctx = await requireWorkspaceAccess(slug, "admin");
-  return { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  return await viewerFor(ctx);
 }
 
 async function memberViewer(slug: string): Promise<Viewer> {
   const ctx = await requireWorkspaceAccess(slug);
-  return { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  return await viewerFor(ctx);
 }
 
 function refresh(slug: string) {

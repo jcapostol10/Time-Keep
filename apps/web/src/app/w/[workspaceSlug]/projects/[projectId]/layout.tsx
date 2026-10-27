@@ -7,6 +7,7 @@ import { ColorDot } from "@/components/tracker/project-picker";
 import { CatalogError } from "@/server/catalog/errors";
 import { getProject } from "@/server/catalog/projects";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 /** Project detail pages are for admins (decision 2 of the Phase 2 design). */
 export default async function ProjectLayout({
@@ -19,7 +20,7 @@ export default async function ProjectLayout({
     "admin",
     `/w/${workspaceSlug}/projects/${projectId}`,
   );
-  const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  const viewer = await viewerFor(ctx);
   const project = await getProject(getDb(), viewer, projectId).catch((error: unknown) => {
     if (error instanceof CatalogError && error.code === "NOT_FOUND") notFound();
     throw error;

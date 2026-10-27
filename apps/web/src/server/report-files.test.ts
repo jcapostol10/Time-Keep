@@ -2,7 +2,13 @@ import { DEFAULT_REPORT_QUERY, type ReportQuery, type ViewerPrefs } from "@timek
 import ExcelJS from "exceljs";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../test/db";
+import {
+  connectTestDb,
+  createTestUser,
+  createTestWorkspace,
+  truncateAll,
+  asViewer,
+} from "../../test/db";
 import { createProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { buildExport, countExportRows } from "./report-files";
@@ -37,7 +43,7 @@ describe("report files", () => {
     await truncateAll(db);
     const alice = await createTestUser(db, "Alice A");
     const ws = await createTestWorkspace(db, "Workspace A", alice.id);
-    viewer = { workspaceId: ws.id, userId: alice.id, role: "owner" };
+    viewer = asViewer({ workspaceId: ws.id, userId: alice.id, role: "owner" });
     const web = await createProject(db, viewer, { name: "Web" });
     const base = { taskId: null, tagIds: [], billable: false };
     await createManualEntry(db, viewer, {

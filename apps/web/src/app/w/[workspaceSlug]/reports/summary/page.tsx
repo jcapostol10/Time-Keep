@@ -9,6 +9,7 @@ import { trackerKeys } from "@/components/tracker/query-keys";
 import { searchParamsOf } from "@/lib/search-params";
 import { reportFilterOptions, summaryReport } from "@/server/reports";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Summary report" };
 
@@ -23,7 +24,7 @@ export default async function SummaryReportPage({
     "member",
     `/w/${workspaceSlug}/reports/summary`,
   );
-  const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  const viewer = await viewerFor(ctx);
   const prefs = resolveViewerPrefs(ctx.user, ctx.settings);
   const query = parseReportQuery(searchParamsOf(raw));
   const key = reportQueryToSearchParams(query).toString();

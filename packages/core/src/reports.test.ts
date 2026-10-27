@@ -40,11 +40,12 @@ describe("report query", () => {
       projectIds: [],
     });
     const params = new URLSearchParams(
-      "preset=last-month&projectIds=p1&projectIds=none&tagIds=t1&tagMode=and&billable=yes&groupBy=client&groupBy=project&description=site",
+      "preset=last-month&groupIds=g1&projectIds=p1&projectIds=none&tagIds=t1&tagMode=and&billable=yes&groupBy=client&groupBy=project&description=site",
     );
     const parsed = parseReportQuery(params);
     expect(parsed).toMatchObject({
       preset: "last-month",
+      groupIds: ["g1"],
       projectIds: ["p1", "none"],
       tagIds: ["t1"],
       tagMode: "and",

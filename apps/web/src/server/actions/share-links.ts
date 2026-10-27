@@ -9,6 +9,7 @@ import { userErrorMessage } from "@/server/actions/errors";
 import { env } from "@/server/env";
 import { createShareLink, isShareExpiry, revokeShareLink } from "@/server/share-links";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 const createSchema = z.object({
   kind: z.enum(REPORT_KINDS),
@@ -29,7 +30,7 @@ export async function createShareLinkAction(
     if (!parsed.success) return fromZodError(parsed.error);
     const { kind, params, title, expiresInDays } = parsed.data;
     if (expiresInDays !== null && !isShareExpiry(expiresInDays)) return fail("Invalid expiry.");
-    const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+    const viewer = await viewerFor(ctx);
     const created = await createShareLink(
       getDb(),
       viewer,
@@ -50,7 +51,7 @@ export async function createShareLinkAction(
 export async function revokeShareLinkAction(slug: string, id: string): Promise<ActionResult> {
   try {
     const ctx = await requireWorkspaceAccess(slug);
-    const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+    const viewer = await viewerFor(ctx);
     await revokeShareLink(getDb(), viewer, id);
     return ok(undefined);
   } catch (error) {

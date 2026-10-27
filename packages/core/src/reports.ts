@@ -75,6 +75,8 @@ export const reportQuerySchema = z
     from: z.iso.datetime({ offset: true }).optional(),
     to: z.iso.datetime({ offset: true }).optional(),
     userIds: idList,
+    /** User groups, expanded to their members at query time. */
+    groupIds: idList,
     clientIds: idList,
     projectIds: idList,
     taskIds: idList,
@@ -106,7 +108,15 @@ export const reportQuerySchema = z
 export type ReportQuery = z.infer<typeof reportQuerySchema>;
 export type ReportQueryInput = z.input<typeof reportQuerySchema>;
 
-const ARRAY_KEYS = ["userIds", "clientIds", "projectIds", "taskIds", "tagIds", "groupBy"] as const;
+const ARRAY_KEYS = [
+  "userIds",
+  "groupIds",
+  "clientIds",
+  "projectIds",
+  "taskIds",
+  "tagIds",
+  "groupBy",
+] as const;
 const SCALAR_KEYS = [
   "preset",
   "from",

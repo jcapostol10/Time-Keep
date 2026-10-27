@@ -4,6 +4,7 @@ import { listPickerProjects } from "@/server/catalog/projects";
 import { listTagOptions } from "@/server/catalog/tags";
 import { listRecentDescriptions } from "@/server/time-entries";
 import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 /** Picker data for the timer bar: projects, tags and the caller's recent descriptions. */
 export async function GET(
@@ -14,7 +15,7 @@ export async function GET(
     const { workspaceSlug } = await ctx.params;
     const access = await requireWorkspaceAccess(workspaceSlug);
     const db = getDb();
-    const scope = { workspaceId: access.workspace.id, userId: access.user.id, role: access.role };
+    const scope = await viewerFor(access);
     const [projects, tagRows, recent] = await Promise.all([
       listPickerProjects(db, scope),
       listTagOptions(db, scope.workspaceId),

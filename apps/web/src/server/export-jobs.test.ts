@@ -8,6 +8,7 @@ import {
   createTestUser,
   createTestWorkspace,
   truncateAll,
+  asViewer,
 } from "../../test/db";
 import type { Viewer } from "./catalog/viewer";
 import {
@@ -51,8 +52,8 @@ describe("export jobs", () => {
     const b = await createTestUser(db, "Bob B");
     const ws = await createTestWorkspace(db, "Workspace A", a.id);
     await addMember(db, ws.id, b.id, "member");
-    alice = { workspaceId: ws.id, userId: a.id, role: "owner" };
-    bob = { workspaceId: ws.id, userId: b.id, role: "member" };
+    alice = asViewer({ workspaceId: ws.id, userId: a.id, role: "owner" });
+    bob = asViewer({ workspaceId: ws.id, userId: b.id, role: "member" });
     for (let i = 0; i < 3; i++) {
       await createManualEntry(db, alice, {
         description: `Work ${i}`,

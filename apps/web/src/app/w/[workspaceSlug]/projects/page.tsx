@@ -9,6 +9,7 @@ import { ProjectsToolbar } from "@/components/projects/projects-toolbar";
 import { listClientOptions } from "@/server/catalog/clients";
 import { listProjects } from "@/server/catalog/projects";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Projects" };
 
@@ -19,7 +20,7 @@ export default async function ProjectsPage({
   const { workspaceSlug } = await params;
   const raw = await searchParams;
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/projects`);
-  const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  const viewer = await viewerFor(ctx);
   const canManage = canManageCatalog(ctx.role);
 
   // Unknown or malformed filters fall back to the defaults rather than erroring.

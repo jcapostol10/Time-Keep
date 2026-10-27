@@ -9,6 +9,7 @@
 import { DEFAULT_REPORT_QUERY, resolveViewerPrefs, type ReportQuery } from "@timekeep/core";
 import { createDb, sql } from "@timekeep/db";
 
+import { loadViewer } from "../src/server/authz";
 import { summaryReport } from "../src/server/reports";
 
 const BUDGET_MS = 1000;
@@ -24,7 +25,7 @@ async function main() {
     );
     const ownerId = owner.rows[0]?.id;
     if (!ownerId) throw new Error("No perf tenant: run pnpm db:seed:perf first");
-    const viewer = { workspaceId: "perf-ws", userId: ownerId, role: "owner" as const };
+    const viewer = await loadViewer(db, "perf-ws", ownerId);
     const prefs = resolveViewerPrefs(
       { timezone: "Asia/Manila" },
       { timezone: "Asia/Manila", timeFormat: "24h", durationFormat: "hh:mm:ss", weekStart: 1 },

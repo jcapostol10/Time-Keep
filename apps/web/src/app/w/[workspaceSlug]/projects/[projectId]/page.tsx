@@ -5,6 +5,7 @@ import { TasksTab } from "@/components/projects/tasks-tab";
 import { listTasks } from "@/server/catalog/tasks";
 import { listMembers } from "@/server/queries/team";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Tasks" };
 
@@ -13,7 +14,7 @@ export default async function ProjectTasksPage({
 }: PageProps<"/w/[workspaceSlug]/projects/[projectId]">) {
   const { workspaceSlug, projectId } = await params;
   const ctx = await requireWorkspacePage(workspaceSlug, "admin");
-  const viewer = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  const viewer = await viewerFor(ctx);
   const db = getDb();
   const [tasks, members] = await Promise.all([
     listTasks(db, viewer, projectId),

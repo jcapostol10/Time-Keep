@@ -1,7 +1,13 @@
 import { DEFAULT_REPORT_QUERY, type ViewerPrefs } from "@timekeep/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../test/db";
+import {
+  connectTestDb,
+  createTestUser,
+  createTestWorkspace,
+  truncateAll,
+  asViewer,
+} from "../../test/db";
 import { routeParams } from "../../test/route-env";
 
 await vi.hoisted(async () => {
@@ -34,7 +40,7 @@ describe("the shared report's export", () => {
   it("refuses a report over the job threshold with 413, since no one could own the job", async () => {
     const alice = await createTestUser(db, "Alice A");
     const ws = await createTestWorkspace(db, "Workspace A", alice.id);
-    const viewer = { workspaceId: ws.id, userId: alice.id, role: "owner" as const };
+    const viewer = asViewer({ workspaceId: ws.id, userId: alice.id, role: "owner" });
     const share = (title: string) =>
       createShareLink(
         db,

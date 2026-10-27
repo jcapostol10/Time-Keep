@@ -1,7 +1,7 @@
 import "server-only";
 
 import {
-  canReadTeam,
+  can,
   type ReportGroup,
   type ReportQuery,
   type ReportTotals,
@@ -12,6 +12,7 @@ import { and, asc, type Database, desc, eq, isNull, project, timeEntry } from "@
 import { detailedParams } from "@/lib/report-links";
 import type { SeriesPoint } from "@/lib/report-types";
 
+import { scopeFilter } from "./authz";
 import type { Viewer } from "./catalog/viewer";
 import { listMembers } from "./queries/team";
 import { summaryReport } from "./reports";
@@ -108,7 +109,11 @@ export interface TeamMember {
   running: boolean;
 }
 
-/** Every active member's total for the range, latest entry and whether a timer runs now. */
+/**
+ * Every active member's total for the range, latest entry and whether a
+ * timer runs now. A manager sees themselves and the people they manage, with
+ * only the entries in their scope.
+ */
 export async function dashboardTeam(
   db: Database,
   viewer: Viewer,
@@ -116,7 +121,7 @@ export async function dashboardTeam(
   prefs: ViewerPrefs,
   now = new Date(),
 ): Promise<TeamMember[]> {
-  if (!canReadTeam(viewer.role)) {
+  if (!can(viewer.actor, "report.readTeam", { kind: "none" })) {
     throw new WorkspaceAccessError(403, "Only owners, admins and managers see the team.");
   }
   const [members, byUser, latestRows] = await Promise.all([
@@ -132,13 +137,22 @@ export async function dashboardTeam(
       })
       .from(timeEntry)
       .leftJoin(project, eq(project.id, timeEntry.projectId))
-      .where(and(eq(timeEntry.workspaceId, viewer.workspaceId), isNull(timeEntry.deletedAt)))
+      .where(
+        and(
+          eq(timeEntry.workspaceId, viewer.workspaceId),
+          isNull(timeEntry.deletedAt),
+          scopeFilter(viewer.actor),
+        ),
+      )
       .orderBy(asc(timeEntry.userId), desc(timeEntry.start)),
   ]);
   const totals = new Map(byUser.groups.map((g) => [g.id, g.totals.durationSeconds]));
   const latest = new Map(latestRows.map((r) => [r.userId, r]));
+  const scoped = scopeFilter(viewer.actor) !== undefined;
+  const listed = (userId: string) =>
+    !scoped || userId === viewer.userId || viewer.actor.managedUserIds.has(userId);
   return members
-    .filter((m) => m.status === "ACTIVE")
+    .filter((m) => m.status === "ACTIVE" && listed(m.userId))
     .map((m): TeamMember => {
       const l = latest.get(m.userId);
       return {

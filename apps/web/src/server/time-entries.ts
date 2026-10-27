@@ -7,7 +7,6 @@ import {
   computeDurationSeconds,
   type EntryDetails,
   MAX_ENTRY_SECONDS,
-  type Role,
   TIMER_STOP_FUTURE_GRACE_MS,
   trackingBlock,
   validateEntryRange,
@@ -47,6 +46,7 @@ import type {
 } from "@/lib/tracker-types";
 
 import { CatalogError } from "./catalog/errors";
+import type { Viewer } from "./catalog/viewer";
 
 /**
  * The single write path for time entries. Server actions and route handlers
@@ -59,11 +59,8 @@ import { CatalogError } from "./catalog/errors";
  * the user may put time on (private projects need membership).
  */
 
-export interface EntryScope {
-  workspaceId: string;
-  userId: string;
-  role: Role;
-}
+/** The person whose entries are read and written, with their role and scope. */
+export type EntryScope = Viewer;
 
 export class TimeEntryError extends Error {
   constructor(

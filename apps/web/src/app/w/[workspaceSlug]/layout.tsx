@@ -7,6 +7,7 @@ import { TrackerProvider } from "@/components/tracker/tracker-provider";
 import { getTrackerSettings } from "@/server/queries/user-settings";
 import { getRunningEntry } from "@/server/time-entries";
 import { listUserWorkspaces, requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 export default async function WorkspaceLayout({
   children,
@@ -17,7 +18,7 @@ export default async function WorkspaceLayout({
   const db = getDb();
   const [workspaces, running, trackerSettings] = await Promise.all([
     listUserWorkspaces(db, ctx.user.id),
-    getRunningEntry(db, { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role }),
+    getRunningEntry(db, await viewerFor(ctx)),
     getTrackerSettings(db, ctx.user.id),
   ]);
   const viewer = resolveViewerPrefs(ctx.user, ctx.settings);

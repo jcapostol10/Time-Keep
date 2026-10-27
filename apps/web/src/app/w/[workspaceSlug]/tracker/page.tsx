@@ -10,6 +10,7 @@ import { listPickerProjects } from "@/server/catalog/projects";
 import { listTags } from "@/server/catalog/tags";
 import { listEntriesPage, listRecentDescriptions } from "@/server/time-entries";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Time Tracker" };
 
@@ -22,7 +23,7 @@ export default async function TrackerPage({
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/tracker`);
   const viewer = resolveViewerPrefs(ctx.user, ctx.settings);
   const db = getDb();
-  const scope = { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  const scope = await viewerFor(ctx);
 
   const [firstPage, projects, tagRows, recent] = await Promise.all([
     listEntriesPage(db, scope, { tz: viewer.timezone, weekStart: viewer.weekStart }),

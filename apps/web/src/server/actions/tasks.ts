@@ -11,12 +11,13 @@ import { userErrorMessage } from "@/server/actions/errors";
 import { createTask, deleteTask, updateTask } from "@/server/catalog/tasks";
 import type { Viewer } from "@/server/catalog/viewer";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
+import { viewerFor } from "@/server/authz";
 
 /** Tasks are managed by admins only (decision 1 of the Phase 2 design). */
 
 async function adminViewer(slug: string): Promise<Viewer> {
   const ctx = await requireWorkspaceAccess(slug, "admin");
-  return { workspaceId: ctx.workspace.id, userId: ctx.user.id, role: ctx.role };
+  return await viewerFor(ctx);
 }
 
 export async function createTaskAction(

@@ -3,7 +3,13 @@ import { existsSync } from "node:fs";
 import { DEFAULT_REPORT_QUERY, type ReportQuery, type ViewerPrefs } from "@timekeep/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../test/db";
+import {
+  connectTestDb,
+  createTestUser,
+  createTestWorkspace,
+  truncateAll,
+  asViewer,
+} from "../../test/db";
 import { createProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { buildPdfExport, localChromePath, renderReportHtml } from "./report-pdf";
@@ -37,7 +43,7 @@ describe("PDF export", () => {
     await truncateAll(db);
     const alice = await createTestUser(db, "Alice A");
     const ws = await createTestWorkspace(db, "Acme <Ops>", alice.id);
-    viewer = { workspaceId: ws.id, userId: alice.id, role: "owner" };
+    viewer = asViewer({ workspaceId: ws.id, userId: alice.id, role: "owner" });
     const web = await createProject(db, viewer, { name: "Web & <Apps>" });
     await createManualEntry(db, viewer, {
       description: "Site work",

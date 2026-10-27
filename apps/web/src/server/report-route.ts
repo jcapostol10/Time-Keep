@@ -14,6 +14,7 @@ import type { DetailedSort } from "@/lib/report-types";
 
 import type { Viewer } from "./catalog/viewer";
 import { BadRequestError, requireWorkspaceAccess, routeErrorResponse } from "./workspace-access";
+import { viewerFor } from "@/server/authz";
 
 const pageSchema = z.object({
   sort: z.enum(["start", "duration"]).default("start"),
@@ -70,7 +71,7 @@ export async function reportRoute<T>(
     const params = new URL(request.url).searchParams;
     const body = await handler({
       db: getDb(),
-      viewer: { workspaceId: access.workspace.id, userId: access.user.id, role: access.role },
+      viewer: await viewerFor(access),
       prefs: resolveViewerPrefs(access.user, access.settings),
       query: parseReportQuery(params),
       params,

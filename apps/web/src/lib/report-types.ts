@@ -69,6 +69,8 @@ export interface WeeklyReport {
 export interface ReportFilterOptions {
   /** null for members: they only ever see their own time. */
   users: { id: string; name: string }[] | null;
+  /** null for members, like users. */
+  groups: { id: string; name: string }[] | null;
   clients: { id: string; name: string }[];
   projects: PickerProject[];
   tasks: { id: string; name: string; projectId: string }[];
