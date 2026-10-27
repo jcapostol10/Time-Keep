@@ -156,7 +156,9 @@ export async function runRateRecalcJob(
             and(
               entriesFrom(job.workspaceId, job.from),
               cursor
-                ? sql`(${timeEntry.start}, ${timeEntry.id}) > (${cursor.start}, ${cursor.id})`
+                ? // The cursor entry's own start, read in SQL: a JavaScript Date keeps
+                  // milliseconds only, and the column holds microseconds.
+                  sql`(${timeEntry.start}, ${timeEntry.id}) > (coalesce((select c."start" from "time_entry" c where c."id" = ${cursor.id}), ${cursor.start}), ${cursor.id})`
                 : undefined,
             ),
           )

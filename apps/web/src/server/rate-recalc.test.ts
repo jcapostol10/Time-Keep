@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, rate, rateEntriesSql, rateRecalcJob, timeEntry } from "@timekeep/db";
+import { and, eq, rate, rateEntriesSql, rateRecalcJob, sql, timeEntry } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../test/db";
@@ -83,6 +83,31 @@ describe("the apply-to-past-entries job", () => {
       error: null,
     });
     expect(await amounts()).toEqual(Array(12).fill(5000));
+  });
+
+  it("finishes over starts with microseconds, which a JavaScript Date cannot hold", async () => {
+    // As SQL writes them (now() - an interval): the cursor must not lose precision, or the
+    // last batch re-reads its own last entry forever.
+    await db.execute(sql`
+      insert into time_entry (id, workspace_id, user_id, billable, start, "end", duration_seconds)
+      select 'micro-' || g, ${me.workspaceId}, ${me.userId}, true,
+             timestamptz '2026-03-02 01:00:00.123456+00' + make_interval(secs => g * 60),
+             timestamptz '2026-03-02 02:00:00.123456+00' + make_interval(secs => g * 60), 3600
+      from generate_series(1, 12) g`);
+    await addRate(5000, new Date(0));
+    const { jobId } = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0));
+    let batches = 0;
+    await runRateRecalcJob(db, jobId, {
+      batchSize: 5,
+      afterBatch: () => {
+        if (++batches > 10) throw new Error("the job does not end");
+      },
+    });
+    expect(await latestRateRecalc(db, me.workspaceId)).toMatchObject({
+      status: "done",
+      processed: 12,
+    });
+    expect(batches).toBe(3);
   });
 
   it("only touches entries from the job's date", async () => {
