@@ -7,9 +7,10 @@ import { ColorDot } from "@/components/tracker/project-picker";
 import { CatalogError } from "@/server/catalog/errors";
 import { getProject } from "@/server/catalog/projects";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { viewerFor } from "@/server/authz";
+import { authorizePage, authorizeProject } from "@/server/authz";
+import { can } from "@timekeep/core";
 
-/** Project detail pages are for admins (decision 2 of the Phase 2 design). */
+/** Project detail pages are for admins and the project's managers (the permission matrix). */
 export default async function ProjectLayout({
   children,
   params,
@@ -17,10 +18,10 @@ export default async function ProjectLayout({
   const { workspaceSlug, projectId } = await params;
   const ctx = await requireWorkspacePage(
     workspaceSlug,
-    "admin",
+    "member",
     `/w/${workspaceSlug}/projects/${projectId}`,
   );
-  const viewer = await viewerFor(ctx);
+  const viewer = await authorizePage(() => authorizeProject(ctx, "project.update", projectId));
   const project = await getProject(getDb(), viewer, projectId).catch((error: unknown) => {
     if (error instanceof CatalogError && error.code === "NOT_FOUND") notFound();
     throw error;
@@ -44,7 +45,11 @@ export default async function ProjectLayout({
           {project.billable ? " · Billable by default" : ""}
         </p>
       </div>
-      <ProjectTabs slug={workspaceSlug} projectId={projectId} />
+      <ProjectTabs
+        slug={workspaceSlug}
+        projectId={projectId}
+        showRates={can(viewer.actor, "rate.view", { kind: "none" })}
+      />
       <div className="mt-6">{children}</div>
     </>
   );

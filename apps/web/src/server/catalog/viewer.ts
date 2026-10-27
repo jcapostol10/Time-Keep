@@ -1,6 +1,6 @@
 import "server-only";
 
-import { type Actor, canManageCatalog, type Role } from "@timekeep/core";
+import { type Actor, can, type Role } from "@timekeep/core";
 import { eq, or, project, sql } from "@timekeep/db";
 import type { SQL } from "drizzle-orm";
 
@@ -23,7 +23,14 @@ export interface Viewer {
  * the workspace filter; never use alone.
  */
 export function visibleProjectFilter(viewer: Viewer): SQL | undefined {
-  if (canManageCatalog(viewer.role)) return undefined;
+  // Whoever may see a private project they are not on (owners, admins) sees all.
+  const unfiltered = can(viewer.actor, "project.view", {
+    kind: "project",
+    projectId: null,
+    visibility: "PRIVATE",
+    isMember: false,
+  });
+  if (unfiltered) return undefined;
   return or(
     eq(project.visibility, "PUBLIC"),
     sql`EXISTS (SELECT 1 FROM "project_member" pm WHERE pm."project_id" = ${project.id} AND pm."user_id" = ${viewer.userId})`,

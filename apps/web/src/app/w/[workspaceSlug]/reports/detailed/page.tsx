@@ -10,7 +10,7 @@ import { detailedKey, type DetailedPaging } from "@/lib/report-types";
 import { searchParamsOf } from "@/lib/search-params";
 import { detailedReport, reportFilterOptions } from "@/server/reports";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { viewerFor } from "@/server/authz";
+import { authorize, authorizePage } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Detailed report" };
 
@@ -27,7 +27,9 @@ export default async function DetailedReportPage({
     "member",
     `/w/${workspaceSlug}/reports/detailed`,
   );
-  const viewer = await viewerFor(ctx);
+  const viewer = await authorizePage(() =>
+    authorize(ctx, "page.view", { kind: "page", page: "reports" }),
+  );
   const prefs = resolveViewerPrefs(ctx.user, ctx.settings);
   const search = searchParamsOf(raw);
   const query = parseReportQuery(search);

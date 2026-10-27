@@ -18,7 +18,6 @@ import {
   resolveReportRange,
 } from "./reports";
 import type { ViewerPrefs } from "./prefs";
-import { canReadTeam } from "./roles";
 
 const MANILA = { timezone: "Asia/Manila", weekStart: 1 as const };
 const NY_SUNDAY = { timezone: "America/New_York", weekStart: 0 as const };
@@ -319,15 +318,6 @@ describe("buildWeekly", () => {
     ]);
     expect(dayTotals).toEqual([3600, 1800, 7200, 0, 0, 0, 0]);
     expect(total).toBe(12600);
-  });
-});
-
-describe("canReadTeam", () => {
-  it("is true for owners, admins and managers only", () => {
-    expect(canReadTeam("owner")).toBe(true);
-    expect(canReadTeam("admin")).toBe(true);
-    expect(canReadTeam("manager")).toBe(true);
-    expect(canReadTeam("member")).toBe(false);
   });
 });
 

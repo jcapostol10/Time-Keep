@@ -1,4 +1,4 @@
-import { hasMinRole, ROLE_LABELS } from "@timekeep/core";
+import { can, ROLE_LABELS } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 import { Avatar, AvatarFallback, AvatarImage } from "@timekeep/ui/components/avatar";
 import { Badge } from "@timekeep/ui/components/badge";
@@ -18,13 +18,17 @@ import { InviteDialog } from "@/components/team/invite-dialog";
 import { PendingInvites } from "@/components/team/pending-invites";
 import { listMembers, listPendingInvitations } from "@/server/queries/team";
 import { requireWorkspacePage } from "@/server/workspace-access";
+import { authorize, authorizePage } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Team" };
 
 export default async function TeamPage({ params }: PageProps<"/w/[workspaceSlug]/team">) {
   const { workspaceSlug } = await params;
   const ctx = await requireWorkspacePage(workspaceSlug);
-  const canManage = hasMinRole(ctx.role, "admin");
+  const viewer = await authorizePage(() =>
+    authorize(ctx, "page.view", { kind: "page", page: "team" }),
+  );
+  const canManage = can(viewer.actor, "member.invite", { kind: "none" });
 
   const db = getDb();
   const [members, invites] = await Promise.all([

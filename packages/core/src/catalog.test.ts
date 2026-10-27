@@ -1,33 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { canManageCatalog, canSeeProject, trackingBlock } from "./catalog";
-
-describe("canManageCatalog", () => {
-  it("allows owners and admins only", () => {
-    expect(canManageCatalog("owner")).toBe(true);
-    expect(canManageCatalog("admin")).toBe(true);
-    expect(canManageCatalog("manager")).toBe(false);
-    expect(canManageCatalog("member")).toBe(false);
-  });
-});
-
-describe("canSeeProject", () => {
-  it("lets admins see private projects they are not on", () => {
-    expect(canSeeProject({ role: "admin", visibility: "PRIVATE", isMember: false })).toBe(true);
-    expect(canSeeProject({ role: "owner", visibility: "PRIVATE", isMember: false })).toBe(true);
-  });
-
-  it("shows members public projects, and private ones only when they are on them", () => {
-    expect(canSeeProject({ role: "member", visibility: "PUBLIC", isMember: false })).toBe(true);
-    expect(canSeeProject({ role: "member", visibility: "PRIVATE", isMember: false })).toBe(false);
-    expect(canSeeProject({ role: "member", visibility: "PRIVATE", isMember: true })).toBe(true);
-  });
-
-  it("treats managers as members until Phase 4", () => {
-    expect(canSeeProject({ role: "manager", visibility: "PRIVATE", isMember: false })).toBe(false);
-    expect(canSeeProject({ role: "manager", visibility: "PRIVATE", isMember: true })).toBe(true);
-  });
-});
+import { trackingBlock } from "./catalog";
 
 describe("trackingBlock", () => {
   const live = { id: "p1", archived: false };

@@ -3,7 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
-  canSeeProject,
+  can,
   computeDurationSeconds,
   type EntryDetails,
   MAX_ENTRY_SECONDS,
@@ -27,7 +27,6 @@ import {
   ne,
   type Project,
   project,
-  projectMember,
   sql,
   type Tag,
   tag,
@@ -47,6 +46,7 @@ import type {
 
 import { CatalogError } from "./catalog/errors";
 import type { Viewer } from "./catalog/viewer";
+import { projectResource } from "./authz";
 
 /**
  * The single write path for time entries. Server actions and route handlers
@@ -180,18 +180,10 @@ async function assertDetailsUsable(
   if (projectId) {
     const found = await db.query.project.findFirst({
       where: and(eq(project.id, projectId), eq(project.workspaceId, scope.workspaceId)),
-      columns: { id: true, archived: true, visibility: true },
-      with: {
-        members: { where: eq(projectMember.userId, scope.userId), columns: { userId: true } },
-      },
+      columns: { id: true, archived: true },
     });
     const visible =
-      found &&
-      canSeeProject({
-        role: scope.role,
-        visibility: found.visibility,
-        isMember: found.members.length > 0,
-      });
+      found && can(scope.actor, "project.view", await projectResource(db, scope, projectId));
     if (!found) throw new TimeEntryError("INVALID", "Project not found.");
     // Visibility is a condition for assigning a project; an entry already on a
     // private project the user has since left keeps it (they can still retag it).

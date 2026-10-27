@@ -9,16 +9,18 @@ import type { ClientDTO } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
 import { userErrorMessage } from "@/server/actions/errors";
 import { createClient, deleteClient, updateClient } from "@/server/catalog/clients";
+import { authorize } from "@/server/authz";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
 
-/** Clients are managed by admins only (decision 1 of the Phase 2 design). */
+/** Who may create and edit clients is the permission matrix's (`client.*`). */
 
 export async function createClientAction(
   slug: string,
   input: unknown,
 ): Promise<ActionResult<ClientDTO>> {
   try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const ctx = await requireWorkspaceAccess(slug);
+    await authorize(ctx, "client.create");
     const parsed = clientInputSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     const created = await createClient(getDb(), ctx.workspace.id, parsed.data);
@@ -35,7 +37,8 @@ export async function updateClientAction(
   input: unknown,
 ): Promise<ActionResult<ClientDTO>> {
   try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const ctx = await requireWorkspaceAccess(slug);
+    await authorize(ctx, "client.update");
     const parsed = clientPatchSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     const updated = await updateClient(getDb(), ctx.workspace.id, clientId, parsed.data);
@@ -51,7 +54,8 @@ export async function deleteClientAction(
   clientId: string,
 ): Promise<ActionResult<null>> {
   try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const ctx = await requireWorkspaceAccess(slug);
+    await authorize(ctx, "client.update");
     await deleteClient(getDb(), ctx.workspace.id, clientId);
     revalidatePath(workspaceRoutes.clients(slug));
     return ok(null);

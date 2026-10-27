@@ -17,6 +17,7 @@ import { getAuth } from "@/server/auth";
 import { requireSession } from "@/server/session";
 import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
 import { createWorkspace } from "@/server/workspaces";
+import { authorize } from "@/server/authz";
 
 export async function createWorkspaceAction(
   input: unknown,
@@ -58,7 +59,8 @@ export async function updateWorkspaceSettingsAction(
   input: unknown,
 ): Promise<ActionResult<{ slug: string }>> {
   try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const ctx = await requireWorkspaceAccess(slug);
+    await authorize(ctx, "workspace.update");
     const parsed = updateSettingsSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     const { name, ...settings } = parsed.data;

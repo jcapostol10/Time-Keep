@@ -81,7 +81,7 @@ function RunningDescription({
 
 export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
   const tracker = useTracker();
-  const { slug, running, draft, setDraft, settledDraft, pending, canManage } = tracker;
+  const { slug, running, draft, setDraft, settledDraft, pending, canCreate } = tracker;
   const { createManual } = useEntryMutations();
   const [storedMode, setMode] = useLocalStorage<Mode>("timekeep:tracker-mode", "timer");
   const mode: Mode = running ? "timer" : storedMode;
@@ -141,7 +141,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
           slug={slug}
           value={{ projectId: values.projectId, taskId: values.taskId }}
           current={running ? { project: running.project, task: running.task } : null}
-          canCreate={canManage}
+          canCreate={canCreate.project}
           onChange={(sel) => change({ projectId: sel.projectId, taskId: sel.taskId })}
         />
         <TagPicker
@@ -149,7 +149,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
           slug={slug}
           value={values.tagIds}
           current={running?.tags ?? []}
-          canCreate={canManage}
+          canCreate={canCreate.tag}
           onChange={(tagIds) => change({ tagIds })}
         />
         <BillableToggle value={values.billable} onChange={(billable) => change({ billable })} />

@@ -52,6 +52,7 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 | `project.create` | yes | yes | if the workspace allows | if the workspace allows |
 | `project.view` | yes | yes | public, private ones they are on, or manage | public, private ones they are on, or manage |
 | `project.update` | yes | yes | projects they manage | — |
+| `project.delete` | yes | yes | — | — |
 | `project.manageMembers` | yes | yes | projects they manage | — |
 
 ## Tasks

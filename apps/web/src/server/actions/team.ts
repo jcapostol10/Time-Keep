@@ -11,6 +11,7 @@ import { getAuth } from "@/server/auth";
 import { env } from "@/server/env";
 import { invitationEmail, sendEmailOrExplain } from "@/server/mail";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
+import { authorize } from "@/server/authz";
 
 function invitationMessage(
   ctx: Awaited<ReturnType<typeof requireWorkspaceAccess>>,
@@ -34,7 +35,8 @@ export async function inviteMemberAction(
   input: unknown,
 ): Promise<ActionResult<{ invitationId: string }>> {
   try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const ctx = await requireWorkspaceAccess(slug);
+    await authorize(ctx, "member.invite");
     const parsed = inviteMemberSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
 
@@ -86,7 +88,8 @@ export async function cancelInvitationAction(
   invitationId: string,
 ): Promise<ActionResult> {
   try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const ctx = await requireWorkspaceAccess(slug);
+    await authorize(ctx, "member.invite");
     const row = await getDb().query.invitation.findFirst({
       where: and(eq(invitation.id, invitationId), eq(invitation.workspaceId, ctx.workspace.id)),
     });
@@ -109,7 +112,8 @@ export async function resendInvitationAction(
   invitationId: string,
 ): Promise<ActionResult> {
   try {
-    const ctx = await requireWorkspaceAccess(slug, "admin");
+    const ctx = await requireWorkspaceAccess(slug);
+    await authorize(ctx, "member.invite");
     const row = await getDb().query.invitation.findFirst({
       where: and(eq(invitation.id, invitationId), eq(invitation.workspaceId, ctx.workspace.id)),
     });

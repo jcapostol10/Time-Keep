@@ -20,10 +20,12 @@ import {
   or,
   project,
   projectMember,
+  sql,
   timeEntry,
   userGroupMember,
 } from "@timekeep/db";
 import type { SQL } from "drizzle-orm";
+import { notFound } from "next/navigation";
 import { cache } from "react";
 
 import type { Viewer } from "./catalog/viewer";
@@ -158,4 +160,49 @@ export function scopeFilter(actor: Actor): SQL | undefined {
     parts.push(inArray(timeEntry.projectId, [...actor.managedProjectIds]));
   }
   return parts.length === 1 ? parts[0] : or(...parts);
+}
+
+/**
+ * A project as the matrix sees it: its visibility, and whether the viewer is
+ * on it (directly or through a group). A project of another workspace is
+ * "not found", like one that does not exist.
+ */
+export async function projectResource(
+  db: Pick<Database, "select">,
+  viewer: Pick<Viewer, "workspaceId" | "userId">,
+  projectId: string,
+): Promise<Extract<Resource, { kind: "project" }>> {
+  const [row] = await db
+    .select({
+      visibility: project.visibility,
+      isMember: sql<boolean>`(
+        exists (select 1 from "project_member" pm where pm."project_id" = ${project.id} and pm."user_id" = ${viewer.userId})
+        or exists (select 1 from "project_group" pg join "user_group_member" gm on gm."group_id" = pg."group_id" where pg."project_id" = ${project.id} and gm."user_id" = ${viewer.userId})
+      )`,
+    })
+    .from(project)
+    .where(and(eq(project.id, projectId), eq(project.workspaceId, viewer.workspaceId)));
+  if (!row) throw new WorkspaceAccessError(404, NOT_FOUND);
+  return { kind: "project", projectId, visibility: row.visibility, isMember: row.isMember };
+}
+
+/** `authorize` for an action on an existing project (its manager may be allowed). */
+export async function authorizeProject(
+  ctx: Pick<WorkspaceContext, "workspace" | "user" | "role">,
+  action: Action,
+  projectId: string,
+): Promise<Viewer> {
+  const viewer = await viewerFor(ctx);
+  assertCan(viewer.actor, action, await projectResource(getDb(), viewer, projectId));
+  return viewer;
+}
+
+/** Pages: a refusal renders the not-found page, as requireWorkspacePage does. */
+export async function authorizePage(check: () => Promise<Viewer>): Promise<Viewer> {
+  try {
+    return await check();
+  } catch (error) {
+    if (error instanceof WorkspaceAccessError) notFound();
+    throw error;
+  }
 }

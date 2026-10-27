@@ -9,7 +9,12 @@ import type { TimeEntryDTO } from "@/lib/tracker-types";
 import { userErrorMessage } from "@/server/actions/errors";
 import { copyWeek, deleteTemplate, saveTemplate } from "@/server/timesheet";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
-import { viewerFor } from "@/server/authz";
+import { authorize } from "@/server/authz";
+
+/** Timesheet rows and templates are the viewer's own time. */
+function ownEntry(ctx: { user: { id: string } }) {
+  return { kind: "entry" as const, userId: ctx.user.id, projectId: null };
+}
 
 /** Templates and copy-week are per member; no admin role needed. */
 
@@ -21,7 +26,7 @@ export async function saveTemplateAction(
     const ctx = await requireWorkspaceAccess(slug);
     const parsed = timesheetTemplateInputSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const viewer = await viewerFor(ctx);
+    const viewer = await authorize(ctx, "entry.write", ownEntry(ctx));
     return ok(await saveTemplate(getDb(), viewer, parsed.data));
   } catch (error) {
     return fail(userErrorMessage(error));
@@ -34,7 +39,7 @@ export async function deleteTemplateAction(
 ): Promise<ActionResult<null>> {
   try {
     const ctx = await requireWorkspaceAccess(slug);
-    const viewer = await viewerFor(ctx);
+    const viewer = await authorize(ctx, "entry.write", ownEntry(ctx));
     await deleteTemplate(getDb(), viewer, templateId);
     return ok(null);
   } catch (error) {
@@ -50,7 +55,7 @@ export async function copyWeekAction(
     const ctx = await requireWorkspaceAccess(slug);
     const parsed = copyWeekSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const scope = await viewerFor(ctx);
+    const scope = await authorize(ctx, "entry.write", ownEntry(ctx));
     const tz = resolveViewerPrefs(ctx.user, ctx.settings).timezone;
     return ok(await copyWeek(getDb(), scope, { ...parsed.data, tz }));
   } catch (error) {

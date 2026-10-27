@@ -9,7 +9,7 @@ import { trackerKeys } from "@/components/tracker/query-keys";
 import { searchParamsOf } from "@/lib/search-params";
 import { reportFilterOptions, weeklyReport } from "@/server/reports";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { viewerFor } from "@/server/authz";
+import { authorize, authorizePage } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Weekly report" };
 
@@ -24,7 +24,9 @@ export default async function WeeklyReportPage({
     "member",
     `/w/${workspaceSlug}/reports/weekly`,
   );
-  const viewer = await viewerFor(ctx);
+  const viewer = await authorizePage(() =>
+    authorize(ctx, "page.view", { kind: "page", page: "reports" }),
+  );
   const prefs = resolveViewerPrefs(ctx.user, ctx.settings);
   const query = parseReportQuery(searchParamsOf(raw));
   const key = reportQueryToSearchParams(query).toString();

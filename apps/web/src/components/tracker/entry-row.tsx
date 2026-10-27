@@ -110,7 +110,7 @@ export function EntryRow({
   onSelectedChange: (selected: boolean) => void;
   nested?: boolean;
 }) {
-  const { slug, viewer, canManage } = useTracker();
+  const { slug, viewer, canCreate } = useTracker();
   const { update } = useEntryMutations();
   const tz = viewer.timezone;
   const end = entry.end ?? entry.start;
@@ -164,14 +164,14 @@ export function EntryRow({
         value={{ projectId: entry.projectId, taskId: entry.taskId }}
         current={{ project: entry.project, task: entry.task }}
         compact
-        canCreate={canManage}
+        canCreate={canCreate.project}
         onChange={(sel) => save({ projectId: sel.projectId, taskId: sel.taskId })}
       />
       <TagPicker
         slug={slug}
         value={entry.tagIds}
         current={entry.tags}
-        canCreate={canManage}
+        canCreate={canCreate.tag}
         onChange={(tagIds) => save({ tagIds })}
       />
       <BillableToggle value={entry.billable} onChange={(billable) => save({ billable })} />

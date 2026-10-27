@@ -46,7 +46,7 @@ export function DetailedRow({
   selected: boolean;
   onSelectedChange: (selected: boolean) => void;
 }) {
-  const { slug, viewer, canManage } = useTracker();
+  const { slug, viewer, canCreate } = useTracker();
   const writes = useEntryWrites();
   const tz = viewer.timezone;
   const times = { start: new Date(entry.start), end: new Date(entry.end) };
@@ -118,7 +118,7 @@ export function DetailedRow({
                 task: entry.taskName ? { name: entry.taskName } : null,
               }}
               compact
-              canCreate={canManage}
+              canCreate={canCreate.project}
               onChange={(sel) => save({ projectId: sel.projectId, taskId: sel.taskId })}
             />
           ) : entry.projectName ? (

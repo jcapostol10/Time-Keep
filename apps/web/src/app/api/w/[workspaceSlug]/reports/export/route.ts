@@ -8,7 +8,7 @@ import { env } from "@/server/env";
 import { buildExport, countExportRows } from "@/server/report-files";
 import { buildPdfExport } from "@/server/report-pdf";
 import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
-import { viewerFor } from "@/server/authz";
+import { authorize } from "@/server/authz";
 
 const requestSchema = z.object({
   report: z.enum(REPORT_KINDS),
@@ -43,7 +43,7 @@ export async function GET(
     if (!parsed.success) return Response.json({ error: "Invalid export" }, { status: 400 });
 
     const db = getDb();
-    const viewer = await viewerFor(access);
+    const viewer = await authorize(access, "page.view", { kind: "page", page: "reports" });
     const req = {
       ...parsed.data,
       query: parseReportQuery(params),

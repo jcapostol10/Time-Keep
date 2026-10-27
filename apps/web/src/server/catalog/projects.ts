@@ -5,7 +5,6 @@ import { randomUUID } from "node:crypto";
 import {
   bucketFor,
   DEFAULT_REPORT_QUERY,
-  canManageCatalog,
   type DeleteProjectMode,
   pickColor,
   type ProjectInput,
@@ -46,6 +45,7 @@ import type { ProjectDetail, ProjectListItem, ProjectStatus } from "@/lib/catalo
 import type { PickerProject } from "@/lib/tracker-types";
 
 import { CatalogError, isUniqueViolation } from "./errors";
+import { scopeFilter } from "../authz";
 import { type Viewer, visibleProjectFilter } from "./viewer";
 import { reassignProjectEntries, softDeleteProjectEntries } from "../time-entries";
 
@@ -104,7 +104,8 @@ async function trackedByProject(db: Executor, viewer: Viewer): Promise<Map<strin
         isNull(timeEntry.deletedAt),
         isNotNull(timeEntry.end),
         isNotNull(timeEntry.projectId),
-        canManageCatalog(viewer.role) ? undefined : eq(timeEntry.userId, viewer.userId),
+        // Admins see everyone's time, a manager their scope, a member their own.
+        scopeFilter(viewer.actor),
       ),
     )
     .groupBy(timeEntry.projectId);

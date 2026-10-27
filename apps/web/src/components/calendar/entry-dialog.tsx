@@ -38,7 +38,7 @@ export type EntryDialogMode =
 
 /** Create an entry from a drag, or edit one from a click. */
 export function EntryDialog({ mode, onClose }: { mode: EntryDialogMode; onClose: () => void }) {
-  const { slug, viewer, canManage } = useTracker();
+  const { slug, viewer, canCreate } = useTracker();
   const tz = viewer.timezone;
   const writes = useEntryWrites();
   const initialStart = mode.kind === "create" ? mode.start : new Date(mode.entry.start);
@@ -170,14 +170,14 @@ export function EntryDialog({ mode, onClose }: { mode: EntryDialogMode; onClose:
               current={
                 mode.kind === "edit" ? { project: mode.entry.project, task: mode.entry.task } : null
               }
-              canCreate={canManage}
+              canCreate={canCreate.project}
               onChange={(sel) => patchDraft({ projectId: sel.projectId, taskId: sel.taskId })}
             />
             <TagPicker
               slug={slug}
               value={draft.tagIds}
               current={mode.kind === "edit" ? mode.entry.tags : []}
-              canCreate={canManage}
+              canCreate={canCreate.tag}
               onChange={(tagIds) => patchDraft({ tagIds })}
             />
             <BillableToggle

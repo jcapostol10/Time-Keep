@@ -1,5 +1,5 @@
 import {
-  canReadTeam,
+  can,
   parseReportQuery,
   reportQueryToSearchParams,
   resolveViewerPrefs,
@@ -40,7 +40,7 @@ export default async function DashboardPage({
     <>
       <PageHeader title="Dashboard" />
       <HydrationBoundary state={dehydrate(queryClient)}>
-        <DashboardView canSeeTeam={canReadTeam(ctx.role)} />
+        <DashboardView canSeeTeam={can(viewer.actor, "report.readTeam", { kind: "none" })} />
       </HydrationBoundary>
     </>
   );

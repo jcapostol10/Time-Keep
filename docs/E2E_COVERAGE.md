@@ -230,6 +230,12 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The workspace switcher lists only the user's own workspaces — `tenant-isolation.spec.ts` › "the switcher only lists the user's own workspaces"
 - [x] A project id from another workspace is not found, on every project page — `project-detail.spec.ts` › "a project id from another workspace is not found"
 
+## Permissions
+
+- [ ] A manager opens a project they manage, without its Rates and Budget tabs — `permissions.spec.ts` › "a manager opens a project they manage, without its Rates tab"
+- [ ] A manager gets not-found for a project they do not manage — `permissions.spec.ts` › "a manager gets not-found for a project they do not manage"
+- [ ] A member sees no Clients or Tags in the sidebar — `permissions.spec.ts` › "a member sees no Clients or Tags in the sidebar"
+
 ## Small screens (375px)
 
 - [ ] The tracker page fits a 375px screen without horizontal scrolling — gap

@@ -5,7 +5,7 @@ import { AccessTab } from "@/components/projects/access-tab";
 import { getProject } from "@/server/catalog/projects";
 import { listMembers } from "@/server/queries/team";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { viewerFor } from "@/server/authz";
+import { authorizePage, authorizeProject } from "@/server/authz";
 
 export const metadata: Metadata = { title: "Access" };
 
@@ -13,8 +13,10 @@ export default async function ProjectAccessPage({
   params,
 }: PageProps<"/w/[workspaceSlug]/projects/[projectId]/access">) {
   const { workspaceSlug, projectId } = await params;
-  const ctx = await requireWorkspacePage(workspaceSlug, "admin");
-  const viewer = await viewerFor(ctx);
+  const ctx = await requireWorkspacePage(workspaceSlug);
+  const viewer = await authorizePage(() =>
+    authorizeProject(ctx, "project.manageMembers", projectId),
+  );
   const db = getDb();
   const [project, members] = await Promise.all([
     getProject(db, viewer, projectId),

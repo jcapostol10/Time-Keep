@@ -68,6 +68,7 @@ const TABLE: Row[] = [
   ["project.create", project(null), true, true, false, false],
   ["project.update", project(MANAGED_PROJECT), true, true, true, false],
   ["project.update", project(OTHER_PROJECT), true, true, false, false],
+  ["project.delete", project(MANAGED_PROJECT), true, true, false, false],
   ["project.manageMembers", project(MANAGED_PROJECT), true, true, true, false],
   ["project.manageMembers", project(OTHER_PROJECT), true, true, false, false],
   [

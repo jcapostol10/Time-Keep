@@ -3,7 +3,7 @@ import { getDb } from "@timekeep/db";
 
 import { listEntriesInRange } from "@/server/time-entries";
 import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
-import { viewerFor } from "@/server/authz";
+import { authorize } from "@/server/authz";
 
 /** The caller's stopped entries starting in `[from, to)`; the timesheet and calendar read this. */
 export async function GET(
@@ -17,7 +17,15 @@ export async function GET(
     const parsed = dateRangeSchema.safeParse({ from: params.get("from"), to: params.get("to") });
     if (!parsed.success) return Response.json({ error: "Invalid range" }, { status: 400 });
 
-    const entries = await listEntriesInRange(getDb(), await viewerFor(access), parsed.data);
+    const entries = await listEntriesInRange(
+      getDb(),
+      await authorize(access, "entry.read", {
+        kind: "entry",
+        userId: access.user.id,
+        projectId: null,
+      }),
+      parsed.data,
+    );
     return Response.json({ entries }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return routeErrorResponse(error, "time-entries");

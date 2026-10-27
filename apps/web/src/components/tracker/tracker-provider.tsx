@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  canManageCatalog,
-  formatClock,
-  type Role,
-  type TrackerSettingsInput,
-  type ViewerPrefs,
-} from "@timekeep/core";
+import { formatClock, type TrackerSettingsInput, type ViewerPrefs } from "@timekeep/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
@@ -49,7 +43,8 @@ interface TrackerContextValue {
   slug: string;
   workspaceId: string;
   /** Owner or admin: may create projects and tags from the pickers. */
-  canManage: boolean;
+  /** Inline create in the pickers: the workspace's "who can create" setting for the viewer. */
+  canCreate: { project: boolean; tag: boolean };
   viewer: ViewerPrefs;
   settings: TrackerSettingsInput;
   running: TimeEntryDTO | null;
@@ -162,7 +157,7 @@ function useLeaveWarning(saving: boolean) {
 export interface TrackerProviderProps {
   slug: string;
   workspaceId: string;
-  role: Role;
+  canCreate: { project: boolean; tag: boolean };
   viewer: ViewerPrefs;
   settings: TrackerSettingsInput;
   initialRunning: TimeEntryDTO | null;
@@ -172,7 +167,7 @@ export interface TrackerProviderProps {
 export function TrackerProvider({
   slug,
   workspaceId,
-  role,
+  canCreate,
   viewer,
   settings,
   initialRunning,
@@ -398,7 +393,7 @@ export function TrackerProvider({
     () => ({
       slug,
       workspaceId,
-      canManage: canManageCatalog(role),
+      canCreate,
       viewer,
       settings,
       running,
@@ -418,7 +413,7 @@ export function TrackerProvider({
     [
       slug,
       workspaceId,
-      role,
+      canCreate,
       viewer,
       settings,
       running,
