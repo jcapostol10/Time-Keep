@@ -16,6 +16,7 @@ import {
   eq,
   isNotNull,
   isNull,
+  lte,
   membership,
   project,
   rate,
@@ -28,8 +29,12 @@ import type { SQL } from "drizzle-orm";
 
 import { assertCan } from "./authz";
 import { CatalogError } from "./catalog/errors";
+import type { RateDTO } from "@/lib/rate-types";
+
 import type { Viewer } from "./catalog/viewer";
 import { requestRateRecalc } from "./rate-recalc";
+
+export type { RateDTO };
 
 /**
  * Billable rates per level, with history: a change adds a row effective
@@ -51,16 +56,6 @@ export interface SetRateInput extends RateTargetInput {
   apply: RateApply;
   /** yyyy-MM-dd in the workspace timezone; required when apply is "from". */
   from?: string;
-}
-
-export interface RateDTO {
-  id: string;
-  level: RateLevel;
-  amountMinor: number | null;
-  currency: string;
-  effectiveFrom: string;
-  createdByName: string | null;
-  createdAt: string;
 }
 
 interface Target {
@@ -265,4 +260,33 @@ export async function relabelWorkspaceCurrency(
     .update(timeEntry)
     .set({ rateCurrency: currency })
     .where(and(eq(timeEntry.workspaceId, workspaceId), isNotNull(timeEntry.rateCurrency)));
+}
+
+/**
+ * The amount in force now at one level for every target of it, keyed by
+ * person (member, project_member) or task. A target missing from the map has
+ * no row; a null value means its latest row says "no rate".
+ */
+export async function currentRatesAt(
+  db: Database,
+  viewer: Viewer,
+  level: "member" | "project_member" | "task",
+  options: { projectId?: string; now?: Date } = {},
+): Promise<Map<string, number | null>> {
+  assertCan(viewer.actor, "rate.view", { kind: "none" });
+  const key = level === "task" ? rate.taskId : rate.userId;
+  const rows = await db
+    .selectDistinctOn([key], { key, amountMinor: rate.amountMinor })
+    .from(rate)
+    .where(
+      and(
+        eq(rate.workspaceId, viewer.workspaceId),
+        eq(rate.kind, "billable"),
+        eq(rate.level, level),
+        options.projectId ? eq(rate.projectId, options.projectId) : undefined,
+        lte(rate.effectiveFrom, options.now ?? new Date()),
+      ),
+    )
+    .orderBy(key, desc(rate.effectiveFrom));
+  return new Map(rows.flatMap((r) => (r.key ? [[r.key, r.amountMinor] as const] : [])));
 }

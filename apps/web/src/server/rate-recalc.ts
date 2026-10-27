@@ -18,6 +18,8 @@ import {
   timeEntry,
 } from "@timekeep/db";
 
+import type { RateRecalcDTO } from "@/lib/rate-types";
+
 import { assertCan } from "./authz";
 import { CatalogError } from "./catalog/errors";
 import type { Viewer } from "./catalog/viewer";
@@ -35,14 +37,7 @@ import type { Viewer } from "./catalog/viewer";
 const BATCH_SIZE = 5_000;
 const STUCK_AFTER_MS = 15 * 60_000;
 
-export interface RateRecalcDTO {
-  id: string;
-  status: "queued" | "running" | "done" | "failed";
-  from: string;
-  total: number | null;
-  processed: number;
-  error: string | null;
-}
+export type { RateRecalcDTO };
 
 export interface RunOptions {
   batchSize?: number;
