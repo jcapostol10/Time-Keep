@@ -7,6 +7,7 @@ export * from "./duration";
 export * from "./entry-edit";
 export * from "./entry-grouping";
 export * from "./permissions";
+export * from "./money";
 export * from "./prefs";
 export * from "./rates";
 export * from "./roles";
