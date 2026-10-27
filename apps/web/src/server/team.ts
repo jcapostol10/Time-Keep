@@ -138,8 +138,8 @@ export async function setMemberStatus(
 
 /**
  * Removes someone from the workspace with their groups, project
- * memberships, scope and member-level rates. Their time entries stay, and
- * read as "(former member)" in reports.
+ * memberships and scope. Their time entries and rates stay (re-rating past
+ * entries keeps their amounts), and read as "(former member)" in reports.
  */
 export async function removeMember(db: Database, viewer: Viewer, userId: string): Promise<void> {
   const current = await target(db, viewer, userId);
@@ -166,7 +166,6 @@ export async function removeMember(db: Database, viewer: Viewer, userId: string)
     await tx
       .delete(managedGroup)
       .where(and(eq(managedGroup.workspaceId, ws), eq(managedGroup.managerId, userId)));
-    await tx.delete(rate).where(and(eq(rate.workspaceId, ws), eq(rate.userId, userId)));
     await tx
       .delete(membership)
       .where(and(eq(membership.workspaceId, ws), eq(membership.userId, userId)));

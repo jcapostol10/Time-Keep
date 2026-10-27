@@ -185,6 +185,37 @@ test.describe("reports", () => {
     await expect(page.getByRole("button", { name: /^Users:/ })).toHaveCount(0);
   });
 
+  test("the Groups filter narrows the summary to the group's members", async ({
+    page,
+    demoUser,
+  }) => {
+    const idOf = async (who: "member1" | "member2") => {
+      await demoUser(who);
+      const res = await page.request.get("/api/auth/get-session");
+      return ((await res.json()) as { user: { id: string } }).user.id;
+    };
+    // The seeded Design group is member1 and member2.
+    const design = [await idOf("member1"), await idOf("member2")];
+    await demoUser("owner");
+    const res = await page.request.get(
+      `/api/w/demo/reports/summary?preset=this-year&${design.map((id) => `userIds=${id}`).join("&")}`,
+    );
+    const seconds = ((await res.json()) as { totals: { durationSeconds: number } }).totals
+      .durationSeconds;
+
+    await openReport(page, "demo", "summary", "preset=this-year");
+    const everyone = await reportTotal(page).textContent();
+    await toggleFilter(page, "Groups", "Design");
+    await expect(page).toHaveURL(/groupIds=/);
+    await expect(reportTotal(page)).not.toHaveText(everyone ?? "");
+    const shown = await page.request.get(
+      `/api/w/demo/reports/summary?${new URL(page.url()).searchParams.toString()}`,
+    );
+    expect(
+      ((await shown.json()) as { totals: { durationSeconds: number } }).totals.durationSeconds,
+    ).toBe(seconds);
+  });
+
   test("the summary agrees with the tracker's week total", async ({
     page,
     freshUser,

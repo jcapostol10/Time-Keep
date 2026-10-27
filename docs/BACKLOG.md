@@ -26,6 +26,14 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] The rate recalculation re-rates every entry from its date, even when the changed rate can only affect some (a project's rate touches only that project's entries). Narrow the job to the changed level's target once workspaces are large enough for it to matter (1M entries take 76 s today).
 - [ ] The recalculation's batch `UPDATE` (raw SQL) leaves `updated_at` alone, so an entry's DTO does not show that its amount changed; nothing reads amounts from the entry DTO yet.
 - [ ] "New entries only" is effective from today's midnight in the workspace timezone: an entry created after the change but dated earlier keeps the old rate (decision 3: an entry is rated by its date). Clockify's wording suggests "created from now"; revisit if owners find it surprising.
+- [ ] Phase 4a review: two concurrent ownership transfers (to admins A and B) can both commit and leave two owners (`team.ts` `transferOwnership` checks the target outside the transaction and updates the owner row unguarded). Use `UPDATE … WHERE role = 'owner' RETURNING` (abort on 0 rows) and lock the target row `FOR UPDATE`.
+- [ ] Phase 4a review: the recalculation's keyset cursor reads the cursor entry's live start (`rate-recalc.ts`), so moving that entry's start later between batches skips the entries in between. Store the cursor's microsecond start from SQL in the batch transaction and compare against the job row.
+- [ ] Phase 4a review: `claim` in `rate-recalc.ts` reads the job before taking the advisory lock, so a merge that lowers `from` in between leaves `total` counted from the old date (the banner can read "6,000 of 4,000"). Read the row after the lock.
+- [ ] Phase 4a review: `reassignProjectEntries` (`time-entries.ts`) binds every moved id when re-rating; deleting a project with more than about 65k entries and reassigning them exceeds the bind-parameter limit and rolls the delete back. Re-rate with a predicate (destination project plus the moved ids from a CTE).
+- [ ] Phase 4a review: deactivation stops the person's timer before the status update, in a separate step (`team.ts` `setMemberStatus`), so a timer started in between keeps running for a deactivated person. Do both in one transaction, or stop again after the status write.
+- [ ] Phase 4a review: `GET /api/w/[slug]/rates` answers 500 for an unknown target (`resolveTarget`'s `CatalogError` is logged as a server error). Map NOT_FOUND to 404.
+- [ ] Phase 4a review: `commitUserImport` creates the CSV's groups before any invite succeeds, and sends up to 500 invites (Better Auth plus SMTP) one after another in one action, which can run past the function budget part-way through. Re-running is safe ("invited already"), but the first result is lost. Move the sending into a job once the worker exists.
+- [ ] A second rate change on the same effective date replaces that date's row (Phase 4a Task 8 ruling), so History loses the earlier value of the day, and entries created between the two changes keep the replaced rate until a recalculation runs.
 
 ## E2E suite
 
@@ -37,7 +45,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)
 
-Nothing open.
+- [ ] `docs/E2E_COVERAGE.md` still lists "Change a member's role — gap" unticked although the ticked team line "a member's role, deactivation and removal" covers it; "Cancel a pending invitation — gap" has no test yet (Phase 4a review).
 
 ## Docs
 

@@ -26,6 +26,7 @@ import {
 import { loadViewer } from "./authz";
 import { createProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
+import { requestRateRecalc, runRateRecalcJob } from "./rate-recalc";
 import { summaryReport } from "./reports";
 import {
   changeRole,
@@ -141,7 +142,7 @@ describe("team service", () => {
     expect(groups).toHaveLength(1);
   });
 
-  it("removes a member's groups, scope and rates but keeps their time as a former member", async () => {
+  it("removes a member's groups and scope but keeps their time and its rates as a former member", async () => {
     const owner = await viewer("olga");
     const web = await createProject(db, owner, { name: "Web" });
     const groupId = randomUUID();
@@ -187,7 +188,14 @@ describe("team service", () => {
     expect(await db.select().from(managedUser).where(eq(managedUser.managerId, ids.max!))).toEqual(
       [],
     );
-    expect(await db.select().from(rate).where(eq(rate.userId, ids.max!))).toEqual([]);
+    // Their rate stays, so re-rating past entries does not wipe their amounts.
+    const { jobId } = await requestRateRecalc(db, wsId, ids.olga!, new Date(0));
+    await runRateRecalcJob(db, jobId);
+    const [rated] = await db
+      .select({ rate: timeEntry.billableRateMinor })
+      .from(timeEntry)
+      .where(eq(timeEntry.userId, ids.max!));
+    expect(rated?.rate).toBe(5000);
 
     const report = await summaryReport(
       db,

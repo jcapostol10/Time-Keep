@@ -94,6 +94,9 @@ test.describe("team", () => {
     await mia.page.goto(`/w/${freshUser.slug}/tracker`);
     await expect(mia.page.getByRole("heading", { name: NOT_FOUND })).toBeVisible();
     await memberAction(page, "Mia Member", "Reactivate");
+    // Wait for the save: while the menu is open the table is hidden from role
+    // queries, so the row's absence proves nothing.
+    await expect(page.getByText("Mia Member is active again")).toBeVisible();
     await mia.page.goto(`/w/${freshUser.slug}/tracker`);
     await waitForApp(mia.page);
     await expect(mia.page.getByRole("heading", { name: "Time Tracker" })).toBeVisible();
@@ -103,6 +106,7 @@ test.describe("team", () => {
     await openTeam(page, freshUser.slug);
     await memberAction(page, "Mia Member", "Remove");
     await page.getByRole("alertdialog").getByRole("button", { name: "Remove" }).click();
+    await expect(page.getByText("Mia Member removed")).toBeVisible();
     await expect(memberRow(page, "Mia Member")).toHaveCount(0);
     await openReport(page, freshUser.slug, "summary");
     await setGroupBy(page, ["Person"]);

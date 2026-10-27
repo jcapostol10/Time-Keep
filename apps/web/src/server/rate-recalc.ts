@@ -27,8 +27,8 @@ import type { Viewer } from "./catalog/viewer";
 /**
  * "Apply to past entries": re-rates live entries from a date with the rates
  * in force at their start. One job runs per workspace; a request while one
- * waits lowers the waiting job's date instead of adding another. Runs after
- * the response (`after()`), in keyset batches that each commit progress and
+ * waits, or after one failed, folds it in (the earliest date, started over)
+ * instead of adding another. Runs after the response (`after()`), in keyset batches that each commit progress and
  * the cursor, so a killed run resumes where it stopped on Retry. A single
  * call (`runRateRecalcJob`), so it can move to the pg-boss worker with the
  * export jobs.
@@ -49,7 +49,11 @@ export interface RunOptions {
 const lockWorkspace = (workspaceId: string) =>
   sql`select pg_advisory_xact_lock(hashtext(${`rate-recalc:${workspaceId}`}))`;
 
-/** Queues a recalculation from `from`, merging into a job already waiting. */
+/**
+ * Queues a recalculation from `from`. A job already waiting, and any failed
+ * ones, are folded in: one waiting job from the earliest date, started over
+ * (entries behind an old cursor were rated before this change).
+ */
 export async function requestRateRecalc(
   db: Database,
   workspaceId: string,
@@ -58,20 +62,29 @@ export async function requestRateRecalc(
 ): Promise<{ jobId: string; merged: boolean }> {
   return db.transaction(async (tx) => {
     await tx.execute(lockWorkspace(workspaceId));
-    const [queued] = await tx
-      .select({ id: rateRecalcJob.id, from: rateRecalcJob.from })
+    const pending = await tx
+      .select({ id: rateRecalcJob.id, from: rateRecalcJob.from, status: rateRecalcJob.status })
       .from(rateRecalcJob)
-      .where(and(eq(rateRecalcJob.workspaceId, workspaceId), eq(rateRecalcJob.status, "queued")))
-      .limit(1);
+      .where(
+        and(
+          eq(rateRecalcJob.workspaceId, workspaceId),
+          inArray(rateRecalcJob.status, ["queued", "failed"]),
+        ),
+      );
+    const queued = pending.find((j) => j.status === "queued");
+    const failed = pending.filter((j) => j.status === "failed").map((j) => j.id);
+    const earliest = pending.reduce((min, j) => (j.from < min ? j.from : min), from);
+    if (failed.length > 0) await tx.delete(rateRecalcJob).where(inArray(rateRecalcJob.id, failed));
     if (queued) {
-      if (from < queued.from) {
-        await tx.update(rateRecalcJob).set({ from }).where(eq(rateRecalcJob.id, queued.id));
-      }
+      await tx
+        .update(rateRecalcJob)
+        .set({ from: earliest, cursorStart: null, cursorId: null, processed: 0, total: 0 })
+        .where(eq(rateRecalcJob.id, queued.id));
       return { jobId: queued.id, merged: true };
     }
     const id = randomUUID();
-    await tx.insert(rateRecalcJob).values({ id, workspaceId, createdBy: userId, from });
-    return { jobId: id, merged: false };
+    await tx.insert(rateRecalcJob).values({ id, workspaceId, createdBy: userId, from: earliest });
+    return { jobId: id, merged: failed.length > 0 };
   });
 }
 
@@ -90,6 +103,30 @@ export async function expireRateRecalcJobs(db: Database, now: Date = new Date())
         lt(rateRecalcJob.startedAt, new Date(now.getTime() - STUCK_AFTER_MS)),
       ),
     );
+}
+
+/**
+ * For the progress poll: fails jobs killed mid-run, and returns a waiting job
+ * nobody is running (its `after()` never ran) for the caller to start.
+ */
+export async function refreshRateRecalc(
+  db: Database,
+  workspaceId: string,
+  now: Date = new Date(),
+): Promise<string | null> {
+  await expireRateRecalcJobs(db, now);
+  const jobs = await db
+    .select({ id: rateRecalcJob.id, status: rateRecalcJob.status })
+    .from(rateRecalcJob)
+    .where(
+      and(
+        eq(rateRecalcJob.workspaceId, workspaceId),
+        inArray(rateRecalcJob.status, ["queued", "running"]),
+      ),
+    )
+    .orderBy(asc(rateRecalcJob.createdAt));
+  if (jobs.some((j) => j.status === "running")) return null;
+  return jobs[0]?.id ?? null;
 }
 
 /** Takes a queued job if no other job of its workspace is running. */

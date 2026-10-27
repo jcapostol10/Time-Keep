@@ -9,6 +9,7 @@ import type { Viewer } from "./catalog/viewer";
 import {
   expireRateRecalcJobs,
   latestRateRecalc,
+  refreshRateRecalc,
   requestRateRecalc,
   retryRateRecalc,
   runRateRecalcJob,
@@ -144,6 +145,61 @@ describe("the apply-to-past-entries job", () => {
       processed: 12,
     });
     expect(await amounts()).toEqual([...Array(5).fill(5000), ...Array(7).fill(7000)]);
+  });
+
+  it("starts a waiting job over when a request merges into it after it had a cursor", async () => {
+    await entries();
+    await addRate(5000, new Date(0));
+    const { jobId } = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0));
+    await runRateRecalcJob(db, jobId, {
+      batchSize: 5,
+      afterBatch: (done) => {
+        if (done === 1) throw new Error("killed");
+      },
+    });
+    await retryRateRecalc(db, me, jobId); // waiting again, cursor after 5 entries
+    await addRate(7000, new Date(1));
+    const merged = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0));
+    expect(merged).toEqual({ jobId, merged: true });
+    await runRateRecalcJob(db, jobId, { batchSize: 5 });
+    // Every entry takes the new rate: none were skipped behind the old cursor.
+    expect(await amounts()).toEqual(Array(12).fill(7000));
+  });
+
+  it("folds an earlier failed job into the next request, so its entries are not left behind", async () => {
+    await entries();
+    await addRate(5000, new Date(0));
+    const first = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0));
+    await runRateRecalcJob(db, first.jobId, {
+      batchSize: 5,
+      afterBatch: (done) => {
+        if (done === 1) throw new Error("killed");
+      },
+    });
+    // A later change from a later date, without anyone pressing Retry on the first.
+    const later = new Date(BASE.getTime() + 10 * 24 * H);
+    const second = await requestRateRecalc(db, me.workspaceId, me.userId, later);
+    await runRateRecalcJob(db, second.jobId, { batchSize: 5 });
+    expect(await amounts()).toEqual(Array(12).fill(5000));
+    const failed = await db
+      .select()
+      .from(rateRecalcJob)
+      .where(and(eq(rateRecalcJob.workspaceId, me.workspaceId), eq(rateRecalcJob.status, "failed")));
+    expect(failed).toEqual([]);
+  });
+
+  it("surfaces a job killed mid-run and starts a waiting one when polled", async () => {
+    const { jobId } = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0));
+    const now = new Date("2026-03-11T04:00:00Z");
+    await db
+      .update(rateRecalcJob)
+      .set({ status: "running", startedAt: new Date(now.getTime() - 16 * 60_000) })
+      .where(eq(rateRecalcJob.id, jobId));
+    expect(await refreshRateRecalc(db, me.workspaceId, now)).toBeNull();
+    expect(await latestRateRecalc(db, me.workspaceId)).toMatchObject({ status: "failed" });
+
+    await retryRateRecalc(db, me, jobId);
+    expect(await refreshRateRecalc(db, me.workspaceId, now)).toBe(jobId);
   });
 
   it("merges a second request into the waiting job, from the earlier date", async () => {

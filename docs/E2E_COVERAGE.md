@@ -137,7 +137,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The status tab exports CSV and opens the same numbers in reports — `project-detail.spec.ts` › "the status tab exports CSV and opens the same numbers in reports"
 - [x] Edit project settings, mark it as a template, archive and unarchive it — `project-detail.spec.ts` › "edit project settings, mark it as a template, archive and unarchive it"
 - [x] Members cannot open project detail — `project-detail.spec.ts` › "members cannot open project detail"
-- [x] The Budget and Rates tabs say which phase brings them — `project-detail.spec.ts` › "the Budget and Rates tabs say which phase brings them"
+- [x] The Budget tab says which phase brings it; the Rates tab sets the project's rates — `project-detail.spec.ts` › "the Budget tab says which phase brings it and the Rates tab sets rates"
 
 ## Projects and tasks in the tracker
 
@@ -203,6 +203,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Group by client then project shows nested totals — `reports.spec.ts` › "group by client then project shows nested totals"
 - [x] Presets and a custom range change the URL and the totals — `reports.spec.ts` › "presets and a custom range change the URL and the totals"
 - [x] A member cannot widen the Users filter by URL and has no Users filter — `reports.spec.ts` › "a member cannot widen the Users filter by URL"
+- [x] The Groups filter narrows the summary to the group's members — `reports.spec.ts` › "the Groups filter narrows the summary to the group's members"
 - [x] The summary agrees with the tracker's week total — `reports.spec.ts` › "the summary agrees with the tracker's week total"
 - [x] A summary row opens the detailed report filtered to it — `reports.spec.ts` › "a summary row opens the detailed report filtered to it"
 - [x] A weekly cell opens the detailed report for that project and day — `reports.spec.ts` › "a weekly cell opens the detailed report for that project and day"

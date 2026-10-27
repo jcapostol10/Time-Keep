@@ -14,6 +14,7 @@ import {
   type Database,
   desc,
   eq,
+  gt,
   isNotNull,
   isNull,
   lte,
@@ -153,33 +154,40 @@ export async function setRate(
   const effectiveFrom = rateEffectiveFrom(input.apply, { date: input.from, timezone, now });
 
   const id = randomUUID();
-  const [row] = await db
-    .insert(rate)
-    .values({
-      id,
-      workspaceId: viewer.workspaceId,
-      kind: "billable",
-      level: input.level,
-      ...target,
-      amountMinor,
-      currency,
-      effectiveFrom,
-      createdBy: viewer.userId,
-      createdAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [
-        rate.workspaceId,
-        rate.kind,
-        rate.level,
-        rate.userId,
-        rate.projectId,
-        rate.taskId,
-        rate.effectiveFrom,
-      ],
-      set: { amountMinor, currency, createdBy: viewer.userId, createdAt: now },
-    })
-    .returning();
+  const [row] = await db.transaction(async (tx) => {
+    // From its date on, this rate replaces whatever the level said: a later row
+    // would otherwise keep winning for the entries after it.
+    await tx
+      .delete(rate)
+      .where(and(targetWhere(viewer, input.level, target), gt(rate.effectiveFrom, effectiveFrom)));
+    return tx
+      .insert(rate)
+      .values({
+        id,
+        workspaceId: viewer.workspaceId,
+        kind: "billable",
+        level: input.level,
+        ...target,
+        amountMinor,
+        currency,
+        effectiveFrom,
+        createdBy: viewer.userId,
+        createdAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [
+          rate.workspaceId,
+          rate.kind,
+          rate.level,
+          rate.userId,
+          rate.projectId,
+          rate.taskId,
+          rate.effectiveFrom,
+        ],
+        set: { amountMinor, currency, createdBy: viewer.userId, createdAt: now },
+      })
+      .returning();
+  });
   if (!row) throw new Error("rate insert returned nothing");
 
   const jobId =
