@@ -17,7 +17,7 @@ import {
 import { user } from "./auth";
 import { project, tag, task } from "./catalog";
 import { timestamps } from "./columns";
-import { rateLevelEnum } from "./enums";
+import { entryTypeEnum, rateLevelEnum } from "./enums";
 import { workspace } from "./workspace";
 
 /**
@@ -55,6 +55,8 @@ export const timeEntry = pgTable(
     rateSource: rateLevelEnum("rate_source"),
     /** round(rate × seconds / 3600) in minor units; null while running or without a rate. */
     amountMinor: bigint("amount_minor", { mode: "number" }),
+    /** A break has no project, task, tags, billing or amount (decision 6). Fixed at creation. */
+    type: entryTypeEnum("type").notNull().default("work"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     ...timestamps,
   },
@@ -144,8 +146,36 @@ export const timesheetTemplate = pgTable(
   ],
 ).enableRLS();
 
+/**
+ * A pinned set of entry details (description, project, task, tags, billable)
+ * the person starts timers from. Per user; at most 20 (the service enforces it).
+ */
+export const favoriteEntry = pgTable(
+  "favorite_entry",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    description: text("description").notNull().default(""),
+    projectId: text("project_id").references(() => project.id, { onDelete: "set null" }),
+    taskId: text("task_id").references(() => task.id, { onDelete: "set null" }),
+    tagIds: text("tag_ids")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    billable: boolean("billable").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("favorite_entry_user_idx").on(t.workspaceId, t.userId, t.createdAt)],
+).enableRLS();
+
 export type TimeEntry = typeof timeEntry.$inferSelect;
 export type NewTimeEntry = typeof timeEntry.$inferInsert;
+export type FavoriteEntry = typeof favoriteEntry.$inferSelect;
 export type TimeEntryTag = typeof timeEntryTag.$inferSelect;
 export type UserSettings = typeof userSettings.$inferSelect;
 export type TimesheetTemplate = typeof timesheetTemplate.$inferSelect;

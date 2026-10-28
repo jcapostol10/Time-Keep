@@ -76,6 +76,16 @@ One row per workspace, created in the same transaction as the workspace.
 | time_format | enum `time_format` (`12h`, `24h`) | `24h` |
 | duration_format | enum `duration_format` (`hh:mm:ss`, `hh:mm`, `decimal`) | `hh:mm:ss` |
 | currency | char(3) | `USD` |
+| rounding_mode | enum `rounding_mode` (`off`, `up`, `down`, `nearest`) | `off` |
+| rounding_minutes | smallint (1, 5, 6, 10, 12, 15, 30 or 60) | `15` |
+| hidden_pages | text[] of `projects`, `team`, `reports` | `{}` |
+| members_see_team_time | boolean | `false` |
+| project_creators, client_creators, task_creators, tag_creators | enum `creator_setting` (`admins`, `managers`, `everyone`) | `admins` |
+| required_fields | text[] of `project`, `task`, `tag`, `description` | `{}` |
+| force_timer | boolean | `false` |
+| allow_breaks | boolean | `false` |
+
+The Phase 4b rule columns (from `rounding_mode` down) default to the behaviour before the rule existed; `packages/core/src/workspace-rules.ts` reads them and ignores an unknown stored value. Rounding applies to reports, exports and share links only (decision 13).
 
 ### `membership` (Better Auth `member`)
 
@@ -182,6 +192,7 @@ Both `(project_id → project cascade, user_id → user cascade)` with a composi
 | rate_source | `rate_level`? | which level answered: `task`, `project_member`, `project`, `member`, `workspace` |
 | amount_minor | bigint? | `round(rate × duration_seconds / 3600)` half up; `NULL` while running or without a rate |
 | deleted_at | timestamptz? | soft delete (Undo restores it) |
+| type | enum `entry_type` (`work`, `break`) | `work`; a break has no project, task, tags, billing or amount and is fixed at creation (decision 6) |
 | created_at, updated_at | timestamptz | |
 
 Indexes:
@@ -197,6 +208,7 @@ Rules (enforced in `apps/web/src/server/time-entries.ts`, the only write path):
 - Stops and edits lock the row with `SELECT ... FOR UPDATE`; an edit writes `start`/`end`/`duration_seconds` only when the patch changes a time.
 - `end > start`; at most 999 hours; a timer cannot stop more than one minute in the future. A forgotten timer that passes 999 hours is clamped at 999 hours when stopped.
 - An entry that crosses midnight stays one row and is listed under its start date in the viewer's timezone.
+- Breaks (Phase 4b): `type = 'break'` rows are saved with no details and never rated (`rates-sql.ts` updates work entries only); reports count work entries unless the Type filter asks otherwise.
 - Rates (Phase 4, decision 3 of the Phase 4 design): a new entry is rated with the rate in force at its start; an edit keeps the rate and recomputes `amount_minor`; only a change of project, task, person or billable switched on re-rates it. A rate change re-rates saved entries only through the `rate_recalc_job` ("Entries from a date" / "All entries"). The rating SQL lives in `packages/db/src/rates-sql.ts`, shared by the entry service, the job and the seed.
 
 ### time_entry_tag
@@ -237,6 +249,24 @@ A user's saved set of timesheet rows, applied to any week.
 | name | text | unique per `(workspace_id, user_id)` |
 | rows | jsonb | `[{ projectId, taskId, description }]`, at most 50 |
 | created_at, updated_at | timestamptz | |
+
+### favorite_entry
+
+A user's pinned entry details (Phase 4b): the tracker's favourites strip starts timers from them. At most 20 per user (enforced by the service).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| user_id | text → user (cascade) | |
+| description | text | default `''` |
+| project_id | text → project (set null) | |
+| task_id | text → task (set null) | |
+| tag_ids | text[] | default `{}` |
+| billable | boolean | default `false` |
+| created_at | timestamptz | oldest pinned first |
+
+Index `favorite_entry_user_idx` on `(workspace_id, user_id, created_at)`.
 
 ### captured_email
 

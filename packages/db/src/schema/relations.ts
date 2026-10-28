@@ -10,7 +10,13 @@ import {
   task,
   taskAssignee,
 } from "./catalog";
-import { timeEntry, timeEntryTag, timesheetTemplate, userSettings } from "./tracking";
+import {
+  favoriteEntry,
+  timeEntry,
+  timeEntryTag,
+  timesheetTemplate,
+  userSettings,
+} from "./tracking";
 import { exportJob, reportShareLink } from "./reports";
 import { userGroup, userGroupMember } from "./team";
 import { invitation, membership, workspace, workspaceSettings } from "./workspace";
@@ -135,6 +141,13 @@ export const timesheetTemplateRelations = relations(timesheetTemplate, ({ one })
     references: [workspace.id],
   }),
   user: one(user, { fields: [timesheetTemplate.userId], references: [user.id] }),
+}));
+
+export const favoriteEntryRelations = relations(favoriteEntry, ({ one }) => ({
+  workspace: one(workspace, { fields: [favoriteEntry.workspaceId], references: [workspace.id] }),
+  user: one(user, { fields: [favoriteEntry.userId], references: [user.id] }),
+  project: one(project, { fields: [favoriteEntry.projectId], references: [project.id] }),
+  task: one(task, { fields: [favoriteEntry.taskId], references: [task.id] }),
 }));
 
 export const reportShareLinkRelations = relations(reportShareLink, ({ one }) => ({

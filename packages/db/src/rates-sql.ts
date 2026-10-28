@@ -51,11 +51,11 @@ const RESOLVED = sql`(
   limit 1
 )`;
 
-/** Re-rates every entry `where` selects (rate, currency, source and amount). */
+/** Re-rates every work entry `where` selects (rate, currency, source and amount); breaks stay unrated. */
 export function rateEntriesSql(where: SQL): SQL {
   return sql`update "time_entry"
     set ("billable_rate_minor", "rate_currency", "rate_source", "amount_minor") = ${RESOLVED}
-    where ${where}`;
+    where (${where}) and "type" = 'work'`;
 }
 
 /** Rates one entry with the rates in force at its start. */
@@ -70,5 +70,5 @@ export async function recomputeAmount(db: Executor, entryId: string): Promise<vo
       when "billable_rate_minor" is null or "duration_seconds" is null then null
       else round("billable_rate_minor"::numeric * "duration_seconds" / 3600)::bigint
     end
-    where ${eq(timeEntry.id, entryId)}`);
+    where ${eq(timeEntry.id, entryId)} and "type" = 'work'`);
 }

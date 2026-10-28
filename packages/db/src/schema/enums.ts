@@ -1,5 +1,7 @@
 import {
+  CREATOR_SETTINGS,
   DURATION_FORMATS,
+  ENTRY_TYPES,
   EXPORT_FORMATS,
   EXPORT_REPORTS,
   EXPORT_STATUSES,
@@ -10,6 +12,7 @@ import {
   RATE_RECALC_STATUSES,
   REPORT_KINDS,
   ROLES,
+  ROUNDING_MODES,
   TASK_STATUSES,
   TIME_FORMATS,
 } from "@timekeep/core";
@@ -28,3 +31,6 @@ export const exportStatusEnum = pgEnum("export_status", EXPORT_STATUSES);
 export const rateKindEnum = pgEnum("rate_kind", RATE_KINDS);
 export const rateLevelEnum = pgEnum("rate_level", RATE_LEVELS);
 export const rateRecalcStatusEnum = pgEnum("rate_recalc_status", RATE_RECALC_STATUSES);
+export const roundingModeEnum = pgEnum("rounding_mode", ROUNDING_MODES);
+export const creatorSettingEnum = pgEnum("creator_setting", CREATOR_SETTINGS);
+export const entryTypeEnum = pgEnum("entry_type", ENTRY_TYPES);

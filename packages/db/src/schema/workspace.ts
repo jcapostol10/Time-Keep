@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  boolean,
   char,
   index,
   pgTable,
@@ -12,8 +14,10 @@ import {
 import { user } from "./auth";
 import { timestamps } from "./columns";
 import {
+  creatorSettingEnum,
   durationFormatEnum,
   membershipStatusEnum,
+  roundingModeEnum,
   timeFormatEnum,
   workspaceRoleEnum,
 } from "./enums";
@@ -96,6 +100,31 @@ export const workspaceSettings = pgTable(
     durationFormat: durationFormatEnum("duration_format").notNull().default("hh:mm:ss"),
     /** ISO 4217 */
     currency: char("currency", { length: 3 }).notNull().default("USD"),
+    // Phase 4b rules. Every default reproduces the behaviour before the rule existed;
+    // core's workspace-rules.ts reads them (unknown stored values fall back there).
+    /** Report rounding (reports, exports and share links only). */
+    roundingMode: roundingModeEnum("rounding_mode").notNull().default("off"),
+    roundingMinutes: smallint("rounding_minutes").notNull().default(15),
+    /** Pages hidden from members: "projects" | "team" | "reports". */
+    hiddenPages: text("hidden_pages")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /** Members see everyone's time in reports and the dashboard (durations only). */
+    membersSeeTeamTime: boolean("members_see_team_time").notNull().default(false),
+    projectCreators: creatorSettingEnum("project_creators").notNull().default("admins"),
+    clientCreators: creatorSettingEnum("client_creators").notNull().default("admins"),
+    taskCreators: creatorSettingEnum("task_creators").notNull().default("admins"),
+    tagCreators: creatorSettingEnum("tag_creators").notNull().default("admins"),
+    /** Fields an entry needs before it is stopped or saved: project | task | tag | description. */
+    requiredFields: text("required_fields")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /** Members and managers track with the timer only (decision 7). */
+    forceTimer: boolean("force_timer").notNull().default(false),
+    /** Break entries may be tracked (decision 6). */
+    allowBreaks: boolean("allow_breaks").notNull().default(false),
     ...timestamps,
   },
   (t) => [primaryKey({ columns: [t.workspaceId] })],

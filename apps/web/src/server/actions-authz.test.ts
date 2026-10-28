@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { DEFAULT_WORKSPACE_SETTINGS } from "@timekeep/core";
 import { eq, projectMember, rate, workspace } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -130,11 +131,8 @@ describe("server actions ask the permission matrix", () => {
     expect(set.ok).toBe(true);
     const [ws] = await db.select().from(workspace).where(eq(workspace.slug, slug));
     const settings = {
+      ...DEFAULT_WORKSPACE_SETTINGS,
       name: ws!.name,
-      timezone: "UTC",
-      weekStart: 1,
-      timeFormat: "24h",
-      durationFormat: "hh:mm:ss",
       currency: "PHP",
     };
     const refused = await updateWorkspaceSettingsAction(slug, settings);
