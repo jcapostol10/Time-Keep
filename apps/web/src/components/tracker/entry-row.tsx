@@ -31,6 +31,7 @@ import {
   EllipsisVerticalIcon,
   PlayIcon,
   ScissorsIcon,
+  StarIcon,
   TagIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -44,6 +45,7 @@ import { CommitInput } from "./manual-entry-fields";
 import { ColorDot, ProjectPicker } from "./project-picker";
 import { SplitDialog } from "./split-dialog";
 import { TagPicker } from "./tag-picker";
+import { useFavorites } from "./use-favorites";
 import { useTracker } from "./tracker-provider";
 import { useEntryMutations } from "./use-entry-mutations";
 
@@ -68,6 +70,7 @@ function TimeRange({ start, end, tz }: { start: string; end: string; tz: string 
 
 function RowActions({ entry }: { entry: TimeEntryDTO }) {
   const { duplicate, remove, split } = useEntryMutations();
+  const { pin } = useFavorites();
   const { rules } = useTracker();
   const [splitting, setSplitting] = useState(false);
   return (
@@ -81,6 +84,20 @@ function RowActions({ entry }: { entry: TimeEntryDTO }) {
       <DropdownMenuContent align="end">
         <DropdownMenuItem onSelect={() => void duplicate(entry.id)}>
           <CopyIcon /> Duplicate
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={entry.type === "break"}
+          onSelect={() =>
+            void pin({
+              description: entry.description,
+              projectId: entry.projectId,
+              taskId: entry.taskId,
+              tagIds: entry.tagIds,
+              billable: entry.billable,
+            })
+          }
+        >
+          <StarIcon /> Pin as favourite
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!entry.end || !rules.canWriteTimes}

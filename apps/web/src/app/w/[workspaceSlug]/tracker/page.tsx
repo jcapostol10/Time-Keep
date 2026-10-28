@@ -8,6 +8,7 @@ import { trackerKeys, type TrackerOptions } from "@/components/tracker/query-key
 import { TrackerPageClient } from "@/components/tracker/tracker-page-client";
 import { listPickerProjects } from "@/server/catalog/projects";
 import { listTags } from "@/server/catalog/tags";
+import { listFavorites } from "@/server/favorites";
 import { listEntriesPage, listRecentDescriptions } from "@/server/time-entries";
 import { requireWorkspacePage } from "@/server/workspace-access";
 import { targetScope, viewerFor, writableUsers } from "@/server/authz";
@@ -44,11 +45,13 @@ export default async function TrackerPage({
   const db = getDb();
   const { scope, people, target, key } = await shownPerson(ctx, raw);
 
-  const [firstPage, projects, tagRows, recent] = await Promise.all([
+  const [firstPage, projects, tagRows, recent, favorites] = await Promise.all([
     listEntriesPage(db, scope, { tz: viewer.timezone, weekStart: viewer.weekStart }),
     listPickerProjects(db, scope),
     listTags(db, scope.workspaceId, { includeArchived: false }),
     listRecentDescriptions(db, scope),
+    // Favourites are the viewer's own, whoever's entries are shown.
+    listFavorites(db, await viewerFor(ctx)),
   ]);
   const tags = tagRows.map((t) => ({ id: t.id, name: t.name, color: t.color }));
 
@@ -64,6 +67,7 @@ export default async function TrackerPage({
     recent,
   });
   queryClient.setQueryData(trackerKeys.people(workspaceSlug), people);
+  queryClient.setQueryData(trackerKeys.favorites(workspaceSlug), favorites);
 
   return (
     <>

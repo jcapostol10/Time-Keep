@@ -219,6 +219,9 @@ export const entryDetailsSchema = z.object({
 });
 export type EntryDetails = z.infer<typeof entryDetailsSchema>;
 
+/** A favourite pins work details (Phase 4b); breaks are not pinned. */
+export const pinFavoriteSchema = entryDetailsSchema.omit({ type: true });
+
 export const startTimerSchema = entryDetailsSchema;
 export type StartTimerInput = z.infer<typeof startTimerSchema>;
 

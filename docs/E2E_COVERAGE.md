@@ -278,6 +278,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 - [x] Select entries and edit their project, tags and billable flag at once — `power.spec.ts` › "bulk edit moves selected entries to a project and tags them"
 - [x] Split an entry into two at a chosen time — `power.spec.ts` › "split an entry at a time"
+- [x] Pin an entry as a favourite and start a timer from it — `power.spec.ts` › "pin an entry as a favourite and start it"
+- [x] A favourite on an archived project cannot start — `power.spec.ts` › "a favourite on an archived project is disabled"
 
 ## Small screens (375px)
 

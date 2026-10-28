@@ -29,6 +29,7 @@ import {
   tag,
   task,
   timeEntry,
+  favoriteEntry,
   timeEntryTag,
   user,
   userGroup,
@@ -304,6 +305,20 @@ async function seedTrackerData(
       color: pickColor(name),
     })),
   );
+  // The owner's one favourite (Phase 4b): the design review on the first project.
+  const ownerId = ids.get("owner@demo.test");
+  if (ownerId && projectIds[0] && tagIds[0]) {
+    await db.insert(favoriteEntry).values({
+      id: randomUUID(),
+      workspaceId,
+      userId: ownerId,
+      description: "Design review",
+      projectId: projectIds[0],
+      taskId: firstTaskIds[0] ?? null,
+      tagIds: [tagIds[0]],
+      billable: true,
+    });
+  }
 
   const now = new Date();
   const today = localDateKey(now, tz);

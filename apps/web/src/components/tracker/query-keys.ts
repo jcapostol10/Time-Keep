@@ -14,6 +14,7 @@ export const trackerKeys = {
   allOptions: (slug: string) => ["tracker", slug, "options"] as const,
   options: (slug: string, userId = "me") => ["tracker", slug, "options", userId] as const,
   people: (slug: string) => ["tracker", slug, "people"] as const,
+  favorites: (slug: string) => ["tracker", slug, "favorites"] as const,
   /** Also under `entries`: an inline edit in the Detailed report refetches every report. */
   report: (slug: string, kind: string, params: string) =>
     ["tracker", slug, "entries", "report", kind, params] as const,
@@ -40,6 +41,7 @@ export const trackerUrls = {
     `/api/w/${slug}/time-entries/range?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${forUser(userId, false)}`,
   options: (slug: string, userId = "me") => `/api/w/${slug}/tracker-options${forUser(userId, true)}`,
   people: (slug: string) => `/api/w/${slug}/people`,
+  favorites: (slug: string) => `/api/w/${slug}/favorites`,
   report: (slug: string, kind: string, params: string) =>
     `/api/w/${slug}/reports/${kind}${params ? `?${params}` : ""}`,
   reportOptions: (slug: string) => `/api/w/${slug}/reports/options`,
