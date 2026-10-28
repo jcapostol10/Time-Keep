@@ -83,6 +83,7 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 | --- | --- | --- | --- | --- |
 | `entry.read` | yes | yes | their scope | their own (everyone's if the workspace allows) |
 | `entry.write` | yes | yes | themselves and people they manage | their own |
+| `entry.writeTimes` | yes | yes | unless force timer is on (own time) | unless force timer is on (own time) |
 
 ## Reports
 
@@ -102,3 +103,4 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 | Action | Owner | Admin | Manager | Member |
 | --- | --- | --- | --- | --- |
 | `import.users` | yes | yes | — | — |
+| `import.entries` | yes | yes | yes | yes |

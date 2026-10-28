@@ -1,3 +1,4 @@
+import type { EntryType } from "./schemas";
 import { localDateKey } from "./time";
 
 /** The subset of a time entry the list needs to group and total. */
@@ -7,6 +8,8 @@ export interface GroupableEntry {
   projectId: string | null;
   tagIds: string[];
   billable: boolean;
+  /** work (the default) or break */
+  type?: EntryType;
   /** ISO instant */
   start: string;
   /** ISO instant; null while running */
@@ -30,10 +33,10 @@ export function sumDuration(entries: readonly GroupableEntry[]): number {
   return total;
 }
 
-/** Same description + project + tags (order-insensitive) + billable ⇒ same key. */
+/** Same description + project + tags (order-insensitive) + billable + type ⇒ same key. */
 export function entryGroupKey(e: GroupableEntry): string {
   const tags = [...e.tagIds].sort().join(",");
-  return `${e.description}\u0000${e.projectId ?? ""}\u0000${tags}\u0000${e.billable ? 1 : 0}`;
+  return `${e.description}\u0000${e.projectId ?? ""}\u0000${tags}\u0000${e.billable ? 1 : 0}\u0000${e.type ?? "work"}`;
 }
 
 /**

@@ -34,6 +34,7 @@ describe("entry payloads", () => {
       taskId: null,
       tagIds: [],
       billable: false,
+      type: "work",
     });
   });
 

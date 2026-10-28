@@ -21,6 +21,16 @@ function entry(overrides: Partial<GroupableEntry> & { id: string }): GroupableEn
   };
 }
 
+describe("entryGroupKey", () => {
+  it("keeps a break apart from a work entry with the same details", () => {
+    const work = entry({ id: "a", type: "work" });
+    const brk = entry({ id: "b", type: "break" });
+    expect(entryGroupKey(work)).not.toBe(entryGroupKey(brk));
+    // An entry without a type is work.
+    expect(entryGroupKey(entry({ id: "c" }))).toBe(entryGroupKey(work));
+  });
+});
+
 describe("groupByDay", () => {
   it("keys entries by their start date in the viewer's zone and lists a midnight-crossing entry once", () => {
     // 23:30 -> 00:30 Manila on March 9/10

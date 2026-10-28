@@ -44,10 +44,14 @@ export const ACTIONS = [
   "report.viewAmounts",
   "shareLink.manage",
   "import.users",
+  /** start, end or duration by hand: the force-timer gate */
+  "entry.writeTimes",
+  "import.entries",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
-export type CreatorSetting = "admins" | "managers" | "everyone";
+export const CREATOR_SETTINGS = ["admins", "managers", "everyone"] as const;
+export type CreatorSetting = (typeof CREATOR_SETTINGS)[number];
 export type CatalogType = "project" | "client" | "task" | "tag";
 
 /** The workspace switches that change answers (Phase 4b makes them editable). */
@@ -116,7 +120,9 @@ export type Rule =
   /** allowed unless the workspace hides the page from members */
   | "unlessHidden"
   /** allowed when the workspace lets members see team time */
-  | "teamSetting";
+  | "teamSetting"
+  /** allowed unless force timer is on, and then only for someone else's time */
+  | "unlessForced";
 
 const SCOPED: ReadonlySet<Rule> = new Set([
   "own",
@@ -167,6 +173,8 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
   "report.viewAmounts": { owner: "yes", admin: "yes", manager: "yes", member: "no" },
   "shareLink.manage": { owner: "yes", admin: "yes", manager: "own", member: "own" },
   "import.users": ADMINS,
+  "entry.writeTimes": { owner: "yes", admin: "yes", manager: "unlessForced", member: "unlessForced" },
+  "import.entries": { owner: "yes", admin: "yes", manager: "yes", member: "yes" },
 };
 
 const CREATED: Partial<Record<Action, CatalogType>> = {
@@ -257,6 +265,10 @@ function check(actor: Actor, action: Action, rule: Rule, resource: Resource): bo
       return resource.kind === "page" && !actor.settings.hiddenPages.includes(resource.page);
     case "teamSetting":
       return actor.settings.membersSeeTeamTime;
+    case "unlessForced":
+      // Decision 7: force timer binds a person's own time; time added for
+      // someone else (an admin or manager for a managed person) is exempt.
+      return !actor.settings.forceTimer || ownerOf(resource) !== actor.userId;
   }
 }
 
@@ -287,6 +299,7 @@ const RULE_WORDS: Record<Rule, string> = {
   creator: "if the workspace allows",
   unlessHidden: "unless the workspace hides it",
   teamSetting: "if the workspace allows",
+  unlessForced: "unless force timer is on (own time)",
 };
 
 const SECTION_TITLES: Record<string, string> = {

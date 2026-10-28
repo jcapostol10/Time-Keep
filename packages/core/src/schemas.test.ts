@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   clientInputSchema,
   clientPatchSchema,
+  DEFAULT_WORKSPACE_SETTINGS,
   currencyCodeSchema,
   dateRangeSchema,
   deleteProjectSchema,
@@ -53,18 +54,36 @@ describe("slug", () => {
 describe("workspace settings", () => {
   it("accepts a full valid payload", () => {
     const parsed = workspaceSettingsSchema.parse({
+      ...DEFAULT_WORKSPACE_SETTINGS,
       timezone: "Asia/Manila",
       weekStart: 1,
       timeFormat: "12h",
       durationFormat: "decimal",
       currency: "PHP",
+      roundingMode: "nearest",
+      roundingMinutes: 6,
+      hiddenPages: ["reports"],
+      requiredFields: ["project", "tag"],
     });
     expect(parsed.weekStart).toBe(1);
+    expect(parsed.roundingMinutes).toBe(6);
   });
   it("rejects a week start outside 0–6 or given as a string", () => {
-    const base = { timezone: "UTC", timeFormat: "24h", durationFormat: "hh:mm", currency: "USD" };
+    const base = { ...DEFAULT_WORKSPACE_SETTINGS, durationFormat: "hh:mm" };
     expect(workspaceSettingsSchema.safeParse({ ...base, weekStart: 7 }).success).toBe(false);
     expect(workspaceSettingsSchema.safeParse({ ...base, weekStart: "1" }).success).toBe(false);
+  });
+  it("rejects an unknown rounding step, page or required field, and a missing rule", () => {
+    const base = DEFAULT_WORKSPACE_SETTINGS;
+    expect(workspaceSettingsSchema.safeParse({ ...base, roundingMinutes: 7 }).success).toBe(false);
+    expect(workspaceSettingsSchema.safeParse({ ...base, hiddenPages: ["clients"] }).success).toBe(
+      false,
+    );
+    expect(workspaceSettingsSchema.safeParse({ ...base, requiredFields: ["colour"] }).success).toBe(
+      false,
+    );
+    const { forceTimer: _omitted, ...withoutForceTimer } = base;
+    expect(workspaceSettingsSchema.safeParse(withoutForceTimer).success).toBe(false);
   });
 });
 

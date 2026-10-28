@@ -4,7 +4,10 @@ import { RATE_APPLY, RATE_LEVELS } from "./rates";
 
 import { PROJECT_VISIBILITIES, TASK_STATUSES } from "./catalog";
 import { hexColorSchema } from "./colors";
+import { CREATOR_SETTINGS, PAGES } from "./permissions";
+import { REQUIRED_FIELDS } from "./required-fields";
 import { ROLES } from "./roles";
+import { ROUNDING_MODES, ROUNDING_STEPS } from "./rounding";
 
 // --- Enumerations shared by DB, server and UI ---------------------------------
 
@@ -96,15 +99,39 @@ export const workspaceSettingsSchema = z.object({
   timeFormat: timeFormatSchema,
   durationFormat: durationFormatSchema,
   currency: currencyCodeSchema,
+  // Phase 4b rules; every field is required so a form never resets one it did not show.
+  roundingMode: z.enum(ROUNDING_MODES),
+  roundingMinutes: z.literal([...ROUNDING_STEPS]),
+  hiddenPages: z.array(z.enum(PAGES)).max(PAGES.length),
+  membersSeeTeamTime: z.boolean(),
+  projectCreators: z.enum(CREATOR_SETTINGS),
+  clientCreators: z.enum(CREATOR_SETTINGS),
+  taskCreators: z.enum(CREATOR_SETTINGS),
+  tagCreators: z.enum(CREATOR_SETTINGS),
+  requiredFields: z.array(z.enum(REQUIRED_FIELDS)).max(REQUIRED_FIELDS.length),
+  forceTimer: z.boolean(),
+  allowBreaks: z.boolean(),
 });
 export type WorkspaceSettingsInput = z.infer<typeof workspaceSettingsSchema>;
 
+/** Today's behaviour: nothing hidden, admins create, no rules, rounding off. */
 export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettingsInput = {
   timezone: "UTC",
   weekStart: 1,
   timeFormat: "24h",
   durationFormat: "hh:mm:ss",
   currency: "USD",
+  roundingMode: "off",
+  roundingMinutes: 15,
+  hiddenPages: [],
+  membersSeeTeamTime: false,
+  projectCreators: "admins",
+  clientCreators: "admins",
+  taskCreators: "admins",
+  tagCreators: "admins",
+  requiredFields: [],
+  forceTimer: false,
+  allowBreaks: false,
 };
 
 export const updateProfileSchema = z.object({
@@ -177,13 +204,18 @@ export const ENTRY_DESCRIPTION_MAX = 3000;
 /** ISO 8601 instant (with offset or Z) → Date. Every action/route payload uses this. */
 export const isoInstantSchema = z.iso.datetime({ offset: true }).transform((s) => new Date(s));
 
+/** A work entry, or a break (decision 6): no project, task, tags, billing or amount. */
+export const ENTRY_TYPES = ["work", "break"] as const;
+export type EntryType = (typeof ENTRY_TYPES)[number];
+
 export const entryDetailsSchema = z.object({
   description: z.string().max(ENTRY_DESCRIPTION_MAX).default(""),
   projectId: z.string().min(1).nullable().default(null),
-  /** Carried for Phase 2; no task picker exists yet. */
   taskId: z.string().min(1).nullable().default(null),
   tagIds: z.array(z.string().min(1)).max(50).default([]),
   billable: z.boolean().default(false),
+  /** Fixed at creation; an entry's type never changes. */
+  type: z.enum(ENTRY_TYPES).default("work"),
 });
 export type EntryDetails = z.infer<typeof entryDetailsSchema>;
 
@@ -199,6 +231,8 @@ export type StopTimerInput = z.infer<typeof stopTimerSchema>;
 export const createManualEntrySchema = entryDetailsSchema.extend({
   start: isoInstantSchema,
   end: isoInstantSchema,
+  /** The person the entry is for (add time for others); the caller by default. */
+  userId: z.string().min(1).optional(),
 });
 export type CreateManualEntryInput = z.infer<typeof createManualEntrySchema>;
 

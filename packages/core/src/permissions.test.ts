@@ -125,6 +125,9 @@ const TABLE: Row[] = [
   ["shareLink.manage", { kind: "shareLink", createdBy: ME }, true, true, true, true],
   ["shareLink.manage", { kind: "shareLink", createdBy: OTHER }, true, true, false, false],
   ["import.users", NONE, true, true, false, false],
+  // Without force timer everyone may set times; "entry.write" decides whose.
+  ["entry.writeTimes", entry(ME), true, true, true, true],
+  ["import.entries", NONE, true, true, true, true],
 ];
 
 describe("can", () => {
@@ -217,6 +220,17 @@ describe("workspace settings", () => {
       can(actor("member", everyone), "task.create", { kind: "task", projectId: OTHER_PROJECT }),
     ).toBe(true);
     expect(can(actor("manager", everyone), "tag.create", NONE)).toBe(false);
+  });
+
+  it("force timer blocks members' and managers' own times, never time for someone else", () => {
+    const forced = { forceTimer: true };
+    expect(can(actor("member"), "entry.writeTimes", entry(ME))).toBe(true);
+    expect(can(actor("member", forced), "entry.writeTimes", entry(ME))).toBe(false);
+    expect(denial(actor("member", forced), "entry.writeTimes", entry(ME))).toBe(403);
+    expect(can(actor("manager", forced), "entry.writeTimes", entry(ME))).toBe(false);
+    expect(can(actor("manager", forced), "entry.writeTimes", entry(MANAGED))).toBe(true);
+    expect(can(actor("admin", forced), "entry.writeTimes", entry(ME))).toBe(true);
+    expect(can(actor("owner", forced), "entry.writeTimes", entry(OTHER))).toBe(true);
   });
 
   it("a hidden page is closed to members only", () => {
