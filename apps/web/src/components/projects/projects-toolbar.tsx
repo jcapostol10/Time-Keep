@@ -64,6 +64,7 @@ export function ProjectsToolbar({
     if (merged.status !== "active") params.set("status", merged.status);
     if (merged.billing !== "all") params.set("billing", merged.billing);
     if (merged.access !== "all") params.set("access", merged.access);
+    if (merged.kind !== "projects") params.set("kind", merged.kind);
     if (merged.sort !== "name") params.set("sort", merged.sort);
     if (merged.dir !== "asc") params.set("dir", merged.dir);
     const search = params.toString();
@@ -144,6 +145,18 @@ export function ProjectsToolbar({
           <SelectItem value="all">All access</SelectItem>
           <SelectItem value="public">Public</SelectItem>
           <SelectItem value="private">Private</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select
+        value={filters.kind}
+        onValueChange={(v) => navigate({ kind: v === "templates" ? "templates" : "projects" })}
+      >
+        <SelectTrigger aria-label="Kind" className="w-[calc(50%-0.25rem)] sm:w-36">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="projects">Projects</SelectItem>
+          <SelectItem value="templates">Templates</SelectItem>
         </SelectContent>
       </Select>
       <Select

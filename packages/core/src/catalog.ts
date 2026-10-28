@@ -11,7 +11,7 @@ export const TASK_STATUSES = ["ACTIVE", "DONE"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export interface TrackingDetails {
-  project: { id: string; archived: boolean } | null;
+  project: { id: string; archived: boolean; isTemplate?: boolean } | null;
   task: { projectId: string; status: TaskStatus } | null;
   tags: { name: string; archived: boolean }[];
 }
@@ -21,6 +21,7 @@ export interface TrackingDetails {
  * Existing entries keep archived projects, done tasks and archived tags.
  */
 export function trackingBlock(d: TrackingDetails): string | null {
+  if (d.project?.isTemplate) return "This project is a template.";
   if (d.project?.archived) return "This project is archived.";
   if (d.task) {
     if (!d.project || d.task.projectId !== d.project.id) {

@@ -2,6 +2,14 @@
 
 import { pickColor, type ProjectInput, projectInputSchema } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
+import { Label } from "@timekeep/ui/components/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@timekeep/ui/components/select";
 import {
   Dialog,
   DialogContent,
@@ -20,7 +28,7 @@ import { toast } from "sonner";
 import type { z } from "zod";
 
 import type { ProjectListItem } from "@/lib/catalog-types";
-import { createProjectAction, updateProjectAction } from "@/server/actions/projects";
+import { createProjectAction, updateProjectAction, copyProjectAction } from "@/server/actions/projects";
 
 import { ProjectFormFields } from "./project-form-fields";
 import type { ClientOption } from "./projects-toolbar";
@@ -32,16 +40,20 @@ export function ProjectDialog({
   slug,
   clients,
   project,
+  templates = [],
   open,
   onOpenChange,
 }: {
   slug: string;
   clients: ClientOption[];
   project?: ProjectListItem;
+  /** "Start from template": the templates the viewer can see (new projects only). */
+  templates?: ProjectListItem[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const form = useForm<FormValues, unknown, ProjectInput>({
     resolver: zodResolver(projectInputSchema),
     defaultValues: {
@@ -63,7 +75,9 @@ export function ProjectDialog({
     const payload = { ...values, color: effectiveColor };
     const result = project
       ? await updateProjectAction(slug, project.id, payload)
-      : await createProjectAction(slug, payload);
+      : templateId
+        ? await copyProjectAction(slug, { sourceId: templateId, ...payload, isTemplate: false })
+        : await createProjectAction(slug, payload);
     if (!result.ok) {
       const nameError = result.fieldErrors?.name?.[0];
       if (nameError) form.setError("name", { message: nameError });
@@ -92,6 +106,37 @@ export function ProjectDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
+            {!project && templates.length > 0 ? (
+              <div className="space-y-2">
+                <Label>Start from template</Label>
+                <Select
+                  value={templateId ?? "blank"}
+                  onValueChange={(v) => {
+                    const t = templates.find((x) => x.id === v) ?? null;
+                    setTemplateId(t?.id ?? null);
+                    if (t) {
+                      setColorPicked(true);
+                      form.setValue("color", t.color, { shouldDirty: true });
+                      form.setValue("billable", t.billable, { shouldDirty: true });
+                      form.setValue("visibility", t.visibility, { shouldDirty: true });
+                      form.setValue("note", t.note, { shouldDirty: true });
+                    }
+                  }}
+                >
+                  <SelectTrigger aria-label="Start from template" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="blank">Blank</SelectItem>
+                    {templates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             <ProjectFormFields
               form={form}
               clients={selectableClients}
@@ -117,7 +162,15 @@ export function ProjectDialog({
   );
 }
 
-export function NewProjectButton({ slug, clients }: { slug: string; clients: ClientOption[] }) {
+export function NewProjectButton({
+  slug,
+  clients,
+  templates = [],
+}: {
+  slug: string;
+  clients: ClientOption[];
+  templates?: ProjectListItem[];
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -125,7 +178,7 @@ export function NewProjectButton({ slug, clients }: { slug: string; clients: Cli
         <PlusIcon /> New project
       </Button>
       {open ? (
-        <ProjectDialog slug={slug} clients={clients} open={open} onOpenChange={setOpen} />
+        <ProjectDialog slug={slug} clients={clients} templates={templates} open={open} onOpenChange={setOpen} />
       ) : null}
     </>
   );

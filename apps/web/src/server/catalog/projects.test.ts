@@ -196,7 +196,21 @@ describe("projects service", () => {
     expect(await setProjectsArchived(db, owner, [a.id, b.id, "nope"], true)).toBe(2);
     expect(await listPickerProjects(db, owner)).toEqual([]);
     expect(await setProjectsArchived(db, owner, [a.id], false)).toBe(1);
-    expect((await listPickerProjects(db, owner)).map((p) => p.name)).toEqual(["A2"]);
+    // A template (a is one now) never reaches the picker; it is listed under Templates.
+    expect(await listPickerProjects(db, owner)).toEqual([]);
+    expect(
+      (
+        await listProjects(db, owner, {
+          q: "",
+          status: "active",
+          billing: "all",
+          access: "all",
+          sort: "name",
+          dir: "asc",
+          kind: "templates",
+        })
+      ).map((p) => p.name),
+    ).toEqual(["A2"]);
   });
 
   it("deletes a project by moving or deleting its entries", async () => {

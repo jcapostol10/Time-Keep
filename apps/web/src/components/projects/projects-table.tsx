@@ -28,7 +28,7 @@ import { toast } from "sonner";
 import { ColorDot } from "@/components/tracker/project-picker";
 import type { ProjectListItem } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
-import { archiveProjectsAction, updateProjectAction } from "@/server/actions/projects";
+import { archiveProjectsAction, updateProjectAction, copyProjectAction } from "@/server/actions/projects";
 
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { FavoriteButton } from "./favorite-button";
@@ -215,6 +215,24 @@ export function ProjectsTable({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onSelect={() => setEditing(p)}>Edit</DropdownMenuItem>
+                        {p.isTemplate ? null : (
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              run(
+                                () =>
+                                  copyProjectAction(slug, {
+                                    sourceId: p.id,
+                                    name: `${p.name} template`,
+                                    clientId: p.clientId,
+                                    isTemplate: true,
+                                  }),
+                                `${p.name} saved as the template “${p.name} template”`,
+                              )
+                            }
+                          >
+                            Save as template
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem
                           onSelect={() =>
                             run(

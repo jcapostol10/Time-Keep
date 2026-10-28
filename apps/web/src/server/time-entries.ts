@@ -197,11 +197,11 @@ async function assertDetailsUsable(
   const projectId = projectTouched ? details.projectId : (current?.projectId ?? null);
   const taskId = taskTouched ? details.taskId : (current?.taskId ?? null);
 
-  let projectRow: { id: string; archived: boolean } | null = null;
+  let projectRow: { id: string; archived: boolean; isTemplate?: boolean } | null = null;
   if (projectId) {
     const found = await db.query.project.findFirst({
       where: and(eq(project.id, projectId), eq(project.workspaceId, scope.workspaceId)),
-      columns: { id: true, archived: true },
+      columns: { id: true, archived: true, isTemplate: true },
     });
     const visible =
       found && can(scope.actor, "project.view", await projectResource(db, scope, projectId));
@@ -210,7 +210,11 @@ async function assertDetailsUsable(
     // private project the user has since left keeps it (they can still retag it).
     if (projectTouched && !visible) throw new TimeEntryError("INVALID", "Project not found.");
     // Archived blocks only when the project itself is being (re)assigned.
-    projectRow = { id: found.id, archived: projectTouched ? found.archived : false };
+    projectRow = {
+      id: found.id,
+      archived: projectTouched ? found.archived : false,
+      isTemplate: projectTouched ? found.isTemplate : false,
+    };
   }
 
   let taskRow: { projectId: string; status: "ACTIVE" | "DONE" } | null = null;

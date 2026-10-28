@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   bucketFor,
+  type CopyProjectInput,
   DEFAULT_REPORT_QUERY,
   type DeleteProjectMode,
   pickColor,
@@ -36,8 +37,10 @@ import {
   projectFavorite,
   projectGroup,
   projectMember,
+  rate,
   sql,
   task,
+  taskAssignee,
   timeEntry,
   userGroup,
 } from "@timekeep/db";
@@ -177,12 +180,14 @@ function comparePicker(a: PickerProject, b: PickerProject): number {
 export async function listProjects(
   db: Executor,
   viewer: Viewer,
-  q: ProjectListQuery,
+  q: Omit<ProjectListQuery, "kind"> & { kind?: ProjectListQuery["kind"] },
 ): Promise<ProjectListItem[]> {
   const filters: (SQL | undefined)[] = [
     eq(project.workspaceId, viewer.workspaceId),
     visibleProjectFilter(viewer),
   ];
+  // Templates are listed apart (Phase 4b): the projects view never shows them.
+  filters.push(eq(project.isTemplate, (q.kind ?? "projects") === "templates"));
   if (q.status !== "all") filters.push(eq(project.archived, q.status === "archived"));
   if (q.billing !== "all") filters.push(eq(project.billable, q.billing === "billable"));
   if (q.access !== "all") {
@@ -217,6 +222,7 @@ export async function listPickerProjects(db: Executor, viewer: Viewer): Promise<
     where: and(
       eq(project.workspaceId, viewer.workspaceId),
       eq(project.archived, false),
+      eq(project.isTemplate, false),
       visibleProjectFilter(viewer),
     ),
     with: {
@@ -241,6 +247,141 @@ export async function listPickerProjects(db: Executor, viewer: Viewer): Promise<
       tasks: r.tasks,
     }))
     .sort(comparePicker);
+}
+
+/** Templates the viewer may see, for "Start from template". */
+export async function listTemplates(
+  db: Executor,
+  viewer: Viewer,
+): Promise<{ id: string; name: string }[]> {
+  const rows = await db.query.project.findMany({
+    where: and(
+      eq(project.workspaceId, viewer.workspaceId),
+      eq(project.isTemplate, true),
+      visibleProjectFilter(viewer),
+    ),
+    columns: { id: true, name: true },
+    orderBy: asc(project.name),
+  });
+  return rows;
+}
+
+/**
+ * A copy of a project (Phase 4b templates): its settings, unless the caller
+ * overrides them, its active tasks with their assignees, its members with
+ * their manager flag, its groups, and the rates in force now at the project,
+ * project-member and task levels, written as new rows effective from now.
+ * The source must be visible to the caller; the caller's `project.create`
+ * right is the action's check.
+ */
+export async function copyProject(
+  db: Database,
+  viewer: Viewer,
+  sourceId: string,
+  opts: Omit<CopyProjectInput, "sourceId">,
+  now: Date = new Date(),
+): Promise<{ id: string; name: string }> {
+  const source = await requireVisibleProject(db, viewer, sourceId);
+  const name = opts.name.trim();
+  const clientId = opts.clientId ?? null;
+  if (clientId) await requireClientName(db, viewer.workspaceId, clientId);
+  const tasks = await db
+    .select()
+    .from(task)
+    .where(and(eq(task.projectId, sourceId), eq(task.status, "ACTIVE")));
+  const taskIds = tasks.map((t) => t.id);
+  const [assignees, members, groups, rateRows] = await Promise.all([
+    taskIds.length > 0
+      ? db.select().from(taskAssignee).where(inArray(taskAssignee.taskId, taskIds))
+      : [],
+    db.select().from(projectMember).where(eq(projectMember.projectId, sourceId)),
+    db.select().from(projectGroup).where(eq(projectGroup.projectId, sourceId)),
+    db
+      .select()
+      .from(rate)
+      .where(
+        and(
+          eq(rate.workspaceId, viewer.workspaceId),
+          eq(rate.kind, "billable"),
+          eq(rate.projectId, sourceId),
+          sql`${rate.effectiveFrom} <= ${now}`,
+        ),
+      ),
+  ]);
+  // The row in force per level and target: the latest effective one; a null amount means none.
+  const inForce = new Map<string, (typeof rateRows)[number]>();
+  for (const r of rateRows) {
+    const key = `${r.level}|${r.userId ?? ""}|${r.taskId ?? ""}`;
+    const seen = inForce.get(key);
+    if (!seen || seen.effectiveFrom < r.effectiveFrom) inForce.set(key, r);
+  }
+  const id = randomUUID();
+  const taskMap = new Map(taskIds.map((old) => [old, randomUUID()]));
+  await db.transaction(async (tx) => {
+    try {
+      await tx.insert(project).values({
+        id,
+        workspaceId: viewer.workspaceId,
+        name,
+        color: opts.color ?? source.color,
+        clientId,
+        billable: opts.billable ?? source.billable,
+        visibility: opts.visibility ?? source.visibility,
+        note: opts.note ?? source.note,
+        isTemplate: opts.isTemplate,
+      });
+    } catch (error) {
+      if (isUniqueViolation(error, "project_workspace_client_name_uq")) {
+        throw new CatalogError("CONFLICT", DUPLICATE_NAME);
+      }
+      throw error;
+    }
+    if (tasks.length > 0) {
+      await tx.insert(task).values(
+        tasks.map((t) => ({
+          id: taskMap.get(t.id)!,
+          workspaceId: viewer.workspaceId,
+          projectId: id,
+          name: t.name,
+          status: "ACTIVE" as const,
+        })),
+      );
+    }
+    if (assignees.length > 0) {
+      await tx
+        .insert(taskAssignee)
+        .values(assignees.map((a) => ({ taskId: taskMap.get(a.taskId)!, userId: a.userId })));
+    }
+    if (members.length > 0) {
+      await tx.insert(projectMember).values(
+        members.map((m) => ({ projectId: id, userId: m.userId, isManager: m.isManager })),
+      );
+    }
+    if (groups.length > 0) {
+      await tx.insert(projectGroup).values(groups.map((g) => ({ projectId: id, groupId: g.groupId })));
+    }
+    const copied = [...inForce.values()].filter(
+      (r) => r.amountMinor !== null && (r.taskId === null || taskMap.has(r.taskId)),
+    );
+    if (copied.length > 0) {
+      await tx.insert(rate).values(
+        copied.map((r) => ({
+          id: randomUUID(),
+          workspaceId: viewer.workspaceId,
+          kind: r.kind,
+          level: r.level,
+          userId: r.userId,
+          projectId: id,
+          taskId: r.taskId ? (taskMap.get(r.taskId) ?? null) : null,
+          amountMinor: r.amountMinor,
+          currency: r.currency,
+          effectiveFrom: now,
+          createdBy: viewer.userId,
+        })),
+      );
+    }
+  });
+  return { id, name };
 }
 
 export async function getProject(

@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  copyProjectSchema,
   deleteProjectSchema,
   projectInputSchema,
   projectMembersSchema,
@@ -16,6 +17,7 @@ import { workspaceRoutes } from "@/lib/routes";
 import type { PickerProject } from "@/lib/tracker-types";
 import { userErrorMessage } from "@/server/actions/errors";
 import {
+  copyProject,
   createProject,
   deleteProject,
   setFavorite,
@@ -182,6 +184,25 @@ export async function setProjectGroupsAction(
     await setProjectGroups(getDb(), viewer, projectId, parsed.data.groupIds);
     refresh(slug);
     return ok(null);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+/** "Save as template" and "Start from template": a copy of a project the caller can see. */
+export async function copyProjectAction(
+  slug: string,
+  input: unknown,
+): Promise<ActionResult<{ id: string; name: string }>> {
+  try {
+    const ctx = await requireWorkspaceAccess(slug);
+    const viewer = await authorize(ctx, "project.create", { kind: "project", projectId: null });
+    const parsed = copyProjectSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    const { sourceId, ...opts } = parsed.data;
+    const copied = await copyProject(getDb(), viewer, sourceId, opts);
+    refresh(slug);
+    return ok(copied);
   } catch (error) {
     return fail(userErrorMessage(error));
   }

@@ -35,15 +35,18 @@ export default async function ProjectsPage({
     status: raw.status,
     billing: raw.billing,
     access: raw.access,
+    kind: raw.kind,
     sort: raw.sort,
     dir: raw.dir,
   });
   const query = parsed.success ? parsed.data : projectListQuerySchema.parse({});
 
   const db = getDb();
-  const [projects, clients] = await Promise.all([
+  const [projects, clients, templates] = await Promise.all([
     listProjects(db, viewer, query),
     listClientOptions(db, ctx.workspace.id),
+    // "Start from template" lists every template the viewer can see.
+    listProjects(db, viewer, { ...query, q: "", clientId: undefined, status: "all", kind: "templates" }),
   ]);
 
   return (
@@ -55,7 +58,7 @@ export default async function ProjectsPage({
             ? "What time is tracked against. Group projects by client and control who can see them."
             : "The projects you can track time on."
         }
-        actions={canCreate ? <NewProjectButton slug={workspaceSlug} clients={clients} /> : null}
+        actions={canCreate ? <NewProjectButton slug={workspaceSlug} clients={clients} templates={templates} /> : null}
       />
       <ProjectsToolbar query={query} clients={clients} />
       <ProjectsTable

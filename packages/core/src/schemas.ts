@@ -335,10 +335,25 @@ export const projectListQuerySchema = z.object({
   status: z.enum(["active", "archived", "all"]).default("active"),
   billing: z.enum(["all", "billable", "non-billable"]).default("all"),
   access: z.enum(["all", "public", "private"]).default("all"),
+  /** Templates are listed apart from projects (Phase 4b). */
+  kind: z.enum(["projects", "templates"]).default("projects"),
   sort: z.enum(["name", "client", "tracked"]).default("name"),
   dir: z.enum(["asc", "desc"]).default("asc"),
 });
 export type ProjectListQuery = z.infer<typeof projectListQuerySchema>;
+
+/** "Save as template" and "Start from template" (Phase 4b): a copy of a project. */
+export const copyProjectSchema = z.object({
+  sourceId: z.string().min(1),
+  name: catalogNameSchema,
+  clientId: z.string().min(1).nullable().default(null),
+  isTemplate: z.boolean().default(false),
+  color: hexColorSchema.optional(),
+  billable: z.boolean().optional(),
+  visibility: z.enum(PROJECT_VISIBILITIES).optional(),
+  note: z.string().max(2000).optional(),
+});
+export type CopyProjectInput = z.infer<typeof copyProjectSchema>;
 
 export const projectMembersSchema = z.object({
   userIds: z.array(z.string().min(1)).max(500),

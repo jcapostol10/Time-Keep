@@ -280,6 +280,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Split an entry into two at a chosen time — `power.spec.ts` › "split an entry at a time"
 - [x] Pin an entry as a favourite and start a timer from it — `power.spec.ts` › "pin an entry as a favourite and start it"
 - [x] A favourite on an archived project cannot start — `power.spec.ts` › "a favourite on an archived project is disabled"
+- [x] Save a project as a template and start a new project from it (tasks, members, rates copied); a template takes no time — `power.spec.ts` › "start a project from a template"
 
 ## Small screens (375px)
 

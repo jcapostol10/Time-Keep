@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { waitForApp } from "./helpers/app";
 import { createProjectViaUi, projectRow, rowAction } from "./helpers/catalog";
+import { setRateIn } from "./helpers/rates";
 import {
   addManualEntry,
   createTag,
@@ -126,5 +127,53 @@ test.describe("power features", () => {
       .getByRole("button", { name: "Start Legacy" });
     await expect(start).toBeDisabled();
     await expect(start).toHaveAttribute("title", "This project is archived.");
+  });
+
+  test("start a project from a template", async ({ page, freshUser }) => {
+    await createProjectViaUi(page, freshUser.slug, "Base");
+    await page.getByRole("link", { name: "Base" }).click();
+    await page.getByRole("button", { name: "Add task" }).click();
+    const taskDialog = page.getByRole("dialog", { name: "New task" });
+    await taskDialog.getByLabel("Name").fill("Setup");
+    await taskDialog.getByRole("button", { name: "Add task" }).click();
+    await expect(page.getByRole("row", { name: /Setup/ })).toBeVisible();
+    await page.getByRole("tab", { name: "Rates" }).click();
+    await setRateIn(
+      page,
+      page.getByRole("region", { name: "Project rate" }).getByRole("button", { name: "Change rate" }),
+      { amount: "80", apply: "New entries only" },
+    );
+
+    await page.goto(`/w/${freshUser.slug}/projects`);
+    await waitForApp(page);
+    await rowAction(page, projectRow(page, "Base"), "Save as template");
+    await expect(page.getByText(/saved as the template/)).toBeVisible();
+    await page.getByRole("combobox", { name: "Kind" }).click();
+    await page.getByRole("option", { name: "Templates", exact: true }).click();
+    await expect(projectRow(page, "Base template")).toBeVisible();
+
+    await page.getByRole("button", { name: "New project" }).click();
+    const dialog = page.getByRole("dialog", { name: "New project" });
+    await dialog.getByRole("combobox", { name: "Start from template" }).click();
+    await page.getByRole("option", { name: "Base template", exact: true }).click();
+    await dialog.getByLabel("Name").fill("Client X");
+    await dialog.getByRole("button", { name: "Create project" }).click();
+    await expect(dialog).toBeHidden();
+
+    await page.getByRole("combobox", { name: "Kind" }).click();
+    await page.getByRole("option", { name: "Projects", exact: true }).click();
+    await page.getByRole("link", { name: "Client X" }).click();
+    await expect(page.getByRole("row", { name: /Setup/ })).toBeVisible();
+    await page.getByRole("tab", { name: "Rates" }).click();
+    await expect(page.getByRole("region", { name: "Project rate" })).toContainText("$80.00");
+
+    // The template itself takes no time: the picker does not list it.
+    await page.goto(`/w/${freshUser.slug}/tracker`);
+    await expect(page.locator('section[aria-label="Timer"][data-hydrated="true"]')).toBeVisible();
+    await timer(page).getByRole("button", { name: /^Project:/ }).click();
+    await page.getByRole("combobox", { name: "Search projects" }).fill("Base");
+    await expect(page.getByRole("option", { name: "Client X", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("option", { name: "Base template", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("option", { name: "Base", exact: true })).toBeVisible();
   });
 });
