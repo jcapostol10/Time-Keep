@@ -147,6 +147,7 @@ function baseConditions(
   if (eff.taskIds.length > 0) conds.push(idFilter(timeEntry.taskId, eff.taskIds));
   if (eff.tagIds.length > 0) conds.push(tagFilter(eff.tagIds, eff.tagMode));
   if (eff.billable !== "all") conds.push(eq(timeEntry.billable, eff.billable === "yes"));
+  if (eff.type !== "all") conds.push(eq(timeEntry.type, eff.type));
   const text = eff.description.trim();
   if (text) conds.push(ilike(timeEntry.description, `%${escapeLike(text)}%`));
   return conds;
@@ -471,6 +472,7 @@ export async function detailedReport(
       taskId: timeEntry.taskId,
       taskName: task.name,
       billable: timeEntry.billable,
+      type: timeEntry.type,
       start: timeEntry.start,
       end: timeEntry.end,
       durationSeconds: timeEntry.durationSeconds,
@@ -513,6 +515,7 @@ export async function detailedReport(
       userName: r.userName,
       tags: tags.map((t) => t.name),
       billable: r.billable,
+      type: r.type,
       start: r.start.toISOString(),
       end: (r.end ?? r.start).toISOString(),
       durationSeconds: r.durationSeconds ?? 0,

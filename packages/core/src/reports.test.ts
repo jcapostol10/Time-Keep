@@ -492,3 +492,15 @@ describe("totals with amounts", () => {
     expect(EMPTY_TOTALS).toMatchObject({ amountMinor: 0, unratedCount: 0 });
   });
 });
+
+describe("the Type filter", () => {
+  it("reads work by default and keeps a chosen type in the URL", () => {
+    expect(parseReportQuery(new URLSearchParams("")).type).toBe("work");
+    expect(parseReportQuery(new URLSearchParams("type=break")).type).toBe("break");
+    expect(parseReportQuery(new URLSearchParams("type=lunch")).type).toBe("work");
+    expect(reportQueryToSearchParams({ ...DEFAULT_REPORT_QUERY, type: "all" }).get("type")).toBe(
+      "all",
+    );
+    expect(reportQueryToSearchParams(DEFAULT_REPORT_QUERY).has("type")).toBe(false);
+  });
+});

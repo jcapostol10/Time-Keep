@@ -24,6 +24,7 @@ const draft: EntryDraft = {
   taskId: "t1",
   tagIds: ["a"],
   billable: true,
+  type: "work",
 };
 
 describe("pruneDraft", () => {

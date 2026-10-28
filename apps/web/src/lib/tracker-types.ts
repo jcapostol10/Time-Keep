@@ -1,3 +1,5 @@
+import type { EntryType } from "@timekeep/core";
+
 /**
  * Isomorphic DTOs for the time tracker. Everything that crosses the
  * server/client boundary (server actions, route handlers, react-query cache)
@@ -50,6 +52,8 @@ export interface TimeEntryDTO {
   tags: EntryTag[];
   tagIds: string[];
   billable: boolean;
+  /** work, or a break: no project, tags, billing or amount */
+  type: EntryType;
   /** ISO instant */
   start: string;
   /** ISO instant; null while running */
@@ -83,6 +87,7 @@ export interface EntryDraft {
   taskId: string | null;
   tagIds: string[];
   billable: boolean;
+  type: EntryType;
 }
 
 export const EMPTY_DRAFT: EntryDraft = {
@@ -91,4 +96,5 @@ export const EMPTY_DRAFT: EntryDraft = {
   taskId: null,
   tagIds: [],
   billable: false,
+  type: "work",
 };

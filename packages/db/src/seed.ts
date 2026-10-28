@@ -97,7 +97,7 @@ async function createWorkspace(
   db: DbExecutor,
   name: string,
   ownerId: string,
-  opts: { slug?: string; timezone?: string } = {},
+  opts: { slug?: string; timezone?: string; allowBreaks?: boolean } = {},
 ) {
   const taken = new Set(
     (await db.select({ slug: workspace.slug }).from(workspace)).map((r) => r.slug),
@@ -105,7 +105,11 @@ async function createWorkspace(
   const slug = opts.slug ?? uniqueSlug(slugify(name), (s) => taken.has(s));
   const id = randomUUID();
   await db.insert(workspace).values({ id, name, slug });
-  await db.insert(workspaceSettings).values({ workspaceId: id, timezone: opts.timezone ?? "UTC" });
+  await db.insert(workspaceSettings).values({
+    workspaceId: id,
+    timezone: opts.timezone ?? "UTC",
+    allowBreaks: opts.allowBreaks ?? false,
+  });
   await db.insert(membership).values({
     id: randomUUID(),
     workspaceId: id,
@@ -351,6 +355,24 @@ async function seedTrackerData(
           if (tagId) links.push({ timeEntryId: id, tagId });
         }
         minutes += length + Math.floor(random() * 3) * 15;
+      }
+      // Lunch: a 30-minute break at noon (decision 6; out of the reports by default).
+      const lunchStart = zonedDateTimeToInstant({ date, hours: 12, minutes: 0 }, tz);
+      const lunchEnd = new Date(lunchStart.getTime() + 30 * 60_000);
+      if (lunchEnd <= now) {
+        entries.push({
+          id: randomUUID(),
+          workspaceId,
+          userId,
+          description: "Lunch",
+          projectId: null,
+          taskId: null,
+          billable: false,
+          type: "break",
+          start: lunchStart,
+          end: lunchEnd,
+          durationSeconds: 1800,
+        });
       }
     }
 

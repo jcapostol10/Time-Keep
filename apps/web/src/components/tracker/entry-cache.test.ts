@@ -16,6 +16,7 @@ function dto(id: string, start: string, extra: Partial<TimeEntryDTO> = {}): Time
     tags: [],
     tagIds: [],
     billable: false,
+    type: "work",
     start,
     end: start,
     durationSeconds: 60,

@@ -116,6 +116,7 @@ const ENTRIES: DetailedEntry[] = [
     end: "2026-03-09T02:30:00.000Z",
     durationSeconds: 5400,
     rateMinor: null,
+    type: "work",
     amountMinor: null,
   },
   {
@@ -131,6 +132,7 @@ const ENTRIES: DetailedEntry[] = [
     end: "2026-03-09T16:30:00.000Z",
     durationSeconds: 3600,
     rateMinor: null,
+    type: "work",
     amountMinor: null,
   },
   {
@@ -146,6 +148,7 @@ const ENTRIES: DetailedEntry[] = [
     end: "2026-03-10T04:15:00.000Z",
     durationSeconds: 900,
     rateMinor: null,
+    type: "work",
     amountMinor: null,
   },
 ];
@@ -154,13 +157,13 @@ describe("detailed export", () => {
   it("formats the date and times in the viewer's zone and formats; a midnight crossing keeps its start date", () => {
     const csv = toCsv(ENTRIES, detailedColumns(PREFS));
     expect(csv.split("\r\n")[0]).toBe(
-      "﻿Description,Project,Client,Task,Person,Tags,Billable,Date,Start,End,Duration",
+      "﻿Description,Type,Project,Client,Task,Person,Tags,Billable,Date,Start,End,Duration",
     );
     expect(csv).toContain(
-      "Design review,Web,Acme,Design,Alice,urgent; review,Yes,2026-03-09,09:00,10:30,1:30:00",
+      "Design review,Work,Web,Acme,Design,Alice,urgent; review,Yes,2026-03-09,09:00,10:30,1:30:00",
     );
     expect(csv).toContain(
-      '"Call ""Globex"", notes",Site,Globex,,Bob,,No,2026-03-09,23:30,00:30,1:00:00',
+      '"Call ""Globex"", notes",Work,Site,Globex,,Bob,,No,2026-03-09,23:30,00:30,1:00:00',
     );
     const us = toCsv(
       ENTRIES,

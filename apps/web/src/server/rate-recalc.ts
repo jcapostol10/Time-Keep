@@ -165,6 +165,7 @@ function entriesFrom(workspaceId: string, from: Date) {
   return and(
     eq(timeEntry.workspaceId, workspaceId),
     isNull(timeEntry.deletedAt),
+    eq(timeEntry.type, "work"),
     gte(timeEntry.start, from),
   );
 }

@@ -83,6 +83,8 @@ export const reportQuerySchema = z
     tagIds: idList,
     tagMode: z.enum(["and", "or"]).default("or"),
     billable: z.enum(["all", "yes", "no"]).default("all"),
+    /** Work entries by default (decision 6); breaks only, or everything. */
+    type: z.enum(["work", "break", "all"]).default("work"),
     description: z.string().max(200).default(""),
     groupBy: z
       .array(z.enum(GROUP_KEYS))
@@ -123,6 +125,7 @@ const SCALAR_KEYS = [
   "to",
   "tagMode",
   "billable",
+  "type",
   "description",
   "bucket",
   "weeklyBy",

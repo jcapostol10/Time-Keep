@@ -25,6 +25,7 @@ import { cn } from "@timekeep/ui/lib/utils";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
+  CoffeeIcon,
   CopyIcon,
   DollarSignIcon,
   EllipsisVerticalIcon,
@@ -159,6 +160,12 @@ export function EntryRow({
         onCommit={(description) => save({ description })}
         className="hover:border-input min-w-0 flex-1 basis-[calc(100%-2rem)] border-transparent text-left shadow-none md:basis-auto"
       />
+      {entry.type === "break" ? (
+        <Badge variant="secondary">
+          <CoffeeIcon /> Break
+        </Badge>
+      ) : (
+        <>
       <ProjectPicker
         slug={slug}
         value={{ projectId: entry.projectId, taskId: entry.taskId }}
@@ -176,6 +183,8 @@ export function EntryRow({
         onChange={(tagIds) => save({ tagIds })}
       />
       <BillableToggle value={entry.billable} onChange={(billable) => save({ billable })} />
+        </>
+      )}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-0.5 md:shrink-0 md:flex-nowrap">
         <CommitInput
           label="Start time"

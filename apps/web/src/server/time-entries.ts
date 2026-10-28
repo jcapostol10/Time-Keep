@@ -131,6 +131,7 @@ function toDTO(row: EntryRow): TimeEntryDTO {
     tags,
     tagIds: tags.map((t) => t.id),
     billable: row.billable,
+    type: row.type,
     start: row.start.toISOString(),
     end: row.end ? row.end.toISOString() : null,
     durationSeconds: row.durationSeconds,
@@ -276,6 +277,28 @@ function actorOf(scope: EntryScope): Actor {
 /** Decision 7: manual times need `entry.writeTimes` (force timer exempts admins and time for others). */
 function assertCanWriteTimes(scope: EntryScope, projectId: string | null): void {
   assertCan(actorOf(scope), "entry.writeTimes", { kind: "entry", userId: scope.userId, projectId });
+}
+
+/** Decision 6: a break carries no details, and only where the workspace allows breaks. */
+async function breakAware<T extends EntryInput>(
+  db: Executor,
+  scope: EntryScope,
+  input: T,
+): Promise<T & { type: EntryDetails["type"] }> {
+  const type = input.type ?? "work";
+  if (type === "work") return { ...input, type };
+  const { allowBreaks } = await rulesOf(db, scope.workspaceId);
+  if (!allowBreaks) throw new TimeEntryError("INVALID", "Breaks are not enabled.");
+  return { ...input, type, projectId: null, taskId: null, tagIds: [], billable: false };
+}
+
+function wantsDetails(patch: Partial<EntryDetails>): boolean {
+  return (
+    (patch.projectId !== undefined && patch.projectId !== null) ||
+    (patch.taskId !== undefined && patch.taskId !== null) ||
+    (patch.tagIds !== undefined && patch.tagIds.length > 0) ||
+    patch.billable === true
+  );
 }
 
 async function rulesOf(db: Executor, workspaceId: string) {
@@ -436,7 +459,8 @@ export async function startTimer(
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${`${scope.workspaceId}:${scope.userId}`}))`,
     );
-    await assertDetailsUsable(tx, scope, input);
+    const details = await breakAware(tx, scope, input);
+    await assertDetailsUsable(tx, scope, details);
 
     const running = await tx.query.timeEntry.findFirst({
       where: and(scopeWhere(scope), isNull(timeEntry.end)),
@@ -458,11 +482,11 @@ export async function startTimer(
         id,
         workspaceId: scope.workspaceId,
         userId: scope.userId,
-        description: input.description.trim(),
-        projectId: input.projectId,
-        taskId: input.taskId,
-        billable: input.billable,
-        type: input.type ?? "work",
+        description: details.description.trim(),
+        projectId: details.projectId,
+        taskId: details.taskId,
+        billable: details.billable,
+        type: details.type,
         start: now,
         end: null,
         durationSeconds: null,
@@ -473,7 +497,7 @@ export async function startTimer(
       }
       throw error;
     }
-    if (input.tagIds.length > 0) await replaceTags(tx, id, input.tagIds);
+    if (details.tagIds.length > 0) await replaceTags(tx, id, details.tagIds);
     await rateEntry(tx, id);
 
     return { started: await loadDTO(tx, scope, id), stopped };
@@ -531,23 +555,24 @@ export async function createManualEntry(
   if (!check.ok) throw new TimeEntryError("INVALID", check.error);
 
   return db.transaction(async (tx) => {
-    await assertDetailsUsable(tx, scope, input);
-    await assertRequiredFields(tx, scope, { ...input, type: input.type ?? "work" });
+    const details = await breakAware(tx, scope, input);
+    await assertDetailsUsable(tx, scope, details);
+    await assertRequiredFields(tx, scope, details);
     const id = randomUUID();
     await tx.insert(timeEntry).values({
       id,
       workspaceId: scope.workspaceId,
       userId: scope.userId,
-      description: input.description.trim(),
-      projectId: input.projectId,
-      taskId: input.taskId,
-      billable: input.billable,
-      type: input.type ?? "work",
+      description: details.description.trim(),
+      projectId: details.projectId,
+      taskId: details.taskId,
+      billable: details.billable,
+      type: details.type,
       start: input.start,
       end: input.end,
       durationSeconds: computeDurationSeconds(input.start, input.end),
     });
-    if (input.tagIds.length > 0) await replaceTags(tx, id, input.tagIds);
+    if (details.tagIds.length > 0) await replaceTags(tx, id, details.tagIds);
     await rateEntry(tx, id);
     return loadDTO(tx, scope, id);
   });
@@ -569,6 +594,9 @@ export async function updateEntry(
     const row = await findOwned(tx, scope, entryId);
     if (patch.start !== undefined || patch.end !== undefined) {
       assertCanWriteTimes(scope, row.projectId);
+    }
+    if (row.type === "break" && wantsDetails(patch)) {
+      throw new TimeEntryError("INVALID", "A break has no project, tags or billing.");
     }
     await assertDetailsUsable(tx, scope, patch, {
       projectId: row.projectId,
@@ -727,6 +755,7 @@ export async function continueEntry(
       taskId: row.taskId,
       tagIds: row.tags.map((t) => t.tag.id),
       billable: row.billable,
+      type: row.type,
     },
     now,
   );

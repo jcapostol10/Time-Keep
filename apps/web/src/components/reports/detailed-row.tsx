@@ -14,6 +14,7 @@ import {
 } from "@timekeep/core";
 import { Checkbox } from "@timekeep/ui/components/checkbox";
 import { TableCell, TableRow } from "@timekeep/ui/components/table";
+import { Badge } from "@timekeep/ui/components/badge";
 import { DollarSignIcon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -111,7 +112,9 @@ export function DetailedRow({
       </TableCell>
       {show("project") ? (
         <TableCell>
-          {entry.editable ? (
+          {entry.type === "break" ? (
+            <Badge variant="secondary">Break</Badge>
+          ) : entry.editable ? (
             <ProjectPicker
               slug={slug}
               value={{ projectId: entry.projectId, taskId: entry.taskId }}

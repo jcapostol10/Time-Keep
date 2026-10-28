@@ -133,6 +133,19 @@ export function FilterBar() {
           <SelectItem value="no">Non-billable only</SelectItem>
         </SelectContent>
       </Select>
+      <Select
+        value={query.type}
+        onValueChange={(v) => set({ type: v === "break" ? "break" : v === "all" ? "all" : "work" })}
+      >
+        <SelectTrigger size="sm" aria-label="Type" className="w-32">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="work">Work</SelectItem>
+          <SelectItem value="break">Breaks</SelectItem>
+          <SelectItem value="all">All</SelectItem>
+        </SelectContent>
+      </Select>
       <Input
         type="search"
         aria-label="Description contains"

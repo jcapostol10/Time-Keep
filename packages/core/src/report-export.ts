@@ -1,3 +1,4 @@
+import type { EntryType } from "./schemas";
 import { formatDuration } from "./duration";
 import { minorToDecimal } from "./money";
 import type { ViewerPrefs } from "./prefs";
@@ -30,6 +31,8 @@ export interface DetailedEntry {
   userName: string;
   tags: string[];
   billable: boolean;
+  /** work or break */
+  type: EntryType;
   start: string;
   end: string;
   durationSeconds: number;
@@ -136,6 +139,7 @@ export function detailedColumns(
     : [];
   return [
     { key: "description", header: "Description", value: (e) => e.description },
+    { key: "type", header: "Type", value: (e) => (e.type === "break" ? "Break" : "Work") },
     { key: "project", header: "Project", value: (e) => e.projectName },
     { key: "client", header: "Client", value: (e) => e.clientName },
     { key: "task", header: "Task", value: (e) => e.taskName },

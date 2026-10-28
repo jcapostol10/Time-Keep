@@ -41,6 +41,7 @@ export function IdleDialog({
       taskId: running.taskId,
       tagIds: running.tagIds,
       billable: running.billable,
+      type: running.type,
     };
     const stopped = await stop(cut);
     if (stopped && andStartNew) await start(details);

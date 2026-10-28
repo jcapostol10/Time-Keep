@@ -3,7 +3,7 @@
 import { formatClock } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import { cn } from "@timekeep/ui/lib/utils";
-import { ListPlusIcon, Loader2Icon, PlayIcon, SquareIcon, TimerIcon } from "lucide-react";
+import { ListPlusIcon, Loader2Icon, PlayIcon, SquareIcon, TimerIcon, CoffeeIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -27,6 +27,7 @@ function detailsOf(s: RecentDescription): EntryDraft {
     taskId: s.taskId,
     tagIds: s.tagIds,
     billable: s.billable,
+    type: "work",
   };
 }
 
@@ -98,6 +99,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
         taskId: running.taskId,
         tagIds: running.tagIds,
         billable: running.billable,
+        type: running.type,
       }
     : draft;
 
@@ -143,6 +145,30 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
       )}
 
       <div className="flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap">
+        {rules.allowBreaks ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-label="Break"
+            aria-pressed={values.type === "break"}
+            disabled={Boolean(running)}
+            onClick={() =>
+              setDraft(
+                values.type === "break"
+                  ? { type: "work" }
+                  : { type: "break", projectId: null, taskId: null, tagIds: [], billable: false },
+              )
+            }
+            className={cn(
+              values.type === "break" ? "text-primary bg-primary/10" : "text-muted-foreground",
+            )}
+          >
+            <CoffeeIcon /> Break
+          </Button>
+        ) : null}
+        {values.type === "break" ? null : (
+          <>
         <ProjectPicker
           slug={slug}
           value={{ projectId: values.projectId, taskId: values.taskId }}
@@ -162,6 +188,8 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
           onChange={(tagIds) => change({ tagIds })}
         />
         <BillableToggle value={values.billable} onChange={(billable) => change({ billable })} />
+          </>
+        )}
       </div>
 
       <div className="ml-auto flex items-center gap-1">

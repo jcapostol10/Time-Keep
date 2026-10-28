@@ -9,6 +9,7 @@ const base: EntryDraft = {
   taskId: "t1",
   tagIds: ["a", "b"],
   billable: true,
+  type: "work",
 };
 
 describe("entry dialog patch", () => {

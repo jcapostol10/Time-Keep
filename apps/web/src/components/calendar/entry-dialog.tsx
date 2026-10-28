@@ -55,6 +55,7 @@ export function EntryDialog({ mode, onClose }: { mode: EntryDialogMode; onClose:
           taskId: mode.entry.taskId,
           tagIds: mode.entry.tagIds,
           billable: mode.entry.billable,
+          type: mode.entry.type,
         };
   const initialTexts = {
     startText: formatTimeOfDay(initialStart, tz, viewer.timeFormat),

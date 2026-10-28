@@ -12,6 +12,7 @@ export function minutesToPx(minutes: number): number {
 }
 
 export function projectLabel(entry: TimeEntryDTO): string {
+  if (entry.type === "break") return "Break";
   if (!entry.project) return "No project";
   return entry.task ? `${entry.project.name} › ${entry.task.name}` : entry.project.name;
 }
@@ -28,7 +29,7 @@ export function CalendarBlock({
   layout: { column: number; columns: number };
   durationFormat: DurationFormat;
 }) {
-  const color = entry.project?.color ?? "#64748b";
+  const color = entry.type === "break" ? "#64748b" : (entry.project?.color ?? "#64748b");
   const duration = formatDuration(entry.durationSeconds ?? 0, durationFormat);
   const name = `${entry.description || "(no description)"}, ${projectLabel(entry)}, ${duration}`;
   const height = Math.max(minutesToPx(geometry.height), SLOT_PX);

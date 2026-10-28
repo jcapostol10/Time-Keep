@@ -53,10 +53,10 @@ export function compareRows(names: NameLookup) {
   };
 }
 
-/** Stopped entries only; the running timer is not in the grid. */
+/** Stopped work entries only: the running timer and breaks are not in the grid. */
 export function toTimesheetEntries(entries: TimeEntryDTO[]): TimesheetEntry[] {
   return entries.flatMap((e) =>
-    e.end && e.durationSeconds !== null
+    e.end && e.durationSeconds !== null && e.type !== "break"
       ? [
           {
             id: e.id,
