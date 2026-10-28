@@ -806,6 +806,7 @@ describe("time entries service", () => {
       projectId: null,
       taskId: null,
       tagIds: [],
+      type: "work",
       billable: false,
       ...over,
     });

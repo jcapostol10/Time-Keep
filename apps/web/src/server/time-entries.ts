@@ -66,6 +66,9 @@ import { projectResource } from "./authz";
 /** The person whose entries are read and written, with their role and scope. */
 export type EntryScope = Viewer;
 
+/** New-entry details; the type defaults to work (the schemas default it too). */
+export type EntryInput = Omit<EntryDetails, "type"> & { type?: EntryDetails["type"] };
+
 export class TimeEntryError extends Error {
   constructor(
     public readonly code: "NOT_FOUND" | "INVALID" | "CONFLICT",
@@ -363,7 +366,7 @@ export async function listRecentDescriptions(
 export async function startTimer(
   db: Database,
   scope: EntryScope,
-  input: EntryDetails,
+  input: EntryInput,
   now: Date = new Date(),
 ): Promise<{ started: TimeEntryDTO; stopped: TimeEntryDTO | null }> {
   return db.transaction(async (tx) => {
@@ -444,7 +447,7 @@ export async function stopTimer(
 export async function createManualEntry(
   db: Database,
   scope: EntryScope,
-  input: EntryDetails & { start: Date; end: Date },
+  input: EntryInput & { start: Date; end: Date },
   _now: Date = new Date(),
 ): Promise<TimeEntryDTO> {
   const check = validateEntryRange({

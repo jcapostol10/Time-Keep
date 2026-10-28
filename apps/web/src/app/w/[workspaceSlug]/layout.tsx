@@ -32,6 +32,8 @@ export default async function WorkspaceLayout({
       canCreate={{
         project: can(scope.actor, "project.create", { kind: "project", projectId: null }),
         tag: can(scope.actor, "tag.create", { kind: "none" }),
+        // The setting only; a project's managers add tasks from the project page.
+        task: can(scope.actor, "task.create", { kind: "none" }),
       }}
       canSeeAmounts={can(scope.actor, "report.viewAmounts", { kind: "none" })}
       currency={ctx.settings.currency}

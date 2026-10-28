@@ -1,3 +1,4 @@
+import { can } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 import type { Metadata } from "next";
 
@@ -20,9 +21,11 @@ export default async function ClientsPage({
 }: PageProps<"/w/[workspaceSlug]/clients">) {
   const { workspaceSlug } = await params;
   const query = await searchParams;
-  // Admins only: members get the same not-found page as for an unknown route.
+  // Whoever may create clients (the "who can create" setting) opens the page; others get
+  // the same not-found page as for an unknown route. Editing stays with admins.
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/clients`);
-  await authorizePage(() => authorize(ctx, "client.update"));
+  const viewer = await authorizePage(() => authorize(ctx, "client.create"));
+  const canManage = can(viewer.actor, "client.update", { kind: "none" });
 
   const q = typeof query.q === "string" ? query.q : "";
   const statusRaw = typeof query.status === "string" ? query.status : "active";
@@ -37,7 +40,13 @@ export default async function ClientsPage({
         actions={<NewClientButton slug={workspaceSlug} />}
       />
       <ClientsToolbar q={q} status={status} />
-      <ClientsTable slug={workspaceSlug} clients={clients} status={status} query={q} />
+      <ClientsTable
+        slug={workspaceSlug}
+        clients={clients}
+        status={status}
+        query={q}
+        canManage={canManage}
+      />
     </>
   );
 }

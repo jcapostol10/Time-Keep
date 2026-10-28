@@ -43,7 +43,7 @@ interface TrackerContextValue {
   slug: string;
   workspaceId: string;
   /** Inline create in the pickers: the workspace's "who can create" setting for the viewer. */
-  canCreate: { project: boolean; tag: boolean };
+  canCreate: { project: boolean; tag: boolean; task: boolean };
   /** The viewer may see amounts (owners, admins, managers in their scope). */
   canSeeAmounts: boolean;
   /** The workspace currency (ISO 4217). */
@@ -160,7 +160,7 @@ function useLeaveWarning(saving: boolean) {
 export interface TrackerProviderProps {
   slug: string;
   workspaceId: string;
-  canCreate: { project: boolean; tag: boolean };
+  canCreate: { project: boolean; tag: boolean; task: boolean };
   canSeeAmounts: boolean;
   currency: string;
   viewer: ViewerPrefs;

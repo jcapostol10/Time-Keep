@@ -5,8 +5,14 @@ import {
   type Actor,
   DEFAULT_PERMISSION_SETTINGS,
   denial,
+  entryRulesOf,
+  type PermissionSettings,
+  permissionSettingsOf,
+  type RequiredField,
   type Resource,
   type Role,
+  type RoundingRule,
+  roundingRuleOf,
 } from "@timekeep/core";
 import {
   and,
@@ -23,6 +29,7 @@ import {
   sql,
   timeEntry,
   userGroupMember,
+  workspaceSettings,
 } from "@timekeep/db";
 import type { SQL } from "drizzle-orm";
 import { cache } from "react";
@@ -42,6 +49,29 @@ type Executor = Pick<Database, "select">;
 
 const NOT_FOUND = "Not found";
 
+/** The workspace's rule columns as the matrix reads them (defaults when the row is missing). */
+async function loadPermissionSettings(
+  db: Executor,
+  workspaceId: string,
+): Promise<PermissionSettings> {
+  const [row] = await db
+    .select()
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.workspaceId, workspaceId));
+  return row ? permissionSettingsOf(row, { id: workspaceId }) : DEFAULT_PERMISSION_SETTINGS;
+}
+
+export interface WorkspaceRules {
+  requiredFields: RequiredField[];
+  allowBreaks: boolean;
+  rounding: RoundingRule | null;
+}
+
+/** The entry and report rules of the request's workspace, from its settings row. */
+export function workspaceRules(ctx: Pick<WorkspaceContext, "settings">): WorkspaceRules {
+  return { ...entryRulesOf(ctx.settings), rounding: roundingRuleOf(ctx.settings) };
+}
+
 /**
  * A manager's scope: the people in `managed_user`, the current members of
  * their `managed_group`s, and the projects where they are a manager. Only
@@ -52,8 +82,9 @@ export async function loadActor(
   workspaceId: string,
   userId: string,
   role: Role,
+  settings?: PermissionSettings,
 ): Promise<Actor> {
-  const settings = DEFAULT_PERMISSION_SETTINGS;
+  settings ??= await loadPermissionSettings(db, workspaceId);
   if (role !== "manager") {
     return { userId, role, managedUserIds: new Set(), managedProjectIds: new Set(), settings };
   }

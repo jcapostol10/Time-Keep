@@ -44,11 +44,14 @@ export function ClientsTable({
   clients,
   status,
   query,
+  canManage,
 }: {
   slug: string;
   clients: ClientDTO[];
   status: string;
   query: string;
+  /** Edit, archive and delete (admins); creators without it see the list only. */
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -114,6 +117,7 @@ export function ClientsTable({
                   </Badge>
                 </TableCell>
                 <TableCell>
+                  {canManage ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" aria-label="More actions">
@@ -143,6 +147,7 @@ export function ClientsTable({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  ) : null}
                 </TableCell>
               </TableRow>
             ))}

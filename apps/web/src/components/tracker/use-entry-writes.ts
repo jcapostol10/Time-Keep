@@ -36,7 +36,14 @@ export function useEntryWrites() {
   }, [cache, notifyEntriesChanged]);
 
   const createManual = useCallback(
-    async (input: EntryDetails & { start: string; end: string }): Promise<TimeEntryDTO | null> => {
+    async (
+      // The type defaults to work (the action's schema fills it).
+      input: Omit<EntryDetails, "type"> & {
+        type?: EntryDetails["type"];
+        start: string;
+        end: string;
+      },
+    ): Promise<TimeEntryDTO | null> => {
       const result = await trackSave(() => createManualEntryAction(slug, input));
       if (!result.ok) {
         toast.error(result.error);

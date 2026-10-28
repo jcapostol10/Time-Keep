@@ -1,3 +1,4 @@
+import { can } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 import type { Metadata } from "next";
 
@@ -21,9 +22,10 @@ export default async function TagsPage({
 }: PageProps<"/w/[workspaceSlug]/tags">) {
   const { workspaceSlug } = await params;
   const query = await searchParams;
-  // Admins only: members get the same not-found page as for an unknown route.
+  // Whoever may create tags opens the page (not-found otherwise); editing stays with admins.
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/tags`);
-  await authorizePage(() => authorize(ctx, "tag.update"));
+  const viewer = await authorizePage(() => authorize(ctx, "tag.create"));
+  const canManage = can(viewer.actor, "tag.update", { kind: "none" });
   const statusRaw = typeof query.status === "string" ? query.status : "active";
   const status = STATUSES.find((s) => s === statusRaw) ?? "active";
 
@@ -38,7 +40,7 @@ export default async function TagsPage({
         actions={<NewTagButton slug={workspaceSlug} />}
       />
       <TagsToolbar status={status} />
-      <TagsTable slug={workspaceSlug} tags={tags} status={status} />
+      <TagsTable slug={workspaceSlug} tags={tags} status={status} canManage={canManage} />
     </>
   );
 }

@@ -69,13 +69,14 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Clients",
         href: workspaceRoutes.clients,
         icon: Building2Icon,
-        permission: { action: "client.update", resource: { kind: "none" } },
+        // Whoever may create clients opens the page; editing stays with admins.
+        permission: { action: "client.create", resource: { kind: "none" } },
       },
       {
         label: "Tags",
         href: workspaceRoutes.tags,
         icon: TagIcon,
-        permission: { action: "tag.update", resource: { kind: "none" } },
+        permission: { action: "tag.create", resource: { kind: "none" } },
       },
       { label: "Settings", href: workspaceRoutes.settings, icon: SettingsIcon },
     ],

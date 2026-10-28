@@ -142,6 +142,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
           value={{ projectId: values.projectId, taskId: values.taskId }}
           current={running ? { project: running.project, task: running.task } : null}
           canCreate={canCreate.project}
+          canCreateTask={canCreate.task}
           onChange={(sel) => change({ projectId: sel.projectId, taskId: sel.taskId })}
         />
         <TagPicker

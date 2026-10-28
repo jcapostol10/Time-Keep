@@ -258,8 +258,18 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A manager gets not-found for a project they do not manage — `permissions.spec.ts` › "a manager gets not-found for a project they do not manage"
 - [x] A member sees no Clients or Tags in the sidebar — `permissions.spec.ts` › "a member sees no Clients or Tags in the sidebar"
 
+## Workspace rules
+
+- [ ] Hiding a page from members removes it from their sidebar and its routes answer not found / 403 — `settings.spec.ts` › "a hidden page leaves a member's sidebar and answers 403"
+- [ ] Members see the team's time in reports when the workspace allows it — `settings.spec.ts` › "members see the team's time when the workspace allows it"
+- [ ] The "who can create" setting lets a member create a project and a tag from the pickers — `settings.spec.ts` › "who can create opens the pickers' inline create to members"
+- [ ] A required field blocks Stop and manual Add until it is filled — `settings.spec.ts` › "a required project blocks Stop until it is picked"
+- [ ] Force timer hides manual mode and makes the timesheet read-only for a member — `settings.spec.ts` › "force timer takes manual entry away from a member"
+- [ ] A break entry is tracked with the Break switch and stays out of the Summary by default — `settings.spec.ts` › "a break stays out of the Summary unless the Type filter asks"
+- [ ] Report rounding rounds the Summary and the Raw toggle shows real time — `settings.spec.ts` › "rounding rounds the Summary and Raw shows real time"
+
 ## Small screens (375px)
 
 - [ ] The tracker page fits a 375px screen without horizontal scrolling — gap
 - [x] At 375px the report filters fold into a sheet (Escape closes it after a picker) and the page does not scroll sideways — `reports.spec.ts` › "at 375px the filters fold into a sheet and the page does not scroll sideways"
-- [ ] The account and settings pages fit a 375px screen without horizontal scrolling — gap
+- [ ] The account and settings pages fit a 375px screen without horizontal scrolling — `settings.spec.ts` › "the account and settings pages fit a 375px screen"

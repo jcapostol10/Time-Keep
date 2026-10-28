@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import type { PickerProject } from "@/lib/tracker-types";
 import { createProjectAction } from "@/server/actions/projects";
+import { createTaskAction } from "@/server/actions/tasks";
 
 import { trackDraftWrite } from "./draft-writes";
 import { useTrackerCache, useTrackerOptions } from "./use-tracker-cache";
@@ -88,6 +89,7 @@ export function ProjectPicker({
   compact = false,
   disabled = false,
   canCreate = false,
+  canCreateTask = false,
   current = null,
 }: {
   slug: string;
@@ -97,6 +99,8 @@ export function ProjectPicker({
   compact?: boolean;
   disabled?: boolean;
   canCreate?: boolean;
+  /** Inline "Create task" for the chosen project (the workspace's "who can create" setting). */
+  canCreateTask?: boolean;
   current?: CurrentSelection | null;
 }) {
   const { data } = useTrackerOptions(slug);
@@ -125,6 +129,13 @@ export function ProjectPicker({
     trimmed.length > 0 &&
     !projects.some((p) => p.name.toLowerCase() === trimmed.toLowerCase());
 
+  // A task is created in the chosen project, once the typed name matches none of its tasks.
+  const showCreateTask =
+    canCreateTask &&
+    listed !== undefined &&
+    trimmed.length > 0 &&
+    !listed.tasks.some((t) => t.name.toLowerCase() === trimmed.toLowerCase());
+
   function choose(selection: ProjectSelection) {
     onChange(selection);
     setOpen(false);
@@ -141,6 +152,19 @@ export function ProjectPicker({
     }
     cache.addProject(result.data);
     choose({ projectId: result.data.id, taskId: null });
+  }
+
+  async function createTask() {
+    if (!listed) return;
+    setCreating(true);
+    const result = await createTaskAction(slug, listed.id, { name: trimmed });
+    setCreating(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    cache.addTask(listed.id, { id: result.data.id, name: result.data.name });
+    choose({ projectId: listed.id, taskId: result.data.id });
   }
 
   // cmdk needs a unique value per item; names are unique within a client.
@@ -240,6 +264,20 @@ export function ProjectPicker({
                 >
                   <PlusIcon />
                   <span className="truncate">Create project &ldquo;{trimmed}&rdquo;</span>
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {showCreateTask ? (
+              <CommandGroup>
+                <CommandItem
+                  value={`__create_task__ ${trimmed}`}
+                  disabled={creating}
+                  onSelect={() => void trackDraftWrite(createTask())}
+                >
+                  <PlusIcon />
+                  <span className="truncate">
+                    Create task &ldquo;{trimmed}&rdquo; in {listed?.name}
+                  </span>
                 </CommandItem>
               </CommandGroup>
             ) : null}

@@ -42,10 +42,13 @@ export function TagsTable({
   slug,
   tags,
   status,
+  canManage,
 }: {
   slug: string;
   tags: TagDTO[];
   status: string;
+  /** Rename, archive and delete (admins); creators without it see the list only. */
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -110,6 +113,7 @@ export function TagsTable({
                   </Badge>
                 </TableCell>
                 <TableCell>
+                  {canManage ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" aria-label="More actions">
@@ -134,6 +138,7 @@ export function TagsTable({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  ) : null}
                 </TableCell>
               </TableRow>
             ))}

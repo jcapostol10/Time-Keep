@@ -73,3 +73,25 @@ export function workspaceSlugFromUrl(page: Page): string {
   if (!match?.[1]) throw new Error(`Not on a workspace page: ${page.url()}`);
   return match[1];
 }
+
+/**
+ * Elements inside <main> that stick out past the right edge of the viewport,
+ * ignoring anything inside a horizontal scroller: the 375px layout checks.
+ */
+export async function overflowingElements(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const scrolls = (el: Element | null): boolean => {
+      for (let e = el; e && e !== document.body; e = e.parentElement) {
+        const x = getComputedStyle(e).overflowX;
+        if (x === "auto" || x === "scroll") return true;
+      }
+      return false;
+    };
+    return [...document.querySelectorAll("main *")]
+      .filter((el) => {
+        const box = el.getBoundingClientRect();
+        return box.width > 0 && box.right > window.innerWidth + 1 && !scrolls(el.parentElement);
+      })
+      .map((el) => el.outerHTML.slice(0, 80));
+  });
+}

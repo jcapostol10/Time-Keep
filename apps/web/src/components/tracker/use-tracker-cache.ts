@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { fetchJson } from "@/lib/fetch-json";
-import type { EntryTag, PickerProject, TimeEntryDTO } from "@/lib/tracker-types";
+import type { EntryTag, PickerProject, PickerTask, TimeEntryDTO } from "@/lib/tracker-types";
 
 import {
   type EntriesData,
@@ -71,6 +71,18 @@ export function useTrackerCache(slug: string) {
             ? {
                 ...d,
                 projects: [...d.projects, projectItem].sort((a, b) => a.name.localeCompare(b.name)),
+              }
+            : d,
+        );
+      },
+      addTask(projectId: string, taskItem: PickerTask) {
+        qc.setQueryData<TrackerOptions>(optionsKey, (d) =>
+          d
+            ? {
+                ...d,
+                projects: d.projects.map((p) =>
+                  p.id === projectId ? { ...p, tasks: [...p.tasks, taskItem] } : p,
+                ),
               }
             : d,
         );

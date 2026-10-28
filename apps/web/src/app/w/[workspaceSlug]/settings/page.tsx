@@ -1,5 +1,10 @@
-import { can } from "@timekeep/core";
-import { getDb } from "@timekeep/db";
+import {
+  can,
+  DEFAULT_WORKSPACE_SETTINGS,
+  type WorkspaceSettingsInput,
+  workspaceSettingsSchema,
+} from "@timekeep/core";
+import { getDb, type WorkspaceSettings } from "@timekeep/db";
 import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/page-header";
@@ -11,6 +16,24 @@ import { currentRate } from "@/server/rates";
 import { requireWorkspacePage } from "@/server/workspace-access";
 
 export const metadata: Metadata = { title: "Settings" };
+
+/**
+ * The form's values from the settings row. A stored value outside the
+ * vocabularies (a hand-edited rule) falls back to the defaults for the rules
+ * rather than failing the page; the general fields are always valid.
+ */
+function settingsValues(row: WorkspaceSettings): WorkspaceSettingsInput {
+  const parsed = workspaceSettingsSchema.safeParse(row);
+  if (parsed.success) return parsed.data;
+  return {
+    ...DEFAULT_WORKSPACE_SETTINGS,
+    timezone: row.timezone,
+    weekStart: row.weekStart as WorkspaceSettingsInput["weekStart"],
+    timeFormat: row.timeFormat,
+    durationFormat: row.durationFormat,
+    currency: row.currency,
+  };
+}
 
 export default async function SettingsPage({ params }: PageProps<"/w/[workspaceSlug]/settings">) {
   const { workspaceSlug } = await params;
@@ -31,14 +54,7 @@ export default async function SettingsPage({ params }: PageProps<"/w/[workspaceS
       <WorkspaceSettingsForm
         slug={workspaceSlug}
         readOnly={!can(viewer.actor, "workspace.update", { kind: "workspace" })}
-        defaultValues={{
-          name: ctx.workspace.name,
-          timezone: ctx.settings.timezone,
-          weekStart: ctx.settings.weekStart as 0 | 1 | 2 | 3 | 4 | 5 | 6,
-          timeFormat: ctx.settings.timeFormat,
-          durationFormat: ctx.settings.durationFormat,
-          currency: ctx.settings.currency,
-        }}
+        defaultValues={{ name: ctx.workspace.name, ...settingsValues(ctx.settings) }}
       />
       {showRates ? (
         <section aria-labelledby="billable-rate" className="mt-10 max-w-xl space-y-2">
