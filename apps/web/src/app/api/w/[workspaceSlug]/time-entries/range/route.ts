@@ -3,9 +3,9 @@ import { getDb } from "@timekeep/db";
 
 import { listEntriesInRange } from "@/server/time-entries";
 import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
-import { authorize } from "@/server/authz";
+import { targetScope } from "@/server/authz";
 
-/** The caller's stopped entries starting in `[from, to)`; the timesheet and calendar read this. */
+/** A person's stopped entries starting in `[from, to)` (`?userId=`, the caller by default). */
 export async function GET(
   request: Request,
   ctx: RouteContext<"/api/w/[workspaceSlug]/time-entries/range">,
@@ -19,11 +19,7 @@ export async function GET(
 
     const entries = await listEntriesInRange(
       getDb(),
-      await authorize(access, "entry.read", {
-        kind: "entry",
-        userId: access.user.id,
-        projectId: null,
-      }),
+      await targetScope(access, params.get("userId") ?? access.user.id),
       parsed.data,
     );
     return Response.json({ entries }, { headers: { "Cache-Control": "no-store" } });

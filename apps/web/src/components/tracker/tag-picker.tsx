@@ -19,6 +19,7 @@ import type { EntryTag } from "@/lib/tracker-types";
 import { createTagAction } from "@/server/actions/tags";
 
 import { trackDraftWrite } from "./draft-writes";
+import { useTargetKey } from "./target-context";
 import { useTrackerCache, useTrackerOptions } from "./use-tracker-cache";
 
 /**
@@ -45,8 +46,8 @@ export function TagPicker({
   /** The entry's own tags, shown when the picker no longer lists them (archived). */
   current?: EntryTag[];
 }) {
-  const { data } = useTrackerOptions(slug);
-  const cache = useTrackerCache(slug);
+  const { data } = useTrackerOptions(slug, useTargetKey());
+  const cache = useTrackerCache(slug, useTargetKey());
   const tags = data?.tags ?? [];
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");

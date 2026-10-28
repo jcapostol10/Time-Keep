@@ -56,7 +56,7 @@ import type {
 
 import { CatalogError } from "./catalog/errors";
 import type { Viewer } from "./catalog/viewer";
-import { assertCan, projectResource } from "./authz";
+import { assertCan, projectResource, scopeForUser } from "./authz";
 
 /**
  * The single write path for time entries. Server actions and route handlers
@@ -738,17 +738,22 @@ export async function duplicateEntry(
   });
 }
 
-/** "Continue": start a new timer with the entry's description, project, task, tags and billable flag. */
+/**
+ * "Continue": start a new timer with the entry's description, project, task,
+ * tags and billable flag. The timer is `startFor`'s (the caller's own, decision
+ * 8); the entry may be someone else's the caller may write for.
+ */
 export async function continueEntry(
   db: Database,
   scope: EntryScope,
   entryId: string,
   now: Date = new Date(),
+  startFor: EntryScope = scope,
 ): Promise<{ started: TimeEntryDTO; stopped: TimeEntryDTO | null }> {
   const row = await findOwned(db, scope, entryId);
   return startTimer(
     db,
-    scope,
+    startFor,
     {
       description: row.description,
       projectId: row.projectId,
@@ -759,6 +764,37 @@ export async function continueEntry(
     },
     now,
   );
+}
+
+/**
+ * The scopes for id-based writes (add time for others): the entries' owners,
+ * each through `scopeForUser`, so an id of someone outside the viewer's
+ * people is not found. Unknown ids are dropped, as `deleteEntries` ignores them.
+ */
+export async function scopesForEntries(
+  db: Executor,
+  viewer: Viewer,
+  ids: string[],
+  opts: { includeDeleted?: boolean } = {},
+): Promise<{ scope: EntryScope; ids: string[] }[]> {
+  if (ids.length === 0) return [];
+  const rows = await db
+    .select({ id: timeEntry.id, userId: timeEntry.userId })
+    .from(timeEntry)
+    .where(
+      and(
+        inArray(timeEntry.id, ids),
+        eq(timeEntry.workspaceId, viewer.workspaceId),
+        opts.includeDeleted ? undefined : isNull(timeEntry.deletedAt),
+      ),
+    );
+  const byOwner = new Map<string, string[]>();
+  for (const r of rows) byOwner.set(r.userId, [...(byOwner.get(r.userId) ?? []), r.id]);
+  const groups: { scope: EntryScope; ids: string[] }[] = [];
+  for (const [userId, owned] of byOwner) {
+    groups.push({ scope: await scopeForUser(db, viewer, userId), ids: owned });
+  }
+  return groups;
 }
 
 // --- Range reads and project-wide operations ----------------------------------------

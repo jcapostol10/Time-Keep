@@ -76,7 +76,7 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
   const show = (key: DetailedColumn) => !hidden.has(key) && (key !== "amount" || money !== null);
   const writes = useEntryWrites();
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
-  // Only own entries can be selected; an entry gone after a refetch drops out by itself.
+  // Only editable entries can be selected; an entry gone after a refetch drops out by itself.
   const ownIds = entries.filter((e) => e.editable).map((e) => e.id);
   const selected = ownIds.filter((id) => picked.has(id));
   const allSelected = ownIds.length > 0 && selected.length === ownIds.length;
@@ -175,7 +175,7 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
                 <TableHead className="w-8 pr-0">
                   {ownIds.length > 0 ? (
                     <Checkbox
-                      aria-label="Select all your entries"
+                      aria-label="Select all editable entries"
                       checked={allSelected ? true : selected.length > 0 ? "indeterminate" : false}
                       onCheckedChange={(checked) =>
                         setPicked(checked === true ? new Set(ownIds) : new Set())

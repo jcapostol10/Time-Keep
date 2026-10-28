@@ -22,6 +22,7 @@ import type { EntriesPage, TimeEntryDTO } from "@/lib/tracker-types";
 
 import { EntryGroupRow, EntryRow } from "./entry-row";
 import { trackerKeys, trackerUrls } from "./query-keys";
+import { useTargetKey } from "./target-context";
 import { useTracker, useTrackerClock } from "./tracker-provider";
 import { useEntryMutations } from "./use-entry-mutations";
 
@@ -218,10 +219,12 @@ export function EntryList() {
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(new Set());
   const sentinel = useRef<HTMLDivElement | null>(null);
 
+  const target = useTargetKey();
   const query = useInfiniteQuery({
-    queryKey: trackerKeys.entries(slug),
+    queryKey: trackerKeys.entries(slug, target),
     initialPageParam: null as string | null,
-    queryFn: ({ pageParam }) => fetchJson<EntriesPage>(trackerUrls.entries(slug, pageParam)),
+    queryFn: ({ pageParam }) =>
+      fetchJson<EntriesPage>(trackerUrls.entries(slug, pageParam, target)),
     getNextPageParam: (last) => last.nextCursor,
   });
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;

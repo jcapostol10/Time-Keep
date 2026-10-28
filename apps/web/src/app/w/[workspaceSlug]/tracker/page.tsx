@@ -10,20 +10,39 @@ import { listPickerProjects } from "@/server/catalog/projects";
 import { listTags } from "@/server/catalog/tags";
 import { listEntriesPage, listRecentDescriptions } from "@/server/time-entries";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { viewerFor } from "@/server/authz";
+import { targetScope, viewerFor, writableUsers } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
+import { TargetProvider } from "@/components/tracker/target-context";
 
 export const metadata: Metadata = { title: "Time Tracker" };
+
+/** `?user=<id>`: someone the viewer may add time for; their week loads under their own keys. */
+async function shownPerson(
+  ctx: Parameters<typeof viewerFor>[0] & { user: { id: string } },
+  raw: Record<string, string | string[] | undefined>,
+) {
+  const db = getDb();
+  const me = await viewerFor(ctx);
+  const people = await writableUsers(db, me);
+  const userParam = typeof raw.user === "string" ? raw.user : null;
+  if (!userParam || userParam === ctx.user.id) return { scope: me, people, target: null, key: "me" };
+  const scope = await authorizePage(() => targetScope(ctx, userParam));
+  const name = people.find((p) => p.id === userParam)?.name ?? "";
+  return { scope, people, target: { userId: userParam, name }, key: userParam };
+}
+
 
 export default async function TrackerPage({
   params,
   searchParams,
 }: PageProps<"/w/[workspaceSlug]/tracker">) {
   const { workspaceSlug } = await params;
-  const { focus } = await searchParams;
+  const raw = await searchParams;
+  const focus = raw.focus;
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/tracker`);
   const viewer = resolveViewerPrefs(ctx.user, ctx.settings);
   const db = getDb();
-  const scope = await viewerFor(ctx);
+  const { scope, people, target, key } = await shownPerson(ctx, raw);
 
   const [firstPage, projects, tagRows, recent] = await Promise.all([
     listEntriesPage(db, scope, { tz: viewer.timezone, weekStart: viewer.weekStart }),
@@ -35,21 +54,24 @@ export default async function TrackerPage({
 
   // Fresh per request; HydrationBoundary merges it into the browser cache.
   const queryClient = new QueryClient();
-  queryClient.setQueryData(trackerKeys.entries(workspaceSlug), {
+  queryClient.setQueryData(trackerKeys.entries(workspaceSlug, key), {
     pages: [firstPage],
     pageParams: [null],
   });
-  queryClient.setQueryData<TrackerOptions>(trackerKeys.options(workspaceSlug), {
+  queryClient.setQueryData<TrackerOptions>(trackerKeys.options(workspaceSlug, key), {
     projects,
     tags,
     recent,
   });
+  queryClient.setQueryData(trackerKeys.people(workspaceSlug), people);
 
   return (
     <>
       <PageHeader title="Time Tracker" />
       <HydrationBoundary state={dehydrate(queryClient)}>
-        <TrackerPageClient autoFocus={focus === "description"} />
+        <TargetProvider target={target}>
+          <TrackerPageClient autoFocus={focus === "description"} />
+        </TargetProvider>
       </HydrationBoundary>
     </>
   );

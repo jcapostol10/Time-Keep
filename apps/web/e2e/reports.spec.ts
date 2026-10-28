@@ -285,7 +285,7 @@ test.describe("reports", () => {
     await expect(page.getByRole("row", { name: "Entry Site work" })).toBeVisible();
     await expect(reportTotal(page)).toHaveText("1:30:00");
 
-    await page.getByRole("checkbox", { name: "Select all your entries" }).check();
+    await page.getByRole("checkbox", { name: "Select all editable entries" }).check();
     await expect(bar).toContainText("2 selected");
   });
 
@@ -333,9 +333,17 @@ test.describe("reports", () => {
   test("another person's entry is read-only", async ({ page, demoUser }) => {
     await demoUser("manager");
     await openReport(page, "demo", "detailed", "preset=last-week");
-    const theirs = page.getByRole("row").filter({ hasText: "Mia Member" }).first();
+    // Someone outside the manager's people (their time on the managed Mobile app project).
+    const theirs = page
+      .getByRole("row", { name: /^Entry / })
+      .filter({ hasNotText: "Maya Manager" })
+      .filter({ hasNotText: "Mia Member" })
+      .first();
     await expect(theirs).toBeVisible();
     await expect(theirs.getByRole("textbox")).toHaveCount(0);
+    // A managed person's entry is editable (add time for others), like the manager's own.
+    const managed = page.getByRole("row").filter({ hasText: "Mia Member" }).first();
+    await expect(managed.getByRole("textbox", { name: "Description" })).toBeVisible();
     const own = page.getByRole("row").filter({ hasText: "Maya Manager" }).first();
     await expect(own.getByRole("textbox", { name: "Description" })).toBeVisible();
   });

@@ -4,22 +4,19 @@ import { listPickerProjects } from "@/server/catalog/projects";
 import { listTagOptions } from "@/server/catalog/tags";
 import { listRecentDescriptions } from "@/server/time-entries";
 import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
-import { authorize } from "@/server/authz";
+import { targetScope } from "@/server/authz";
 
-/** Picker data for the timer bar: projects, tags and the caller's recent descriptions. */
+/** Picker data: a person's projects (`?userId=`, the caller by default), tags and recent descriptions. */
 export async function GET(
-  _request: Request,
+  request: Request,
   ctx: RouteContext<"/api/w/[workspaceSlug]/tracker-options">,
 ) {
   try {
     const { workspaceSlug } = await ctx.params;
     const access = await requireWorkspaceAccess(workspaceSlug);
     const db = getDb();
-    const scope = await authorize(access, "entry.read", {
-      kind: "entry",
-      userId: access.user.id,
-      projectId: null,
-    });
+    const userId = new URL(request.url).searchParams.get("userId") ?? access.user.id;
+    const scope = await targetScope(access, userId);
     const [projects, tagRows, recent] = await Promise.all([
       listPickerProjects(db, scope),
       listTagOptions(db, scope.workspaceId),

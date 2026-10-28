@@ -575,7 +575,11 @@ export async function detailedReport(
       projectColor: r.projectColor ?? null,
       taskId: r.taskId,
       tagIds: tags.map((t) => t.id),
-      editable: r.userId === viewer.userId,
+      editable: can(viewer.actor, "entry.write", {
+        kind: "entry",
+        userId: r.userId,
+        projectId: r.projectId,
+      }),
     };
   });
   const last = pageRows[pageRows.length - 1];

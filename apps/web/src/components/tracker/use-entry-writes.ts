@@ -15,6 +15,7 @@ import {
 
 import { trackSave } from "./saving-store";
 import { useTracker } from "./tracker-provider";
+import { useTargetKey } from "./target-context";
 import { useTrackerCache } from "./use-tracker-cache";
 
 /** What callers send: ISO strings, which the action parses into instants. */
@@ -27,7 +28,8 @@ export type UpdateEntryPatch = z.input<typeof updateEntrySchema>;
  */
 export function useEntryWrites() {
   const { slug, notifyEntriesChanged } = useTracker();
-  const cache = useTrackerCache(slug);
+  const target = useTargetKey();
+  const cache = useTrackerCache(slug, target);
 
   const settle = useCallback(() => {
     void cache.invalidateEntries();
@@ -44,7 +46,9 @@ export function useEntryWrites() {
         end: string;
       },
     ): Promise<TimeEntryDTO | null> => {
-      const result = await trackSave(() => createManualEntryAction(slug, input));
+      const result = await trackSave(() =>
+        createManualEntryAction(slug, { ...input, userId: target === "me" ? undefined : target }),
+      );
       if (!result.ok) {
         toast.error(result.error);
         return null;
@@ -52,7 +56,7 @@ export function useEntryWrites() {
       settle();
       return result.data;
     },
-    [slug, settle],
+    [slug, target, settle],
   );
 
   const update = useCallback(

@@ -20,6 +20,8 @@ import type { TimeEntryDTO } from "@/lib/tracker-types";
 
 import { useRangeEntries } from "../timesheet/use-timesheet";
 import { useIsSaving } from "../tracker/saving-store";
+import { PersonPicker } from "../tracker/person-picker";
+import { useTarget } from "../tracker/target-context";
 import { useTracker } from "../tracker/tracker-provider";
 import { useEntryWrites } from "../tracker/use-entry-writes";
 import { CalendarGrid } from "./calendar-grid";
@@ -40,6 +42,8 @@ export function CalendarPageClient({
   view: CalendarView | null;
 }) {
   const { slug, viewer, rules } = useTracker();
+  const target = useTarget();
+  const targetKey = target?.userId ?? "me";
   const tz = viewer.timezone;
   const router = useRouter();
   const pathname = usePathname();
@@ -60,7 +64,7 @@ export function CalendarPageClient({
     [view, weekStart, dateKey, tz],
   );
 
-  const { data: entries = [] } = useRangeEntries(slug, from, to);
+  const { data: entries = [] } = useRangeEntries(slug, from, to, true, targetKey);
   const writes = useEntryWrites();
   const [dialog, setDialog] = useState<EntryDialogMode | null>(null);
 
@@ -94,6 +98,8 @@ export function CalendarPageClient({
           onNext={() => go(addDaysInZone(anchor, step, tz))}
           onToday={() => go(null)}
         />
+        <div className="flex items-center gap-2">
+        <PersonPicker />
         <div role="radiogroup" aria-label="View" className="bg-muted flex rounded-md p-0.5 text-sm">
           {(["day", "week"] as const).map((v) => (
             <button
@@ -110,6 +116,7 @@ export function CalendarPageClient({
               {v}
             </button>
           ))}
+        </div>
         </div>
       </div>
 

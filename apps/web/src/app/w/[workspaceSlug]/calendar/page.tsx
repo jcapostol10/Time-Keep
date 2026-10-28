@@ -15,9 +15,27 @@ import { listPickerProjects } from "@/server/catalog/projects";
 import { listTags } from "@/server/catalog/tags";
 import { listEntriesInRange, listRecentDescriptions } from "@/server/time-entries";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { viewerFor } from "@/server/authz";
+import { targetScope, viewerFor, writableUsers } from "@/server/authz";
+import { authorizePage } from "@/server/authz-page";
+import { TargetProvider } from "@/components/tracker/target-context";
 
 export const metadata: Metadata = { title: "Calendar" };
+
+/** `?user=<id>`: someone the viewer may add time for; their week loads under their own keys. */
+async function shownPerson(
+  ctx: Parameters<typeof viewerFor>[0] & { user: { id: string } },
+  raw: Record<string, string | string[] | undefined>,
+) {
+  const db = getDb();
+  const me = await viewerFor(ctx);
+  const people = await writableUsers(db, me);
+  const userParam = typeof raw.user === "string" ? raw.user : null;
+  if (!userParam || userParam === ctx.user.id) return { scope: me, people, target: null, key: "me" };
+  const scope = await authorizePage(() => targetScope(ctx, userParam));
+  const name = people.find((p) => p.id === userParam)?.name ?? "";
+  return { scope, people, target: { userId: userParam, name }, key: userParam };
+}
+
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -29,8 +47,8 @@ export default async function CalendarPage({
   const raw = await searchParams;
   const ctx = await requireWorkspacePage(workspaceSlug, "member", `/w/${workspaceSlug}/calendar`);
   const viewer = resolveViewerPrefs(ctx.user, ctx.settings);
-  const scope = await viewerFor(ctx);
   const db = getDb();
+  const { scope, people, target, key } = await shownPerson(ctx, raw);
 
   // ?view=day|week&date=YYYY-MM-DD; the week containing the date is always loaded.
   const view = raw.view === "day" || raw.view === "week" ? raw.view : null;
@@ -51,8 +69,9 @@ export default async function CalendarPage({
   ]);
 
   const queryClient = new QueryClient();
-  queryClient.setQueryData(trackerKeys.range(workspaceSlug, from, to), entries);
-  queryClient.setQueryData<TrackerOptions>(trackerKeys.options(workspaceSlug), {
+  queryClient.setQueryData(trackerKeys.range(workspaceSlug, from, to, key), entries);
+  queryClient.setQueryData(trackerKeys.people(workspaceSlug), people);
+  queryClient.setQueryData<TrackerOptions>(trackerKeys.options(workspaceSlug, key), {
     projects,
     tags: tagRows.map((t) => ({ id: t.id, name: t.name, color: t.color })),
     recent,
@@ -62,7 +81,9 @@ export default async function CalendarPage({
     <>
       <PageHeader title="Calendar" />
       <HydrationBoundary state={dehydrate(queryClient)}>
+        <TargetProvider target={target}>
         <CalendarPageClient from={from} to={to} dateKey={dateKey} view={view} />
+        </TargetProvider>
       </HydrationBoundary>
     </>
   );

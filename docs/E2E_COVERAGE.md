@@ -270,9 +270,13 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Add time for others
 
-- [ ] An admin adds time for a member through the person picker and the member sees it in their tracker — `others.spec.ts` › "an admin adds time for a member and the member sees it in their tracker"
-- [ ] A manager's person picker lists only the people they manage, and a URL for someone else is not found — `others.spec.ts` › "a manager's person picker lists only their people"
+- [x] An admin adds time for a member through the person picker and the member sees it in their tracker — `others.spec.ts` › "an admin adds time for a member and the member sees it in their tracker"
+- [x] A manager's person picker lists only the people they manage, and a URL for someone else is not found — `others.spec.ts` › "a manager's person picker lists only their people"
 - [ ] The timer bar stays the viewer's own while another person's entries are shown — `others.spec.ts` › "the timer bar stays the viewer's own"
+
+## Power features
+
+- [ ] Select entries and edit their project, tags and billable flag at once — `power.spec.ts` › "bulk edit moves selected entries to a project and tags them"
 
 ## Small screens (375px)
 

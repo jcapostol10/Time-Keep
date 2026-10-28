@@ -20,6 +20,7 @@ import { createProjectAction } from "@/server/actions/projects";
 import { createTaskAction } from "@/server/actions/tasks";
 
 import { trackDraftWrite } from "./draft-writes";
+import { useTargetKey } from "./target-context";
 import { useTrackerCache, useTrackerOptions } from "./use-tracker-cache";
 
 export function ColorDot({ color, className }: { color: string; className?: string }) {
@@ -106,8 +107,8 @@ export function ProjectPicker({
   invalid?: boolean;
   current?: CurrentSelection | null;
 }) {
-  const { data } = useTrackerOptions(slug);
-  const cache = useTrackerCache(slug);
+  const { data } = useTrackerOptions(slug, useTargetKey());
+  const cache = useTrackerCache(slug, useTargetKey());
   const projects = useMemo(() => data?.projects ?? [], [data]);
   const groups = useMemo(() => groupProjects(projects), [projects]);
   const [open, setOpen] = useState(false);

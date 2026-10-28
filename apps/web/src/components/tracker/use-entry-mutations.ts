@@ -15,6 +15,7 @@ import {
 
 import { trackSave } from "./saving-store";
 import { useTracker } from "./tracker-provider";
+import { useTargetKey } from "./target-context";
 import { useTrackerCache } from "./use-tracker-cache";
 
 export type EntryPatch = Partial<EntryDraft> & { start?: string; end?: string };
@@ -24,11 +25,14 @@ const UNDO_MS = 5000;
 /** Entry mutations with cache updates; every success is broadcast to other tabs. */
 export function useEntryMutations() {
   const { slug, notifyEntriesChanged } = useTracker();
-  const cache = useTrackerCache(slug);
+  const target = useTargetKey();
+  const cache = useTrackerCache(slug, target);
 
   const createManual = useCallback(
     async (input: EntryDraft & { start: string; end: string }) => {
-      const result = await trackSave(() => createManualEntryAction(slug, input));
+      const result = await trackSave(() =>
+        createManualEntryAction(slug, { ...input, userId: target === "me" ? undefined : target }),
+      );
       if (!result.ok) {
         toast.error(result.error);
         return false;
@@ -39,7 +43,7 @@ export function useEntryMutations() {
       toast.success("Entry added");
       return true;
     },
-    [slug, cache, notifyEntriesChanged],
+    [slug, target, cache, notifyEntriesChanged],
   );
 
   /** Optimistic inline edit; rolls back and explains on failure. */

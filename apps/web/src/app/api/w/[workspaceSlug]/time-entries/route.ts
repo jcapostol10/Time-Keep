@@ -3,11 +3,11 @@ import { getDb } from "@timekeep/db";
 
 import { listEntriesPage } from "@/server/time-entries";
 import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
-import { authorize } from "@/server/authz";
+import { targetScope } from "@/server/authz";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
-/** One week of the caller's entries; `?before=<ISO instant>` pages back in time. */
+/** One week of a person's entries (`?userId=`, the caller by default); `?before=<ISO instant>` pages back in time. */
 export async function GET(
   request: Request,
   ctx: RouteContext<"/api/w/[workspaceSlug]/time-entries">,
@@ -16,7 +16,8 @@ export async function GET(
     const { workspaceSlug } = await ctx.params;
     const access = await requireWorkspaceAccess(workspaceSlug);
 
-    const beforeRaw = new URL(request.url).searchParams.get("before");
+    const params = new URL(request.url).searchParams;
+    const beforeRaw = params.get("before");
     let before: Date | undefined;
     if (beforeRaw) {
       const parsed = isoInstantSchema.safeParse(beforeRaw);
@@ -27,11 +28,7 @@ export async function GET(
     const viewer = resolveViewerPrefs(access.user, access.settings);
     const page = await listEntriesPage(
       getDb(),
-      await authorize(access, "entry.read", {
-        kind: "entry",
-        userId: access.user.id,
-        projectId: null,
-      }),
+      await targetScope(access, params.get("userId") ?? access.user.id),
       {
         before,
         tz: viewer.timezone,

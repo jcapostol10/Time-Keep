@@ -19,6 +19,8 @@ import { useHydrated } from "@/hooks/use-hydrated";
 
 import { useIsSaving } from "../tracker/saving-store";
 import { useTracker } from "../tracker/tracker-provider";
+import { PersonPicker } from "../tracker/person-picker";
+import { useTarget } from "../tracker/target-context";
 import { useTrackerOptions } from "../tracker/use-tracker-cache";
 import { AddRowDialog } from "./add-row-dialog";
 import { CopyLastWeekDialog } from "./copy-last-week-dialog";
@@ -30,6 +32,8 @@ import { useRangeEntries } from "./use-timesheet";
 /** The weekly grid page: week navigation, rows the user added this visit, and the toolbar. */
 export function TimesheetPageClient({ from, to }: { from: string; to: string }) {
   const { slug, viewer, rules } = useTracker();
+  const target = useTarget();
+  const targetKey = target?.userId ?? "me";
   const tz = viewer.timezone;
   const router = useRouter();
   const pathname = usePathname();
@@ -38,8 +42,8 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
   const weekStart = useMemo(() => new Date(from), [from]);
   const weekKey = localDateKey(weekStart, tz);
 
-  const { data: entries = [] } = useRangeEntries(slug, from, to);
-  const { data: options } = useTrackerOptions(slug);
+  const { data: entries = [] } = useRangeEntries(slug, from, to, true, targetKey);
+  const { data: options } = useTrackerOptions(slug, targetKey);
   // Rows added this visit, per week; they vanish on a full reload (templates persist).
   const [extraRowsByWeek, setExtraRowsByWeek] = useState<Record<string, TimesheetRowKey[]>>({});
   const extraRows = useMemo(() => extraRowsByWeek[weekKey] ?? [], [extraRowsByWeek, weekKey]);
@@ -91,6 +95,7 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
           onToday={() => goToWeek(null)}
         />
         <div className="flex flex-wrap items-center gap-2">
+          <PersonPicker />
           <Button
             variant="outline"
             size="sm"
@@ -99,6 +104,8 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
           >
             <PlusIcon /> Add new row
           </Button>
+          {target ? null : (
+            <>
           <Button
             variant="outline"
             size="sm"
@@ -116,6 +123,8 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
             }))}
             onApply={addRows}
           />
+            </>
+          )}
           <span className="text-muted-foreground ml-2 text-sm">
             Week total{" "}
             <span data-testid="grand-total" className="text-foreground font-semibold tabular-nums">

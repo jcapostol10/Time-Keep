@@ -19,19 +19,38 @@ import {
   duplicateEntry,
   type EntryScope,
   restoreEntries,
+  scopesForEntries,
   startTimer,
   stopTimer,
+  TimeEntryError,
   updateEntry,
 } from "@/server/time-entries";
-import { requireWorkspaceAccess } from "@/server/workspace-access";
-import { authorize } from "@/server/authz";
+import { requireWorkspaceAccess, type WorkspaceContext } from "@/server/workspace-access";
+import { authorize, targetScope, viewerFor } from "@/server/authz";
 
 export type StartResult = { started: TimeEntryDTO; stopped: TimeEntryDTO | null };
 
-/** Everyone acts on their own entries here; Phase 4b adds time for others. */
+/** The caller's own scope: timers are always their own (decision 8). */
+async function ownScope(ctx: WorkspaceContext): Promise<EntryScope> {
+  return authorize(ctx, "entry.write", { kind: "entry", userId: ctx.user.id, projectId: null });
+}
+
 async function scopeFor(slug: string): Promise<EntryScope> {
   const ctx = await requireWorkspaceAccess(slug);
   return authorize(ctx, "entry.write", { kind: "entry", userId: ctx.user.id, projectId: null });
+}
+
+/** The scope of one entry by id (its owner's, acted for by the caller), or not found. */
+async function entryScope(
+  ctx: WorkspaceContext,
+  entryId: string,
+  includeDeleted = false,
+): Promise<EntryScope> {
+  const [group] = await scopesForEntries(getDb(), await viewerFor(ctx), [entryId], {
+    includeDeleted,
+  });
+  if (!group) throw new TimeEntryError("NOT_FOUND", "Time entry not found.");
+  return group.scope;
 }
 
 export async function startTimerAction(
@@ -67,9 +86,10 @@ export async function createManualEntryAction(
   input: unknown,
 ): Promise<ActionResult<TimeEntryDTO>> {
   try {
-    const scope = await scopeFor(slug);
+    const ctx = await requireWorkspaceAccess(slug);
     const parsed = createManualEntrySchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
+    const scope = await targetScope(ctx, parsed.data.userId ?? ctx.user.id);
     return ok(await createManualEntry(getDb(), scope, parsed.data));
   } catch (error) {
     return actionFailure(error);
@@ -82,9 +102,10 @@ export async function updateEntryAction(
   input: unknown,
 ): Promise<ActionResult<TimeEntryDTO>> {
   try {
-    const scope = await scopeFor(slug);
+    const ctx = await requireWorkspaceAccess(slug);
     const parsed = updateEntrySchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
+    const scope = await entryScope(ctx, entryId);
     return ok(await updateEntry(getDb(), scope, entryId, parsed.data));
   } catch (error) {
     return actionFailure(error);
@@ -96,10 +117,15 @@ export async function deleteEntriesAction(
   input: unknown,
 ): Promise<ActionResult<{ deleted: string[] }>> {
   try {
-    const scope = await scopeFor(slug);
+    const ctx = await requireWorkspaceAccess(slug);
     const parsed = entryIdsSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    return ok(await deleteEntries(getDb(), scope, parsed.data.ids));
+    const db = getDb();
+    const deleted: string[] = [];
+    for (const g of await scopesForEntries(db, await viewerFor(ctx), parsed.data.ids)) {
+      deleted.push(...(await deleteEntries(db, g.scope, g.ids)).deleted);
+    }
+    return ok({ deleted });
   } catch (error) {
     return actionFailure(error);
   }
@@ -110,10 +136,16 @@ export async function restoreEntriesAction(
   input: unknown,
 ): Promise<ActionResult<{ restored: string[] }>> {
   try {
-    const scope = await scopeFor(slug);
+    const ctx = await requireWorkspaceAccess(slug);
     const parsed = entryIdsSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    return ok(await restoreEntries(getDb(), scope, parsed.data.ids));
+    const db = getDb();
+    const groups = await scopesForEntries(db, await viewerFor(ctx), parsed.data.ids, {
+      includeDeleted: true,
+    });
+    const restored: string[] = [];
+    for (const g of groups) restored.push(...(await restoreEntries(db, g.scope, g.ids)).restored);
+    return ok({ restored });
   } catch (error) {
     return actionFailure(error);
   }
@@ -124,8 +156,8 @@ export async function duplicateEntryAction(
   entryId: string,
 ): Promise<ActionResult<TimeEntryDTO>> {
   try {
-    const scope = await scopeFor(slug);
-    return ok(await duplicateEntry(getDb(), scope, entryId));
+    const ctx = await requireWorkspaceAccess(slug);
+    return ok(await duplicateEntry(getDb(), await entryScope(ctx, entryId), entryId));
   } catch (error) {
     return actionFailure(error);
   }
@@ -136,8 +168,9 @@ export async function continueEntryAction(
   entryId: string,
 ): Promise<ActionResult<StartResult>> {
   try {
-    const scope = await scopeFor(slug);
-    return ok(await continueEntry(getDb(), scope, entryId));
+    const ctx = await requireWorkspaceAccess(slug);
+    const scope = await entryScope(ctx, entryId);
+    return ok(await continueEntry(getDb(), scope, entryId, undefined, await ownScope(ctx)));
   } catch (error) {
     return actionFailure(error);
   }

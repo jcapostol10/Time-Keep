@@ -66,7 +66,7 @@ export function useRateRecalc(slug: string) {
   const finished = job?.status === "done" && job.id === watchedId;
   useEffect(() => {
     // Amounts changed: every report and the entry views refetch.
-    if (finished) void qc.invalidateQueries({ queryKey: trackerKeys.entries(slug) });
+    if (finished) void qc.invalidateQueries({ queryKey: trackerKeys.allEntries(slug) });
   }, [finished, qc, slug]);
   return { job, watchedId };
 }

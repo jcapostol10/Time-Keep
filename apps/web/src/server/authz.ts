@@ -3,6 +3,7 @@ import "server-only";
 import {
   type Action,
   type Actor,
+  can,
   DEFAULT_PERMISSION_SETTINGS,
   denial,
   entryRulesOf,
@@ -36,6 +37,8 @@ import { cache } from "react";
 
 import type { Viewer } from "./catalog/viewer";
 import { WorkspaceAccessError } from "./access-error";
+import { listMembers } from "./queries/team";
+import type { EntryScope } from "./time-entries";
 import type { WorkspaceContext } from "./workspace-access";
 
 /**
@@ -226,4 +229,47 @@ export async function authorizeProject(
   const viewer = await viewerFor(ctx);
   assertCan(viewer.actor, action, await projectResource(getDb(), viewer, projectId));
   return viewer;
+}
+
+/**
+ * The scope for reading and writing `userId`'s time (add time for others,
+ * decision 8): the viewer's own, or the target's own viewer (their role and
+ * projects decide what they may track on) acted for by the caller. Someone
+ * outside the caller's people (anyone, for a member) is not found, never
+ * forbidden, so existence does not leak.
+ */
+export async function scopeForUser(
+  db: Pick<Database, "select" | "query">,
+  viewer: Viewer,
+  userId: string,
+): Promise<EntryScope> {
+  assertCan(viewer.actor, "entry.write", { kind: "entry", userId, projectId: null });
+  if (userId === viewer.userId) return viewer;
+  const target = await loadViewer(db, viewer.workspaceId, userId);
+  return { ...target, hideAmounts: viewer.hideAmounts, actedBy: viewer.actor };
+}
+
+/** `scopeForUser` for the request's viewer. */
+export async function targetScope(
+  ctx: Pick<WorkspaceContext, "workspace" | "user" | "role">,
+  userId: string,
+): Promise<EntryScope> {
+  return scopeForUser(getDb(), await viewerFor(ctx), userId);
+}
+
+/** Active members the viewer may add time for: themselves first, then by name. */
+export async function writableUsers(
+  db: Database,
+  viewer: Viewer,
+): Promise<{ id: string; name: string }[]> {
+  const members = await listMembers(db, viewer.workspaceId);
+  const others = members
+    .filter((m) => m.status === "ACTIVE" && m.userId !== viewer.userId)
+    .filter((m) =>
+      can(viewer.actor, "entry.write", { kind: "entry", userId: m.userId, projectId: null }),
+    )
+    .map((m) => ({ id: m.userId, name: m.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const me = members.find((m) => m.userId === viewer.userId);
+  return me ? [{ id: me.userId, name: me.name }, ...others] : others;
 }

@@ -8,6 +8,7 @@ import { useId, useMemo, useState } from "react";
 import type { RecentDescription } from "@/lib/tracker-types";
 
 import { ColorDot } from "./project-picker";
+import { useTargetKey } from "./target-context";
 import { useTrackerOptions } from "./use-tracker-cache";
 
 const MAX_SUGGESTIONS = 8;
@@ -40,7 +41,7 @@ export function DescriptionInput({
   /** The server refused a save for this field (required fields). */
   invalid?: boolean;
 }) {
-  const { data } = useTrackerOptions(slug);
+  const { data } = useTrackerOptions(slug, useTargetKey());
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);

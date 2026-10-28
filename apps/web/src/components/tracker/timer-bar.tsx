@@ -15,6 +15,7 @@ import { DescriptionInput } from "./description-input";
 import { ManualEntryFields } from "./manual-entry-fields";
 import { ProjectPicker } from "./project-picker";
 import { TagPicker } from "./tag-picker";
+import { TargetProvider } from "./target-context";
 import { useTracker, useTrackerClock } from "./tracker-provider";
 import { useEntryMutations } from "./use-entry-mutations";
 
@@ -115,6 +116,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
   }, [autoFocus, focusDescription]);
 
   return (
+    <TargetProvider target={null}>
     <section
       aria-label="Timer"
       data-hydrated={hydrated}
@@ -259,5 +261,6 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
         </p>
       ) : null}
     </section>
+    </TargetProvider>
   );
 }

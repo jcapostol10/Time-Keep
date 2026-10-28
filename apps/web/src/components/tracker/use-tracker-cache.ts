@@ -15,24 +15,27 @@ import {
 } from "./entry-cache";
 import { type TrackerOptions, trackerKeys, trackerUrls } from "./query-keys";
 
-/** Picker data (projects, tags, recent descriptions); hydrated by the tracker page. */
-export function useTrackerOptions(slug: string) {
+/** Picker data (projects, tags, recent descriptions) of a person; hydrated by the page. */
+export function useTrackerOptions(slug: string, userId = "me") {
   return useQuery({
-    queryKey: trackerKeys.options(slug),
-    queryFn: () => fetchJson<TrackerOptions>(trackerUrls.options(slug)),
+    queryKey: trackerKeys.options(slug, userId),
+    queryFn: () => fetchJson<TrackerOptions>(trackerUrls.options(slug, userId)),
     staleTime: 30_000,
   });
 }
 
-/** Imperative cache operations shared by the provider and the entry list. */
-export function useTrackerCache(slug: string) {
+/** Imperative cache operations shared by the provider and the entry list, per shown person. */
+export function useTrackerCache(slug: string, userId = "me") {
   const qc = useQueryClient();
   return useMemo(() => {
-    const entriesKey = trackerKeys.entries(slug);
-    const optionsKey = trackerKeys.options(slug);
+    const entriesKey = trackerKeys.entries(slug, userId);
+    const optionsKey = trackerKeys.options(slug, userId);
 
-    const invalidateEntries = () => qc.invalidateQueries({ queryKey: entriesKey });
-    const invalidateOptions = () => qc.invalidateQueries({ queryKey: optionsKey });
+    // Everyone's lists, ranges and reports: a write for one person can change another's view.
+    const invalidateEntries = () =>
+      qc.invalidateQueries({ queryKey: trackerKeys.allEntries(slug) });
+    const invalidateOptions = () =>
+      qc.invalidateQueries({ queryKey: trackerKeys.allOptions(slug) });
 
     return {
       invalidateEntries,
@@ -124,5 +127,5 @@ export function useTrackerCache(slug: string) {
         return resolved;
       },
     };
-  }, [qc, slug]);
+  }, [qc, slug, userId]);
 }

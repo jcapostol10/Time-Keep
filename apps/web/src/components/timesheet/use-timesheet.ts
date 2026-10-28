@@ -8,12 +8,19 @@ import type { TimeEntryDTO } from "@/lib/tracker-types";
 
 import { trackerKeys, trackerUrls } from "../tracker/query-keys";
 
-/** The viewer's stopped entries starting in [from, to); hydrated by the page. */
-export function useRangeEntries(slug: string, from: string, to: string, enabled = true) {
+/** A person's stopped entries starting in [from, to); hydrated by the page. */
+export function useRangeEntries(
+  slug: string,
+  from: string,
+  to: string,
+  enabled = true,
+  userId = "me",
+) {
   return useQuery({
-    queryKey: trackerKeys.range(slug, from, to),
+    queryKey: trackerKeys.range(slug, from, to, userId),
     queryFn: async () =>
-      (await fetchJson<{ entries: TimeEntryDTO[] }>(trackerUrls.range(slug, from, to))).entries,
+      (await fetchJson<{ entries: TimeEntryDTO[] }>(trackerUrls.range(slug, from, to, userId)))
+        .entries,
     staleTime: 10_000,
     refetchOnWindowFocus: true,
     enabled,

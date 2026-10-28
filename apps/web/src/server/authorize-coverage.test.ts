@@ -17,6 +17,9 @@ const SRC = path.resolve(__dirname, "..");
 const SHARED: Record<string, string> = {
   reportRoute: "server/report-route.ts",
   authorizeProject: "server/authz.ts",
+  scopeForUser: "server/authz.ts",
+  targetScope: "server/authz.ts",
+  scopesForEntries: "server/time-entries.ts",
 };
 
 /** Exports that act on the session only, not on a workspace's data. */
@@ -96,14 +99,25 @@ function authorizes(body: string, helpers: Set<string>): boolean {
 }
 
 function unguarded(): string[] {
-  const shared = new Set(
-    Object.entries(SHARED)
-      .filter(([name, file]) => {
-        const fn = functions(readFileSync(path.join(SRC, file), "utf8")).get(name);
-        return Boolean(fn && (fn.body.includes("authorize(") || fn.body.includes("assertCan(")));
-      })
-      .map(([name]) => name),
+  // A shared helper authorizes when its body asks the matrix, or calls a helper that does.
+  const bodies = new Map(
+    Object.entries(SHARED).map(([name, file]) => [
+      name,
+      functions(readFileSync(path.join(SRC, file), "utf8")).get(name)?.body ?? "",
+    ]),
   );
+  const shared = new Set(
+    [...bodies].filter(([, b]) => b.includes("authorize(") || b.includes("assertCan(")).map(([n]) => n),
+  );
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [name, body] of bodies) {
+      if (!shared.has(name) && authorizes(body, shared)) {
+        shared.add(name);
+        grew = true;
+      }
+    }
+  }
   const targets = [
     ...files(path.join(SRC, "server/actions"), (n) => n.endsWith(".ts") && !n.endsWith(".test.ts")),
     ...files(path.join(SRC, "app/api/w"), (n) => n === "route.ts"),
@@ -116,7 +130,7 @@ function unguarded(): string[] {
     }
     const fns = functions(source);
     const local = new Set(
-      [...fns].filter(([, f]) => !f.exported && f.body.includes("authorize(")).map(([n]) => n),
+      [...fns].filter(([, f]) => !f.exported && authorizes(f.body, shared)).map(([n]) => n),
     );
     const helpers = new Set([...shared, ...local]);
     for (const [name, fn] of fns) {

@@ -40,7 +40,7 @@ export interface DetailedEntryDTO extends DetailedEntry {
   projectColor: string | null;
   taskId: string | null;
   tagIds: string[];
-  /** The viewer's own entry (Phase 4 opens others' up). */
+  /** The viewer may edit it: their own, or a person they may add time for. */
   editable: boolean;
 }
 
