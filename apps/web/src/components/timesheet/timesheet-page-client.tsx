@@ -29,7 +29,7 @@ import { useRangeEntries } from "./use-timesheet";
 
 /** The weekly grid page: week navigation, rows the user added this visit, and the toolbar. */
 export function TimesheetPageClient({ from, to }: { from: string; to: string }) {
-  const { slug, viewer } = useTracker();
+  const { slug, viewer, rules } = useTracker();
   const tz = viewer.timezone;
   const router = useRouter();
   const pathname = usePathname();
@@ -91,10 +91,20 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
           onToday={() => goToWeek(null)}
         />
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!rules.canWriteTimes}
+            onClick={() => setAdding(true)}
+          >
             <PlusIcon /> Add new row
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setCopying(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!rules.canWriteTimes}
+            onClick={() => setCopying(true)}
+          >
             <CopyIcon /> Copy last week
           </Button>
           <TemplatesMenu

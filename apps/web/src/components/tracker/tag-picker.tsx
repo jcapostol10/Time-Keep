@@ -31,6 +31,7 @@ export function TagPicker({
   onChange,
   disabled = false,
   canCreate = false,
+  invalid = false,
   current = [],
 }: {
   slug: string;
@@ -39,6 +40,8 @@ export function TagPicker({
   disabled?: boolean;
   /** Admins may create a tag from here. */
   canCreate?: boolean;
+  /** The server refused a save for the tags (required fields). */
+  invalid?: boolean;
   /** The entry's own tags, shown when the picker no longer lists them (archived). */
   current?: EntryTag[];
 }) {
@@ -116,9 +119,11 @@ export function TagPicker({
           size="sm"
           disabled={disabled}
           aria-label={`Tags: ${selectedTags.map((t) => t.name).join(", ") || "none"}`}
+          aria-invalid={invalid || undefined}
           className={cn(
             "max-w-48 justify-start",
             selectedTags.length === 0 && "text-muted-foreground",
+            invalid && "ring-destructive ring-2",
           )}
         >
           <TagIcon />

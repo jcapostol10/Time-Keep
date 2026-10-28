@@ -1,6 +1,12 @@
 "use client";
 
-import { formatClock, type TrackerSettingsInput, type ViewerPrefs } from "@timekeep/core";
+import {
+  formatClock,
+  REQUIRED_FIELDS,
+  type RequiredField,
+  type TrackerSettingsInput,
+  type ViewerPrefs,
+} from "@timekeep/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
@@ -39,9 +45,25 @@ import { pruneDraft } from "./draft-prune";
 
 export type RunningPatch = Partial<EntryDraft> & { start?: string };
 
+/** The workspace rules the tracker shows (the server enforces them). */
+export interface TrackerRules {
+  requiredFields: RequiredField[];
+  allowBreaks: boolean;
+  /** False under force timer for members and managers: no manual entries, no time edits. */
+  canWriteTimes: boolean;
+}
+
+/** The required field a refused Stop named, until the entry changes again. */
+export interface StopProblem {
+  field: RequiredField;
+  message: string;
+}
+
 interface TrackerContextValue {
   slug: string;
   workspaceId: string;
+  rules: TrackerRules;
+  stopProblem: StopProblem | null;
   /** Inline create in the pickers: the workspace's "who can create" setting for the viewer. */
   canCreate: { project: boolean; tag: boolean; task: boolean };
   /** The viewer may see amounts (owners, admins, managers in their scope). */
@@ -163,6 +185,7 @@ export interface TrackerProviderProps {
   canCreate: { project: boolean; tag: boolean; task: boolean };
   canSeeAmounts: boolean;
   currency: string;
+  rules: TrackerRules;
   viewer: ViewerPrefs;
   settings: TrackerSettingsInput;
   initialRunning: TimeEntryDTO | null;
@@ -175,6 +198,7 @@ export function TrackerProvider({
   canCreate,
   canSeeAmounts,
   currency,
+  rules,
   viewer,
   settings,
   initialRunning,
@@ -183,6 +207,7 @@ export function TrackerProvider({
   const qc = useQueryClient();
   const router = useRouter();
   const cache = useTrackerCache(slug);
+  const [stopProblem, setStopProblem] = useState<StopProblem | null>(null);
   const runningKey = useMemo(() => trackerKeys.running(slug), [slug]);
 
   const { data: running = null } = useQuery({
@@ -279,6 +304,7 @@ export function TrackerProvider({
           return false;
         }
         applyStart(result.data);
+        setStopProblem(null);
         draftRef.current = EMPTY_DRAFT;
         setDraftState(EMPTY_DRAFT);
         return true;
@@ -303,9 +329,12 @@ export function TrackerProvider({
         );
         if (!result.ok) {
           qc.setQueryData(runningKey, current);
+          const field = REQUIRED_FIELDS.find((f) => result.fieldErrors?.[f]);
+          setStopProblem(field ? { field, message: result.error } : null);
           toast.error(result.error);
           return false;
         }
+        setStopProblem(null);
         cache.upsertEntry(result.data, "insert");
         void cache.invalidateOptions();
         channelRef.current?.post({ type: "running", running: null });
@@ -361,6 +390,7 @@ export function TrackerProvider({
         r?.id === current.id ? result.data : r,
       );
       setRunning(qc.getQueryData<TimeEntryDTO | null>(runningKey) ?? null);
+      setStopProblem(null);
       return true;
     },
     [qc, runningKey, cache, slug, setRunning],
@@ -400,6 +430,8 @@ export function TrackerProvider({
     () => ({
       slug,
       workspaceId,
+      rules,
+      stopProblem,
       canCreate,
       canSeeAmounts,
       currency,
@@ -422,6 +454,8 @@ export function TrackerProvider({
     [
       slug,
       workspaceId,
+      rules,
+      stopProblem,
       canCreate,
       canSeeAmounts,
       currency,

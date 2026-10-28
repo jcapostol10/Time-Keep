@@ -9,9 +9,9 @@ import {
 } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 
-import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
+import { type ActionResult, fromZodError, ok } from "@/lib/action-result";
 import type { TimeEntryDTO } from "@/lib/tracker-types";
-import { userErrorMessage } from "@/server/actions/errors";
+import { actionFailure } from "@/server/actions/errors";
 import {
   continueEntry,
   createManualEntry,
@@ -44,7 +44,7 @@ export async function startTimerAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await startTimer(getDb(), scope, parsed.data));
   } catch (error) {
-    return fail(userErrorMessage(error));
+    return actionFailure(error);
   }
 }
 
@@ -58,7 +58,7 @@ export async function stopTimerAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await stopTimer(getDb(), scope, parsed.data));
   } catch (error) {
-    return fail(userErrorMessage(error));
+    return actionFailure(error);
   }
 }
 
@@ -72,7 +72,7 @@ export async function createManualEntryAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await createManualEntry(getDb(), scope, parsed.data));
   } catch (error) {
-    return fail(userErrorMessage(error));
+    return actionFailure(error);
   }
 }
 
@@ -87,7 +87,7 @@ export async function updateEntryAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await updateEntry(getDb(), scope, entryId, parsed.data));
   } catch (error) {
-    return fail(userErrorMessage(error));
+    return actionFailure(error);
   }
 }
 
@@ -101,7 +101,7 @@ export async function deleteEntriesAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await deleteEntries(getDb(), scope, parsed.data.ids));
   } catch (error) {
-    return fail(userErrorMessage(error));
+    return actionFailure(error);
   }
 }
 
@@ -115,7 +115,7 @@ export async function restoreEntriesAction(
     if (!parsed.success) return fromZodError(parsed.error);
     return ok(await restoreEntries(getDb(), scope, parsed.data.ids));
   } catch (error) {
-    return fail(userErrorMessage(error));
+    return actionFailure(error);
   }
 }
 
@@ -127,7 +127,7 @@ export async function duplicateEntryAction(
     const scope = await scopeFor(slug);
     return ok(await duplicateEntry(getDb(), scope, entryId));
   } catch (error) {
-    return fail(userErrorMessage(error));
+    return actionFailure(error);
   }
 }
 
@@ -139,6 +139,6 @@ export async function continueEntryAction(
     const scope = await scopeFor(slug);
     return ok(await continueEntry(getDb(), scope, entryId));
   } catch (error) {
-    return fail(userErrorMessage(error));
+    return actionFailure(error);
   }
 }

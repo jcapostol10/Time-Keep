@@ -50,12 +50,14 @@ function RunningDescription({
   onSave,
   onPick,
   inputRef,
+  invalid,
 }: {
   slug: string;
   saved: string;
   onSave: (description: string) => void;
   onPick: (s: RecentDescription) => void;
   inputRef: (el: HTMLInputElement | null) => void;
+  invalid?: boolean;
 }) {
   const [text, setText] = useState(saved);
   return (
@@ -74,6 +76,7 @@ function RunningDescription({
         if (text.trim() !== saved) onSave(text);
       }}
       inputRef={inputRef}
+      invalid={invalid}
       className="basis-full md:flex-1 md:basis-auto"
     />
   );
@@ -81,10 +84,12 @@ function RunningDescription({
 
 export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
   const tracker = useTracker();
-  const { slug, running, draft, setDraft, settledDraft, pending, canCreate } = tracker;
+  const { slug, running, draft, setDraft, settledDraft, pending, canCreate, rules, stopProblem } =
+    tracker;
   const { createManual } = useEntryMutations();
   const [storedMode, setMode] = useLocalStorage<Mode>("timekeep:tracker-mode", "timer");
-  const mode: Mode = running ? "timer" : storedMode;
+  // Force timer (decision 7): the timer is the only way to add time.
+  const mode: Mode = running || !rules.canWriteTimes ? "timer" : storedMode;
 
   const values: EntryDraft = running
     ? {
@@ -121,6 +126,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
           onSave={(description) => change({ description })}
           onPick={(s) => change(detailsOf(s))}
           inputRef={tracker.registerDescriptionInput}
+          invalid={stopProblem?.field === "description"}
         />
       ) : (
         <DescriptionInput
@@ -143,6 +149,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
           current={running ? { project: running.project, task: running.task } : null}
           canCreate={canCreate.project}
           canCreateTask={canCreate.task}
+          invalid={stopProblem?.field === "project" || stopProblem?.field === "task"}
           onChange={(sel) => change({ projectId: sel.projectId, taskId: sel.taskId })}
         />
         <TagPicker
@@ -151,6 +158,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
           value={values.tagIds}
           current={running?.tags ?? []}
           canCreate={canCreate.tag}
+          invalid={stopProblem?.field === "tag"}
           onChange={(tagIds) => change({ tagIds })}
         />
         <BillableToggle value={values.billable} onChange={(billable) => change({ billable })} />
@@ -189,6 +197,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
             }}
           />
         )}
+        {rules.canWriteTimes ? (
         <div className="flex flex-col" role="group" aria-label="Entry mode">
           <Button
             type="button"
@@ -214,7 +223,13 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
             <ListPlusIcon />
           </Button>
         </div>
+        ) : null}
       </div>
+      {stopProblem ? (
+        <p role="alert" className="text-destructive basis-full px-1 text-sm">
+          {stopProblem.message}
+        </p>
+      ) : null}
     </section>
   );
 }

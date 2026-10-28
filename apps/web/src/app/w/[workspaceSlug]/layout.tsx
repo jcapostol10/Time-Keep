@@ -7,7 +7,7 @@ import { TrackerProvider } from "@/components/tracker/tracker-provider";
 import { getTrackerSettings } from "@/server/queries/user-settings";
 import { getRunningEntry } from "@/server/time-entries";
 import { listUserWorkspaces, requireWorkspacePage } from "@/server/workspace-access";
-import { viewerFor } from "@/server/authz";
+import { viewerFor, workspaceRules } from "@/server/authz";
 import { hiddenNavLabels } from "@/components/shell/nav-items";
 
 export default async function WorkspaceLayout({
@@ -24,6 +24,7 @@ export default async function WorkspaceLayout({
     getTrackerSettings(db, ctx.user.id),
   ]);
   const viewer = resolveViewerPrefs(ctx.user, ctx.settings);
+  const rules = workspaceRules(ctx);
 
   return (
     <TrackerProvider
@@ -37,6 +38,15 @@ export default async function WorkspaceLayout({
       }}
       canSeeAmounts={can(scope.actor, "report.viewAmounts", { kind: "none" })}
       currency={ctx.settings.currency}
+      rules={{
+        requiredFields: rules.requiredFields,
+        allowBreaks: rules.allowBreaks,
+        canWriteTimes: can(scope.actor, "entry.writeTimes", {
+          kind: "entry",
+          userId: ctx.user.id,
+          projectId: null,
+        }),
+      }}
       viewer={viewer}
       settings={trackerSettings}
       initialRunning={running}

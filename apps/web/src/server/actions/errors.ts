@@ -5,6 +5,7 @@ import { APIError } from "better-auth/api";
 import { CatalogError } from "@/server/catalog/errors";
 import { TimeEntryError } from "@/server/time-entries";
 import { WorkspaceAccessError } from "@/server/workspace-access";
+import { type ActionResult, fail } from "@/lib/action-result";
 
 /**
  * The message a server action may show the user. Known errors carry their
@@ -23,4 +24,11 @@ export function userErrorMessage(error: unknown): string {
   }
   console.error("[action] unexpected error", error);
   return "Something went wrong.";
+}
+
+/** The failed result for an error; a required-field refusal names its field. */
+export function actionFailure(error: unknown): ActionResult<never> {
+  const message = userErrorMessage(error);
+  if (error instanceof TimeEntryError && error.field) return fail(message, { [error.field]: [message] });
+  return fail(message);
 }

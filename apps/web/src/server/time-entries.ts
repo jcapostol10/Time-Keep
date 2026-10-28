@@ -3,11 +3,16 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  type Actor,
   can,
   computeDurationSeconds,
   type EntryDetails,
+  entryRulesOf,
   MAX_ENTRY_SECONDS,
+  missingRequiredField,
   needsRerate,
+  type RequiredField,
+  requiredFieldMessage,
   TIMER_STOP_FUTURE_GRACE_MS,
   trackingBlock,
   validateEntryRange,
@@ -38,6 +43,7 @@ import {
   timeEntry,
   type TimeEntry,
   timeEntryTag,
+  workspaceSettings,
 } from "@timekeep/db";
 
 import type {
@@ -50,7 +56,7 @@ import type {
 
 import { CatalogError } from "./catalog/errors";
 import type { Viewer } from "./catalog/viewer";
-import { projectResource } from "./authz";
+import { assertCan, projectResource } from "./authz";
 
 /**
  * The single write path for time entries. Server actions and route handlers
@@ -63,8 +69,12 @@ import { projectResource } from "./authz";
  * the user may put time on (private projects need membership).
  */
 
-/** The person whose entries are read and written, with their role and scope. */
-export type EntryScope = Viewer;
+/**
+ * The person whose entries are read and written, with their role and scope.
+ * `actedBy` is the admin or manager acting for them (add time for others);
+ * the force-timer gate reads it, so time added for someone else is exempt.
+ */
+export type EntryScope = Viewer & { actedBy?: Actor };
 
 /** New-entry details; the type defaults to work (the schemas default it too). */
 export type EntryInput = Omit<EntryDetails, "type"> & { type?: EntryDetails["type"] };
@@ -73,6 +83,8 @@ export class TimeEntryError extends Error {
   constructor(
     public readonly code: "NOT_FOUND" | "INVALID" | "CONFLICT",
     message: string,
+    /** The required field the entry lacks, for the UI to mark. */
+    public readonly field?: RequiredField,
   ) {
     super(message);
     this.name = "TimeEntryError";
@@ -256,6 +268,57 @@ function implicitStopEnd(start: Date, now: Date): Date {
   return new Date(Math.min(Math.max(now.getTime(), earliest), latest));
 }
 
+/** Who acts: the scope's own actor, or the person acting for them. */
+function actorOf(scope: EntryScope): Actor {
+  return scope.actedBy ?? scope.actor;
+}
+
+/** Decision 7: manual times need `entry.writeTimes` (force timer exempts admins and time for others). */
+function assertCanWriteTimes(scope: EntryScope, projectId: string | null): void {
+  assertCan(actorOf(scope), "entry.writeTimes", { kind: "entry", userId: scope.userId, projectId });
+}
+
+async function rulesOf(db: Executor, workspaceId: string) {
+  const [row] = await db
+    .select({
+      requiredFields: workspaceSettings.requiredFields,
+      allowBreaks: workspaceSettings.allowBreaks,
+    })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.workspaceId, workspaceId));
+  return entryRulesOf(row ?? { requiredFields: [], allowBreaks: false });
+}
+
+/**
+ * Decision 5: the workspace's required fields bind when an entry is stopped
+ * or saved. A task is required only when the project has active tasks;
+ * breaks are exempt. Throws with the field named, so the UI can mark it.
+ */
+async function assertRequiredFields(
+  db: Executor,
+  scope: EntryScope,
+  details: {
+    description: string;
+    projectId: string | null;
+    taskId: string | null;
+    tagIds: readonly string[];
+    type: EntryDetails["type"];
+  },
+): Promise<void> {
+  const { requiredFields } = await rulesOf(db, scope.workspaceId);
+  if (requiredFields.length === 0) return;
+  let projectHasTasks = false;
+  if (requiredFields.includes("task") && details.projectId) {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(task)
+      .where(and(eq(task.projectId, details.projectId), eq(task.status, "ACTIVE")));
+    projectHasTasks = (row?.n ?? 0) > 0;
+  }
+  const missing = missingRequiredField(requiredFields, details, { projectHasTasks });
+  if (missing) throw new TimeEntryError("INVALID", requiredFieldMessage(missing), missing);
+}
+
 // --- Reads -----------------------------------------------------------------------
 
 export async function getRunningEntry(
@@ -399,6 +462,7 @@ export async function startTimer(
         projectId: input.projectId,
         taskId: input.taskId,
         billable: input.billable,
+        type: input.type ?? "work",
         start: now,
         end: null,
         durationSeconds: null,
@@ -427,6 +491,13 @@ export async function stopTimer(
     await lockOwned(tx, scope, input.entryId);
     const row = await findOwned(tx, scope, input.entryId);
     if (row.end) return toDTO(row);
+    await assertRequiredFields(tx, scope, {
+      description: row.description,
+      projectId: row.projectId,
+      taskId: row.taskId,
+      tagIds: row.tags.map((t) => t.tag.id),
+      type: row.type,
+    });
 
     let end = input.end ?? now;
     const max = row.start.getTime() + MAX_ENTRY_SECONDS * 1000;
@@ -450,6 +521,7 @@ export async function createManualEntry(
   input: EntryInput & { start: Date; end: Date },
   _now: Date = new Date(),
 ): Promise<TimeEntryDTO> {
+  assertCanWriteTimes(scope, input.projectId);
   const check = validateEntryRange({
     start: input.start,
     end: input.end,
@@ -460,6 +532,7 @@ export async function createManualEntry(
 
   return db.transaction(async (tx) => {
     await assertDetailsUsable(tx, scope, input);
+    await assertRequiredFields(tx, scope, { ...input, type: input.type ?? "work" });
     const id = randomUUID();
     await tx.insert(timeEntry).values({
       id,
@@ -469,6 +542,7 @@ export async function createManualEntry(
       projectId: input.projectId,
       taskId: input.taskId,
       billable: input.billable,
+      type: input.type ?? "work",
       start: input.start,
       end: input.end,
       durationSeconds: computeDurationSeconds(input.start, input.end),
@@ -493,6 +567,9 @@ export async function updateEntry(
   return db.transaction(async (tx) => {
     await lockOwned(tx, scope, entryId);
     const row = await findOwned(tx, scope, entryId);
+    if (patch.start !== undefined || patch.end !== undefined) {
+      assertCanWriteTimes(scope, row.projectId);
+    }
     await assertDetailsUsable(tx, scope, patch, {
       projectId: row.projectId,
       taskId: row.taskId,
@@ -517,6 +594,16 @@ export async function updateEntry(
         times = { start, end: null, durationSeconds: null };
       }
     }
+
+    // The entry as it will be after the patch; a stopped entry must still meet the rules.
+    const merged = {
+      description: patch.description ?? row.description,
+      projectId: patch.projectId !== undefined ? patch.projectId : row.projectId,
+      taskId: patch.taskId !== undefined ? patch.taskId : row.taskId,
+      tagIds: patch.tagIds ?? row.tags.map((t) => t.tag.id),
+      type: row.type,
+    };
+    if (times ? times.end : row.end) await assertRequiredFields(tx, scope, merged);
 
     // updatedAt is always set, so a tags-only patch is still a valid UPDATE.
     await tx
@@ -595,6 +682,7 @@ export async function duplicateEntry(
   return db.transaction(async (tx) => {
     const row = await findOwned(tx, scope, entryId);
     if (!row.end) throw new TimeEntryError("INVALID", "Stop the timer before duplicating it.");
+    assertCanWriteTimes(scope, row.projectId);
     await assertDetailsUsable(tx, scope, {
       projectId: row.projectId,
       taskId: row.taskId,
@@ -609,6 +697,7 @@ export async function duplicateEntry(
       projectId: row.projectId,
       taskId: row.taskId,
       billable: row.billable,
+      type: row.type,
       start: row.start,
       end: row.end,
       durationSeconds: row.durationSeconds,

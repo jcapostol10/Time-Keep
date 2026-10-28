@@ -90,6 +90,7 @@ export function ProjectPicker({
   disabled = false,
   canCreate = false,
   canCreateTask = false,
+  invalid = false,
   current = null,
 }: {
   slug: string;
@@ -101,6 +102,8 @@ export function ProjectPicker({
   canCreate?: boolean;
   /** Inline "Create task" for the chosen project (the workspace's "who can create" setting). */
   canCreateTask?: boolean;
+  /** The server refused a save for the project or task (required fields). */
+  invalid?: boolean;
   current?: CurrentSelection | null;
 }) {
   const { data } = useTrackerOptions(slug);
@@ -185,7 +188,12 @@ export function ProjectPicker({
           size="sm"
           disabled={disabled}
           aria-label={`Project: ${label}`}
-          className={cn("max-w-56 justify-start", !project && "text-muted-foreground")}
+          aria-invalid={invalid || undefined}
+          className={cn(
+            "max-w-56 justify-start",
+            !project && "text-muted-foreground",
+            invalid && "ring-destructive ring-2",
+          )}
         >
           {project ? (
             <>

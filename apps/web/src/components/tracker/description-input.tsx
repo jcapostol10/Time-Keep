@@ -25,6 +25,7 @@ export function DescriptionInput({
   onEnter,
   inputRef,
   className,
+  invalid,
 }: {
   slug: string;
   value: string;
@@ -36,6 +37,8 @@ export function DescriptionInput({
   onEnter?: () => void;
   inputRef?: (el: HTMLInputElement | null) => void;
   className?: string;
+  /** The server refused a save for this field (required fields). */
+  invalid?: boolean;
 }) {
   const { data } = useTrackerOptions(slug);
   const listId = useId();
@@ -68,6 +71,7 @@ export function DescriptionInput({
         maxLength={ENTRY_DESCRIPTION_MAX}
         placeholder="What are you working on?"
         aria-label="Description"
+        aria-invalid={invalid || undefined}
         role="combobox"
         aria-expanded={showList}
         aria-controls={listId}

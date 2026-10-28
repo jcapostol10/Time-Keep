@@ -110,7 +110,7 @@ export function EntryRow({
   onSelectedChange: (selected: boolean) => void;
   nested?: boolean;
 }) {
-  const { slug, viewer, canCreate } = useTracker();
+  const { slug, viewer, canCreate, rules } = useTracker();
   const { update } = useEntryMutations();
   const tz = viewer.timezone;
   const end = entry.end ?? entry.start;
@@ -181,6 +181,7 @@ export function EntryRow({
           label="Start time"
           value={formatTimeOfDay(times.start, tz, viewer.timeFormat)}
           onCommit={(t) => editTime("start", t)}
+          disabled={!rules.canWriteTimes}
           className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none"
         />
         <span className="text-muted-foreground" aria-hidden>
@@ -190,6 +191,7 @@ export function EntryRow({
           label="End time"
           value={formatTimeOfDay(times.end, tz, viewer.timeFormat)}
           onCommit={(t) => editTime("end", t)}
+          disabled={!rules.canWriteTimes}
           className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none"
         />
         <sup
@@ -201,6 +203,7 @@ export function EntryRow({
         <Input
           type="date"
           aria-label="Date"
+          disabled={!rules.canWriteTimes}
           defaultValue={localDateKey(times.start, tz)}
           key={entry.start}
           onBlur={(e) => {
@@ -216,6 +219,7 @@ export function EntryRow({
           label="Duration"
           value={formatDuration(entry.durationSeconds ?? 0, viewer.durationFormat)}
           onCommit={editDuration}
+          disabled={!rules.canWriteTimes}
           className="hover:border-input w-[6rem] shrink-0 border-transparent font-semibold shadow-none"
         />
         <ContinueButton entry={entry} />

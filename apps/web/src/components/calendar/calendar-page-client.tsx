@@ -39,7 +39,7 @@ export function CalendarPageClient({
   dateKey: string;
   view: CalendarView | null;
 }) {
-  const { slug, viewer } = useTracker();
+  const { slug, viewer, rules } = useTracker();
   const tz = viewer.timezone;
   const router = useRouter();
   const pathname = usePathname();
@@ -119,11 +119,12 @@ export function CalendarPageClient({
         today={today}
         hydrated={hydrated}
         onCreate={(dayKey, a, b) => {
+          if (!rules.canWriteTimes) return;
           const range = createdRange(dayKey, a, b, tz);
           setDialog({ kind: "create", dayKey, start: range.start, end: range.end });
         }}
         onMove={(entry, dayKey, startMinutes) => {
-          if (!entry.end) return; // the running timer is not dragged
+          if (!entry.end || !rules.canWriteTimes) return; // the running timer is not dragged
           const range = movedRange(
             { start: entry.start, end: entry.end },
             dayKey,
@@ -136,7 +137,7 @@ export function CalendarPageClient({
           });
         }}
         onResize={(entry, edge, dayKey, minutes) => {
-          if (!entry.end) return;
+          if (!entry.end || !rules.canWriteTimes) return;
           const range = resizedRange(
             { start: entry.start, end: entry.end },
             edge,

@@ -48,7 +48,7 @@ export function TimesheetCell({
   /** Called before a delete that may empty the row, so the row stays for the visit. */
   onKeepRow?: (row: TimesheetRowKey) => void;
 }) {
-  const { viewer } = useTracker();
+  const { viewer, rules } = useTracker();
   const writes = useEntryWrites();
   const shown = cell.seconds > 0 ? formatDuration(cell.seconds, viewer.durationFormat) : "";
   // Local text while editing; null means "show the saved value".
@@ -56,6 +56,7 @@ export function TimesheetCell({
   const [choosing, setChoosing] = useState<TimesheetEntry[] | null>(null);
 
   async function commit(raw: string) {
+    if (!rules.canWriteTimes) return;
     setText(null);
     const trimmed = raw.trim();
     const seconds = trimmed === "" ? 0 : parseDuration(trimmed);
@@ -105,6 +106,7 @@ export function TimesheetCell({
     <>
       <Input
         aria-label={label}
+        readOnly={!rules.canWriteTimes}
         data-row={rowIndex}
         data-col={colIndex}
         inputMode="text"
