@@ -44,6 +44,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { type z } from "zod";
 
+import { RulesFields } from "@/components/settings/rules-fields";
 import { TimezoneSelect } from "@/components/settings/timezone-select";
 import { updateWorkspaceSettingsAction } from "@/server/actions/workspaces";
 
@@ -221,6 +222,8 @@ export function WorkspaceSettingsForm({
               )}
             />
           </div>
+
+          <RulesFields />
         </fieldset>
 
         {readOnly ? (
@@ -230,7 +233,7 @@ export function WorkspaceSettingsForm({
         ) : (
           <Button type="submit" disabled={form.formState.isSubmitting || !form.formState.isDirty}>
             {form.formState.isSubmitting ? <Loader2Icon className="animate-spin" /> : null}
-            Save changes
+            Save settings
           </Button>
         )}
       </form>

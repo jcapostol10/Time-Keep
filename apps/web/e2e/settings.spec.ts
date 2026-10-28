@@ -217,8 +217,9 @@ test.describe("workspace rules", () => {
 
   test("the account and settings pages fit a 375px screen", async ({ page, freshUser }) => {
     await page.setViewportSize({ width: 375, height: 760 });
+    // The account page sits outside the workspace shell: wait for its last section.
     await page.goto("/account");
-    await waitForApp(page);
+    await expect(page.getByRole("button", { name: "Send me a test email" })).toBeVisible();
     expect(await overflowingElements(page)).toEqual([]);
     await openSettings(page, freshUser.slug);
     await expect(page.getByRole("button", { name: "Save settings" })).toBeVisible();
