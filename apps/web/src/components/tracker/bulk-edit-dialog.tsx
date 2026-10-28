@@ -21,9 +21,10 @@ import {
   SelectValue,
 } from "@timekeep/ui/components/select";
 import { Loader2Icon } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { BillableToggle } from "./billable-toggle";
+import { draftWritesSettled } from "./draft-writes";
 import { ProjectPicker, type ProjectSelection } from "./project-picker";
 import { TagPicker } from "./tag-picker";
 import { useTracker } from "./tracker-provider";
@@ -72,6 +73,9 @@ export function BulkEditDialog({
     ...(changeDescription ? { description: description.trim() } : {}),
   };
   const nothing = Object.keys(patch).length === 0;
+  // The latest patch once a picker's inline create (a new project or tag) has landed.
+  const patchRef = useRef(patch);
+  patchRef.current = patch;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -88,7 +92,8 @@ export function BulkEditDialog({
             e.preventDefault();
             if (nothing) return;
             setBusy(true);
-            const ok = await onApply(patch);
+            await draftWritesSettled();
+            const ok = await onApply(patchRef.current);
             setBusy(false);
             if (ok) onOpenChange(false);
           }}

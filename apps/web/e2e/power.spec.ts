@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
-import { createProjectViaUi } from "./helpers/catalog";
-import { addManualEntry, entry, waitForSaves } from "./helpers/tracker";
+import { createProjectViaUi, rowAction } from "./helpers/catalog";
+import { addManualEntry, entry, today, waitForSaves } from "./helpers/tracker";
 
 /** Phase 4b power features: bulk edit, split, favourites, templates, the Audit tab. */
 
@@ -37,6 +37,7 @@ test.describe("power features", () => {
     await page.getByRole("combobox", { name: "Search tags" }).fill("urgent");
     await page.getByRole("option", { name: "Create tag “urgent”" }).click();
     await page.keyboard.press("Escape");
+    await expect(dialog.getByRole("button", { name: "Tags: urgent" })).toBeVisible();
     await dialog.getByRole("button", { name: "Apply" }).click();
     await expect(dialog).toBeHidden();
     await waitForSaves(page);
@@ -46,5 +47,25 @@ test.describe("power features", () => {
       await expect(row.getByRole("button", { name: "Project: Alpha" })).toBeVisible();
       await expect(row.getByRole("button", { name: "Tags: urgent" })).toBeVisible();
     }
+  });
+
+  test("split an entry at a time", async ({ page, freshUser, trackerPage }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Long one", start: "00:10", duration: "2" });
+    await rowAction(page, entry(page, "Long one"), "Split…");
+    const dialog = page.getByRole("dialog", { name: "Split entry" });
+    await dialog.getByRole("textbox", { name: "Split at" }).fill("01:10");
+    await dialog.getByRole("button", { name: "Split" }).click();
+    await expect(dialog).toBeHidden();
+    await waitForSaves(page);
+
+    // Two identical halves collapse into a group; expanded, each lasts an hour.
+    const group = today(page).getByRole("group", { name: "Group Long one", exact: true });
+    await expect(group.getByRole("button", { name: "2 entries" })).toBeVisible();
+    await group.getByRole("button", { name: "2 entries" }).click();
+    const halves = entry(page, "Long one");
+    await expect(halves).toHaveCount(2);
+    await expect(halves.nth(0).getByRole("textbox", { name: "Duration" })).toHaveValue("1:00:00");
+    await expect(halves.nth(1).getByRole("textbox", { name: "Duration" })).toHaveValue("1:00:00");
   });
 });
