@@ -26,7 +26,9 @@ test.describe("profile settings", () => {
     await page.getByRole("button", { name: "Remove" }).click();
     await expect(page.getByText("Photo removed")).toBeVisible();
 
-    // Restore the seeded name so other specs stay deterministic.
+    // Restore the seeded name so other specs stay deterministic. The first save's toast
+    // can still be up on a quick machine; let it go so the next one is the only one.
+    await expect(page.getByText("Profile saved")).toBeHidden();
     await page.getByLabel("Full name").fill("Max Member");
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByText("Profile saved")).toBeVisible();

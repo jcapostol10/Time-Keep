@@ -54,6 +54,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
 - [ ] Re-prove the 26 coverage ticks carried over from Phases 0–1: break each guarded behaviour once and watch its test fail.
 - [ ] "Cancel a pending invitation" has no e2e test (an `E2E_COVERAGE.md` gap since Phase 4a).
+- [ ] The preview run is at its 10-minute budget: 10.4 min on 2026-10-28 (161 tests, 3 workers, one test failing three times), against 3.8 min locally; the runner reaches the `sin1` deployment over a long round trip. If a clean run stays over, move the slowest specs (team, reports) to a nightly run.
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)
 

@@ -55,6 +55,14 @@ export interface TeamContext {
 const STATUS_LABELS = { ACTIVE: "Active", INVITED: "Invited", DEACTIVATED: "Deactivated" } as const;
 const ANY = "__any__";
 
+interface Filters {
+  q: string;
+  role: string;
+  group: string;
+  status: string;
+}
+const filterKey = (f: Filters) => JSON.stringify([f.q, f.role, f.group, f.status]);
+
 /** Members and Groups tabs; the members' filters live in the URL. */
 export function TeamView({
   rows,
@@ -62,11 +70,20 @@ export function TeamView({
   ...ctx
 }: TeamContext & {
   rows: TeamRow[];
-  filters: { q: string; role: string; group: string; status: string };
+  filters: Filters;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const [, startTransition] = useTransition();
+  // The filters last asked for. A change builds on them, not on the props: on a slow
+  // connection the props still carry the previous URL while the next change is made,
+  // and the change before it would be lost. The props win once they arrive.
+  const [requested, setRequested] = useState(filters);
+  const [syncedFilters, setSyncedFilters] = useState(filters);
+  if (filterKey(syncedFilters) !== filterKey(filters)) {
+    setSyncedFilters(filters);
+    setRequested(filters);
+  }
   const [q, setQ] = useState(filters.q);
   const [shownQ, setShownQ] = useState(filters.q);
   if (shownQ !== filters.q) {
@@ -74,8 +91,9 @@ export function TeamView({
     setQ(filters.q);
   }
 
-  function setFilter(patch: Partial<typeof filters>) {
-    const next = { ...filters, ...patch };
+  function setFilter(patch: Partial<Filters>) {
+    const next = { ...requested, ...patch };
+    setRequested(next);
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(next)) if (v) params.set(k, v);
     startTransition(() => router.replace(`${pathname}${params.size ? `?${params}` : ""}`));
@@ -116,7 +134,7 @@ export function TeamView({
             onChange={(e) => setQ(e.target.value)}
           />
           <Select
-            value={filters.role || ANY}
+            value={requested.role || ANY}
             onValueChange={(v) => setFilter({ role: v === ANY ? "" : v })}
           >
             <SelectTrigger size="sm" aria-label="Role" className="w-36">
@@ -132,7 +150,7 @@ export function TeamView({
             </SelectContent>
           </Select>
           <Select
-            value={filters.group || ANY}
+            value={requested.group || ANY}
             onValueChange={(v) => setFilter({ group: v === ANY ? "" : v })}
           >
             <SelectTrigger size="sm" aria-label="Group" className="w-40">
@@ -148,7 +166,7 @@ export function TeamView({
             </SelectContent>
           </Select>
           <Select
-            value={filters.status || ANY}
+            value={requested.status || ANY}
             onValueChange={(v) => setFilter({ status: v === ANY ? "" : v.toLowerCase() })}
           >
             <SelectTrigger size="sm" aria-label="Status" className="w-44">

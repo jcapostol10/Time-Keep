@@ -1,3 +1,5 @@
+import type { Page } from "@playwright/test";
+
 import { expect, test } from "./fixtures";
 import { uniqueEmail, waitForApp } from "./helpers/app";
 import { createProjectViaUi } from "./helpers/catalog";
@@ -6,6 +8,20 @@ import { addTeammate, inviteViaUi, memberAction, memberRow, openTeam } from "./h
 import { addManualEntry, projectButton } from "./helpers/tracker";
 
 const NOT_FOUND = "We couldn't find that page";
+
+/**
+ * Delays the Team page's filter navigations, as on a distant server: a second filter
+ * change made before the first one's page arrives must not undo the first.
+ */
+async function slowFilterNavigations(page: Page) {
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const isFilterNavigation =
+      request.headers()["rsc"] === "1" && new URL(request.url()).pathname.endsWith("/team");
+    if (isFilterNavigation) await new Promise((resolve) => setTimeout(resolve, 800));
+    await route.fallback();
+  });
+}
 
 test.describe("team", () => {
   test("bulk invite reports each address", async ({ page, freshUser }) => {
@@ -182,6 +198,7 @@ test.describe("team", () => {
     const pending = uniqueEmail("pending");
     const invited = await inviteViaUi(page, freshUser.slug, [pending], "Member");
     await invited.getByRole("button", { name: "Done" }).click();
+    await slowFilterNavigations(page);
     await page.getByRole("combobox", { name: "Group" }).click();
     await page.getByRole("option", { name: "Design" }).click();
     await expect(memberRow(page, "Gus Member")).toBeVisible();
@@ -204,6 +221,9 @@ test.describe("team", () => {
     await page.getByRole("tab", { name: "Access" }).click();
     await page.getByRole("checkbox", { name: "Design" }).check();
     await expect(page.getByRole("checkbox", { name: "Design" })).toBeChecked();
+    // The box ticks at once and is disabled while the access saves: wait for the save,
+    // or Gus's reload below can come first.
+    await expect(page.getByRole("checkbox", { name: "Design" })).toBeEnabled();
     await gus.page.reload();
     await waitForApp(gus.page);
     await projectButton(gus.page).click();
