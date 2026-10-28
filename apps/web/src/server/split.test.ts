@@ -140,6 +140,7 @@ describe("split", () => {
       .where(eq(workspaceSettings.workspaceId, wsId));
     const forced = await loadViewer(db, wsId, bob.userId);
     await expect(splitEntry(db, forced, whole.id, at(30))).rejects.toMatchObject({ status: 403 });
-    await expect(splitEntry(db, olga, whole.id, at(30))).rejects.toMatchObject({ status: 404 });
+    // Someone else's entry is not in the caller's own scope.
+    await expect(splitEntry(db, olga, whole.id, at(30))).rejects.toThrow("Time entry not found.");
   });
 });

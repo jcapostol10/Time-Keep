@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@timekeep/ui/components/select";
 import { Loader2Icon } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { BillableToggle } from "./billable-toggle";
 import { draftWritesSettled } from "./draft-writes";
@@ -75,7 +75,9 @@ export function BulkEditDialog({
   const nothing = Object.keys(patch).length === 0;
   // The latest patch once a picker's inline create (a new project or tag) has landed.
   const patchRef = useRef(patch);
-  patchRef.current = patch;
+  useEffect(() => {
+    patchRef.current = patch;
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

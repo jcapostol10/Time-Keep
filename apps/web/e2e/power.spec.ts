@@ -1,8 +1,17 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
-import { createProjectViaUi, rowAction } from "./helpers/catalog";
-import { addManualEntry, entry, today, waitForSaves } from "./helpers/tracker";
+import { waitForApp } from "./helpers/app";
+import { createProjectViaUi, projectRow, rowAction } from "./helpers/catalog";
+import {
+  addManualEntry,
+  createTag,
+  entry,
+  pickProject,
+  timer,
+  today,
+  waitForSaves,
+} from "./helpers/tracker";
 
 /** Phase 4b power features: bulk edit, split, favourites, templates, the Audit tab. */
 
@@ -49,7 +58,7 @@ test.describe("power features", () => {
     }
   });
 
-  test("split an entry at a time", async ({ page, freshUser, trackerPage }) => {
+  test("split an entry at a time", async ({ page, trackerPage }) => {
     await trackerPage();
     await addManualEntry(page, { description: "Long one", start: "00:10", duration: "2" });
     await rowAction(page, entry(page, "Long one"), "Split…");
@@ -67,5 +76,55 @@ test.describe("power features", () => {
     await expect(halves).toHaveCount(2);
     await expect(halves.nth(0).getByRole("textbox", { name: "Duration" })).toHaveValue("1:00:00");
     await expect(halves.nth(1).getByRole("textbox", { name: "Duration" })).toHaveValue("1:00:00");
+  });
+
+  test("pin an entry as a favourite and start it", async ({ page, freshUser, trackerPage }) => {
+    await createProjectViaUi(page, freshUser.slug, "Alpha");
+    await trackerPage();
+    await pickProject(page, "Alpha");
+    await createTag(page, "urgent");
+    await addManualEntry(page, { description: "Pinned work", start: "00:05", duration: "0.5" });
+    await rowAction(page, entry(page, "Pinned work"), "Pin as favourite");
+
+    const strip = page.getByRole("region", { name: "Favourites" });
+    await expect(strip).toContainText("Pinned work");
+    await strip.getByRole("button", { name: "Start Pinned work" }).click();
+    await expect(timer(page).getByRole("button", { name: "Stop" })).toBeVisible();
+    await expect(timer(page).getByRole("combobox", { name: "Description" })).toHaveValue(
+      "Pinned work",
+    );
+    await expect(timer(page).getByRole("button", { name: "Project: Alpha" })).toBeVisible();
+    await expect(timer(page).getByRole("button", { name: "Tags: urgent" })).toBeVisible();
+    await timer(page).getByRole("button", { name: "Stop" }).click();
+    await expect(timer(page).getByRole("button", { name: "Start" })).toBeVisible();
+
+    await strip.getByRole("button", { name: "Unpin Pinned work" }).click();
+    await expect(page.getByRole("region", { name: "Favourites" })).toHaveCount(0);
+  });
+
+  test("a favourite on an archived project is disabled", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await createProjectViaUi(page, freshUser.slug, "Old");
+    await trackerPage();
+    await pickProject(page, "Old");
+    await addManualEntry(page, { description: "Legacy", start: "00:05", duration: "0.5" });
+    await rowAction(page, entry(page, "Legacy"), "Pin as favourite");
+    await expect(page.getByRole("region", { name: "Favourites" })).toContainText("Legacy");
+
+    await page.goto(`/w/${freshUser.slug}/projects`);
+    await waitForApp(page);
+    await page.getByRole("checkbox", { name: "Select Old" }).check();
+    await page.getByRole("button", { name: "Archive" }).click();
+    await expect(projectRow(page, "Old")).toHaveCount(0);
+
+    await trackerPage();
+    const start = page
+      .getByRole("region", { name: "Favourites" })
+      .getByRole("button", { name: "Start Legacy" });
+    await expect(start).toBeDisabled();
+    await expect(start).toHaveAttribute("title", "This project is archived.");
   });
 });
