@@ -270,6 +270,9 @@ export const bulkEntryPatchSchema = z
   .refine((p) => Object.values(p).some((v) => v !== undefined), "Pick something to change");
 export type BulkEntryPatch = z.infer<typeof bulkEntryPatchSchema>;
 
+/** Split (Phase 4b): the instant inside the entry where the second part starts. */
+export const splitEntrySchema = z.object({ at: isoInstantSchema });
+
 export const bulkUpdateEntriesSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(500),
   patch: bulkEntryPatchSchema,

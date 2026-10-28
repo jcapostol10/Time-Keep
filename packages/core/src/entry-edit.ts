@@ -54,3 +54,13 @@ export function withDate(entry: EntryTimes, dateKey: string, tz: string): EntryT
 export function withDuration(entry: EntryTimes, seconds: number): EntryTimes {
   return { start: entry.start, end: new Date(entry.start.getTime() + seconds * 1000) };
 }
+
+/**
+ * Where the split dialog starts: the midpoint rounded down to the minute, or
+ * the exact midpoint when rounding would land on the start (a short entry).
+ */
+export function splitPoint(entry: { start: Date; end: Date }): Date {
+  const mid = new Date((entry.start.getTime() + entry.end.getTime()) / 2);
+  const floored = new Date(Math.floor(mid.getTime() / 60_000) * 60_000);
+  return floored.getTime() > entry.start.getTime() ? floored : mid;
+}

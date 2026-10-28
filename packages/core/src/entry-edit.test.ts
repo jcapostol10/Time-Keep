@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { manualRange, withDate, withDuration, withEndTime, withStartTime } from "./entry-edit";
+import {
+  manualRange,
+  splitPoint,
+  withDate,
+  withDuration,
+  withEndTime,
+  withStartTime,
+} from "./entry-edit";
 
 const MANILA = "Asia/Manila";
 const NEW_YORK = "America/New_York";
@@ -76,5 +83,21 @@ describe("row edits", () => {
 
   it("withDuration keeps the start and moves the end", () => {
     expect(iso(withDuration(entry, 5400).end)).toBe("2026-03-09T02:30:00.000Z");
+  });
+});
+
+describe("splitPoint", () => {
+  it("is the midpoint rounded down to the minute", () => {
+    const start = new Date("2026-03-09T10:00:00.000Z");
+    expect(splitPoint({ start, end: new Date("2026-03-09T11:01:00.000Z") }).toISOString()).toBe(
+      "2026-03-09T10:30:00.000Z",
+    );
+  });
+
+  it("is the exact midpoint when the rounded one would be the start", () => {
+    const start = new Date("2026-03-09T10:00:00.000Z");
+    expect(splitPoint({ start, end: new Date("2026-03-09T10:01:00.000Z") }).toISOString()).toBe(
+      "2026-03-09T10:00:30.000Z",
+    );
   });
 });

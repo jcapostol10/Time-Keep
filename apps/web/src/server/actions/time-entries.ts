@@ -4,6 +4,7 @@ import {
   bulkUpdateEntriesSchema,
   createManualEntrySchema,
   entryIdsSchema,
+  splitEntrySchema,
   startTimerSchema,
   stopTimerSchema,
   updateEntrySchema,
@@ -22,6 +23,7 @@ import {
   type EntryScope,
   restoreEntries,
   scopesForEntries,
+  splitEntry,
   startTimer,
   stopTimer,
   TimeEntryError,
@@ -190,6 +192,23 @@ export async function bulkUpdateEntriesAction(
     const db = getDb();
     const groups = await scopesForEntries(db, await viewerFor(ctx), parsed.data.ids);
     return ok(await bulkUpdateEntries(db, groups, parsed.data.patch));
+  } catch (error) {
+    return actionFailure(error);
+  }
+}
+
+/** Split: one entry becomes two at `at`; the owner's scope, acted for by the caller. */
+export async function splitEntryAction(
+  slug: string,
+  entryId: string,
+  input: unknown,
+): Promise<ActionResult<{ first: TimeEntryDTO; second: TimeEntryDTO }>> {
+  try {
+    const ctx = await requireWorkspaceAccess(slug);
+    const parsed = splitEntrySchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    const scope = await entryScope(ctx, entryId);
+    return ok(await splitEntry(getDb(), scope, entryId, parsed.data.at));
   } catch (error) {
     return actionFailure(error);
   }

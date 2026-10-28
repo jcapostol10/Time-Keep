@@ -30,9 +30,11 @@ import {
   DollarSignIcon,
   EllipsisVerticalIcon,
   PlayIcon,
+  ScissorsIcon,
   TagIcon,
   Trash2Icon,
 } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import type { TimeEntryDTO } from "@/lib/tracker-types";
@@ -40,6 +42,7 @@ import type { TimeEntryDTO } from "@/lib/tracker-types";
 import { BillableToggle } from "./billable-toggle";
 import { CommitInput } from "./manual-entry-fields";
 import { ColorDot, ProjectPicker } from "./project-picker";
+import { SplitDialog } from "./split-dialog";
 import { TagPicker } from "./tag-picker";
 import { useTracker } from "./tracker-provider";
 import { useEntryMutations } from "./use-entry-mutations";
@@ -64,8 +67,11 @@ function TimeRange({ start, end, tz }: { start: string; end: string; tz: string 
 }
 
 function RowActions({ entry }: { entry: TimeEntryDTO }) {
-  const { duplicate, remove } = useEntryMutations();
+  const { duplicate, remove, split } = useEntryMutations();
+  const { rules } = useTracker();
+  const [splitting, setSplitting] = useState(false);
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label="More actions">
@@ -76,11 +82,26 @@ function RowActions({ entry }: { entry: TimeEntryDTO }) {
         <DropdownMenuItem onSelect={() => void duplicate(entry.id)}>
           <CopyIcon /> Duplicate
         </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={!entry.end || !rules.canWriteTimes}
+          onSelect={() => setSplitting(true)}
+        >
+          <ScissorsIcon /> Split…
+        </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => void remove([entry.id])}>
           <Trash2Icon /> Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    {splitting ? (
+      <SplitDialog
+        entry={entry}
+        open
+        onOpenChange={setSplitting}
+        onSplit={(at) => split(entry, at)}
+      />
+    ) : null}
+    </>
   );
 }
 

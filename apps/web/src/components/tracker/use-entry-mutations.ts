@@ -11,6 +11,7 @@ import {
   deleteEntriesAction,
   duplicateEntryAction,
   restoreEntriesAction,
+  splitEntryAction,
   updateEntryAction,
 } from "@/server/actions/time-entries";
 
@@ -142,8 +143,27 @@ export function useEntryMutations() {
     [slug, cache, notifyEntriesChanged],
   );
 
+  /** Split at an instant: both parts land in the list. */
+  const split = useCallback(
+    async (entry: TimeEntryDTO, at: Date) => {
+      const result = await trackSave(() =>
+        splitEntryAction(slug, entry.id, { at: at.toISOString() }),
+      );
+      if (!result.ok) {
+        toast.error(result.error);
+        return false;
+      }
+      cache.upsertEntry(result.data.first);
+      cache.upsertEntry(result.data.second, "insert");
+      notifyEntriesChanged();
+      toast.success("Entry split");
+      return true;
+    },
+    [slug, cache, notifyEntriesChanged],
+  );
+
   return useMemo(
-    () => ({ createManual, update, remove, restore, duplicate, bulkUpdate }),
-    [createManual, update, remove, restore, duplicate, bulkUpdate],
+    () => ({ createManual, update, remove, restore, duplicate, bulkUpdate, split }),
+    [createManual, update, remove, restore, duplicate, bulkUpdate, split],
   );
 }

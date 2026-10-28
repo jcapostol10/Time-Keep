@@ -740,6 +740,56 @@ export async function duplicateEntry(
 }
 
 /**
+ * Split: `[start, at)` stays on the entry and `[at, end)` becomes a new one
+ * with the same details, tags and rate snapshot (a split is an edit of
+ * times, so it keeps the rate); each part lasts at least a second.
+ */
+export async function splitEntry(
+  db: Database,
+  scope: EntryScope,
+  entryId: string,
+  at: Date,
+  now: Date = new Date(),
+): Promise<{ first: TimeEntryDTO; second: TimeEntryDTO }> {
+  return db.transaction(async (tx) => {
+    await lockOwned(tx, scope, entryId);
+    const row = await findOwned(tx, scope, entryId);
+    if (!row.end) throw new TimeEntryError("INVALID", "Stop the timer before splitting it.");
+    assertCanWriteTimes(scope, row.projectId);
+    if (at.getTime() < row.start.getTime() + 1000 || at.getTime() > row.end.getTime() - 1000) {
+      throw new TimeEntryError("INVALID", "Pick a time inside the entry.");
+    }
+    await tx
+      .update(timeEntry)
+      .set({ end: at, durationSeconds: computeDurationSeconds(row.start, at), updatedAt: now })
+      .where(eq(timeEntry.id, row.id));
+    await recomputeAmount(tx, row.id);
+    const id = randomUUID();
+    await tx.insert(timeEntry).values({
+      id,
+      workspaceId: scope.workspaceId,
+      userId: scope.userId,
+      description: row.description,
+      projectId: row.projectId,
+      taskId: row.taskId,
+      billable: row.billable,
+      type: row.type,
+      start: at,
+      end: row.end,
+      durationSeconds: computeDurationSeconds(at, row.end),
+      billableRateMinor: row.billableRateMinor,
+      rateCurrency: row.rateCurrency,
+      rateSource: row.rateSource,
+    });
+    const tagIds = row.tags.map((t) => t.tag.id);
+    if (tagIds.length > 0) await replaceTags(tx, id, tagIds);
+    await recomputeAmount(tx, id);
+    return { first: await loadDTO(tx, scope, row.id), second: await loadDTO(tx, scope, id) };
+  });
+}
+
+
+/**
  * "Continue": start a new timer with the entry's description, project, task,
  * tags and billable flag. The timer is `startFor`'s (the caller's own, decision
  * 8); the entry may be someone else's the caller may write for.
