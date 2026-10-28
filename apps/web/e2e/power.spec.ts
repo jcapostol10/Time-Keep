@@ -1,10 +1,11 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
-import { waitForApp } from "./helpers/app";
+import { overflowingElements, waitForApp } from "./helpers/app";
 import { createProjectViaUi, projectRow, rowAction } from "./helpers/catalog";
 import { setRateIn } from "./helpers/rates";
 import { detailedRow, openReport } from "./helpers/reports";
+import { addTeammate } from "./helpers/team";
 import {
   addManualEntry,
   createTag,
@@ -15,7 +16,7 @@ import {
   waitForSaves,
 } from "./helpers/tracker";
 
-/** Phase 4b power features: bulk edit, split, favourites, templates, the Audit tab. */
+/** Phase 4b power features: bulk edit, split, favourites, templates, the Audit tab, 375px. */
 
 /** Picks an existing project in any ProjectPicker inside `scope`. */
 async function pickProjectIn(page: Page, scope: ReturnType<Page["getByRole"]>, name: string) {
@@ -60,8 +61,8 @@ test.describe("power features", () => {
     }
   });
 
-  test("split an entry at a time", async ({ page, trackerPage }) => {
-    await trackerPage();
+  test("split an entry at a time", async ({ page, freshUser, trackerPage }) => {
+    await trackerPage(freshUser.slug);
     await addManualEntry(page, { description: "Long one", start: "00:10", duration: "2" });
     await rowAction(page, entry(page, "Long one"), "Split…");
     const dialog = page.getByRole("dialog", { name: "Split entry" });
@@ -208,5 +209,25 @@ test.describe("power features", () => {
     await expect(dialog).toBeHidden();
     await expect(detailedRow(page, "Lost")).toHaveCount(0);
     await expect(detailedRow(page, "Long")).toBeVisible();
+  });
+
+  test("the tracker fits a 375px screen with favourites and the person picker", async ({
+    page,
+    freshUser,
+    browser,
+    baseURL,
+    trackerPage,
+  }) => {
+    // A second person makes the person picker render; a favourite adds the strip.
+    const mia = await addTeammate(page, browser, baseURL, freshUser.slug, "Mia Member", "Member");
+    await mia.context.close();
+    await trackerPage();
+    await addManualEntry(page, { description: "Pinned work", start: "00:05", duration: "0.5" });
+    await rowAction(page, entry(page, "Pinned work"), "Pin as favourite");
+    await expect(page.getByRole("region", { name: "Favourites" })).toContainText("Pinned work");
+
+    await page.setViewportSize({ width: 375, height: 760 });
+    await expect(page.getByRole("combobox", { name: "Person", exact: true })).toBeVisible();
+    expect(await overflowingElements(page)).toEqual([]);
   });
 });

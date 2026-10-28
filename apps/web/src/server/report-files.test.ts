@@ -90,7 +90,7 @@ describe("report files", () => {
     const text = new TextDecoder().decode(file.body);
     expect(file.rowCount).toBe(2);
     expect(text).toContain(
-      '"Site ""work"", phase 1",Web,,,Alice A,,No,2026-03-09,09:00,10:30,1:30:00',
+      '"Site ""work"", phase 1",Work,Web,,,Alice A,,No,2026-03-09,09:00,10:30,1:30:00',
     );
   });
 

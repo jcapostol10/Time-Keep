@@ -290,6 +290,6 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Small screens (375px)
 
-- [ ] The tracker page fits a 375px screen without horizontal scrolling — gap
+- [x] The tracker page fits a 375px screen without horizontal scrolling — `power.spec.ts` › "the tracker fits a 375px screen with favourites and the person picker"
 - [x] At 375px the report filters fold into a sheet (Escape closes it after a picker) and the page does not scroll sideways — `reports.spec.ts` › "at 375px the filters fold into a sheet and the page does not scroll sideways"
 - [x] The account and settings pages fit a 375px screen without horizontal scrolling — `settings.spec.ts` › "the account and settings pages fit a 375px screen"

@@ -158,10 +158,16 @@ Delivered in two halves (design: `docs/superpowers/specs/2026-10-27-phase-4-desi
 - [x] Team page (full), groups, CSV import; manager scope (`team.test.ts`, `groups.test.ts`, `invites.test.ts`, `manager-scope.test.ts`, `team.spec.ts`)
 - [x] Rate hierarchy with history and snapshots; amounts in reports (`rates.test.ts`, `entry-rates.test.ts`, `rate-recalc.test.ts`, `report-amounts.test.ts`, `rates.spec.ts`, `amounts.spec.ts`)
 
-Phase 4b:
+Phase 4b (plan: `docs/superpowers/plans/2026-10-28-phase-4b.md`):
 
-- [ ] Workspace settings (rounding, visibility, required fields, breaks)
-- [ ] Add time for others, bulk edit, split, favourites, templates, audit report, import
+- [x] Workspace rules: report rounding, hidden pages, who can create, who sees the team's time, required fields, force timer, breaks (`workspace-rules.test.ts`, `entry-rules.test.ts`, `breaks.test.ts`, `rounding.test.ts`, `settings.spec.ts`)
+- [x] Add time for others, bulk edit, split, favourites, templates, the Audit tab, CSV import (`add-for-others.test.ts`, `bulk-edit.test.ts`, `split.test.ts`, `favorites.test.ts`, `catalog/templates.test.ts`, `audit.test.ts`, `entry-import.test.ts`; `others.spec.ts`, `power.spec.ts`, `import.spec.ts`)
+
+Acceptance checks for 4b (the design's list):
+
+- [x] A required field blocks Stop (`settings.spec.ts`, "a required project blocks Stop until it is picked"); force timer takes manual entry away from a member; a break stays out of the Summary unless the Type filter asks; rounding rounds the Summary and Raw shows real time
+- [x] An admin adds time for a member and the member sees it in their tracker (`others.spec.ts`); bulk edit, split, pin and start a favourite, a project from a template and the Audit tab (`power.spec.ts`); an import dry run and commit (`import.spec.ts`)
+- [x] Perf: the one-year Summary with amounts stays under a second with rounding on (364 ms); the recalculation over 1,000,000 entries takes 91.5 s (`docs/DATA_MODEL.md`)
 
 Acceptance checks:
 
@@ -176,6 +182,21 @@ Decisions for 4a (the owner agreed to decisions 1, 2, 4, 9 and 10 on 2026-10-27;
 - One currency per workspace until Phase 6; changing it relabels rates and amounts after a confirmation.
 - Deactivate keeps everything for reactivation; remove keeps only the time. Ownership goes to an active admin who confirms by typing the workspace name. Importing users sends invitations.
 - The recalculation job runs after the response (`after()`), like export jobs; moving both to pg-boss is in `docs/BACKLOG.md`.
+
+Decisions for 4b (the plan's, plus the rulings made while building; the owner has not reviewed these individually):
+
+- Every rule column defaults to the behaviour before the rule existed. `loadActor` reads `workspace_settings` itself (one primary-key read per request), so the matrix answers hidden pages (a 404 page, a 403 JSON route, as 4a's `authorizePage` does), who can create, who sees the team's time, required fields and force timer.
+- Required fields and force timer live in the entry service. A required field blocks Stop and every save (a task only when the project has active tasks; breaks are exempt). Force timer refuses manual times for the actor's own entries only, never time added for someone else, and never a stop with an explicit end (the idle dialog's discard must keep working).
+- A break (`time_entry.type = 'break'`) carries no details, needs `allow_breaks`, is never rated and keeps its type for life. Reports count work entries unless the Type filter asks; the timesheet grid lists work only (breaks are tracked in the tracker and the calendar).
+- Rounding is a report rule, not a change to entries: the engine reads it from `workspace_settings` with the currency, the URL toggle (`rounding=off`) shows raw time, the Detailed report sorts by raw duration, and the dashboard always shows raw time.
+- Adding time for others: the target's own `Viewer` plus `actedBy` (the actor). A member asking for anyone else's time gets a 404 (the scoped "own" rule), not a 403. Writes on an entry id resolve the owner's scope server-side; creates take a `userId`. The timer bar is always the viewer's own.
+- Bulk edit is all-or-nothing over the selected entries. A split keeps the rate snapshot on both parts, each at least a second long. A favourite pins details, not times, at most 20 per person; pinning the same details twice is refused.
+- Templates: "Save as template" copies the project as "<name> template" (tasks, members, groups and rates, whatever the actor's `rate.set`); "Start from template" prefills the copy dialog, whose own fields win; templates are hidden from the projects list and the pickers.
+- The Audit tab is the Detailed report with a filter (`audit`, `shortMinutes`, `longHours` in the query). Its criteria combine with OR; `/reports/audit` without an `audit` param redirects to the defaults (no project, longer than 10 hours).
+- Import goes through a route handler (a 4 MB file is over the action body limit). The dry run names the line and field of every problem and its fingerprint guards the commit; the email column follows `entry.write`, so a member's rows for another email are errors; names to create match ignoring case, once per spelling.
+- The Detailed report's `editable` follows `entry.write`, so admins and managers edit (and bulk edit) others' entries there. `task.create` for non-admins is exercised through the project picker's inline "Create task". The Clients and Tags pages open to anyone who may create there, with row actions still admin-only.
+
+Bugs found while building 4b and fixed: the bulk edit dialog could apply before an inline tag create had settled and lose the new tag (it now waits for the draft writes); `TimezoneSelect` threw outside a form (the import dialog has no react-hook-form context).
 
 Bugs found while building 4a and fixed: `updated_at` mixed the database's and the app server's clocks, so an update could be stamped before its insert (two time-entry tests flaked); `setProjectMembers` deleted a project's managers with its member list; a new user's personal workspace was always UTC, so "New entries only" missed entries early in their day; the recalculation cursor lost microseconds and looped forever on its last entry (found by the perf run). The final review then found, and this branch fixed: a backdated or "All entries" rate lost to later rows at its level (it now replaces them); Better Auth's organization endpoints let a deactivated admin change roles and remove members (closed with `disabledPaths`; the app writes memberships itself); Better Auth's default limit of 100 invitations and members capped bulk invite and import; a request merged into a waiting job kept that job's cursor and a failed job's entries were left behind (both now fold into one job started over, and polling fails a killed job and starts a stuck one); removing a member deleted their rates, so a later recalculation shifted their past amounts; the reports had no Groups filter.
 

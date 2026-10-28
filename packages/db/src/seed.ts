@@ -202,6 +202,7 @@ const DEMO_PROJECTS: {
   client: number | null;
   visibility: "PUBLIC" | "PRIVATE";
   tasks: string[];
+  template?: boolean;
 }[] = [
   {
     name: "Website redesign",
@@ -211,6 +212,14 @@ const DEMO_PROJECTS: {
   },
   { name: "Mobile app", client: 1, visibility: "PRIVATE", tasks: ["iOS", "Android"] },
   { name: "Internal", client: null, visibility: "PUBLIC", tasks: ["Meetings", "Admin"] },
+  // A template (Phase 4b) for "Start from template"; no entries land on it.
+  {
+    name: "Client onboarding",
+    client: null,
+    visibility: "PUBLIC",
+    tasks: ["Kickoff", "Handover"],
+    template: true,
+  },
 ];
 /** member2 is left off the private project so the demo tenant has a project a member cannot see. */
 const PRIVATE_PROJECT_MEMBERS = [
@@ -265,6 +274,7 @@ async function seedTrackerData(
       clientId: p.client === null ? null : (clientIds[p.client] ?? null),
       visibility: p.visibility,
       billable: p.client !== null,
+      isTemplate: p.template ?? false,
     })),
   );
   const privateMembers = DEMO_PROJECTS.flatMap((p, i) =>

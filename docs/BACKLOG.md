@@ -35,8 +35,12 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] Phase 4a review: `commitUserImport` creates the CSV's groups before any invite succeeds, and sends up to 500 invites (Better Auth plus SMTP) one after another in one action, which can run past the function budget part-way through. Re-running is safe ("invited already"), but the first result is lost. Move the sending into a job once the worker exists.
 - [ ] A second rate change on the same effective date replaces that date's row (Phase 4a Task 8 ruling), so History loses the earlier value of the day, and entries created between the two changes keep the replaced rate until a recalculation runs.
 
+- [ ] The CSV import parses and resolves the file twice (the dry run and the commit) and writes up to 10,000 rows inside one request. Fine within the 300 s budget today; move the commit to a job with the export jobs once the worker exists.
+- [ ] Rounding rounds each entry before summing (Clockify's rule); a workspace that wants the total rounded instead has no setting for it.
+
 ## E2E suite
 
+- [ ] `others.spec.ts` "the timer bar stays the viewer's own" is a weak test: it passed with the entry list keyed to the viewer, and no single break models a timer for someone else (timers have no target at all), so its coverage line stays unticked.
 - [ ] `ci.yml` skips its pull_request job for same-repository PRs (the push already ran). GitHub counts a skipped job as a passing required check, so if branch protection is ever added, require the push run's check explicitly; none exists today.
 - [ ] Against the dev server, three workers occasionally close an open picker mid-test (Next recompiles routes on demand and pushes updates); the production-server run (see the CLAUDE.md commands) is stable. Consider making `pnpm e2e` build and start a production server locally.
 - [ ] The suite runs spec files with 3 workers to stay under 10 minutes on a preview; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). If a new spec writes to the demo tenant, check it against the others or give it its own project in the Playwright config.

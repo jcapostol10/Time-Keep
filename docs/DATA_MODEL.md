@@ -2,7 +2,7 @@
 
 PostgreSQL (16 locally, Supabase in production) via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
 
-## Entity overview (Phases 0–4a)
+## Entity overview (Phases 0–4b)
 
 ```
 user ──< session            (activeWorkspaceId → workspace)
@@ -30,6 +30,7 @@ workspace ──< user_group ──< user_group_member >── user;  project �
 workspace ──< managed_user / managed_group   (a manager's people and groups)
 workspace ──< rate   (billable rate history per level);  workspace ──< rate_recalc_job
 workspace ──< export_job >── user          (large exports built after the response)
+workspace ──< favorite_entry >── user      (pinned entry details; Phase 4b)
 ```
 
 ## Tables
@@ -407,9 +408,15 @@ Measured on the perf tenant (`pnpm db:seed:perf`: 1,000,000 entries, rates at fo
 - "Apply to past entries" over every entry (`runRateRecalcJob`, batches of 5,000, one `rateEntriesSql` update each): 76.2 s for 1,000,000 entries, inside a function's 300 s. One batch is about 380 ms (a primary-key scan plus five rate-lookup probes per entry).
 - One-year Summary with amounts: owner median 328 ms (334,000 entries), manager median 146 ms (109,000 entries in scope). The amount is one more `sum(bigint)` over a stored column; the scope filter is an `OR` of the manager's own, managed people's and managed projects' entries.
 
+## Rules at scale (Phase 4b)
+
+Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf`, 2026-10-28, after the rule columns, `time_entry.type` and the work-only rating:
+
+- One-year Summary with amounts: owner median 346 ms, manager 151 ms. Rounded to 15 minutes (`roundedSecondsSql` / `roundedAmountSql` in `packages/db/src/rounding-sql.ts`: a `CASE` per row inside the sums), 364 ms. Rounding costs about 5 %, so no rounded column is stored; it stays a report rule.
+- "Apply to past entries" over every entry: 91.5 s for 1,000,000 entries (the work-only predicate adds a column test per row), inside the 300 s budget.
+
 ## Planned (later phases)
 
-Phase 4b: `workspace_settings` extensions (rounding, visibility, creators, required fields, force timer, breaks), `time_entry.type`, `favorite_entry`.
 Phase 5: `approval_request`, `lock_period`, `time_off_policy`, `time_off_request`, `holiday`, `kiosk`, `kiosk_pin`.
 Phase 6: `expense`, `expense_category`, `invoice`, `invoice_item`, `payment`, `budget`, `custom_field`.
 Phase 7: `assignment`, `milestone`.
