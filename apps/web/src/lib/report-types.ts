@@ -4,6 +4,7 @@ import type {
   GroupKey,
   ReportGroup,
   ReportTotals,
+  RoundingRule,
   WeeklyBy,
   WeeklyRow,
 } from "@timekeep/core";
@@ -83,6 +84,8 @@ export interface ReportFilterOptions {
   projects: PickerProject[];
   tasks: { id: string; name: string; projectId: string }[];
   tags: EntryTag[];
+  /** The workspace rounding rule, or null when off: the toolbar shows a toggle only then. */
+  rounding: RoundingRule | null;
 }
 
 export interface DetailedPaging {

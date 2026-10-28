@@ -73,7 +73,16 @@ async function main() {
       return mid;
     }
     const manager = await loadViewer(db, "perf-ws", "perf-user-2");
-    const median = Math.max(await time("owner", viewer), await time("manager", manager));
+    const plain = Math.max(await time("owner", viewer), await time("manager", manager));
+    // With a rounding rule every entry is rounded and re-amounted in the scan.
+    await db.execute(
+      sql`update workspace_settings set rounding_mode = 'nearest', rounding_minutes = 15 where workspace_id = 'perf-ws'`,
+    );
+    const rounded = await time("owner, rounded to 15 min", viewer);
+    await db.execute(
+      sql`update workspace_settings set rounding_mode = 'off' where workspace_id = 'perf-ws'`,
+    );
+    const median = Math.max(plain, rounded);
 
     const plans = [
       sql`explain (analyze, buffers, costs off)

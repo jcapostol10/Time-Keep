@@ -504,3 +504,14 @@ describe("the Type filter", () => {
     expect(reportQueryToSearchParams(DEFAULT_REPORT_QUERY).has("type")).toBe(false);
   });
 });
+
+describe("the rounding choice", () => {
+  it("applies the rule by default and keeps raw in the URL", () => {
+    expect(parseReportQuery(new URLSearchParams("")).rounding).toBe("on");
+    expect(parseReportQuery(new URLSearchParams("rounding=off")).rounding).toBe("off");
+    expect(
+      reportQueryToSearchParams({ ...DEFAULT_REPORT_QUERY, rounding: "off" }).get("rounding"),
+    ).toBe("off");
+    expect(reportQueryToSearchParams(DEFAULT_REPORT_QUERY).has("rounding")).toBe(false);
+  });
+});

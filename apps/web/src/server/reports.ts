@@ -17,6 +17,8 @@ import {
   type ReportRow,
   type ReportTotals,
   resolveReportRange,
+  type RoundingRule,
+  roundingRuleOf,
   type ViewerPrefs,
   weekBounds,
 } from "@timekeep/core";
@@ -35,6 +37,8 @@ import {
   lt,
   or,
   project,
+  roundedAmountSql,
+  roundedSecondsSql,
   sql,
   tag,
   task,
@@ -155,31 +159,66 @@ function baseConditions(
 
 // Sums are bigint: a 32-bit int overflows at 2^31 seconds (68 years of time, one year of a
 // 300-person company). node-postgres returns bigint as text, so mapWith(Number).
-const DURATION = sql`coalesce(sum(${timeEntry.durationSeconds}), 0)::bigint`.mapWith(Number);
-const BILLABLE =
-  sql`coalesce(sum(case when ${timeEntry.billable} then ${timeEntry.durationSeconds} else 0 end), 0)::bigint`.mapWith(
-    Number,
-  );
-const NON_BILLABLE =
-  sql`coalesce(sum(case when ${timeEntry.billable} then 0 else ${timeEntry.durationSeconds} end), 0)::bigint`.mapWith(
-    Number,
-  );
 const COUNT = sql<number>`count(*)::int`;
-// Amounts count billable entries only; an unrated billable entry has a null amount.
-const AMOUNT =
-  sql`coalesce(sum(case when ${timeEntry.billable} then ${timeEntry.amountMinor} else 0 end), 0)::bigint`.mapWith(
-    Number,
-  );
 const UNRATED = sql<number>`(count(*) filter (where ${timeEntry.billable} and ${timeEntry.amountMinor} is null))::int`;
 
-/** The workspace currency when the viewer may see amounts, else null (and amounts read 0). */
-async function moneyFor(db: Executor, viewer: Viewer): Promise<ReportMoney> {
-  if (viewer.hideAmounts || !can(viewer.actor, "report.viewAmounts", { kind: "none" })) return null;
-  const settings = await db.query.workspaceSettings.findFirst({
-    where: eq(workspaceSettings.workspaceId, viewer.workspaceId),
-    columns: { currency: true },
+/** A bigint/int column or expression that may be null: node-postgres returns it as text. */
+const nullableNumber = (v: unknown): number | null => (v === null ? null : Number(v));
+
+interface Measures {
+  duration: SQL<number>;
+  billable: SQL<number>;
+  nonBillable: SQL<number>;
+  amount: SQL<number>;
+}
+
+/**
+ * The sums, over raw durations or, with a rounding rule (decision 13), over
+ * each entry's rounded duration and the amount recomputed from it with the
+ * entry's stored rate. Amounts count billable entries only; an unrated
+ * billable entry has a null amount.
+ */
+function measures(rule: RoundingRule | null): Measures {
+  const s = rule ? roundedSecondsSql(rule) : sql`${timeEntry.durationSeconds}`;
+  const a = rule ? roundedAmountSql(rule) : sql`${timeEntry.amountMinor}`;
+  return {
+    duration: sql`coalesce(sum(${s}), 0)::bigint`.mapWith(Number),
+    billable: sql`coalesce(sum(case when ${timeEntry.billable} then ${s} else 0 end), 0)::bigint`.mapWith(
+      Number,
+    ),
+    nonBillable:
+      sql`coalesce(sum(case when ${timeEntry.billable} then 0 else ${s} end), 0)::bigint`.mapWith(
+        Number,
+      ),
+    amount: sql`coalesce(sum(case when ${timeEntry.billable} then ${a} else 0 end), 0)::bigint`.mapWith(
+      Number,
+    ),
+  };
+}
+
+interface ReportSettings {
+  currency: string;
+  rounding: RoundingRule | null;
+}
+
+/** The workspace's currency and rounding rule: one primary-key read per report. */
+async function reportSettings(db: Executor, workspaceId: string): Promise<ReportSettings> {
+  const row = await db.query.workspaceSettings.findFirst({
+    where: eq(workspaceSettings.workspaceId, workspaceId),
+    columns: { currency: true, roundingMode: true, roundingMinutes: true },
   });
-  return { currency: settings?.currency ?? "USD" };
+  return { currency: row?.currency ?? "USD", rounding: row ? roundingRuleOf(row) : null };
+}
+
+/** The rule this query applies: the workspace's, unless the URL asks for raw time. */
+function ruleFor(query: ReportQuery, settings: ReportSettings): RoundingRule | null {
+  return query.rounding === "on" ? settings.rounding : null;
+}
+
+/** The workspace currency when the viewer may see amounts, else null (and amounts read 0). */
+function moneyOf(viewer: Viewer, settings: ReportSettings): ReportMoney {
+  if (viewer.hideAmounts || !can(viewer.actor, "report.viewAmounts", { kind: "none" })) return null;
+  return { currency: settings.currency };
 }
 
 function hideTotals(t: ReportTotals): ReportTotals {
@@ -260,13 +299,13 @@ function groupExprs(key: GroupKey, prefs: ViewerPrefs): { id: SQL; label: SQL } 
   }
 }
 
-async function aggregateTotals(db: Executor, where: SQL): Promise<ReportTotals> {
+async function aggregateTotals(db: Executor, where: SQL, m: Measures): Promise<ReportTotals> {
   const [row] = await db
     .select({
-      durationSeconds: DURATION,
-      billableSeconds: BILLABLE,
+      durationSeconds: m.duration,
+      billableSeconds: m.billable,
       entryCount: COUNT,
-      amountMinor: AMOUNT,
+      amountMinor: m.amount,
       unratedCount: UNRATED,
     })
     .from(timeEntry)
@@ -283,6 +322,7 @@ async function groupedRows(
   where: SQL,
   keys: GroupKey[],
   prefs: ViewerPrefs,
+  m: Measures,
 ): Promise<ReportRow[]> {
   const fields: Record<string, SQL> = {};
   keys.forEach((key, i) => {
@@ -296,10 +336,10 @@ async function groupedRows(
   const base = db
     .select({
       ...fields,
-      durationSeconds: DURATION,
-      billableSeconds: BILLABLE,
+      durationSeconds: m.duration,
+      billableSeconds: m.billable,
       entryCount: COUNT,
-      amountMinor: AMOUNT,
+      amountMinor: m.amount,
       unratedCount: UNRATED,
     })
     .from(timeEntry)
@@ -342,6 +382,7 @@ async function seriesRows(
   bucket: SummaryReport["bucket"],
   prefs: ViewerPrefs,
   range: { from: Date; to: Date },
+  m: Measures,
 ): Promise<{ series: SeriesPoint[]; totals: ReportTotals }> {
   // Sum by local day, the cheapest key per row (one time zone conversion), then roll the few
   // hundred days up into weeks or months here. Formatting per row, or a week expression,
@@ -349,10 +390,10 @@ async function seriesRows(
   const grouped = db
     .select({
       d: sql`${dayDateExpr(prefs.timezone)}`.as("d"),
-      b: BILLABLE.as("b"),
-      nb: NON_BILLABLE.as("nb"),
+      b: m.billable.as("b"),
+      nb: m.nonBillable.as("nb"),
       n: COUNT.as("n"),
-      a: AMOUNT.as("a"),
+      a: m.amount.as("a"),
       u: UNRATED.as("u"),
     })
     .from(timeEntry)
@@ -417,11 +458,13 @@ export async function summaryReport(
   // Below a tag level the join repeats a multi-tag entry, so the levels above it are
   // grouped again without the join.
   const tagAt = eff.groupBy.indexOf("tag");
-  const [rows, { series, totals }, prefixRows, money] = await Promise.all([
-    groupedRows(db, where, eff.groupBy, prefs),
-    seriesRows(db, where, bucket, prefs, range),
-    tagAt > 0 ? groupedRows(db, where, eff.groupBy.slice(0, tagAt), prefs) : undefined,
-    moneyFor(db, viewer),
+  const settings = await reportSettings(db, viewer.workspaceId);
+  const m = measures(ruleFor(eff, settings));
+  const money = moneyOf(viewer, settings);
+  const [rows, { series, totals }, prefixRows] = await Promise.all([
+    groupedRows(db, where, eff.groupBy, prefs, m),
+    seriesRows(db, where, bucket, prefs, range, m),
+    tagAt > 0 ? groupedRows(db, where, eff.groupBy.slice(0, tagAt), prefs, m) : undefined,
   ]);
   const { groups } = groupRows(rows, eff.groupBy, totals, prefixRows);
   return {
@@ -459,6 +502,8 @@ export async function detailedReport(
     );
   }
   const order = page.dir === "desc" ? desc : asc;
+  const settings = await reportSettings(db, viewer.workspaceId);
+  const rule = ruleFor(eff, settings);
   const rows = await db
     .select({
       id: timeEntry.id,
@@ -475,9 +520,13 @@ export async function detailedReport(
       type: timeEntry.type,
       start: timeEntry.start,
       end: timeEntry.end,
-      durationSeconds: timeEntry.durationSeconds,
+      durationSeconds: sql`${rule ? roundedSecondsSql(rule) : timeEntry.durationSeconds}`.mapWith(
+        nullableNumber,
+      ),
       rateMinor: timeEntry.billableRateMinor,
-      amountMinor: timeEntry.amountMinor,
+      amountMinor: sql`${rule ? roundedAmountSql(rule) : timeEntry.amountMinor}`.mapWith(
+        nullableNumber,
+      ),
     })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
@@ -488,7 +537,7 @@ export async function detailedReport(
     .orderBy(order(sortColumn), order(timeEntry.id))
     .limit(limit + 1);
   const pageRows = rows.slice(0, limit);
-  const money = await moneyFor(db, viewer);
+  const money = moneyOf(viewer, settings);
   const ids = pageRows.map((r) => r.id);
   const tagRows =
     ids.length > 0
@@ -539,7 +588,7 @@ export async function detailedReport(
         }
       : null;
   // The range's totals are the first page's; later pages (an export's loop, Load more) skip them.
-  const totals = page.cursor ? null : await aggregateTotals(db, and(...base)!);
+  const totals = page.cursor ? null : await aggregateTotals(db, and(...base)!, measures(rule));
   return {
     money,
     range: { from: range.from.toISOString(), to: range.to.toISOString(), label: range.label },
@@ -562,6 +611,8 @@ export async function weeklyReport(
   const tz = prefs.timezone;
   const week = weekBounds(range.from, tz, prefs.weekStart);
   const where = and(...baseConditions(viewer, eff, { from: week.weekStart, to: week.weekEnd }))!;
+  const settings = await reportSettings(db, viewer.workspaceId);
+  const m = measures(ruleFor(eff, settings));
   const idExpr =
     by === "user" ? sql<string>`${timeEntry.userId}` : sql<string | null>`${timeEntry.projectId}`;
   const labelExpr =
@@ -573,8 +624,8 @@ export async function weeklyReport(
       id: idExpr,
       label: labelExpr,
       dateKey: dateKeyExpr(tz),
-      seconds: DURATION,
-      amountMinor: AMOUNT,
+      seconds: m.duration,
+      amountMinor: m.amount,
     })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
@@ -596,7 +647,7 @@ export async function weeklyReport(
     })),
     dayKeys,
   );
-  const money = await moneyFor(db, viewer);
+  const money = moneyOf(viewer, settings);
   return {
     money,
     weekStart: week.weekStart.toISOString(),
@@ -683,6 +734,7 @@ export async function reportFilterOptions(
     team ? inScopeUserIds(db, viewer) : Promise.resolve(null),
   ]);
   const inScope = (id: string) => !scope || scope.has(id);
+  const { rounding } = await reportSettings(db, viewer.workspaceId);
   const active = members?.filter((m) => m.status === "ACTIVE") ?? null;
   const former = active
     ? await formerMembers(db, viewer.workspaceId, new Set(active.map((m) => m.userId)))
@@ -701,5 +753,6 @@ export async function reportFilterOptions(
       p.tasks.map((t) => ({ id: t.id, name: t.name, projectId: p.id })),
     ),
     tags,
+    rounding,
   };
 }

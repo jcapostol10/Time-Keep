@@ -60,7 +60,8 @@ export async function dashboardMe(
   prefs: ViewerPrefs,
   now = new Date(),
 ): Promise<DashboardMe> {
-  const own = { ...query, userIds: [viewer.userId] };
+  // The dashboard shows raw time; rounding is a report rule (decision 13).
+  const own = { ...query, userIds: [viewer.userId], rounding: "off" as const };
   const [byProject, byClient, byActivity] = await Promise.all([
     summaryReport(db, viewer, { ...own, groupBy: ["project"] }, prefs, now),
     summaryReport(db, viewer, { ...own, groupBy: ["client"] }, prefs, now),
@@ -130,7 +131,13 @@ export async function dashboardTeam(
   }
   const [members, byUser, latestRows] = await Promise.all([
     listMembers(db, viewer.workspaceId),
-    summaryReport(db, viewer, { ...query, userIds: [], groupBy: ["user"] }, prefs, now),
+    summaryReport(
+      db,
+      viewer,
+      { ...query, userIds: [], groupBy: ["user"], rounding: "off" },
+      prefs,
+      now,
+    ),
     db
       .selectDistinctOn([timeEntry.userId], {
         userId: timeEntry.userId,

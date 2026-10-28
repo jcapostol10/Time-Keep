@@ -12,6 +12,7 @@ import { useTracker } from "../tracker/tracker-provider";
 import { ExportMenu } from "./export-menu";
 import { FilterBar } from "./filter-bar";
 import { reportHref, useReportQuery } from "./report-url";
+import { RoundingToggle } from "./rounding-toggle";
 import { ShareDialog } from "./share-dialog";
 
 const VIEWS: { kind: ReportKind; label: string }[] = [
@@ -40,6 +41,7 @@ export function ReportShell({
         actions={
           <>
             {actions}
+            <RoundingToggle />
             <ShareDialog kind={kind} />
             <ExportMenu kind={kind} />
           </>

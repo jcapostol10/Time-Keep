@@ -266,7 +266,13 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A required field blocks Stop and manual Add until it is filled — `settings.spec.ts` › "a required project blocks Stop until it is picked"
 - [x] Force timer hides manual mode and makes the timesheet read-only for a member — `settings.spec.ts` › "force timer takes manual entry away from a member"
 - [x] A break entry is tracked with the Break switch and stays out of the Summary by default — `settings.spec.ts` › "a break stays out of the Summary unless the Type filter asks"
-- [ ] Report rounding rounds the Summary and the Raw toggle shows real time — `settings.spec.ts` › "rounding rounds the Summary and Raw shows real time"
+- [x] Report rounding rounds the Summary and the Raw toggle shows real time — `settings.spec.ts` › "rounding rounds the Summary and Raw shows real time"
+
+## Add time for others
+
+- [ ] An admin adds time for a member through the person picker and the member sees it in their tracker — `others.spec.ts` › "an admin adds time for a member and the member sees it in their tracker"
+- [ ] A manager's person picker lists only the people they manage, and a URL for someone else is not found — `others.spec.ts` › "a manager's person picker lists only their people"
+- [ ] The timer bar stays the viewer's own while another person's entries are shown — `others.spec.ts` › "the timer bar stays the viewer's own"
 
 ## Small screens (375px)
 

@@ -85,6 +85,8 @@ export const reportQuerySchema = z
     billable: z.enum(["all", "yes", "no"]).default("all"),
     /** Work entries by default (decision 6); breaks only, or everything. */
     type: z.enum(["work", "break", "all"]).default("work"),
+    /** Apply the workspace rounding rule (decision 13); "off" shows raw time. */
+    rounding: z.enum(["on", "off"]).default("on"),
     description: z.string().max(200).default(""),
     groupBy: z
       .array(z.enum(GROUP_KEYS))
@@ -126,6 +128,7 @@ const SCALAR_KEYS = [
   "tagMode",
   "billable",
   "type",
+  "rounding",
   "description",
   "bucket",
   "weeklyBy",
