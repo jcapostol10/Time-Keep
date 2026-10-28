@@ -11,13 +11,15 @@ import {
 import { Skeleton } from "@timekeep/ui/components/skeleton";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@timekeep/ui/components/table";
 import { Checkbox } from "@timekeep/ui/components/checkbox";
-import { ArrowDownIcon, ArrowUpIcon, Columns3Icon, Loader2Icon, Trash2Icon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, Columns3Icon, Loader2Icon, Trash2Icon, PencilIcon } from "lucide-react";
 import { useState } from "react";
 
 import type { DetailedPaging, DetailedSort } from "@/lib/report-types";
 
 import { useIsSaving } from "../tracker/saving-store";
 import { useTracker } from "../tracker/tracker-provider";
+import { BulkEditDialog } from "../tracker/bulk-edit-dialog";
+import { useEntryMutations } from "../tracker/use-entry-mutations";
 import { useEntryWrites } from "../tracker/use-entry-writes";
 import { DETAILED_COLUMNS, type DetailedColumn, useHiddenColumns } from "./detailed-columns";
 import { DetailedRow } from "./detailed-row";
@@ -75,6 +77,8 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
   const money = first?.money ?? null;
   const show = (key: DetailedColumn) => !hidden.has(key) && (key !== "amount" || money !== null);
   const writes = useEntryWrites();
+  const { bulkUpdate } = useEntryMutations();
+  const [editing, setEditing] = useState(false);
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
   // Only editable entries can be selected; an entry gone after a refetch drops out by itself.
   const ownIds = entries.filter((e) => e.editable).map((e) => e.id);
@@ -156,6 +160,9 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
               className="bg-muted/50 flex items-center gap-2 border-b px-3 py-2 text-sm"
             >
               <span className="font-medium">{selected.length} selected</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
+                <PencilIcon /> Edit
+              </Button>
               <Button
                 type="button"
                 variant="destructive"
@@ -231,6 +238,16 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
           </Button>
         </div>
       ) : null}
+      <BulkEditDialog
+        count={selected.length}
+        open={editing}
+        onOpenChange={setEditing}
+        onApply={async (patch) => {
+          const ok = await bulkUpdate(selected, patch);
+          if (ok) setPicked(new Set());
+          return ok;
+        }}
+      />
     </div>
   );
 }

@@ -276,7 +276,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Power features
 
-- [ ] Select entries and edit their project, tags and billable flag at once — `power.spec.ts` › "bulk edit moves selected entries to a project and tags them"
+- [x] Select entries and edit their project, tags and billable flag at once — `power.spec.ts` › "bulk edit moves selected entries to a project and tags them"
 
 ## Small screens (375px)
 

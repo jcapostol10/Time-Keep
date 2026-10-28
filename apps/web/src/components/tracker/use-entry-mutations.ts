@@ -1,11 +1,12 @@
 "use client";
 
-import { computeDurationSeconds } from "@timekeep/core";
+import { computeDurationSeconds, type BulkEntryPatch } from "@timekeep/core";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 
 import type { EntryDraft, TimeEntryDTO } from "@/lib/tracker-types";
 import {
+  bulkUpdateEntriesAction,
   createManualEntryAction,
   deleteEntriesAction,
   duplicateEntryAction,
@@ -123,8 +124,26 @@ export function useEntryMutations() {
     [slug, cache, notifyEntriesChanged],
   );
 
+  /** Bulk edit: all the selected entries or none; the list refetches. */
+  const bulkUpdate = useCallback(
+    async (ids: string[], patch: BulkEntryPatch) => {
+      const result = await trackSave(() => bulkUpdateEntriesAction(slug, { ids, patch }));
+      if (!result.ok) {
+        toast.error(result.error);
+        return false;
+      }
+      await cache.invalidateEntries();
+      void cache.invalidateOptions();
+      notifyEntriesChanged();
+      const n = result.data.updated.length;
+      toast.success(n === 1 ? "Entry updated" : `${n} entries updated`);
+      return true;
+    },
+    [slug, cache, notifyEntriesChanged],
+  );
+
   return useMemo(
-    () => ({ createManual, update, remove, restore, duplicate }),
-    [createManual, update, remove, restore, duplicate],
+    () => ({ createManual, update, remove, restore, duplicate, bulkUpdate }),
+    [createManual, update, remove, restore, duplicate, bulkUpdate],
   );
 }

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import type { BulkEntryPatch } from "@timekeep/core";
 import { eq, managedUser, project, rate, timeEntry, workspaceSettings } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -14,12 +15,7 @@ import { loadViewer } from "./authz";
 import { createProject } from "./catalog/projects";
 import { createTag } from "./catalog/tags";
 import type { Viewer } from "./catalog/viewer";
-import {
-  type BulkEntryPatch,
-  bulkUpdateEntries,
-  createManualEntry,
-  scopesForEntries,
-} from "./time-entries";
+import { bulkUpdateEntries, createManualEntry, scopesForEntries } from "./time-entries";
 
 const handle = connectTestDb();
 const db = handle.db;

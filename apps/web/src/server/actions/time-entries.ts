@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  bulkUpdateEntriesSchema,
   createManualEntrySchema,
   entryIdsSchema,
   startTimerSchema,
@@ -13,6 +14,7 @@ import { type ActionResult, fromZodError, ok } from "@/lib/action-result";
 import type { TimeEntryDTO } from "@/lib/tracker-types";
 import { actionFailure } from "@/server/actions/errors";
 import {
+  bulkUpdateEntries,
   continueEntry,
   createManualEntry,
   deleteEntries,
@@ -171,6 +173,23 @@ export async function continueEntryAction(
     const ctx = await requireWorkspaceAccess(slug);
     const scope = await entryScope(ctx, entryId);
     return ok(await continueEntry(getDb(), scope, entryId, undefined, await ownScope(ctx)));
+  } catch (error) {
+    return actionFailure(error);
+  }
+}
+
+/** Bulk edit: the selected entries, grouped by owner, all updated or none. */
+export async function bulkUpdateEntriesAction(
+  slug: string,
+  input: unknown,
+): Promise<ActionResult<{ updated: TimeEntryDTO[] }>> {
+  try {
+    const ctx = await requireWorkspaceAccess(slug);
+    const parsed = bulkUpdateEntriesSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    const db = getDb();
+    const groups = await scopesForEntries(db, await viewerFor(ctx), parsed.data.ids);
+    return ok(await bulkUpdateEntries(db, groups, parsed.data.patch));
   } catch (error) {
     return actionFailure(error);
   }

@@ -13,13 +13,14 @@ import {
 import { Button } from "@timekeep/ui/components/button";
 import { Checkbox } from "@timekeep/ui/components/checkbox";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Loader2Icon, TimerIcon, Trash2Icon, XIcon } from "lucide-react";
+import { Loader2Icon, TimerIcon, Trash2Icon, XIcon, PencilIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { fetchJson } from "@/lib/fetch-json";
 import type { EntriesPage, TimeEntryDTO } from "@/lib/tracker-types";
 
+import { BulkEditDialog } from "./bulk-edit-dialog";
 import { EntryGroupRow, EntryRow } from "./entry-row";
 import { trackerKeys, trackerUrls } from "./query-keys";
 import { useTargetKey } from "./target-context";
@@ -214,8 +215,9 @@ function DaySection({
 
 export function EntryList() {
   const { slug, viewer, running } = useTracker();
-  const { remove } = useEntryMutations();
+  const { remove, bulkUpdate } = useEntryMutations();
   const selection = useSelection();
+  const [editing, setEditing] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(new Set());
   const sentinel = useRef<HTMLDivElement | null>(null);
 
@@ -323,10 +325,12 @@ export function EntryList() {
           className="bg-popover fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-md items-center gap-2 rounded-lg border p-2 pl-4 shadow-lg"
         >
           <span className="text-sm font-medium">{selectedIds.length} selected</span>
+          <Button variant="outline" size="sm" className="ml-auto" onClick={() => setEditing(true)}>
+            <PencilIcon /> Edit
+          </Button>
           <Button
             variant="destructive"
             size="sm"
-            className="ml-auto"
             onClick={async () => {
               if (await remove(selectedIds)) selection.clear();
             }}
@@ -343,6 +347,16 @@ export function EntryList() {
           </Button>
         </div>
       ) : null}
+      <BulkEditDialog
+        count={selectedIds.length}
+        open={editing}
+        onOpenChange={setEditing}
+        onApply={async (patch) => {
+          const ok = await bulkUpdate(selectedIds, patch);
+          if (ok) selection.clear();
+          return ok;
+        }}
+      />
     </div>
   );
 }

@@ -253,6 +253,28 @@ export const entryIdsSchema = z.object({
 });
 export type EntryIdsInput = z.infer<typeof entryIdsSchema>;
 
+/** Bulk edit (Phase 4b): each present key applies to every selected entry. */
+export const bulkEntryPatchSchema = z
+  .object({
+    projectId: z.string().min(1).nullable().optional(),
+    taskId: z.string().min(1).nullable().optional(),
+    tags: z
+      .object({
+        mode: z.enum(["add", "replace", "remove"]),
+        tagIds: z.array(z.string().min(1)).max(50),
+      })
+      .optional(),
+    billable: z.boolean().optional(),
+    description: z.string().max(ENTRY_DESCRIPTION_MAX).optional(),
+  })
+  .refine((p) => Object.values(p).some((v) => v !== undefined), "Pick something to change");
+export type BulkEntryPatch = z.infer<typeof bulkEntryPatchSchema>;
+
+export const bulkUpdateEntriesSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(500),
+  patch: bulkEntryPatchSchema,
+});
+
 // --- Catalog: clients, projects, tasks, tags ----------------------------------
 
 const catalogNameSchema = z.string().trim().min(1, "Name is required").max(100);

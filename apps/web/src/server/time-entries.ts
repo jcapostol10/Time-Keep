@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   type Actor,
+  type BulkEntryPatch,
   can,
   computeDurationSeconds,
   type EntryDetails,
@@ -795,6 +796,114 @@ export async function scopesForEntries(
     groups.push({ scope: await scopeForUser(db, viewer, userId), ids: owned });
   }
   return groups;
+}
+
+function applyTagMode(current: string[], tags: NonNullable<BulkEntryPatch["tags"]>): string[] {
+  switch (tags.mode) {
+    case "add":
+      return [...new Set([...current, ...tags.tagIds])];
+    case "replace":
+      return [...new Set(tags.tagIds)];
+    case "remove":
+      return current.filter((id) => !tags.tagIds.includes(id));
+  }
+}
+
+/** One entry of a bulk edit: the same checks and rating rule as `updateEntry`, times untouched. */
+async function applyBulkPatch(
+  tx: Executor,
+  scope: EntryScope,
+  entryId: string,
+  patch: BulkEntryPatch,
+  now: Date,
+): Promise<TimeEntryDTO> {
+  await lockOwned(tx, scope, entryId);
+  const row = await findOwned(tx, scope, entryId);
+  const currentTags = row.tags.map((t) => t.tag.id);
+  // A new project clears the task unless the patch names one.
+  const details: Partial<EntryDetails> = {
+    ...(patch.projectId !== undefined
+      ? { projectId: patch.projectId, taskId: patch.taskId ?? null }
+      : patch.taskId !== undefined
+        ? { taskId: patch.taskId }
+        : {}),
+    ...(patch.tags ? { tagIds: applyTagMode(currentTags, patch.tags) } : {}),
+    ...(patch.billable !== undefined ? { billable: patch.billable } : {}),
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
+  };
+  if (row.type === "break" && wantsDetails(details)) {
+    throw new TimeEntryError("INVALID", "A break has no project, tags or billing.");
+  }
+  await assertDetailsUsable(tx, scope, details, {
+    projectId: row.projectId,
+    taskId: row.taskId,
+    tagIds: currentTags,
+  });
+  const merged = {
+    description: details.description ?? row.description,
+    projectId: details.projectId !== undefined ? details.projectId : row.projectId,
+    taskId: details.taskId !== undefined ? details.taskId : row.taskId,
+    tagIds: details.tagIds ?? currentTags,
+    type: row.type,
+  };
+  if (row.end) await assertRequiredFields(tx, scope, merged);
+  await tx
+    .update(timeEntry)
+    .set({
+      updatedAt: now,
+      ...(details.description !== undefined ? { description: details.description.trim() } : {}),
+      ...(details.projectId !== undefined ? { projectId: details.projectId } : {}),
+      ...(details.taskId !== undefined ? { taskId: details.taskId } : {}),
+      ...(details.billable !== undefined ? { billable: details.billable } : {}),
+    })
+    .where(eq(timeEntry.id, row.id));
+  if (details.tagIds !== undefined) await replaceTags(tx, row.id, details.tagIds);
+  const rerate = needsRerate(
+    { userId: row.userId, projectId: row.projectId, taskId: row.taskId, billable: row.billable },
+    {
+      userId: row.userId,
+      projectId: merged.projectId,
+      taskId: merged.taskId,
+      billable: details.billable ?? row.billable,
+    },
+  );
+  if (rerate) await rateEntry(tx, row.id);
+  return loadDTO(tx, scope, row.id);
+}
+
+/**
+ * Bulk edit: every selected entry (grouped by owner through `scopesForEntries`)
+ * is checked and patched in one transaction; one failure rolls everything
+ * back, and the error says how many failed and why the first did.
+ */
+export async function bulkUpdateEntries(
+  db: Database,
+  groups: { scope: EntryScope; ids: string[] }[],
+  patch: BulkEntryPatch,
+  now: Date = new Date(),
+): Promise<{ updated: TimeEntryDTO[] }> {
+  const total = groups.reduce((n, g) => n + g.ids.length, 0);
+  return db.transaction(async (tx) => {
+    const failures: string[] = [];
+    const updated: TimeEntryDTO[] = [];
+    for (const { scope, ids } of groups) {
+      for (const id of ids) {
+        try {
+          updated.push(await applyBulkPatch(tx, scope, id, patch, now));
+        } catch (error) {
+          if (!(error instanceof TimeEntryError)) throw error;
+          failures.push(error.message);
+        }
+      }
+    }
+    if (failures.length > 0) {
+      throw new TimeEntryError(
+        "INVALID",
+        `${failures.length} of ${total} entries could not be updated: ${failures[0]}`,
+      );
+    }
+    return { updated };
+  });
 }
 
 // --- Range reads and project-wide operations ----------------------------------------
