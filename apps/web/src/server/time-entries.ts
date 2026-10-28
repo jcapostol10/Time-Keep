@@ -670,6 +670,69 @@ export async function updateEntry(
   });
 }
 
+/**
+ * Many stopped entries at once (the CSV import): the checks of
+ * `createManualEntry`, once per distinct set of details, then one insert and
+ * one rating pass; a failure rolls back with the caller's transaction.
+ */
+export async function createManualEntries(
+  db: Executor,
+  scope: EntryScope,
+  inputs: (EntryInput & { start: Date; end: Date })[],
+  now: Date = new Date(),
+): Promise<{ ids: string[] }> {
+  if (inputs.length === 0) return { ids: [] };
+  assertCanWriteTimes(scope, null);
+  const checked = new Map<string, EntryInput & { type: EntryDetails["type"] }>();
+  const rows: (typeof timeEntry.$inferInsert)[] = [];
+  const tagRows: { timeEntryId: string; tagId: string }[] = [];
+  for (const input of inputs) {
+    const range = validateEntryRange({ start: input.start, end: input.end, now, mode: "manual" });
+    if (!range.ok) throw new TimeEntryError("INVALID", range.error);
+    const key = JSON.stringify([
+      input.projectId,
+      input.taskId,
+      [...new Set(input.tagIds)].sort(),
+      input.billable,
+      input.type ?? "work",
+      input.description.trim() === "",
+    ]);
+    let details = checked.get(key);
+    if (!details) {
+      details = await breakAware(db, scope, input);
+      await assertDetailsUsable(db, scope, details);
+      await assertRequiredFields(db, scope, details);
+      checked.set(key, details);
+    }
+    const id = randomUUID();
+    rows.push({
+      id,
+      workspaceId: scope.workspaceId,
+      userId: scope.userId,
+      description: input.description.trim(),
+      projectId: details.projectId,
+      taskId: details.taskId,
+      billable: details.billable,
+      type: details.type,
+      start: input.start,
+      end: input.end,
+      durationSeconds: computeDurationSeconds(input.start, input.end),
+    });
+    for (const tagId of new Set(details.tagIds)) tagRows.push({ timeEntryId: id, tagId });
+  }
+  for (let i = 0; i < rows.length; i += 500) {
+    await db.insert(timeEntry).values(rows.slice(i, i + 500));
+  }
+  for (let i = 0; i < tagRows.length; i += 1000) {
+    await db.insert(timeEntryTag).values(tagRows.slice(i, i + 1000));
+  }
+  const ids = rows.map((r) => r.id!);
+  for (let i = 0; i < ids.length; i += 1000) {
+    await db.execute(rateEntriesSql(inArray(timeEntry.id, ids.slice(i, i + 1000))));
+  }
+  return { ids };
+}
+
 /** Soft-deletes stopped entries in scope; ids that don't match are ignored. */
 export async function deleteEntries(
   db: Executor,

@@ -283,6 +283,11 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Save a project as a template and start a new project from it (tasks, members, rates copied); a template takes no time — `power.spec.ts` › "start a project from a template"
 - [x] The Audit tab lists entries without a project or longer than 10 hours and bulk edit fixes them there — `power.spec.ts` › "the Audit tab lists problem entries and fixes them"
 
+## Import
+
+- [x] Import entries from a CSV: map columns, check every row, then import the ready ones — `import.spec.ts` › "import entries from a CSV: check, then import"
+- [x] An import for another person's email needs permission — `import.spec.ts` › "a member cannot import time for someone else"
+
 ## Small screens (375px)
 
 - [ ] The tracker page fits a 375px screen without horizontal scrolling — gap

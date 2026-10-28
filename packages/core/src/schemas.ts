@@ -4,6 +4,7 @@ import { RATE_APPLY, RATE_LEVELS } from "./rates";
 
 import { PROJECT_VISIBILITIES, TASK_STATUSES } from "./catalog";
 import { hexColorSchema } from "./colors";
+import { IMPORT_COLUMNS } from "./entry-import";
 import { CREATOR_SETTINGS, PAGES } from "./permissions";
 import { REQUIRED_FIELDS } from "./required-fields";
 import { ROLES } from "./roles";
@@ -275,6 +276,17 @@ export type BulkEntryPatch = z.infer<typeof bulkEntryPatchSchema>;
 
 /** Split (Phase 4b): the instant inside the entry where the second part starts. */
 export const splitEntrySchema = z.object({ at: isoInstantSchema });
+
+/** Importing entries (Phase 4b): the file's times' zone and format, what may be created, the mapping. */
+export const importOptionsSchema = z.object({
+  timezone: timeZoneSchema,
+  dateFormat: dateFormatSchema,
+  createMissing: z.boolean(),
+  mapping: z.partialRecord(z.enum(IMPORT_COLUMNS), z.number().int().min(0).max(500)),
+  /** The dry run's fingerprint, for a commit. */
+  fingerprint: z.string().length(64).optional(),
+});
+export type ImportOptionsInput = z.infer<typeof importOptionsSchema>;
 
 export const bulkUpdateEntriesSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(500),
