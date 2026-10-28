@@ -74,6 +74,21 @@ describe("entry rules", () => {
     expect(running?.end).toBeNull();
   });
 
+  it("starting another timer refuses while the running one lacks a required field", async () => {
+    await setRules({ requiredFields: ["project"] });
+    const olga = await viewer(olgaId);
+    const web = await createProject(db, olga, { name: "Web" });
+    const { started } = await startTimer(db, olga, bare);
+    // The implicit stop is a stop too (decision 5): a favourite, Continue or S cannot skip it.
+    await expect(startTimer(db, olga, { ...bare, projectId: web.id })).rejects.toMatchObject({
+      message: "Project is required.",
+      field: "project",
+    });
+    const running = await getRunningEntry(db, olga);
+    expect(running?.id).toBe(started.id);
+    expect(running?.end).toBeNull();
+  });
+
   it("task required applies only to projects with active tasks", async () => {
     await setRules({ requiredFields: ["task"] });
     const olga = await viewer(olgaId);

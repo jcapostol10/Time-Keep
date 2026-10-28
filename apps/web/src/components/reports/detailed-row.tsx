@@ -51,7 +51,7 @@ export function DetailedRow({
   selected: boolean;
   onSelectedChange: (selected: boolean) => void;
 }) {
-  const { slug, viewer, canCreate, rules } = useTracker();
+  const { slug, viewer, canCreate } = useTracker();
   const writes = useEntryWrites();
   const tz = viewer.timezone;
   const times = { start: new Date(entry.start), end: new Date(entry.end) };
@@ -172,7 +172,7 @@ export function DetailedRow({
                 label="Start time"
                 value={formatTimeOfDay(times.start, tz, viewer.timeFormat)}
                 onCommit={(t) => editTime("start", t)}
-                disabled={!rules.canWriteTimes}
+                disabled={!entry.timesEditable}
                 className={`${INPUT} w-[5.25rem]`}
               />
               <span aria-hidden>–</span>
@@ -180,7 +180,7 @@ export function DetailedRow({
                 label="End time"
                 value={formatTimeOfDay(times.end, tz, viewer.timeFormat)}
                 onCommit={(t) => editTime("end", t)}
-                disabled={!rules.canWriteTimes}
+                disabled={!entry.timesEditable}
                 className={`${INPUT} w-[5.25rem]`}
               />
               {crossesMidnight ? <sup className="text-muted-foreground">+1</sup> : null}
@@ -200,7 +200,7 @@ export function DetailedRow({
               label="Duration"
               value={durationText}
               onCommit={editDuration}
-              disabled={!rules.canWriteTimes}
+              disabled={!entry.timesEditable}
               className={`${INPUT} w-[6rem] text-right font-semibold`}
             />
           ) : (

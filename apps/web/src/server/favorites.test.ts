@@ -1,4 +1,6 @@
-import { and, eq, project, projectMember } from "@timekeep/db";
+import { randomUUID } from "node:crypto";
+
+import { and, eq, favoriteEntry, project, projectMember } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -11,6 +13,7 @@ import {
 import { loadViewer } from "./authz";
 import { createProject } from "./catalog/projects";
 import { createTag } from "./catalog/tags";
+import { createTask } from "./catalog/tasks";
 import type { Viewer } from "./catalog/viewer";
 import { listFavorites, MAX_FAVORITES, pinFavorite, unpinFavorite } from "./favorites";
 
@@ -92,5 +95,38 @@ describe("favourites", () => {
     expect(list.find((f) => f.id === onSecret.id)?.blocked).toBe(
       "This project is no longer visible to you.",
     );
+  });
+
+  it("pins only details of the viewer's workspace that they may see", async () => {
+    const zed = await createTestUser(db, "Zed Other");
+    const other = await createTestWorkspace(db, "Other", zed.id);
+    const foreignTag = await createTag(db, other.id, { name: "foreign" });
+    await expect(pinFavorite(db, olga, details({ tagIds: [foreignTag.id] }))).rejects.toMatchObject(
+      { code: "NOT_FOUND" },
+    );
+    const hidden = await createTask(db, olga, secretId, { name: "Hidden", assigneeIds: [] });
+    await expect(
+      pinFavorite(db, olga, details({ projectId: webId, taskId: hidden.id })),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const c = await createTestUser(db, "Cid Member");
+    await addMember(db, wsId, c.id, "member");
+    const cid = await loadViewer(db, wsId, c.id);
+    await expect(
+      pinFavorite(db, cid, details({ projectId: secretId, tagIds: [] })),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    // A row that slipped in with another workspace's tag never names it.
+    await db.insert(favoriteEntry).values({
+      id: randomUUID(),
+      workspaceId: wsId,
+      userId: olga.userId,
+      description: "Slipped",
+      projectId: null,
+      taskId: null,
+      tagIds: [foreignTag.id],
+      billable: false,
+    });
+    const slipped = (await listFavorites(db, olga)).find((f) => f.description === "Slipped");
+    expect(slipped?.tags).toEqual([]);
   });
 });

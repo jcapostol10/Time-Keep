@@ -28,7 +28,7 @@ import { BillableToggle } from "../tracker/billable-toggle";
 import { DescriptionInput } from "../tracker/description-input";
 import { ProjectPicker } from "../tracker/project-picker";
 import { TagPicker } from "../tracker/tag-picker";
-import { useTracker } from "../tracker/tracker-provider";
+import { useCanWriteTimes, useTracker } from "../tracker/tracker-provider";
 import { type UpdateEntryPatch, useEntryWrites } from "../tracker/use-entry-writes";
 import { draftChanges, timesChanged } from "./entry-dialog-model";
 
@@ -38,7 +38,8 @@ export type EntryDialogMode =
 
 /** Create an entry from a drag, or edit one from a click. */
 export function EntryDialog({ mode, onClose }: { mode: EntryDialogMode; onClose: () => void }) {
-  const { slug, viewer, canCreate, rules } = useTracker();
+  const { slug, viewer, canCreate } = useTracker();
+  const canWriteTimes = useCanWriteTimes();
   const tz = viewer.timezone;
   const writes = useEntryWrites();
   const initialStart = mode.kind === "create" ? mode.start : new Date(mode.entry.start);
@@ -189,7 +190,7 @@ export function EntryDialog({ mode, onClose }: { mode: EntryDialogMode; onClose:
           <div className="flex items-center gap-2">
             <Input
               aria-label="Start time"
-              readOnly={!rules.canWriteTimes}
+              readOnly={!canWriteTimes}
               value={startText}
               onChange={(e) => setStartText(e.target.value)}
               className="w-28 tabular-nums"
@@ -202,7 +203,7 @@ export function EntryDialog({ mode, onClose }: { mode: EntryDialogMode; onClose:
             <span className="text-muted-foreground">–</span>
             <Input
               aria-label="End time"
-              readOnly={!rules.canWriteTimes}
+              readOnly={!canWriteTimes}
               value={endText}
               onChange={(e) => setEndText(e.target.value)}
               className="w-28 tabular-nums"

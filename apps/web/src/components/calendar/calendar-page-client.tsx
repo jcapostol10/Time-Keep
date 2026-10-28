@@ -22,7 +22,7 @@ import { useRangeEntries } from "../timesheet/use-timesheet";
 import { useIsSaving } from "../tracker/saving-store";
 import { PersonPicker } from "../tracker/person-picker";
 import { useTarget } from "../tracker/target-context";
-import { useTracker } from "../tracker/tracker-provider";
+import { useCanWriteTimes, useTracker } from "../tracker/tracker-provider";
 import { useEntryWrites } from "../tracker/use-entry-writes";
 import { CalendarGrid } from "./calendar-grid";
 import { EntryDialog, type EntryDialogMode } from "./entry-dialog";
@@ -41,7 +41,8 @@ export function CalendarPageClient({
   dateKey: string;
   view: CalendarView | null;
 }) {
-  const { slug, viewer, rules } = useTracker();
+  const { slug, viewer } = useTracker();
+  const canWriteTimes = useCanWriteTimes();
   const target = useTarget();
   const targetKey = target?.userId ?? "me";
   const tz = viewer.timezone;
@@ -126,12 +127,12 @@ export function CalendarPageClient({
         today={today}
         hydrated={hydrated}
         onCreate={(dayKey, a, b) => {
-          if (!rules.canWriteTimes) return;
+          if (!canWriteTimes) return;
           const range = createdRange(dayKey, a, b, tz);
           setDialog({ kind: "create", dayKey, start: range.start, end: range.end });
         }}
         onMove={(entry, dayKey, startMinutes) => {
-          if (!entry.end || !rules.canWriteTimes) return; // the running timer is not dragged
+          if (!entry.end || !canWriteTimes) return; // the running timer is not dragged
           const range = movedRange(
             { start: entry.start, end: entry.end },
             dayKey,
@@ -144,7 +145,7 @@ export function CalendarPageClient({
           });
         }}
         onResize={(entry, edge, dayKey, minutes) => {
-          if (!entry.end || !rules.canWriteTimes) return;
+          if (!entry.end || !canWriteTimes) return;
           const range = resizedRange(
             { start: entry.start, end: entry.end },
             edge,

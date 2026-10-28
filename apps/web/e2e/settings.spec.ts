@@ -4,6 +4,7 @@ import { expect, test } from "./fixtures";
 import { overflowingElements, waitForApp } from "./helpers/app";
 import { createProjectViaUi } from "./helpers/catalog";
 import { openReport, reportTotal } from "./helpers/reports";
+import { openSettings, saveSettings } from "./helpers/settings";
 import { addTeammate } from "./helpers/team";
 import {
   addManualEntry,
@@ -18,16 +19,6 @@ import {
  * The workspace rules (Phase 4b, Part 4): each test turns one rule on as the
  * owner and checks what a member, or the owner's own tracker and reports, get.
  */
-
-async function openSettings(page: Page, slug: string) {
-  await page.goto(`/w/${slug}/settings`);
-  await waitForApp(page);
-}
-
-async function saveSettings(page: Page) {
-  await page.getByRole("button", { name: "Save settings" }).click();
-  await expect(page.getByText("Workspace settings saved")).toBeVisible();
-}
 
 /** Picks an option in a labelled select (settings and report filters). */
 async function choose(page: Page, label: string, option: string) {

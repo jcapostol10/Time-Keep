@@ -15,27 +15,10 @@ import { listPickerProjects } from "@/server/catalog/projects";
 import { listTags } from "@/server/catalog/tags";
 import { listEntriesInRange, listRecentDescriptions } from "@/server/time-entries";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { targetScope, viewerFor, writableUsers } from "@/server/authz";
-import { authorizePage } from "@/server/authz-page";
+import { shownPerson } from "@/server/authz-page";
 import { TargetProvider } from "@/components/tracker/target-context";
 
 export const metadata: Metadata = { title: "Calendar" };
-
-/** `?user=<id>`: someone the viewer may add time for; their week loads under their own keys. */
-async function shownPerson(
-  ctx: Parameters<typeof viewerFor>[0] & { user: { id: string } },
-  raw: Record<string, string | string[] | undefined>,
-) {
-  const db = getDb();
-  const me = await viewerFor(ctx);
-  const people = await writableUsers(db, me);
-  const userParam = typeof raw.user === "string" ? raw.user : null;
-  if (!userParam || userParam === ctx.user.id) return { scope: me, people, target: null, key: "me" };
-  const scope = await authorizePage(() => targetScope(ctx, userParam));
-  const name = people.find((p) => p.id === userParam)?.name ?? "";
-  return { scope, people, target: { userId: userParam, name }, key: userParam };
-}
-
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 

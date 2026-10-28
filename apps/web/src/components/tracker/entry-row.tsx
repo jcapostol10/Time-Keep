@@ -46,7 +46,7 @@ import { ColorDot, ProjectPicker } from "./project-picker";
 import { SplitDialog } from "./split-dialog";
 import { TagPicker } from "./tag-picker";
 import { useFavorites } from "./use-favorites";
-import { useTracker } from "./tracker-provider";
+import { useCanWriteTimes, useTracker } from "./tracker-provider";
 import { useEntryMutations } from "./use-entry-mutations";
 
 const ROW =
@@ -71,7 +71,7 @@ function TimeRange({ start, end, tz }: { start: string; end: string; tz: string 
 function RowActions({ entry }: { entry: TimeEntryDTO }) {
   const { duplicate, remove, split } = useEntryMutations();
   const { pin } = useFavorites();
-  const { rules } = useTracker();
+  const canWriteTimes = useCanWriteTimes();
   const [splitting, setSplitting] = useState(false);
   return (
     <>
@@ -100,7 +100,7 @@ function RowActions({ entry }: { entry: TimeEntryDTO }) {
           <StarIcon /> Pin as favourite
         </DropdownMenuItem>
         <DropdownMenuItem
-          disabled={!entry.end || !rules.canWriteTimes}
+          disabled={!entry.end || !canWriteTimes}
           onSelect={() => setSplitting(true)}
         >
           <ScissorsIcon /> Split…
@@ -149,7 +149,8 @@ export function EntryRow({
   onSelectedChange: (selected: boolean) => void;
   nested?: boolean;
 }) {
-  const { slug, viewer, canCreate, rules } = useTracker();
+  const { slug, viewer, canCreate } = useTracker();
+  const canWriteTimes = useCanWriteTimes();
   const { update } = useEntryMutations();
   const tz = viewer.timezone;
   const end = entry.end ?? entry.start;
@@ -228,7 +229,7 @@ export function EntryRow({
           label="Start time"
           value={formatTimeOfDay(times.start, tz, viewer.timeFormat)}
           onCommit={(t) => editTime("start", t)}
-          disabled={!rules.canWriteTimes}
+          disabled={!canWriteTimes}
           className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none"
         />
         <span className="text-muted-foreground" aria-hidden>
@@ -238,7 +239,7 @@ export function EntryRow({
           label="End time"
           value={formatTimeOfDay(times.end, tz, viewer.timeFormat)}
           onCommit={(t) => editTime("end", t)}
-          disabled={!rules.canWriteTimes}
+          disabled={!canWriteTimes}
           className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none"
         />
         <sup
@@ -250,7 +251,7 @@ export function EntryRow({
         <Input
           type="date"
           aria-label="Date"
-          disabled={!rules.canWriteTimes}
+          disabled={!canWriteTimes}
           defaultValue={localDateKey(times.start, tz)}
           key={entry.start}
           onBlur={(e) => {
@@ -266,7 +267,7 @@ export function EntryRow({
           label="Duration"
           value={formatDuration(entry.durationSeconds ?? 0, viewer.durationFormat)}
           onCommit={editDuration}
-          disabled={!rules.canWriteTimes}
+          disabled={!canWriteTimes}
           className="hover:border-input w-[6rem] shrink-0 border-transparent font-semibold shadow-none"
         />
         <ContinueButton entry={entry} />

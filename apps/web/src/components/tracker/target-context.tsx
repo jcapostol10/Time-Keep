@@ -12,6 +12,8 @@ import { createContext, useContext, useMemo } from "react";
 export interface Target {
   userId: string;
   name: string;
+  /** Whether their times may be typed: force timer exempts time added for others. */
+  canWriteTimes: boolean;
 }
 
 const TargetContext = createContext<Target | null>(null);
@@ -24,7 +26,10 @@ export function TargetProvider({
   children: React.ReactNode;
 }) {
   const value = useMemo(
-    () => (target ? { userId: target.userId, name: target.name } : null),
+    () =>
+      target
+        ? { userId: target.userId, name: target.name, canWriteTimes: target.canWriteTimes }
+        : null,
     [target],
   );
   return <TargetContext.Provider value={value}>{children}</TargetContext.Provider>;

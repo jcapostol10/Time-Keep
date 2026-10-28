@@ -273,3 +273,16 @@ export async function writableUsers(
   const me = members.find((m) => m.userId === viewer.userId);
   return me ? [{ id: me.userId, name: me.name }, ...others] : others;
 }
+
+/**
+ * Whether the shown person's times may be typed (`entry.writeTimes`): the
+ * actor's own only outside force timer, time added for someone else always.
+ * The tracker, timesheet and calendar pages pass it with the target.
+ */
+export function canWriteTimesFor(scope: Viewer & { actedBy?: Actor }): boolean {
+  return can(scope.actedBy ?? scope.actor, "entry.writeTimes", {
+    kind: "entry",
+    userId: scope.userId,
+    projectId: null,
+  });
+}

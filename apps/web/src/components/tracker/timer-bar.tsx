@@ -16,7 +16,7 @@ import { ManualEntryFields } from "./manual-entry-fields";
 import { ProjectPicker } from "./project-picker";
 import { TagPicker } from "./tag-picker";
 import { TargetProvider } from "./target-context";
-import { useTracker, useTrackerClock } from "./tracker-provider";
+import { useCanWriteTimes, useTracker, useTrackerClock } from "./tracker-provider";
 import { useEntryMutations } from "./use-entry-mutations";
 
 type Mode = "timer" | "manual";
@@ -90,8 +90,10 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
     tracker;
   const { createManual } = useEntryMutations();
   const [storedMode, setMode] = useLocalStorage<Mode>("timekeep:tracker-mode", "timer");
+  // The shown person's rule: a manager under force timer still types time for their people.
+  const canWriteTimes = useCanWriteTimes();
   // Force timer (decision 7): the timer is the only way to add time.
-  const mode: Mode = running || !rules.canWriteTimes ? "timer" : storedMode;
+  const mode: Mode = running || !canWriteTimes ? "timer" : storedMode;
 
   const values: EntryDraft = running
     ? {
@@ -227,7 +229,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
             }}
           />
         )}
-        {rules.canWriteTimes ? (
+        {canWriteTimes ? (
         <div className="flex flex-col" role="group" aria-label="Entry mode">
           <Button
             type="button"

@@ -18,7 +18,7 @@ import { PeriodNav } from "@/components/period-nav";
 import { useHydrated } from "@/hooks/use-hydrated";
 
 import { useIsSaving } from "../tracker/saving-store";
-import { useTracker } from "../tracker/tracker-provider";
+import { useCanWriteTimes, useTracker } from "../tracker/tracker-provider";
 import { PersonPicker } from "../tracker/person-picker";
 import { useTarget } from "../tracker/target-context";
 import { useTrackerOptions } from "../tracker/use-tracker-cache";
@@ -31,7 +31,8 @@ import { useRangeEntries } from "./use-timesheet";
 
 /** The weekly grid page: week navigation, rows the user added this visit, and the toolbar. */
 export function TimesheetPageClient({ from, to }: { from: string; to: string }) {
-  const { slug, viewer, rules } = useTracker();
+  const { slug, viewer } = useTracker();
+  const canWriteTimes = useCanWriteTimes();
   const target = useTarget();
   const targetKey = target?.userId ?? "me";
   const tz = viewer.timezone;
@@ -99,7 +100,7 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
           <Button
             variant="outline"
             size="sm"
-            disabled={!rules.canWriteTimes}
+            disabled={!canWriteTimes}
             onClick={() => setAdding(true)}
           >
             <PlusIcon /> Add new row
@@ -109,7 +110,7 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
           <Button
             variant="outline"
             size="sm"
-            disabled={!rules.canWriteTimes}
+            disabled={!canWriteTimes}
             onClick={() => setCopying(true)}
           >
             <CopyIcon /> Copy last week

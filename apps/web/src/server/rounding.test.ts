@@ -144,6 +144,23 @@ describe("rounding in reports", () => {
     expect(page.entries.map((e) => e.amountMinor)).toEqual([0, amountFor(5000, 900)]);
   });
 
+  it("pages by the raw duration under rounding, so Load more never repeats a row", async () => {
+    const page = (cursor?: { value: string; id: string }) =>
+      detailedReport(
+        db,
+        rounded.me,
+        q(),
+        PREFS,
+        { cursor, sort: "duration", dir: "desc", limit: 1 },
+        NOW,
+      );
+    const p1 = await page();
+    expect(p1.entries.map((e) => e.description)).toEqual(["Nine"]);
+    const p2 = await page(p1.nextCursor!);
+    expect(p2.entries.map((e) => e.description)).toEqual(["Seven"]);
+    expect(p2.nextCursor).toBeNull();
+  });
+
   it("exports follow the URL's choice", async () => {
     const csv = async (rounding: ReportQuery["rounding"]) =>
       new TextDecoder().decode(

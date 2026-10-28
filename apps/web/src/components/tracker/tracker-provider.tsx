@@ -34,6 +34,7 @@ import {
 } from "@/server/actions/time-entries";
 
 import { draftWritesSettled } from "./draft-writes";
+import { useTarget } from "./target-context";
 import { trackerKeys, trackerUrls } from "./query-keys";
 import { IdleDialog } from "./idle-dialog";
 import { activeIdlePrompt, type IdlePrompt } from "./idle-prompt";
@@ -486,4 +487,14 @@ export function TrackerProvider({
       </TrackerClockContext.Provider>
     </TrackerContext.Provider>
   );
+}
+
+/**
+ * Whether times may be typed for the shown person: the viewer's own rule, or
+ * the target's (force timer exempts time added for someone else).
+ */
+export function useCanWriteTimes(): boolean {
+  const target = useTarget();
+  const { rules } = useTracker();
+  return target ? target.canWriteTimes : rules.canWriteTimes;
 }

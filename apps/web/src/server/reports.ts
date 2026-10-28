@@ -36,6 +36,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  membership,
   or,
   project,
   roundedAmountSql,
@@ -556,6 +557,9 @@ export async function detailedReport(
       durationSeconds: sql`${rule ? roundedSecondsSql(rule) : timeEntry.durationSeconds}`.mapWith(
         nullableNumber,
       ),
+      // The keyset cursor follows the sort column, which is the raw duration.
+      rawDurationSeconds: timeEntry.durationSeconds,
+      ownerStatus: membership.status,
       rateMinor: timeEntry.billableRateMinor,
       amountMinor: sql`${rule ? roundedAmountSql(rule) : timeEntry.amountMinor}`.mapWith(
         nullableNumber,
@@ -566,6 +570,10 @@ export async function detailedReport(
     .leftJoin(client, eq(client.id, project.clientId))
     .leftJoin(task, eq(task.id, timeEntry.taskId))
     .innerJoin(user, eq(user.id, timeEntry.userId))
+    .leftJoin(
+      membership,
+      and(eq(membership.workspaceId, timeEntry.workspaceId), eq(membership.userId, timeEntry.userId)),
+    )
     .where(and(...conds))
     .orderBy(order(sortColumn), order(timeEntry.id))
     .limit(limit + 1);
@@ -588,6 +596,9 @@ export async function detailedReport(
   }
   const entries: DetailedEntryDTO[] = pageRows.map((r) => {
     const tags = tagsByEntry.get(r.id) ?? [];
+    const editable =
+      r.ownerStatus === "ACTIVE" &&
+      can(viewer.actor, "entry.write", { kind: "entry", userId: r.userId, projectId: r.projectId });
     return {
       id: r.id,
       description: r.description,
@@ -608,11 +619,16 @@ export async function detailedReport(
       projectColor: r.projectColor ?? null,
       taskId: r.taskId,
       tagIds: tags.map((t) => t.id),
-      editable: can(viewer.actor, "entry.write", {
-        kind: "entry",
-        userId: r.userId,
-        projectId: r.projectId,
-      }),
+      // A deactivated or removed owner has no scope to write in (`scopeForUser`
+      // answers 404), so their rows stay read-only rather than failing on save.
+      editable,
+      timesEditable:
+        editable &&
+        can(viewer.actor, "entry.writeTimes", {
+          kind: "entry",
+          userId: r.userId,
+          projectId: r.projectId,
+        }),
     };
   });
   const last = pageRows[pageRows.length - 1];
@@ -620,7 +636,9 @@ export async function detailedReport(
     rows.length > limit && last
       ? {
           value:
-            page.sort === "duration" ? String(last.durationSeconds ?? 0) : last.start.toISOString(),
+            page.sort === "duration"
+              ? String(last.rawDurationSeconds ?? 0)
+              : last.start.toISOString(),
           id: last.id,
         }
       : null;

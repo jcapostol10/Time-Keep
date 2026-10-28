@@ -15,7 +15,7 @@ import { toast } from "sonner";
 
 import type { TimeEntryDTO } from "@/lib/tracker-types";
 
-import { useTracker } from "../tracker/tracker-provider";
+import { useCanWriteTimes, useTracker } from "../tracker/tracker-provider";
 import { useEntryWrites } from "../tracker/use-entry-writes";
 import { CellEntriesDialog } from "./cell-entries-dialog";
 import { toTimesheetEntries } from "./model";
@@ -48,7 +48,8 @@ export function TimesheetCell({
   /** Called before a delete that may empty the row, so the row stays for the visit. */
   onKeepRow?: (row: TimesheetRowKey) => void;
 }) {
-  const { viewer, rules } = useTracker();
+  const { viewer } = useTracker();
+  const canWriteTimes = useCanWriteTimes();
   const writes = useEntryWrites();
   const shown = cell.seconds > 0 ? formatDuration(cell.seconds, viewer.durationFormat) : "";
   // Local text while editing; null means "show the saved value".
@@ -56,7 +57,7 @@ export function TimesheetCell({
   const [choosing, setChoosing] = useState<TimesheetEntry[] | null>(null);
 
   async function commit(raw: string) {
-    if (!rules.canWriteTimes) return;
+    if (!canWriteTimes) return;
     setText(null);
     const trimmed = raw.trim();
     const seconds = trimmed === "" ? 0 : parseDuration(trimmed);
@@ -106,7 +107,7 @@ export function TimesheetCell({
     <>
       <Input
         aria-label={label}
-        readOnly={!rules.canWriteTimes}
+        readOnly={!canWriteTimes}
         data-row={rowIndex}
         data-col={colIndex}
         inputMode="text"

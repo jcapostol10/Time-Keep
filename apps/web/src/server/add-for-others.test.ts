@@ -11,7 +11,7 @@ import {
   createTestWorkspace,
   truncateAll,
 } from "../../test/db";
-import { loadViewer, scopeForUser, writableUsers } from "./authz";
+import { canWriteTimesFor, loadViewer, scopeForUser, writableUsers } from "./authz";
 import { createProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { listPickerProjects } from "./catalog/projects";
@@ -162,6 +162,23 @@ describe("add time for others", () => {
     await expect(
       createManualEntry(db, max, { ...bare, projectId: webId, start: START, end: at(60) }),
     ).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("the pages' write-times flag follows the shown person, not the viewer", async () => {
+    const max = await viewer("max");
+    const bob = await viewer("bob");
+    await createManualEntry(db, bob, { ...bare, projectId: webId, start: START, end: at(30) });
+    await createManualEntry(db, max, { ...bare, projectId: webId, start: at(60), end: at(90) });
+    await setRules({ forceTimer: true });
+    const forced = await viewer("max"); // an actor carries the settings it was loaded with
+    expect(canWriteTimesFor(forced)).toBe(false);
+    expect(canWriteTimesFor(await scopeForUser(db, forced, ids.bob!))).toBe(true);
+    // The Detailed report says the same per row: Bob's times, not Max's own.
+    const page = await detailedReport(db, forced, q(), PREFS, { sort: "start", dir: "asc" }, NOW);
+    expect(page.entries.map((e) => [e.editable, e.timesEditable])).toEqual([
+      [true, true],
+      [true, false],
+    ]);
   });
 
   it("scopesForEntries groups ids by owner and refuses ids outside the scope", async () => {

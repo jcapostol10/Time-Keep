@@ -155,6 +155,7 @@ export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}
     const demo = await createWorkspace(tx, DEMO_WORKSPACE.name, ownerId, {
       slug: DEMO_WORKSPACE.slug,
       timezone: DEMO_WORKSPACE.timezone,
+      allowBreaks: true, // the seeded lunch breaks must be something the demo users could add
     });
 
     for (const u of DEMO_USERS) {

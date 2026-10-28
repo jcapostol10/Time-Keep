@@ -42,6 +42,8 @@ export interface DetailedEntryDTO extends DetailedEntry {
   tagIds: string[];
   /** The viewer may edit it: their own, or a person they may add time for. */
   editable: boolean;
+  /** `editable` and the times too: force timer keeps the owner's own times to the timer. */
+  timesEditable: boolean;
 }
 
 export type DetailedSort = "start" | "duration";

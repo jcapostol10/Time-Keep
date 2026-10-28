@@ -37,6 +37,13 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 - [ ] The CSV import parses and resolves the file twice (the dry run and the commit) and writes up to 10,000 rows inside one request. Fine within the 300 s budget today; move the commit to a job with the export jobs once the worker exists.
 - [ ] Rounding rounds each entry before summing (Clockify's rule); a workspace that wants the total rounded instead has no setting for it.
+- [ ] Phase 4b review: the import route reads the whole multipart body (`formData()`) before checking the file's size, and a malformed `options` JSON answers 500 instead of 400. Check `Content-Length` first and map the parse error to a 400 (Vercel's 4.5 MB body cap bounds it in production).
+- [ ] Phase 4b review: an import naming an archived project or a template with "create missing" on says "Will create" in the check and then fails the commit with a 500 (the unique name). Resolve names against every project in the check ("project X is archived") or map `CatalogError` to a 400 in the route.
+- [ ] Phase 4b review: the import's row errors tell a member whether an address is an active workspace member ("unknown email" vs "you cannot add time for"), even where Team is hidden from members. Use one message for non-admins.
+- [ ] Phase 4b review: unchecking every Audit criterion shows every entry until a reload re-adds the defaults (`audit-filter.tsx` sends an empty list, which the URL drops). Keep one criterion checked or show an empty state.
+- [ ] Phase 4b review: `stopTimer` with an explicit end stays ungated under force timer (Task 5 ruling, for the idle dialog's discard), so a member can trim a running timer to any end after its start. Accepted; a known soft spot.
+- [ ] Phase 4b review: "Pin as favourite" is offered on another person's rows, pinning their private project into the viewer's favourites as a permanently blocked chip. Hide the item when a target is shown.
+- [ ] Phase 4b review: the import treats an end equal to its start as the next day (`09:00,09:00` imports a 24-hour entry); refusing an equal end would match what the person meant.
 
 ## E2E suite
 

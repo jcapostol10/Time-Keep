@@ -458,6 +458,30 @@ describe("report engine", () => {
     });
   });
 
+  it("rows of deactivated or removed members are read-only: no scope can be built for them", async () => {
+    await db
+      .update(membership)
+      .set({ status: "DEACTIVATED" })
+      .where(and(eq(membership.workspaceId, alice.workspaceId), eq(membership.userId, bob.userId)));
+    await db
+      .delete(membership)
+      .where(and(eq(membership.workspaceId, alice.workspaceId), eq(membership.userId, max.userId)));
+    const page = await detailedReport(
+      db,
+      alice,
+      q(),
+      PREFS,
+      { sort: "start", dir: "desc", limit: 50 },
+      NOW,
+    );
+    const of = (userId: string) => page.entries.filter((e) => e.userId === userId);
+    expect(of(bob.userId).length).toBeGreaterThan(0);
+    expect(of(max.userId).length).toBeGreaterThan(0);
+    expect(of(bob.userId).every((e) => !e.editable)).toBe(true);
+    expect(of(max.userId).every((e) => !e.editable)).toBe(true);
+    expect(of(alice.userId).every((e) => e.editable)).toBe(true);
+  });
+
   it("sums the range on the first page only, so an export's page loop does not repeat it", async () => {
     const page = (cursor?: { value: string; id: string }) =>
       detailedReport(db, alice, q(), PREFS, { cursor, sort: "start", dir: "desc", limit: 3 }, NOW);

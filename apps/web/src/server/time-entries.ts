@@ -469,9 +469,18 @@ export async function startTimer(
 
     const running = await tx.query.timeEntry.findFirst({
       where: and(scopeWhere(scope), isNull(timeEntry.end)),
+      with: { tags: true },
     });
     let stopped: TimeEntryDTO | null = null;
     if (running) {
+      // The implicit stop is a stop (decision 5): a favourite, Continue or S cannot skip the rule.
+      await assertRequiredFields(tx, scope, {
+        description: running.description,
+        projectId: running.projectId,
+        taskId: running.taskId,
+        tagIds: running.tags.map((t) => t.tagId),
+        type: running.type,
+      });
       const end = implicitStopEnd(running.start, now);
       await tx
         .update(timeEntry)

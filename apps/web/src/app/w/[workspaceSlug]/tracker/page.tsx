@@ -11,27 +11,11 @@ import { listTags } from "@/server/catalog/tags";
 import { listFavorites } from "@/server/favorites";
 import { listEntriesPage, listRecentDescriptions } from "@/server/time-entries";
 import { requireWorkspacePage } from "@/server/workspace-access";
-import { targetScope, viewerFor, writableUsers } from "@/server/authz";
-import { authorizePage } from "@/server/authz-page";
+import { viewerFor } from "@/server/authz";
+import { shownPerson } from "@/server/authz-page";
 import { TargetProvider } from "@/components/tracker/target-context";
 
 export const metadata: Metadata = { title: "Time Tracker" };
-
-/** `?user=<id>`: someone the viewer may add time for; their week loads under their own keys. */
-async function shownPerson(
-  ctx: Parameters<typeof viewerFor>[0] & { user: { id: string } },
-  raw: Record<string, string | string[] | undefined>,
-) {
-  const db = getDb();
-  const me = await viewerFor(ctx);
-  const people = await writableUsers(db, me);
-  const userParam = typeof raw.user === "string" ? raw.user : null;
-  if (!userParam || userParam === ctx.user.id) return { scope: me, people, target: null, key: "me" };
-  const scope = await authorizePage(() => targetScope(ctx, userParam));
-  const name = people.find((p) => p.id === userParam)?.name ?? "";
-  return { scope, people, target: { userId: userParam, name }, key: userParam };
-}
-
 
 export default async function TrackerPage({
   params,

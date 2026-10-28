@@ -17,6 +17,7 @@ import {
 
 import type { FavoriteDTO } from "@/lib/favorite-types";
 
+import { WorkspaceAccessError } from "./access-error";
 import { projectResource } from "./authz";
 import { CatalogError } from "./catalog/errors";
 import type { Viewer } from "./catalog/viewer";
@@ -67,8 +68,16 @@ export async function listFavorites(db: Executor, viewer: Viewer): Promise<Favor
           with: { client: { columns: { name: true } } },
         })
       : [],
-    taskIds.length > 0 ? db.query.task.findMany({ where: inArray(task.id, taskIds) }) : [],
-    tagIds.length > 0 ? db.query.tag.findMany({ where: inArray(tag.id, tagIds) }) : [],
+    taskIds.length > 0
+      ? db.query.task.findMany({
+          where: and(inArray(task.id, taskIds), eq(task.workspaceId, viewer.workspaceId)),
+        })
+      : [],
+    tagIds.length > 0
+      ? db.query.tag.findMany({
+          where: and(inArray(tag.id, tagIds), eq(tag.workspaceId, viewer.workspaceId)),
+        })
+      : [],
   ]);
   const visible = new Map<string, boolean>();
   for (const p of projects) {
@@ -107,6 +116,39 @@ export async function listFavorites(db: Executor, viewer: Viewer): Promise<Favor
   });
 }
 
+/** Invariant 3: the details must be the viewer's workspace's, and visible to them. */
+async function assertPinnable(db: Executor, viewer: Viewer, details: Details): Promise<void> {
+  if (details.projectId) {
+    let visible = false;
+    try {
+      const resource = await projectResource(db, viewer, details.projectId);
+      visible = can(viewer.actor, "project.view", resource);
+    } catch (error) {
+      if (!(error instanceof WorkspaceAccessError)) throw error;
+    }
+    if (!visible) throw new CatalogError("NOT_FOUND", "Project not found.");
+  }
+  if (details.taskId) {
+    const row = await db.query.task.findFirst({
+      where: and(
+        eq(task.id, details.taskId),
+        eq(task.workspaceId, viewer.workspaceId),
+        eq(task.projectId, details.projectId ?? ""),
+      ),
+      columns: { id: true },
+    });
+    if (!row) throw new CatalogError("NOT_FOUND", "Task not found.");
+  }
+  const tagIds = [...new Set(details.tagIds)];
+  if (tagIds.length > 0) {
+    const rows = await db.query.tag.findMany({
+      where: and(inArray(tag.id, tagIds), eq(tag.workspaceId, viewer.workspaceId)),
+      columns: { id: true },
+    });
+    if (rows.length !== tagIds.length) throw new CatalogError("NOT_FOUND", "Tag not found.");
+  }
+}
+
 /** Pins details; refused at the limit or when the same details are already pinned. */
 export async function pinFavorite(
   db: Executor,
@@ -128,6 +170,7 @@ export async function pinFavorite(
   if (existing.some((r) => sameDetails(r, details))) {
     throw new CatalogError("CONFLICT", "Already pinned.");
   }
+  await assertPinnable(db, viewer, details);
   const id = randomUUID();
   await db.insert(favoriteEntry).values({
     id,
