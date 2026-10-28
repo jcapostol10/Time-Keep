@@ -281,6 +281,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Pin an entry as a favourite and start a timer from it — `power.spec.ts` › "pin an entry as a favourite and start it"
 - [x] A favourite on an archived project cannot start — `power.spec.ts` › "a favourite on an archived project is disabled"
 - [x] Save a project as a template and start a new project from it (tasks, members, rates copied); a template takes no time — `power.spec.ts` › "start a project from a template"
+- [x] The Audit tab lists entries without a project or longer than 10 hours and bulk edit fixes them there — `power.spec.ts` › "the Audit tab lists problem entries and fixes them"
 
 ## Small screens (375px)
 

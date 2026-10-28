@@ -52,6 +52,14 @@ export type Bucket = (typeof BUCKETS)[number];
 
 export const REPORT_KINDS = ["summary", "detailed", "weekly"] as const;
 export type ReportKind = (typeof REPORT_KINDS)[number];
+/** The report pages: the kinds, plus the Audit tab (the Detailed report with audit criteria). */
+export type ReportView = ReportKind | "audit";
+
+/** Audit criteria (Phase 4b): an entry matching any chosen one is a problem entry. */
+export const AUDIT_CRITERIA = ["noProject", "noTask", "short", "long"] as const;
+export type AuditCriterion = (typeof AUDIT_CRITERIA)[number];
+/** What the Audit tab opens with: entries without a project, or longer than 10 hours. */
+export const AUDIT_DEFAULT_PARAMS = "audit=noProject&audit=long";
 export const EXPORT_FORMATS = ["csv", "xlsx", "pdf"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 export const EXPORT_REPORTS = ["summary", "detailed", "weekly", "project-status"] as const;
@@ -87,6 +95,14 @@ export const reportQuerySchema = z
     type: z.enum(["work", "break", "all"]).default("work"),
     /** Apply the workspace rounding rule (decision 13); "off" shows raw time. */
     rounding: z.enum(["on", "off"]).default("on"),
+    /** The Audit tab's criteria, combined with OR; empty means no audit filter. */
+    audit: z
+      .array(z.enum(AUDIT_CRITERIA))
+      .max(AUDIT_CRITERIA.length)
+      .refine((keys) => new Set(keys).size === keys.length, "Criteria must differ")
+      .default([]),
+    shortMinutes: z.coerce.number().int().min(1).max(1440).default(1),
+    longHours: z.coerce.number().int().min(1).max(999).default(10),
     description: z.string().max(200).default(""),
     groupBy: z
       .array(z.enum(GROUP_KEYS))
@@ -120,6 +136,7 @@ const ARRAY_KEYS = [
   "taskIds",
   "tagIds",
   "groupBy",
+  "audit",
 ] as const;
 const SCALAR_KEYS = [
   "preset",
@@ -129,6 +146,8 @@ const SCALAR_KEYS = [
   "billable",
   "type",
   "rounding",
+  "shortMinutes",
+  "longHours",
   "description",
   "bucket",
   "weeklyBy",

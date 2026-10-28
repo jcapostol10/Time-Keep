@@ -2,10 +2,8 @@
 
 import {
   parseReportQuery,
-  type ReportKind,
   type ReportQuery,
-  reportQueryToSearchParams,
-} from "@timekeep/core";
+  reportQueryToSearchParams, type ReportView } from "@timekeep/core";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
@@ -51,6 +49,6 @@ export function useReportQuery(): {
 }
 
 /** The same query on another report view. */
-export function reportHref(slug: string, kind: ReportKind, params: string): string {
+export function reportHref(slug: string, kind: ReportView, params: string): string {
   return `${workspaceRoutes.reports(slug, kind)}${params ? `?${params}` : ""}`;
 }

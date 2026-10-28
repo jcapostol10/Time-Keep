@@ -4,6 +4,7 @@ import { expect, test } from "./fixtures";
 import { waitForApp } from "./helpers/app";
 import { createProjectViaUi, projectRow, rowAction } from "./helpers/catalog";
 import { setRateIn } from "./helpers/rates";
+import { detailedRow, openReport } from "./helpers/reports";
 import {
   addManualEntry,
   createTag,
@@ -175,5 +176,37 @@ test.describe("power features", () => {
     await expect(page.getByRole("option", { name: "Client X", exact: true })).toHaveCount(0);
     await expect(page.getByRole("option", { name: "Base template", exact: true })).toHaveCount(0);
     await expect(page.getByRole("option", { name: "Base", exact: true })).toBeVisible();
+  });
+
+  test("the Audit tab lists problem entries and fixes them", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await createProjectViaUi(page, freshUser.slug, "Alpha");
+    await trackerPage();
+    await addManualEntry(page, { description: "Lost", start: "00:05", duration: "1" });
+    await pickProject(page, "Alpha");
+    await addManualEntry(page, { description: "Long", start: "01:10", duration: "11" });
+    await pickProject(page, "Alpha");
+    await addManualEntry(page, { description: "Fine", start: "12:15", duration: "1" });
+
+    await openReport(page, freshUser.slug, "summary");
+    await page.getByRole("link", { name: "Audit" }).click();
+    await expect(page).toHaveURL(/audit=noProject/);
+    await expect(detailedRow(page, "Lost")).toBeVisible();
+    await expect(detailedRow(page, "Long")).toBeVisible();
+    await expect(detailedRow(page, "Fine")).toHaveCount(0);
+
+    // Fix the lost entry where it was found.
+    await detailedRow(page, "Lost").getByRole("checkbox", { name: "Select Lost" }).check();
+    await page.getByRole("toolbar", { name: "Selected entries" }).getByRole("button", { name: "Edit" }).click();
+    const dialog = page.getByRole("dialog", { name: "Edit 1 entry" });
+    await dialog.getByRole("checkbox", { name: "Change project" }).check();
+    await pickProjectIn(page, dialog, "Alpha");
+    await dialog.getByRole("button", { name: "Apply" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(detailedRow(page, "Lost")).toHaveCount(0);
+    await expect(detailedRow(page, "Long")).toBeVisible();
   });
 });

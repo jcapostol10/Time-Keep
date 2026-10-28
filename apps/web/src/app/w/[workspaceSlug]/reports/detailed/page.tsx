@@ -61,7 +61,7 @@ export default async function DetailedReportPage({
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <ReportShell kind="detailed">
+      <ReportShell view="detailed">
         <DetailedView initialPaging={paging} />
       </ReportShell>
     </HydrationBoundary>

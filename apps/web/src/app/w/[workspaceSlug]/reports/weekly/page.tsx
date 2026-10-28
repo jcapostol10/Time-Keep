@@ -43,7 +43,7 @@ export default async function WeeklyReportPage({
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <ReportShell kind="weekly">
+      <ReportShell view="weekly">
         <WeeklyView />
       </ReportShell>
     </HydrationBoundary>

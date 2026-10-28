@@ -515,3 +515,21 @@ describe("the rounding choice", () => {
     expect(reportQueryToSearchParams(DEFAULT_REPORT_QUERY).has("rounding")).toBe(false);
   });
 });
+
+describe("audit criteria in the query", () => {
+  it("reads the criteria and thresholds, and keeps only the non-defaults", () => {
+    const q = parseReportQuery(
+      new URLSearchParams("audit=noProject&audit=long&shortMinutes=5&longHours=8"),
+    );
+    expect(q.audit).toEqual(["noProject", "long"]);
+    expect(q.shortMinutes).toBe(5);
+    expect(q.longHours).toBe(8);
+    expect(parseReportQuery(new URLSearchParams("")).audit).toEqual([]);
+    // An unknown criterion invalidates the URL: the defaults open.
+    expect(parseReportQuery(new URLSearchParams("audit=bogus")).audit).toEqual([]);
+    const params = reportQueryToSearchParams({ ...q, shortMinutes: 1 });
+    expect(params.getAll("audit")).toEqual(["noProject", "long"]);
+    expect(params.has("shortMinutes")).toBe(false);
+    expect(params.get("longHours")).toBe("8");
+  });
+});

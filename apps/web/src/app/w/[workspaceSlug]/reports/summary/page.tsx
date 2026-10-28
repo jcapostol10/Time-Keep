@@ -43,7 +43,7 @@ export default async function SummaryReportPage({
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <ReportShell kind="summary">
+      <ReportShell view="summary">
         <SummaryView />
       </ReportShell>
     </HydrationBoundary>

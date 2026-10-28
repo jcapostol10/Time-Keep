@@ -28,7 +28,7 @@ import { useReportQuery } from "./report-url";
 import { useReportOptions } from "./use-report";
 
 /** Every filter writes to the URL; below md they sit in a sheet behind a "Filters" button. */
-export function FilterBar() {
+export function FilterBar({ extra }: { extra?: React.ReactNode } = {}) {
   const { slug, viewer } = useTracker();
   const { query, set } = useReportQuery();
   const { data: options } = useReportOptions(slug);
@@ -146,6 +146,7 @@ export function FilterBar() {
           <SelectItem value="all">All</SelectItem>
         </SelectContent>
       </Select>
+      {extra}
       <Input
         type="search"
         aria-label="Description contains"

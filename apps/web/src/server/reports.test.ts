@@ -475,7 +475,8 @@ describe("report engine", () => {
     expect(p1.entries).toHaveLength(3);
     expect(p1.totals?.entryCount).toBe(8);
     expect(p1.entries[0]!.description).toBe("Build");
-    expect(p1.entries.map((e) => e.editable)).toEqual([true, false, false]);
+    // An owner may write everyone's time (Phase 4b add time for others): every row is editable.
+    expect(p1.entries.map((e) => e.editable)).toEqual([true, true, true]);
     expect(p1.nextCursor).not.toBeNull();
     await entry(alice, { description: "Newest", date: "2026-03-11", start: "08:00", hours: 1 });
     const p2 = await page(p1.nextCursor!);

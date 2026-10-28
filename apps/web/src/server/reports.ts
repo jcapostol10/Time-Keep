@@ -29,6 +29,7 @@ import {
   type Database,
   desc,
   eq,
+  gt,
   gte,
   ilike,
   inArray,
@@ -122,6 +123,36 @@ function tagFilter(ids: string[], mode: "and" | "or"): SQL {
   return ids.includes(NONE_ID) ? or(main, none)! : main;
 }
 
+/** The Audit tab's criteria, combined with OR (decision: any one makes a problem entry). */
+function auditConditions(eff: ReportQuery): SQL | undefined {
+  const parts: SQL[] = [];
+  for (const criterion of eff.audit ?? []) {
+    switch (criterion) {
+      case "noProject":
+        parts.push(isNull(timeEntry.projectId));
+        break;
+      case "noTask":
+        // Only where the project has active tasks to pick from.
+        parts.push(
+          and(
+            isNull(timeEntry.taskId),
+            isNotNull(timeEntry.projectId),
+            sql`exists (select 1 from ${task} t where t."project_id" = ${timeEntry.projectId} and t."status" = 'ACTIVE')`,
+          )!,
+        );
+        break;
+      case "short":
+        parts.push(lt(timeEntry.durationSeconds, eff.shortMinutes * 60));
+        break;
+      case "long":
+        parts.push(gt(timeEntry.durationSeconds, eff.longHours * 3600));
+        break;
+    }
+  }
+  if (parts.length === 0) return undefined;
+  return parts.length === 1 ? parts[0] : or(...parts);
+}
+
 function baseConditions(
   viewer: Viewer,
   query: ReportQuery,
@@ -152,6 +183,8 @@ function baseConditions(
   if (eff.tagIds.length > 0) conds.push(tagFilter(eff.tagIds, eff.tagMode));
   if (eff.billable !== "all") conds.push(eq(timeEntry.billable, eff.billable === "yes"));
   if (eff.type !== "all") conds.push(eq(timeEntry.type, eff.type));
+  const audit = auditConditions(eff);
+  if (audit) conds.push(audit);
   const text = eff.description.trim();
   if (text) conds.push(ilike(timeEntry.description, `%${escapeLike(text)}%`));
   return conds;
