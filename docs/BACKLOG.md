@@ -42,10 +42,11 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] The suite runs spec files with 3 workers to stay under 10 minutes on a preview; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). If a new spec writes to the demo tenant, check it against the others or give it its own project in the Playwright config.
 - [ ] Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
 - [ ] Re-prove the 26 coverage ticks carried over from Phases 0–1: break each guarded behaviour once and watch its test fail.
+- [ ] "Cancel a pending invitation" has no e2e test (an `E2E_COVERAGE.md` gap since Phase 4a).
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)
 
-- [ ] `docs/E2E_COVERAGE.md` still lists "Change a member's role — gap" unticked although the ticked team line "a member's role, deactivation and removal" covers it; "Cancel a pending invitation — gap" has no test yet (Phase 4a review).
+Nothing open.
 
 ## Docs
 
@@ -53,6 +54,7 @@ Nothing open.
 
 ## Done
 
+- [x] `docs/E2E_COVERAGE.md` listed "Change a member's role — gap" although the ticked team line "a member's role, deactivation and removal" covers it; the duplicate line is gone. Done 2026-10-28 ("docs: drop the duplicate role-change coverage gap").
 - [x] **Export bucket:** the owner created the private `timekeep-exports` bucket in Supabase Storage; `S3_EXPORT_BUCKET=timekeep-exports` is set for production and preview, `EXPORT_JOB_THRESHOLD=5` for previews only. The preview e2e passed 123/123 with the export-job test. Done 2026-10-26 ("docs: the export bucket is set up").
 - [x] Phase 3 review minors (2026-10-25), all done 2026-10-25:
   - Report, export and tracker JSON routes answered unexpected errors with a bare 500 and logged nothing; they now log first (`routeErrorResponse`). A malformed Detailed cursor reached Postgres and gave 500; it is now a 400. ("routes: log unexpected failures; a malformed Detailed cursor is a 400")

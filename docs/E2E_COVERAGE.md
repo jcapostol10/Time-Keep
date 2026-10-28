@@ -27,7 +27,6 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Members cannot invite; admins can — `workspace.spec.ts` › "members cannot invite; admins can"
 - [x] Workspace settings are read-only for members and editable by admins — `workspace.spec.ts` › "workspace settings are read-only for members and editable by admins"
 - [ ] Cancel a pending invitation — gap
-- [ ] Change a member's role — gap
 - [x] Invite several people at once and see what happened to each address — `team.spec.ts` › "bulk invite reports each address"
 - [x] Import people from a CSV: preview each row, then invite the ready ones (creating their groups) — `team.spec.ts` › "user import previews and invites"
 - [x] Change a member's role; a member sees the team read-only — `team.spec.ts` › "a member's role, deactivation and removal"
