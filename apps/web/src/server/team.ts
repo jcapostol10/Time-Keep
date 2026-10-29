@@ -65,7 +65,10 @@ async function stopRunning(
     actor: await loadActor(db, workspaceId, userId, role),
   };
   const running = await getRunningEntry(db, scope);
-  if (running) await stopTimer(db, scope, { entryId: running.id, end: now }, now);
+  // Closed as it is: the admin cannot fill the person's required fields or task.
+  if (running) {
+    await stopTimer(db, scope, { entryId: running.id, end: now, administrative: true }, now);
+  }
 }
 
 /** Deletes a manager's people, groups and project-manager flags in this workspace. */

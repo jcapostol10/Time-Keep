@@ -223,7 +223,14 @@ export async function listProjects(
  * Projects the viewer may track on: visible, not archived, with their active
  * tasks. Favourites first, then by client (none last), then by name.
  */
-export async function listPickerProjects(db: Executor, viewer: Viewer): Promise<PickerProject[]> {
+export async function listPickerProjects(
+  db: Executor,
+  viewer: Viewer,
+  opts: {
+    /** Keep a project whose active tasks are all hidden (the import resolves names on it). */
+    keepProjectsWithHiddenTasks?: boolean;
+  } = {},
+): Promise<PickerProject[]> {
   const rows = await db.query.project.findMany({
     where: and(
       eq(project.workspaceId, viewer.workspaceId),
@@ -255,7 +262,7 @@ export async function listPickerProjects(db: Executor, viewer: Viewer): Promise<
   return rows
     .flatMap((r): PickerProject[] => {
       const t = byProject.get(r.id) ?? { visible: [], hidden: 0 };
-      if (t.visible.length === 0 && t.hidden > 0) return [];
+      if (t.visible.length === 0 && t.hidden > 0 && !opts.keepProjectsWithHiddenTasks) return [];
       return [
         {
           id: r.id,

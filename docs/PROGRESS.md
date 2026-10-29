@@ -228,6 +228,8 @@ Rulings made while planning (the owner approved the plan on 2026-10-29): rule 8 
 
 Rulings made while building (the owner has not reviewed these individually): rule 8 counts the project's active tasks visible or not, so a project whose tasks are all hidden from a person takes no untasked time from them (it is out of their picker anyway); `createTask` asserts `task.create` itself, so the import's commit and any later caller are held to it; the write-path tests live in one file on one fixture; the new e2e spec runs with a 180-second per-test timeout (each flow builds groups, projects and tasks through the UI); the "invitee" line is guarded by the acceptance hook, since the picker reads group membership in SQL. Two existing tests changed because the assignee UI is hidden: "manage a project's tasks" adds a task with a group instead of an assignee, and the templates test expects task groups on the copy.
 
+Review (2026-10-29): a fresh reviewer read the whole branch (no Critical, 5 Important, 9 Minor findings). Fixed on the branch, each with a test that failed first: rule 8 was skipped by the implicit stop a new timer makes and by a stop through an edit's end; deactivating a member whose running timer had no task on a project with tasks failed on that person's rules (the administrative stop now closes the entry as it is); the import offered to create a project whose tasks were all hidden from the row's person instead of saying so, and its dry run now applies rule 8; a backup file the break-once script left was committed. Every deferred minor and every behaviour the reviewer set aside is in `docs/BACKLOG.md`.
+
 ## Phase 5 — Approvals, time off, attendance, reminders, kiosk
 
 - [ ] Approval periods and state machine; lock dates

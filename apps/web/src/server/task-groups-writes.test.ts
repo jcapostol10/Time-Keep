@@ -28,6 +28,7 @@ import { createTask } from "./catalog/tasks";
 import type { Viewer } from "./catalog/viewer";
 import { commitEntryImport, type ImportOptions, planEntryImport } from "./entry-import";
 import { listFavorites, pinFavorite } from "./favorites";
+import { setMemberStatus } from "./team";
 import {
   bulkUpdateEntries,
   continueEntry,
@@ -129,7 +130,7 @@ describe("tasks by group: writes", () => {
     await addMember(db, wsId, bob.id, "member");
     await addMember(db, wsId, carol.id, "member");
     ids = { olga: olga.id, ann: ann.id, max: max.id, bob: bob.id, carol: carol.id };
-    emails = { olga: olga.email, ann: ann.email, bob: bob.email };
+    emails = { olga: olga.email, ann: ann.email, bob: bob.email, carol: carol.email };
     await db.insert(managedUser).values({ workspaceId: wsId, managerId: max.id, userId: bob.id });
 
     ids.design = await group("Design", [bob.id, carol.id]);
@@ -269,6 +270,60 @@ describe("tasks by group: writes", () => {
     // Owners and admins see every task, so none is forced on them.
     const olga = await viewer("olga");
     await createManualEntry(db, olga, { ...bare, projectId: ids.web!, start: at(60), end: at(90) });
+  });
+
+  it("rule 8 binds the implicit stop and a stop through updateEntry (review fix)", async () => {
+    await byGroup();
+    const bob = await viewer("bob");
+    const required = { message: "Task is required.", field: "task" };
+    const { started } = await startTimer(db, bob, { ...bare, projectId: ids.web! });
+    // Starting another timer stops this one: refused the same way as Stop.
+    await expect(startTimer(db, bob, { ...bare, projectId: ids.empty! })).rejects.toMatchObject(
+      required,
+    );
+    expect((await getRunningEntry(db, bob))?.id).toBe(started.id);
+    // Setting an end on a running entry stops it: refused the same way.
+    await expect(
+      updateEntry(db, bob, started.id, { end: new Date(Date.now() + 1000) }),
+    ).rejects.toMatchObject(required);
+    expect((await getRunningEntry(db, bob))?.id).toBe(started.id);
+    // A time edit that keeps it running is not a stop.
+    await updateEntry(db, bob, started.id, { start: new Date(Date.now() - 60_000) });
+    expect((await getRunningEntry(db, bob))?.id).toBe(started.id);
+  });
+
+  it("deactivating a member with an untasked running timer on a project with tasks succeeds (review fix)", async () => {
+    await byGroup();
+    const { started } = await startTimer(db, await viewer("bob"), { ...bare, projectId: ids.web! });
+    await setMemberStatus(db, await viewer("olga"), ids.bob!, "DEACTIVATED");
+    expect((await stored(started.id)).end).not.toBeNull();
+  });
+
+  it("the import tells a project pruned by rule 8 from an unknown one (review fix)", async () => {
+    await byGroup();
+    const ann = await viewer("ann");
+    // Hidden's only task is Engineering's: Carol (Design) cannot see the project in her picker.
+    const hiddenTask = await planEntryImport(
+      db,
+      ann,
+      csv(`2026-03-09,09:00,10:00,Work,Hidden,Cabling,,yes,${emails.carol}`),
+      OPTIONS,
+    );
+    expect(hiddenTask.rows[0]!.error).toBe(
+      `Line 2: task "Cabling" isn't available to Carol Member's groups`,
+    );
+    expect(hiddenTask.creates.projects).toEqual([]);
+    const noTask = await planEntryImport(
+      db,
+      ann,
+      csv(`2026-03-09,09:00,10:00,Work,Hidden,,,yes,${emails.carol}`),
+      OPTIONS,
+    );
+    expect(noTask.rows[0]!.error).toBe("Line 2: Task is required.");
+    expect(noTask.creates.projects).toEqual([]);
+    // For Ann herself the project is open and no task is forced.
+    const own = await planEntryImport(db, ann, csv("2026-03-09,09:00,10:00,Work,Hidden,,,yes,"), OPTIONS);
+    expect(own).toMatchObject({ ok: 1, errors: 0 });
   });
 
   it("existing entries are untouched: time, description, tags, billable and split still work on an unavailable task", async () => {

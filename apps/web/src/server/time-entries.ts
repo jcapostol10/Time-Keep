@@ -517,7 +517,8 @@ export async function startTimer(
     });
     let stopped: TimeEntryDTO | null = null;
     if (running) {
-      // The implicit stop is a stop (decision 5): a favourite, Continue or S cannot skip the rule.
+      // The implicit stop is a stop (decision 5, and rule 8 of decision 11): a
+      // favourite, Continue or S cannot skip the rules.
       await assertRequiredFields(tx, scope, {
         description: running.description,
         projectId: running.projectId,
@@ -525,6 +526,7 @@ export async function startTimer(
         tagIds: running.tags.map((t) => t.tagId),
         type: running.type,
       });
+      await assertTaskPicked(tx, scope, running);
       const end = implicitStopEnd(running.start, now);
       await tx
         .update(timeEntry)
@@ -562,25 +564,32 @@ export async function startTimer(
   });
 }
 
-/** Stops a running entry at `end` (default now). Idempotent for stopped entries. */
+/**
+ * Stops a running entry at `end` (default now). Idempotent for stopped
+ * entries. `administrative` is the stop deactivation makes on someone's
+ * behalf: the entry is closed as it is, without the owner-facing rules
+ * (required fields, the required task), which the admin could not satisfy.
+ */
 export async function stopTimer(
   db: Database,
   scope: EntryScope,
-  input: { entryId: string; end?: Date },
+  input: { entryId: string; end?: Date; administrative?: boolean },
   now: Date = new Date(),
 ): Promise<TimeEntryDTO> {
   return db.transaction(async (tx) => {
     await lockOwned(tx, scope, input.entryId);
     const row = await findOwned(tx, scope, input.entryId);
     if (row.end) return toDTO(row);
-    await assertRequiredFields(tx, scope, {
-      description: row.description,
-      projectId: row.projectId,
-      taskId: row.taskId,
-      tagIds: row.tags.map((t) => t.tag.id),
-      type: row.type,
-    });
-    await assertTaskPicked(tx, scope, row);
+    if (!input.administrative) {
+      await assertRequiredFields(tx, scope, {
+        description: row.description,
+        projectId: row.projectId,
+        taskId: row.taskId,
+        tagIds: row.tags.map((t) => t.tag.id),
+        type: row.type,
+      });
+      await assertTaskPicked(tx, scope, row);
+    }
 
     let end = input.end ?? now;
     const max = row.start.getTime() + MAX_ENTRY_SECONDS * 1000;
@@ -663,16 +672,6 @@ export async function updateEntry(
       taskId: row.taskId,
       tagIds: row.tags.map((t) => t.tag.id),
     });
-    // Rule 8 binds a stopped entry whose project or task the patch touches.
-    const touchesTask = patch.projectId !== undefined || patch.taskId !== undefined;
-    if (touchesTask && (patch.end !== undefined || row.end !== null)) {
-      await assertTaskPicked(tx, scope, {
-        projectId: patch.projectId !== undefined ? patch.projectId : row.projectId,
-        taskId: patch.taskId !== undefined ? patch.taskId : row.taskId,
-        type: row.type,
-      });
-    }
-
     // Only touch the times when the patch does, so a details edit never
     // rewrites (or un-stops) times changed elsewhere.
     const touchesTimes = patch.start !== undefined || patch.end !== undefined;
@@ -700,7 +699,14 @@ export async function updateEntry(
       tagIds: patch.tagIds ?? row.tags.map((t) => t.tag.id),
       type: row.type,
     };
-    if (times ? times.end : row.end) await assertRequiredFields(tx, scope, merged);
+    const stoppedAfter = Boolean(times ? times.end : row.end);
+    if (stoppedAfter) await assertRequiredFields(tx, scope, merged);
+    // Rule 8 binds where a stopped entry's project or task changes, and where
+    // the patch itself stops the entry (an end on a running one is a Stop).
+    const touchesTask = patch.projectId !== undefined || patch.taskId !== undefined;
+    if (stoppedAfter && (touchesTask || row.end === null)) {
+      await assertTaskPicked(tx, scope, merged);
+    }
 
     // updatedAt is always set, so a tags-only patch is still a valid UPDATE.
     await tx

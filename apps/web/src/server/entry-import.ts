@@ -112,7 +112,9 @@ class Lookup {
   async projectsFor(scope: EntryScope): Promise<PickerProject[]> {
     let list = this.projectsByUser.get(scope.userId);
     if (!list) {
-      list = await listPickerProjects(this.db, scope);
+      // Every project the person may see, so a row naming one whose tasks are
+      // all hidden from them is told so, not offered as a project to create.
+      list = await listPickerProjects(this.db, scope, { keepProjectsWithHiddenTasks: true });
       this.projectsByUser.set(scope.userId, list);
     }
     return list;
@@ -261,7 +263,9 @@ async function resolve(
       existing = lookup.project(await lookup.projectsFor(scope), row.project, clientName);
       if (existing) {
         projectName = existing.name;
-        projectHasTasks = existing.tasks.length > 0;
+        projectHasTasks =
+          existing.tasks.length > 0 ||
+          (await lookup.hiddenTaskNames(scope, existing.id)).length > 0;
       } else if (options.createMissing && mayCreate.project) {
         creates.projects.add(clientName ? `${row.project} (${clientName})` : row.project);
         projectName = row.project;
@@ -303,6 +307,19 @@ async function resolve(
         fail(member.name, `unknown task "${row.task}"`);
         continue;
       }
+    }
+    // Rule 8 of decision 11, as the entry service applies it at commit: a
+    // manager or member saving on a project with active tasks must name one.
+    if (
+      !taskName &&
+      existing &&
+      projectHasTasks &&
+      byGroup &&
+      scope.role !== "owner" &&
+      scope.role !== "admin"
+    ) {
+      fail(member.name, requiredFieldMessage("task"));
+      continue;
     }
     let tagProblem: string | null = null;
     const tagNames: string[] = [];
