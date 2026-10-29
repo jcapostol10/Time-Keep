@@ -63,6 +63,12 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter @timekeep/web exec playwright install --with-deps chromium
 
+      # PDF exports launch Playwright's Chrome from the server. Ubuntu 24.04
+      # blocks the unprivileged user namespaces Chrome's sandbox needs; allow
+      # them on this throwaway runner rather than run Chrome without a sandbox.
+      - name: Let Chrome use its sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Start Postgres, Mailpit and object storage
         run: docker compose up -d --wait
 
