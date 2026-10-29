@@ -14,6 +14,7 @@ import {
   needsRerate,
   type RequiredField,
   requiredFieldMessage,
+  TASK_UNAVAILABLE_MESSAGE,
   TIMER_STOP_FUTURE_GRACE_MS,
   trackingBlock,
   validateEntryRange,
@@ -41,6 +42,7 @@ import {
   tag,
   type Tag,
   task,
+  taskGroup,
   timeEntry,
   type TimeEntry,
   timeEntryTag,
@@ -56,6 +58,7 @@ import type {
 } from "@/lib/tracker-types";
 
 import { CatalogError } from "./catalog/errors";
+import { visibleTasksFor } from "./catalog/tasks";
 import type { Viewer } from "./catalog/viewer";
 import { assertCan, projectResource, scopeForUser } from "./authz";
 
@@ -244,6 +247,47 @@ async function assertDetailsUsable(
 
   const block = trackingBlock({ project: projectRow, task: taskRow, tags: addedTags });
   if (block) throw new TimeEntryError("INVALID", block);
+
+  // Decision 11: a task is taken through one of its groups, judged for the
+  // entry's owner (`scope.actor`, never `actedBy`: rule 11). Only a task being
+  // assigned is checked; an entry that keeps its task keeps it (rule 10).
+  if (taskRow && taskId) {
+    const groups = await db
+      .select({ groupId: taskGroup.groupId })
+      .from(taskGroup)
+      .where(eq(taskGroup.taskId, taskId));
+    const allowed = can(scope.actor, "task.trackTime", {
+      kind: "task",
+      projectId: taskRow.projectId,
+      groupIds: groups.map((g) => g.groupId),
+    });
+    if (!allowed) throw new TimeEntryError("INVALID", TASK_UNAVAILABLE_MESSAGE);
+  }
+}
+
+/**
+ * Rule 8 of decision 11: with tasks by group, a manager or member saving time
+ * on a project that has active tasks must pick one of them. It binds where
+ * required fields bind (Stop and saves that touch the project or task), never
+ * on Start or on a time edit; owners and admins see every task, so none is
+ * forced on them. A project whose tasks are all hidden from the person takes
+ * no untasked time either (it is out of their picker).
+ */
+async function assertTaskPicked(
+  db: Executor,
+  scope: EntryScope,
+  details: { projectId: string | null; taskId: string | null; type: EntryDetails["type"] },
+): Promise<void> {
+  if (details.type === "break" || details.taskId || !details.projectId) return;
+  if (scope.actor.settings.taskVisibility !== "BY_GROUP") return;
+  if (scope.role === "owner" || scope.role === "admin") return;
+  const tasks = await visibleTasksFor(db, scope, {
+    projectIds: [details.projectId],
+    includeHidden: true,
+  });
+  if (tasks.length > 0) {
+    throw new TimeEntryError("INVALID", requiredFieldMessage("task"), "task");
+  }
 }
 
 function sameIdSet(a: string[], b: string[]): boolean {
@@ -536,6 +580,7 @@ export async function stopTimer(
       tagIds: row.tags.map((t) => t.tag.id),
       type: row.type,
     });
+    await assertTaskPicked(tx, scope, row);
 
     let end = input.end ?? now;
     const max = row.start.getTime() + MAX_ENTRY_SECONDS * 1000;
@@ -572,6 +617,7 @@ export async function createManualEntry(
     const details = await breakAware(tx, scope, input);
     await assertDetailsUsable(tx, scope, details);
     await assertRequiredFields(tx, scope, details);
+    await assertTaskPicked(tx, scope, details);
     const id = randomUUID();
     await tx.insert(timeEntry).values({
       id,
@@ -617,6 +663,15 @@ export async function updateEntry(
       taskId: row.taskId,
       tagIds: row.tags.map((t) => t.tag.id),
     });
+    // Rule 8 binds a stopped entry whose project or task the patch touches.
+    const touchesTask = patch.projectId !== undefined || patch.taskId !== undefined;
+    if (touchesTask && (patch.end !== undefined || row.end !== null)) {
+      await assertTaskPicked(tx, scope, {
+        projectId: patch.projectId !== undefined ? patch.projectId : row.projectId,
+        taskId: patch.taskId !== undefined ? patch.taskId : row.taskId,
+        type: row.type,
+      });
+    }
 
     // Only touch the times when the patch does, so a details edit never
     // rewrites (or un-stops) times changed elsewhere.
@@ -711,6 +766,7 @@ export async function createManualEntries(
       details = await breakAware(db, scope, input);
       await assertDetailsUsable(db, scope, details);
       await assertRequiredFields(db, scope, details);
+      await assertTaskPicked(db, scope, details);
       checked.set(key, details);
     }
     const id = randomUUID();
@@ -832,6 +888,9 @@ export async function splitEntry(
     const row = await findOwned(tx, scope, entryId);
     if (!row.end) throw new TimeEntryError("INVALID", "Stop the timer before splitting it.");
     assertCanWriteTimes(scope, row.projectId);
+    // A split copies the entry's details unchanged, so task.trackTime is not
+    // re-checked (rule 10 of decision 11): a task the person can no longer
+    // see stays on both parts.
     if (at.getTime() < row.start.getTime() + 1000 || at.getTime() > row.end.getTime() - 1000) {
       throw new TimeEntryError("INVALID", "Pick a time inside the entry.");
     }
@@ -973,6 +1032,9 @@ async function applyBulkPatch(
     type: row.type,
   };
   if (row.end) await assertRequiredFields(tx, scope, merged);
+  if (row.end && (details.projectId !== undefined || details.taskId !== undefined)) {
+    await assertTaskPicked(tx, scope, merged);
+  }
   await tx
     .update(timeEntry)
     .set({

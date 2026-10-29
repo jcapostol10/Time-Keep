@@ -1,7 +1,7 @@
 "use server";
 
-import { taskInputSchema, taskPatchSchema } from "@timekeep/core";
-import { and, eq, getDb, task } from "@timekeep/db";
+import { taskGroupsSchema, taskInputSchema, taskPatchSchema } from "@timekeep/core";
+import { and, eq, getDb, inArray, task } from "@timekeep/db";
 import { revalidatePath } from "next/cache";
 
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
@@ -10,17 +10,14 @@ import { workspaceRoutes } from "@/lib/routes";
 import { userErrorMessage } from "@/server/actions/errors";
 import { authorize } from "@/server/authz";
 import { CatalogError } from "@/server/catalog/errors";
-import { createTask, deleteTask, updateTask } from "@/server/catalog/tasks";
+import { createTask, deleteTask, setTaskGroups, updateTask } from "@/server/catalog/tasks";
 import type { Viewer } from "@/server/catalog/viewer";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
 
-/**
- * Admins manage every project's tasks, a project's managers its own (and
- * whoever the workspace's "who can create tasks" setting allows may add them).
- */
+/** Admins manage every project's tasks, a project's managers its own (decision 11). */
 async function taskViewer(
   slug: string,
-  action: "task.create" | "task.update",
+  action: "task.create" | "task.update" | "task.assignGroups",
   target: { projectId: string } | { taskId: string },
 ): Promise<Viewer> {
   const ctx = await requireWorkspaceAccess(slug);
@@ -67,6 +64,39 @@ export async function updateTaskAction(
     const updated = await updateTask(getDb(), viewer, taskId, parsed.data);
     revalidatePath(workspaceRoutes.project(slug, updated.projectId));
     return ok(updated);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+/** The Tasks tab's multi-select: groups on several tasks of one project at once. */
+export async function setTaskGroupsAction(
+  slug: string,
+  input: unknown,
+): Promise<ActionResult<{ updated: number }>> {
+  try {
+    const ctx = await requireWorkspaceAccess(slug);
+    const parsed = taskGroupsSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    const rows = await getDb()
+      .select({ projectId: task.projectId })
+      .from(task)
+      .where(and(eq(task.workspaceId, ctx.workspace.id), inArray(task.id, parsed.data.taskIds)));
+    if (rows.length === 0) throw new CatalogError("NOT_FOUND", "Task not found.");
+    const projectIds = [...new Set(rows.map((r) => r.projectId))];
+    let viewer: Viewer | undefined;
+    for (const projectId of projectIds) {
+      viewer = await authorize(ctx, "task.assignGroups", { kind: "task", projectId });
+    }
+    await setTaskGroups(
+      getDb(),
+      viewer!,
+      parsed.data.taskIds,
+      parsed.data.groupIds,
+      parsed.data.mode,
+    );
+    for (const projectId of projectIds) revalidatePath(workspaceRoutes.project(slug, projectId));
+    return ok({ updated: parsed.data.taskIds.length });
   } catch (error) {
     return fail(userErrorMessage(error));
   }

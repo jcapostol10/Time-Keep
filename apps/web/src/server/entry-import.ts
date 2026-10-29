@@ -27,7 +27,7 @@ import { scopeForUser } from "./authz";
 import { createClient, listClientOptions } from "./catalog/clients";
 import { createProject, listPickerProjects } from "./catalog/projects";
 import { createTag, listTags } from "./catalog/tags";
-import { createTask } from "./catalog/tasks";
+import { createTask, visibleTasksFor } from "./catalog/tasks";
 import type { Viewer } from "./catalog/viewer";
 import { listMembers } from "./queries/team";
 import { createManualEntries, type EntryScope } from "./time-entries";
@@ -62,6 +62,8 @@ export interface ImportOptions {
   /** Create projects, clients, tasks and tags the file names and the workspace lacks. */
   createMissing: boolean;
   mapping: ColumnMapping;
+  /** The groups a task created by the import belongs to; required when tasks are by group. */
+  newTaskGroupIds?: string[];
 }
 
 export type { ImportCreates, ImportPlan, ImportRowResult } from "@/lib/import-types";
@@ -116,6 +118,27 @@ class Lookup {
     return list;
   }
 
+  private readonly hiddenByUser = new Map<string, Map<string, string[]>>();
+
+  /** Active tasks of the project the person may not track on (decision 11): exist, but hidden. */
+  async hiddenTaskNames(scope: EntryScope, projectId: string): Promise<string[]> {
+    let byProject = this.hiddenByUser.get(scope.userId);
+    if (!byProject) {
+      byProject = new Map();
+      this.hiddenByUser.set(scope.userId, byProject);
+    }
+    let names = byProject.get(projectId);
+    if (!names) {
+      const all = await visibleTasksFor(this.db, scope, {
+        projectIds: [projectId],
+        includeHidden: true,
+      });
+      names = all.filter((t) => !t.visible).map((t) => t.name);
+      byProject.set(projectId, names);
+    }
+    return names;
+  }
+
   /** A project by name, preferring the given client's. */
   project(list: PickerProject[], name: string, client: string | null): PickerProject | undefined {
     const matches = list.filter((p) => lower(p.name) === lower(name));
@@ -163,7 +186,11 @@ async function resolve(
     client: can(viewer.actor, "client.create", { kind: "none" }),
     project: can(viewer.actor, "project.create", { kind: "project", projectId: null }),
     tag: can(viewer.actor, "tag.create", { kind: "none" }),
+    // A task on a project the import creates: only roles that add tasks anywhere (decision 11).
+    taskOnNewProject: can(viewer.actor, "task.create", { kind: "task", projectId: "new" }),
   };
+  const byGroup = viewer.actor.settings.taskVisibility === "BY_GROUP";
+  const newTaskGroupIds = options.newTaskGroupIds ?? [];
   const creates = {
     clients: new NameSet(),
     projects: new NameSet(),
@@ -250,13 +277,26 @@ async function resolve(
         continue;
       }
       const found = existing?.tasks.find((t) => lower(t.name) === lower(row.task!));
+      const hidden =
+        !found &&
+        existing !== undefined &&
+        (await lookup.hiddenTaskNames(scope, existing.id)).some(
+          (n) => lower(n) === lower(row.task!),
+        );
+      const mayCreateTask = existing
+        ? can(viewer.actor, "task.create", { kind: "task", projectId: existing.id })
+        : mayCreate.project && mayCreate.taskOnNewProject;
       if (found) taskName = found.name;
-      else if (
-        options.createMissing &&
-        (existing
-          ? can(viewer.actor, "task.create", { kind: "task", projectId: existing.id })
-          : mayCreate.project)
-      ) {
+      else if (hidden) {
+        // Rule 11: the task exists, but not for the row's person.
+        const whose = scope.userId === viewer.userId ? "your" : `${member.name}'s`;
+        fail(member.name, `task "${row.task}" isn't available to ${whose} groups`);
+        continue;
+      } else if (options.createMissing && mayCreateTask) {
+        if (byGroup && newTaskGroupIds.length === 0) {
+          fail(member.name, `choose groups for new tasks to create "${row.task}"`);
+          continue;
+        }
         creates.tasks.add(`${projectName} › ${row.task}`);
         taskName = row.task;
       } else {
@@ -332,6 +372,7 @@ async function resolve(
           end: r.row.end?.toISOString(),
         })),
         creates: createsOut,
+        newTaskGroupIds: [...newTaskGroupIds].sort(),
       }),
     )
     .digest("hex");
@@ -405,7 +446,11 @@ export async function commitEntryImport(
       const project = lookup.project(await lookup.projectsFor(r.scope), r.project, r.client);
       if (!project) throw new ImportError(`Project "${r.project}" could not be found.`);
       if (project.tasks.some((t) => lower(t.name) === lower(r.task!))) continue;
-      const created = await createTask(tx, viewer, project.id, { name: r.task, assigneeIds: [] });
+      const created = await createTask(tx, viewer, project.id, {
+        name: r.task,
+        assigneeIds: [],
+        groupIds: options.newTaskGroupIds ?? [],
+      });
       project.tasks.push({ id: created.id, name: created.name });
     }
 

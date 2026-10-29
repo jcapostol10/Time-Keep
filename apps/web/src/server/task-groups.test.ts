@@ -55,8 +55,14 @@ async function group(name: string, members: string[]): Promise<string> {
   return id;
 }
 
+/** Seeds a task with its group rows directly: no rule 9, and no "pick a group" check in BY_GROUP mode. */
 async function task(projectId: string, name: string, groupIds: string[]): Promise<string> {
-  const t = await createTask(db, await viewer("olga"), projectId, { name, assigneeIds: [] });
+  const olga = await viewer("olga");
+  const seeding: Viewer = {
+    ...olga,
+    actor: { ...olga.actor, settings: { ...olga.actor.settings, taskVisibility: "EVERYONE" } },
+  };
+  const t = await createTask(db, seeding, projectId, { name, assigneeIds: [] });
   if (groupIds.length > 0) {
     await db.insert(taskGroup).values(groupIds.map((groupId) => ({ taskId: t.id, groupId })));
   }

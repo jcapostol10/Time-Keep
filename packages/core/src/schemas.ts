@@ -284,6 +284,8 @@ export const importOptionsSchema = z.object({
   dateFormat: dateFormatSchema,
   createMissing: z.boolean(),
   mapping: z.partialRecord(z.enum(IMPORT_COLUMNS), z.number().int().min(0).max(500)),
+  /** The groups a task created by the import belongs to; required when tasks are by group. */
+  newTaskGroupIds: z.array(z.string().min(1)).max(100).default([]),
   /** The dry run's fingerprint, for a commit. */
   fingerprint: z.string().length(64).optional(),
 });
@@ -378,9 +380,14 @@ export const deleteProjectSchema = z.discriminatedUnion("mode", [
 ]);
 export type DeleteProjectMode = z.infer<typeof deleteProjectSchema>;
 
+const groupIdsSchema = z.array(z.string().min(1)).max(100);
+
 export const taskInputSchema = z.object({
   name: catalogNameSchema,
+  /** Kept for the data; the UI no longer edits assignees (decision 11). */
   assigneeIds: z.array(z.string().min(1)).max(100).default([]),
+  /** The groups whose members see and track on the task when tasks are by group. */
+  groupIds: groupIdsSchema.default([]),
 });
 export type TaskInput = z.infer<typeof taskInputSchema>;
 
@@ -388,8 +395,17 @@ export const taskPatchSchema = z.object({
   name: catalogNameSchema.optional(),
   status: z.enum(TASK_STATUSES).optional(),
   assigneeIds: z.array(z.string().min(1)).max(100).optional(),
+  groupIds: groupIdsSchema.optional(),
 });
 export type TaskPatch = z.infer<typeof taskPatchSchema>;
+
+/** The Tasks tab's multi-select: add the groups to, remove them from, or set them on the tasks. */
+export const taskGroupsSchema = z.object({
+  taskIds: z.array(z.string().min(1)).min(1).max(200),
+  groupIds: groupIdsSchema,
+  mode: z.enum(["add", "remove", "set"]),
+});
+export type TaskGroupsInput = z.infer<typeof taskGroupsSchema>;
 
 export const tagInputSchema = z.object({
   name: catalogNameSchema,

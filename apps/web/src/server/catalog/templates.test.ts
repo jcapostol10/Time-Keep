@@ -8,7 +8,7 @@ import {
   projectMember,
   rate,
   task,
-  taskAssignee,
+  taskGroup,
   userGroup,
   workspaceSettings,
 } from "@timekeep/db";
@@ -83,7 +83,11 @@ describe("project templates", () => {
       note: "Onboarding steps",
     });
     templateId = base.id;
-    setupTaskId = (await createTask(db, olga, base.id, { name: "Setup", assigneeIds: [bob.id] })).id;
+    groupId = randomUUID();
+    await db.insert(userGroup).values({ id: groupId, workspaceId: wsId, name: "Design" });
+    setupTaskId = (
+      await createTask(db, olga, base.id, { name: "Setup", assigneeIds: [], groupIds: [groupId] })
+    ).id;
     await createTask(db, olga, base.id, { name: "Review", assigneeIds: [] });
     const done = await createTask(db, olga, base.id, { name: "Old step", assigneeIds: [] });
     await db.update(task).set({ status: "DONE" }).where(eq(task.id, done.id));
@@ -91,9 +95,8 @@ describe("project templates", () => {
       { projectId: base.id, userId: max.id, isManager: true },
       { projectId: base.id, userId: bob.id, isManager: false },
     ]);
-    groupId = randomUUID();
-    await db.insert(userGroup).values({ id: groupId, workspaceId: wsId, name: "Design" });
-    await db.insert(projectGroup).values({ projectId: base.id, groupId });
+    // Rule 9 already gave Design access to the private template through its task.
+    await db.insert(projectGroup).values({ projectId: base.id, groupId }).onConflictDoNothing();
     await addRate({ level: "project", projectId: base.id, amountMinor: 8000 });
     await addRate({ level: "project", projectId: base.id, amountMinor: 7000, effectiveFrom: new Date("2020-01-01") });
     await addRate({ level: "project_member", projectId: base.id, userId: bob.id, amountMinor: 9000 });
@@ -108,7 +111,7 @@ describe("project templates", () => {
     );
   });
 
-  it("copies active tasks with assignees, members with their manager flag, groups, settings and the rates in force", async () => {
+  it("copies active tasks with their groups, members with their manager flag, groups, settings and the rates in force", async () => {
     const before = new Date();
     const copy = await copyProject(db, olga, templateId, {
       name: "Client X",
@@ -133,10 +136,10 @@ describe("project templates", () => {
     ]);
     const newSetup = tasks.find((t) => t.name === "Setup")!;
     expect(
-      (await db.select().from(taskAssignee).where(eq(taskAssignee.taskId, newSetup.id))).map(
-        (a) => a.userId,
+      (await db.select().from(taskGroup).where(eq(taskGroup.taskId, newSetup.id))).map(
+        (g) => g.groupId,
       ),
-    ).toEqual([ids.bob]);
+    ).toEqual([groupId]);
     const members = await db.select().from(projectMember).where(eq(projectMember.projectId, copy.id));
     expect(members.map((m) => [m.userId, m.isManager]).sort()).toEqual(
       [

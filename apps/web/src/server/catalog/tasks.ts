@@ -14,6 +14,7 @@ import {
   membership,
   or,
   project,
+  projectGroup,
   sql,
   task,
   taskAssignee,
@@ -193,6 +194,86 @@ async function replaceAssignees(db: Executor, taskId: string, userIds: string[])
   }
 }
 
+/** The groups must be this workspace's. */
+async function assertGroups(db: Executor, workspaceId: string, groupIds: string[]): Promise<void> {
+  if (groupIds.length === 0) return;
+  const rows = await db
+    .select({ id: userGroup.id })
+    .from(userGroup)
+    .where(and(eq(userGroup.workspaceId, workspaceId), inArray(userGroup.id, groupIds)));
+  if (rows.length !== groupIds.length) throw new CatalogError("INVALID", "Unknown group.");
+}
+
+/**
+ * Rule 9: a group given a task on a PRIVATE project also gets the project's
+ * access, in the same transaction. Removing the task never takes it away.
+ */
+async function grantProjectAccess(
+  db: Executor,
+  projectIds: string[],
+  groupIds: string[],
+): Promise<void> {
+  if (projectIds.length === 0 || groupIds.length === 0) return;
+  const privateProjects = await db
+    .select({ id: project.id })
+    .from(project)
+    .where(and(inArray(project.id, projectIds), eq(project.visibility, "PRIVATE")));
+  if (privateProjects.length === 0) return;
+  await db
+    .insert(projectGroup)
+    .values(
+      privateProjects.flatMap((p) => groupIds.map((groupId) => ({ projectId: p.id, groupId }))),
+    )
+    .onConflictDoNothing();
+}
+
+/**
+ * Sets, adds or removes groups on tasks (decision 11), by someone with
+ * `task.assignGroups` on every task's project: a manager's foreign project is
+ * not found. One transaction; `add` and `set` apply rule 9.
+ */
+export async function setTaskGroups(
+  db: Database,
+  viewer: Viewer,
+  taskIds: string[],
+  groupIds: string[],
+  mode: "add" | "remove" | "set",
+): Promise<void> {
+  const uniqueTasks = [...new Set(taskIds)];
+  const uniqueGroups = [...new Set(groupIds)];
+  if (uniqueTasks.length === 0) return;
+  const rows = await db
+    .select({ id: task.id, projectId: task.projectId })
+    .from(task)
+    .where(and(eq(task.workspaceId, viewer.workspaceId), inArray(task.id, uniqueTasks)));
+  if (rows.length !== uniqueTasks.length) throw new CatalogError("NOT_FOUND", "Task not found.");
+  const projectIds = [...new Set(rows.map((r) => r.projectId))];
+  for (const projectId of projectIds) {
+    assertCan(viewer.actor, "task.assignGroups", { kind: "task", projectId });
+  }
+  await assertGroups(db, viewer.workspaceId, uniqueGroups);
+  await db.transaction(async (tx) => {
+    if (mode === "set") {
+      await tx.delete(taskGroup).where(inArray(taskGroup.taskId, uniqueTasks));
+    } else if (mode === "remove" && uniqueGroups.length > 0) {
+      await tx
+        .delete(taskGroup)
+        .where(and(inArray(taskGroup.taskId, uniqueTasks), inArray(taskGroup.groupId, uniqueGroups)));
+    }
+    if (mode !== "remove" && uniqueGroups.length > 0) {
+      await tx
+        .insert(taskGroup)
+        .values(
+          uniqueTasks.flatMap((taskId) =>
+            uniqueGroups.map((groupId) => ({ taskId, groupId, assignedBy: viewer.userId })),
+          ),
+        )
+        .onConflictDoNothing();
+      await grantProjectAccess(tx, projectIds, uniqueGroups);
+    }
+  });
+}
+
 /**
  * A project's tasks, alphabetical, with their groups and tracked time. Whoever
  * edits the project's tasks (admins, its managers) sees every task, ACTIVE and
@@ -318,13 +399,20 @@ export async function createTask(
   db: Database,
   viewer: Viewer,
   projectId: string,
-  input: TaskInput,
+  input: Omit<TaskInput, "groupIds"> & { groupIds?: string[] },
 ): Promise<TaskDTO> {
   await requireVisibleProject(db, viewer, projectId);
+  assertCan(viewer.actor, "task.create", { kind: "task", projectId });
   const assigneeIds = [...new Set(input.assigneeIds)];
   await assertMembers(db, viewer.workspaceId, assigneeIds);
+  const groupIds = [...new Set(input.groupIds ?? [])];
+  // With tasks by group a task is never created without one (ruling R2 of the plan).
+  if (viewer.actor.settings.taskVisibility === "BY_GROUP" && groupIds.length === 0) {
+    throw new CatalogError("INVALID", "Pick at least one group.");
+  }
+  await assertGroups(db, viewer.workspaceId, groupIds);
   const id = randomUUID();
-  // The task and its assignees land together or not at all.
+  // The task, its assignees and its groups land together or not at all.
   return db.transaction(async (tx) => {
     try {
       await tx.insert(task).values({
@@ -340,6 +428,12 @@ export async function createTask(
       throw error;
     }
     await replaceAssignees(tx, id, assigneeIds);
+    if (groupIds.length > 0) {
+      await tx
+        .insert(taskGroup)
+        .values(groupIds.map((groupId) => ({ taskId: id, groupId, assignedBy: viewer.userId })));
+      await grantProjectAccess(tx, [projectId], groupIds);
+    }
     return toDTO(await requireVisibleTask(tx, viewer, id), undefined);
   });
 }
@@ -353,9 +447,23 @@ export async function updateTask(
   const row = await requireVisibleTask(db, viewer, taskId);
   const assigneeIds = patch.assigneeIds === undefined ? undefined : [...new Set(patch.assigneeIds)];
   if (assigneeIds) await assertMembers(db, viewer.workspaceId, assigneeIds);
-  // Assignees and the rename land together: a refused name must not leave new assignees behind.
+  const groupIds = patch.groupIds === undefined ? undefined : [...new Set(patch.groupIds)];
+  if (groupIds) {
+    assertCan(viewer.actor, "task.assignGroups", { kind: "task", projectId: row.projectId });
+    await assertGroups(db, viewer.workspaceId, groupIds);
+  }
+  // Assignees, groups and the rename land together: a refused name must not leave new ones behind.
   await db.transaction(async (tx) => {
     if (assigneeIds) await replaceAssignees(tx, taskId, assigneeIds);
+    if (groupIds) {
+      await tx.delete(taskGroup).where(eq(taskGroup.taskId, taskId));
+      if (groupIds.length > 0) {
+        await tx
+          .insert(taskGroup)
+          .values(groupIds.map((groupId) => ({ taskId, groupId, assignedBy: viewer.userId })));
+        await grantProjectAccess(tx, [row.projectId], groupIds);
+      }
+    }
     if (patch.name !== undefined || patch.status !== undefined) {
       try {
         await tx
