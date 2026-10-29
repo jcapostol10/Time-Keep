@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 
 import { TasksTab } from "@/components/projects/tasks-tab";
 import { listTasks } from "@/server/catalog/tasks";
-import { listMembers } from "@/server/queries/team";
 import { requireWorkspacePage } from "@/server/workspace-access";
 import { authorizeProject } from "@/server/authz";
 import { authorizePage } from "@/server/authz-page";
@@ -16,20 +15,7 @@ export default async function ProjectTasksPage({
   const { workspaceSlug, projectId } = await params;
   const ctx = await requireWorkspacePage(workspaceSlug);
   const viewer = await authorizePage(() => authorizeProject(ctx, "project.update", projectId));
-  const db = getDb();
-  const [tasks, members] = await Promise.all([
-    listTasks(db, viewer, projectId),
-    listMembers(db, ctx.workspace.id),
-  ]);
+  const tasks = await listTasks(getDb(), viewer, projectId);
 
-  return (
-    <TasksTab
-      slug={workspaceSlug}
-      projectId={projectId}
-      tasks={tasks}
-      members={members
-        .filter((m) => m.status === "ACTIVE")
-        .map((m) => ({ id: m.userId, name: m.name, image: m.image ?? null }))}
-    />
-  );
+  return <TasksTab slug={workspaceSlug} projectId={projectId} tasks={tasks} />;
 }

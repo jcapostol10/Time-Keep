@@ -14,6 +14,7 @@ import {
   ROLES,
   ROUNDING_MODES,
   TASK_STATUSES,
+  TASK_VISIBILITY,
   TIME_FORMATS,
 } from "@timekeep/core";
 import { pgEnum } from "drizzle-orm/pg-core";
@@ -34,3 +35,4 @@ export const rateRecalcStatusEnum = pgEnum("rate_recalc_status", RATE_RECALC_STA
 export const roundingModeEnum = pgEnum("rounding_mode", ROUNDING_MODES);
 export const creatorSettingEnum = pgEnum("creator_setting", CREATOR_SETTINGS);
 export const entryTypeEnum = pgEnum("entry_type", ENTRY_TYPES);
+export const taskVisibilityEnum = pgEnum("task_visibility", TASK_VISIBILITY);

@@ -1,7 +1,7 @@
-import { index, pgTable, primaryKey, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { index, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
-import { project } from "./catalog";
+import { project, task } from "./catalog";
 import { timestamps } from "./columns";
 import { invitation, workspace } from "./workspace";
 
@@ -52,6 +52,28 @@ export const projectGroup = pgTable(
   (t) => [
     primaryKey({ columns: [t.projectId, t.groupId] }),
     index("project_group_group_id_idx").on(t.groupId),
+  ],
+).enableRLS();
+
+/**
+ * A group a task belongs to (decision 11, tasks by group): when the workspace
+ * shows tasks by group, the group's members see and track on the task.
+ */
+export const taskGroup = pgTable(
+  "task_group",
+  {
+    taskId: text("task_id")
+      .notNull()
+      .references(() => task.id, { onDelete: "cascade" }),
+    groupId: text("group_id")
+      .notNull()
+      .references(() => userGroup.id, { onDelete: "cascade" }),
+    assignedBy: text("assigned_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.taskId, t.groupId] }),
+    index("task_group_group_id_idx").on(t.groupId),
   ],
 ).enableRLS();
 
@@ -112,5 +134,6 @@ export const invitationGroup = pgTable(
 export type UserGroup = typeof userGroup.$inferSelect;
 export type UserGroupMember = typeof userGroupMember.$inferSelect;
 export type ProjectGroup = typeof projectGroup.$inferSelect;
+export type TaskGroup = typeof taskGroup.$inferSelect;
 export type ManagedUser = typeof managedUser.$inferSelect;
 export type ManagedGroup = typeof managedGroup.$inferSelect;

@@ -17,7 +17,8 @@ workspace ──< client
 workspace ──< project >── client   (nullable, ON DELETE RESTRICT)
 project ──< project_member >── user   (who may see a PRIVATE project)
 project ──< project_favorite >── user
-project ──< task ──< task_assignee >── user
+project ──< task ──< task_assignee >── user   (deprecated 2026-10-29; unread)
+task ──< task_group >── user_group            (tasks by group, decision 11)
 workspace ──< tag
 workspace ──< time_entry >── user
 time_entry >── project      (nullable, ON DELETE SET NULL)
@@ -81,7 +82,9 @@ One row per workspace, created in the same transaction as the workspace.
 | rounding_minutes | smallint (1, 5, 6, 10, 12, 15, 30 or 60) | `15` |
 | hidden_pages | text[] of `projects`, `team`, `reports` | `{}` |
 | members_see_team_time | boolean | `false` |
-| project_creators, client_creators, task_creators, tag_creators | enum `creator_setting` (`admins`, `managers`, `everyone`) | `admins` |
+| project_creators, client_creators, tag_creators | enum `creator_setting` (`admins`, `managers`, `everyone`) | `admins` |
+| task_creators | enum `creator_setting` | `admins`; **unread since 2026-10-29** (tasks are created by owners, admins and project managers); kept for a later contract migration |
+| task_visibility | enum `task_visibility` (`EVERYONE`, `BY_GROUP`) | `EVERYONE` (0012); `BY_GROUP` shows members only the tasks of their groups (decision 11) |
 | required_fields | text[] of `project`, `task`, `tag`, `description` | `{}` |
 | force_timer | boolean | `false` |
 | allow_breaks | boolean | `false` |
@@ -161,7 +164,18 @@ Both `(project_id → project cascade, user_id → user cascade)` with a composi
 | status | `task_status` | `ACTIVE` or `DONE`; done tasks keep their entries but take no new time |
 | created_at, updated_at | timestamptz | |
 
-`task_assignee` `(task_id, user_id)` is informational in Phase 2.
+`task_assignee` `(task_id, user_id)` is **deprecated since 2026-10-29**: kept with its data and foreign keys, never read for access, no longer edited by the UI; a later contract migration drops it.
+
+### task_group
+
+A group a task belongs to (decision 11 of the Phase 4 design, "tasks by group", migration 0012). When `workspace_settings.task_visibility` is `BY_GROUP`, a member sees and tracks on an active task only through one of its groups.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| task_id | text → task (cascade) | composite PK with `group_id` |
+| group_id | text → user_group (cascade) | indexed (`task_group_group_id_idx`); deleting a group takes its rows with it, so the task may become a "No group" task |
+| assigned_by | text? → user (set null) | who assigned it |
+| created_at | timestamptz | |
 
 ### tag
 

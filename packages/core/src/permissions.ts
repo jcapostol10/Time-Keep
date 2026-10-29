@@ -52,6 +52,10 @@ export type Action = (typeof ACTIONS)[number];
 
 export const CREATOR_SETTINGS = ["admins", "managers", "everyone"] as const;
 export type CreatorSetting = (typeof CREATOR_SETTINGS)[number];
+
+/** Who sees a task: everyone (today's behaviour) or only the members of its groups. */
+export const TASK_VISIBILITY = ["EVERYONE", "BY_GROUP"] as const;
+export type TaskVisibility = (typeof TASK_VISIBILITY)[number];
 export type CatalogType = "project" | "client" | "task" | "tag";
 
 /** The workspace switches that change answers (Phase 4b makes them editable). */

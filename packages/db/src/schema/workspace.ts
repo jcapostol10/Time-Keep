@@ -18,6 +18,7 @@ import {
   durationFormatEnum,
   membershipStatusEnum,
   roundingModeEnum,
+  taskVisibilityEnum,
   timeFormatEnum,
   workspaceRoleEnum,
 } from "./enums";
@@ -125,6 +126,8 @@ export const workspaceSettings = pgTable(
     forceTimer: boolean("force_timer").notNull().default(false),
     /** Break entries may be tracked (decision 6). */
     allowBreaks: boolean("allow_breaks").notNull().default(false),
+    /** Tasks by group (decision 11): members see only the tasks of their groups. */
+    taskVisibility: taskVisibilityEnum("task_visibility").notNull().default("EVERYONE"),
     ...timestamps,
   },
   (t) => [primaryKey({ columns: [t.workspaceId] })],

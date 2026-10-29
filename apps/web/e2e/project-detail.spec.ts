@@ -29,11 +29,9 @@ test.describe("project detail", () => {
     await page.getByRole("button", { name: "Add task" }).click();
     const dialog = page.getByRole("dialog", { name: "New task" });
     await dialog.getByLabel("Name").fill("Design");
-    await dialog.getByRole("checkbox", { name: "Fresh Tester" }).check();
     await dialog.getByRole("button", { name: "Add task" }).click();
     await expect(dialog).toBeHidden();
     const row = page.getByRole("row", { name: /Design/ });
-    await expect(row.getByRole("img", { name: "Fresh Tester" })).toBeVisible();
 
     await rowAction(page, row, "Rename");
     const rename = page.getByRole("dialog", { name: "Rename task" });

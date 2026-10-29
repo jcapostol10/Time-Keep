@@ -125,7 +125,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Project detail
 
-- [x] Add a task with assignees — `project-detail.spec.ts` › "manage a project's tasks"
+- [x] Add a task — `project-detail.spec.ts` › "manage a project's tasks"
 - [x] Rename a task — `project-detail.spec.ts` › "manage a project's tasks"
 - [x] Mark a task done and reopen it — `project-detail.spec.ts` › "manage a project's tasks"
 - [x] A done task takes no new time and is hidden from the picker — `project-picker.spec.ts` › "a done task takes no new time and is hidden from the picker"

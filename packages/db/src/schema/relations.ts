@@ -18,7 +18,7 @@ import {
   userSettings,
 } from "./tracking";
 import { exportJob, reportShareLink } from "./reports";
-import { userGroup, userGroupMember } from "./team";
+import { taskGroup, userGroup, userGroupMember } from "./team";
 import { invitation, membership, workspace, workspaceSettings } from "./workspace";
 
 export const userRelations = relations(user, ({ many, one }) => ({
@@ -105,12 +105,18 @@ export const taskRelations = relations(task, ({ one, many }) => ({
   workspace: one(workspace, { fields: [task.workspaceId], references: [workspace.id] }),
   project: one(project, { fields: [task.projectId], references: [project.id] }),
   assignees: many(taskAssignee),
+  groups: many(taskGroup),
   timeEntries: many(timeEntry),
 }));
 
 export const taskAssigneeRelations = relations(taskAssignee, ({ one }) => ({
   task: one(task, { fields: [taskAssignee.taskId], references: [task.id] }),
   user: one(user, { fields: [taskAssignee.userId], references: [user.id] }),
+}));
+
+export const taskGroupRelations = relations(taskGroup, ({ one }) => ({
+  task: one(task, { fields: [taskGroup.taskId], references: [task.id] }),
+  group: one(userGroup, { fields: [taskGroup.groupId], references: [userGroup.id] }),
 }));
 
 export const tagRelations = relations(tag, ({ one, many }) => ({

@@ -11,7 +11,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@timekeep/ui/components/alert-dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@timekeep/ui/components/avatar";
 import { Button } from "@timekeep/ui/components/button";
 import {
   DropdownMenu,
@@ -34,34 +33,24 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import type { TaskDTO } from "@/lib/catalog-types";
-import { initials } from "@/lib/initials";
 import { deleteTaskAction, updateTaskAction } from "@/server/actions/tasks";
 
 import { TaskDialog } from "./task-dialog";
-
-export interface MemberOption {
-  id: string;
-  name: string;
-  image: string | null;
-}
 
 export function TasksTab({
   slug,
   projectId,
   tasks,
-  members,
 }: {
   slug: string;
   projectId: string;
   tasks: TaskDTO[];
-  members: MemberOption[];
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<TaskDTO | null>(null);
   const [deleting, setDeleting] = useState<TaskDTO | null>(null);
-  const byId = new Map(members.map((m) => [m.id, m]));
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
     startTransition(async () => {
@@ -83,7 +72,6 @@ export function TasksTab({
         <TableHeader>
           <TableRow>
             <TableHead>Task</TableHead>
-            <TableHead>Assignees</TableHead>
             <TableHead className="text-right">Tracked</TableHead>
             <TableHead className="w-0" />
           </TableRow>
@@ -92,27 +80,6 @@ export function TasksTab({
           {rows.map((t) => (
             <TableRow key={t.id}>
               <TableCell className="font-medium">{t.name}</TableCell>
-              <TableCell>
-                <div className="flex -space-x-2">
-                  {t.assigneeIds.map((id) => {
-                    const m = byId.get(id);
-                    if (!m) return null;
-                    return (
-                      <span key={id} role="img" aria-label={m.name} title={m.name}>
-                        <Avatar className="ring-background size-7 ring-2">
-                          {m.image ? <AvatarImage src={m.image} alt="" /> : null}
-                          <AvatarFallback className="text-[10px]">
-                            {initials(m.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                      </span>
-                    );
-                  })}
-                  {t.assigneeIds.length === 0 ? (
-                    <span className="text-muted-foreground text-sm">—</span>
-                  ) : null}
-                </div>
-              </TableCell>
               <TableCell className="text-right tabular-nums">
                 {formatDuration(t.trackedSeconds, "hh:mm:ss")}
               </TableCell>
@@ -182,7 +149,6 @@ export function TasksTab({
         <TaskDialog
           slug={slug}
           projectId={projectId}
-          members={members}
           open
           onOpenChange={(open) => !open && setCreating(false)}
         />
@@ -192,7 +158,6 @@ export function TasksTab({
           key={renaming.id}
           slug={slug}
           projectId={projectId}
-          members={members}
           task={renaming}
           open
           onOpenChange={(open) => !open && setRenaming(null)}
