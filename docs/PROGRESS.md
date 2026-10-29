@@ -218,13 +218,15 @@ The owner reversed the Phase 4 design's out-of-scope line "task assignees restri
 
 Rulings made while planning (the owner approved the plan on 2026-10-29): rule 8 binds on Stop and saves, never Start, for managers and members only, through the required-field plumbing; in By group mode a task is never created without a group, so the picker's inline "Create task" shows only in Everyone mode; the rule 10 refusal is a validation error on every path, crafted ids included; the actor's groups load only in By group mode; the Team page's "Tasks" and "Tasks available" are dialogs from the row menus; `task_creators` and `task_assignee` stay in the schema unread; the demo seed keeps the demo-tenant specs' expectations; the perf seed gains groups and tasks.
 
-- [ ] Data: migration 0012 (`task_group`, `workspace_settings.task_visibility`), the assignee UI hidden
-- [ ] Permissions: `task.trackTime`, `task.assignGroups`, actors carry their groups, tasks leave "who can create"
-- [ ] Reads: `visibleTasksFor` behind the pickers, filter options and the Tasks tab; the task-list coverage test
-- [ ] Writes: the check in the entry service on every path, favourites, import; `setTaskGroups` with rule 9
-- [ ] Templates copy task groups
-- [ ] UI: the setting and its confirmation, the Tasks tab, the Team page lists, the import's groups for new tasks
-- [ ] Seed, integration and e2e tests, perf, docs
+- [x] Data: migration 0012 (`task_group`, `workspace_settings.task_visibility`), the assignee UI hidden
+- [x] Permissions: `task.trackTime`, `task.assignGroups`, actors carry their groups, tasks leave "who can create"
+- [x] Reads: `visibleTasksFor` behind the pickers, filter options and the Tasks tab; the task-list coverage test
+- [x] Writes: the check in the entry service on every path, favourites, import; `setTaskGroups` with rule 9
+- [x] Templates copy task groups
+- [x] UI: the setting and its confirmation, the Tasks tab, the Team page lists, the import's groups for new tasks
+- [x] Seed, integration and e2e tests, perf, docs (`task-groups.test.ts`, `task-groups-writes.test.ts`, `task-visibility-coverage.test.ts`, `catalog/tasks.test.ts`, `catalog/templates.test.ts`; `task-groups.spec.ts`; perf in `docs/DATA_MODEL.md`)
+
+Rulings made while building (the owner has not reviewed these individually): rule 8 counts the project's active tasks visible or not, so a project whose tasks are all hidden from a person takes no untasked time from them (it is out of their picker anyway); `createTask` asserts `task.create` itself, so the import's commit and any later caller are held to it; the write-path tests live in one file on one fixture; the new e2e spec runs with a 180-second per-test timeout (each flow builds groups, projects and tasks through the UI); the "invitee" line is guarded by the acceptance hook, since the picker reads group membership in SQL. Two existing tests changed because the assignee UI is hidden: "manage a project's tasks" adds a task with a group instead of an assignee, and the templates test expects task groups on the copy.
 
 ## Phase 5 — Approvals, time off, attendance, reminders, kiosk
 

@@ -1,8 +1,10 @@
 /**
  * Times the one-year Summary over the perf tenant (pnpm db:seed:perf), for the
- * owner and for a scoped manager, and prints the plans of its queries; then
- * rates all 1,000,000 entries with the "apply to past entries" job. Fails
- * over the one-second Summary budget or the 300-second function budget.
+ * owner, a scoped manager and a member, plus the member's picker read with
+ * tasks by group, and prints the plans of the Summary's queries; then rates
+ * all 1,000,000 entries with the "apply to past entries" job. Fails over the
+ * one-second Summary budget, the 200 ms picker budget or the 300-second
+ * function budget.
  *
  *   pnpm --filter @timekeep/web report:perf
  *
@@ -12,11 +14,13 @@ import { DEFAULT_REPORT_QUERY, resolveViewerPrefs, type ReportQuery } from "@tim
 import { createDb, sql } from "@timekeep/db";
 
 import { loadViewer } from "../src/server/authz";
+import { listPickerProjects } from "../src/server/catalog/projects";
 import type { Viewer } from "../src/server/catalog/viewer";
 import { requestRateRecalc, runRateRecalcJob } from "../src/server/rate-recalc";
 import { summaryReport } from "../src/server/reports";
 
 const BUDGET_MS = 1000;
+const PICKER_BUDGET_MS = 200;
 const RECALC_BUDGET_MS = 300_000;
 
 async function main() {
@@ -73,7 +77,29 @@ async function main() {
       return mid;
     }
     const manager = await loadViewer(db, "perf-ws", "perf-user-2");
-    const plain = Math.max(await time("owner", viewer), await time("manager", manager));
+    const member = await loadViewer(db, "perf-ws", "perf-user-3");
+    const plain = Math.max(
+      await time("owner", viewer),
+      await time("manager", manager),
+      await time("member", member),
+    );
+    // The member's picker with tasks by group (decision 11): projects with their visible tasks.
+    await listPickerProjects(db, member);
+    const pickerRuns: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const t0 = performance.now();
+      const projects = await listPickerProjects(db, member);
+      pickerRuns.push(performance.now() - t0);
+      if (i === 0) {
+        const tasks = projects.reduce((n, p) => n + p.tasks.length, 0);
+        console.info(`[perf] member picker: ${projects.length} projects, ${tasks} visible tasks`);
+      }
+    }
+    pickerRuns.sort((a, b) => a - b);
+    const pickerMs = pickerRuns[2]!;
+    console.info(
+      `[perf] member picker (tasks by group): median ${pickerMs.toFixed(0)} ms (runs ${pickerRuns.map((r) => r.toFixed(0)).join(", ")})`,
+    );
     // With a rounding rule every entry is rounded and re-amounted in the scan.
     await db.execute(
       sql`update workspace_settings set rounding_mode = 'nearest', rounding_minutes = 15 where workspace_id = 'perf-ws'`,
@@ -111,6 +137,10 @@ async function main() {
     }
     if (median > BUDGET_MS) {
       console.error(`[perf] over budget: ${median.toFixed(0)} ms > ${BUDGET_MS} ms`);
+      process.exitCode = 1;
+    }
+    if (pickerMs > PICKER_BUDGET_MS) {
+      console.error(`[perf] picker over budget: ${pickerMs.toFixed(0)} ms > ${PICKER_BUDGET_MS} ms`);
       process.exitCode = 1;
     }
     if (recalcMs > RECALC_BUDGET_MS) {

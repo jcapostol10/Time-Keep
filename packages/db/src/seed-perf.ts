@@ -1,9 +1,10 @@
 /**
  * A large tenant for report performance work: workspace "perf", 25
  * @perf.test people, 12 projects, 1,000,000 stopped entries over three
- * years (about a third tagged), rates at every level, and a manager (person
- * 2) who manages people 3–8 and project 1. Local databases only; the e2e seed and
- * cleanup never touch @perf.test. Rebuilds from scratch each run.
+ * years (about a third tagged), rates at every level, a manager (person 2)
+ * who manages people 3–8 and project 1, and tasks by group (three groups,
+ * five tasks per project). Local databases only; the e2e seed and cleanup
+ * never touch @perf.test. Rebuilds from scratch each run.
  *
  *   pnpm db:seed:perf            then   pnpm --filter @timekeep/web report:perf
  */
@@ -83,6 +84,26 @@ async function main() {
       select 'perf-ws', 'perf-user-2', 'perf-user-' || g from generate_series(3, 8) g`);
     await db.execute(sql`
       insert into project_member (project_id, user_id, is_manager) values ('perf-p-1', 'perf-user-2', true)`);
+    // Tasks by group (decision 11): three groups over people 3–25, five tasks per
+    // project each in one group, and the workspace showing tasks by group, so the
+    // member's picker query is timed with the Summary.
+    await db.execute(
+      sql`update workspace_settings set task_visibility = 'BY_GROUP' where workspace_id = 'perf-ws'`,
+    );
+    await db.execute(sql`
+      insert into user_group (id, workspace_id, name)
+      select 'perf-g-' || g, 'perf-ws', 'Group ' || g from generate_series(1, 3) g`);
+    await db.execute(sql`
+      insert into user_group_member (group_id, user_id)
+      select 'perf-g-' || (1 + g % 3), 'perf-user-' || g from generate_series(3, ${USERS}) g`);
+    await db.execute(sql`
+      insert into task (id, workspace_id, project_id, name)
+      select 'perf-task-' || p || '-' || t, 'perf-ws', 'perf-p-' || p, 'Task ' || t
+      from generate_series(1, 12) p, generate_series(1, 5) t`);
+    await db.execute(sql`
+      insert into task_group (task_id, group_id)
+      select 'perf-task-' || p || '-' || t, 'perf-g-' || (1 + (p + t) % 3)
+      from generate_series(1, 12) p, generate_series(1, 5) t`);
     // Rates at every level, from the beginning; entries are left unrated for the
     // recalculation timing (report:perf rates them all).
     await db.execute(sql`

@@ -429,6 +429,14 @@ Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf`, 2026
 - One-year Summary with amounts: owner median 346 ms, manager 151 ms. Rounded to 15 minutes (`roundedSecondsSql` / `roundedAmountSql` in `packages/db/src/rounding-sql.ts`: a `CASE` per row inside the sums), 364 ms. Rounding costs about 5 %, so no rounded column is stored; it stays a report rule.
 - "Apply to past entries" over every entry: 91.5 s for 1,000,000 entries (the work-only predicate adds a column test per row), inside the 300 s budget.
 
+## Tasks by group at scale (2026-10-29)
+
+Measured on the perf tenant (`pnpm db:seed:perf` now adds three groups over people 3–25, five tasks per project each in one group, and `task_visibility = 'BY_GROUP'`) with `pnpm --filter @timekeep/web report:perf`, 2026-10-29, right after the seed (the machine busier than in the earlier runs):
+
+- One-year Summary with amounts: owner median 522 ms (334,000 entries), manager 299 ms, member 38 ms (13,000 entries); rounded to 15 minutes, owner 586 ms. The report engine does not read `task_group`: the rule changes what a person may pick, not what their entries count.
+- The member's picker with tasks by group (`listPickerProjects`, 12 projects, 20 visible tasks: one `visibleTasksFor` read with the group `EXISTS` per task): median 11 ms, against a 200 ms budget.
+- "Apply to past entries" over every entry: 117 s (the earlier runs: 76 s and 91 s; same code path, a loaded machine), inside the 300 s budget.
+
 ## Planned (later phases)
 
 Phase 5: `approval_request`, `lock_period`, `time_off_policy`, `time_off_request`, `holiday`, `kiosk`, `kiosk_pin`.

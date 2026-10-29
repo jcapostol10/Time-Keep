@@ -24,10 +24,12 @@ import {
   managedUser,
   membership,
   project,
+  projectGroup,
   projectMember,
   rate,
   tag,
   task,
+  taskGroup,
   timeEntry,
   favoriteEntry,
   timeEntryTag,
@@ -98,7 +100,12 @@ async function createWorkspace(
   db: DbExecutor,
   name: string,
   ownerId: string,
-  opts: { slug?: string; timezone?: string; allowBreaks?: boolean } = {},
+  opts: {
+    slug?: string;
+    timezone?: string;
+    allowBreaks?: boolean;
+    taskVisibility?: "EVERYONE" | "BY_GROUP";
+  } = {},
 ) {
   const taken = new Set(
     (await db.select({ slug: workspace.slug }).from(workspace)).map((r) => r.slug),
@@ -110,6 +117,7 @@ async function createWorkspace(
     workspaceId: id,
     timezone: opts.timezone ?? "UTC",
     allowBreaks: opts.allowBreaks ?? false,
+    taskVisibility: opts.taskVisibility ?? "EVERYONE",
   });
   await db.insert(membership).values({
     id: randomUUID(),
@@ -156,6 +164,8 @@ export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}
       slug: DEMO_WORKSPACE.slug,
       timezone: DEMO_WORKSPACE.timezone,
       allowBreaks: true, // the seeded lunch breaks must be something the demo users could add
+      // Tasks by group (decision 11): the demo shows the rule; seedTeamAndRates assigns the groups.
+      taskVisibility: "BY_GROUP",
     });
 
     for (const u of DEMO_USERS) {
@@ -221,6 +231,8 @@ const DEMO_PROJECTS: {
     tasks: ["Kickoff", "Handover"],
     template: true,
   },
+  // Tasks by group: its tasks belong to Finance only, so members outside Finance never see it.
+  { name: "Finance ops", client: 1, visibility: "PUBLIC", tasks: ["Invoicing", "Payroll"] },
 ];
 /** member2 is left off the private project so the demo tenant has a project a member cannot see. */
 const PRIVATE_PROJECT_MEMBERS = [
@@ -254,7 +266,12 @@ async function seedTrackerData(
   db: DbExecutor,
   workspaceId: string,
   ids: Map<string, string>,
-): Promise<{ projectIds: string[]; firstTaskIds: (string | null)[] }> {
+): Promise<{
+  projectIds: string[];
+  firstTaskIds: (string | null)[];
+  /** Task ids by "<project name>/<task name>", for the group assignments. */
+  taskIds: Map<string, string>;
+}> {
   const tz = DEMO_WORKSPACE.timezone;
   const clientIds = DEMO_CLIENTS.map(() => randomUUID());
   await db.insert(client).values(
@@ -290,6 +307,7 @@ async function seedTrackerData(
   if (privateMembers.length > 0) await db.insert(projectMember).values(privateMembers);
   // First task of each project; entries land on it.
   const firstTaskIds: (string | null)[] = [];
+  const taskIds = new Map<string, string>();
   const taskRows: (typeof task.$inferInsert)[] = [];
   DEMO_PROJECTS.forEach((p, i) => {
     const projectId = projectIds[i];
@@ -297,6 +315,7 @@ async function seedTrackerData(
     p.tasks.forEach((name, j) => {
       const id = randomUUID();
       if (j === 0) firstTaskIds[i] = id;
+      taskIds.set(`${p.name}/${name}`, id);
       taskRows.push({
         id,
         workspaceId,
@@ -424,19 +443,26 @@ async function seedTrackerData(
     if (entries.length > 0) await db.insert(timeEntry).values(entries);
     if (links.length > 0) await db.insert(timeEntryTag).values(links);
   }
-  return { projectIds, firstTaskIds };
+  return { projectIds, firstTaskIds, taskIds };
 }
 
 /**
- * Phase 4: two groups; the manager manages member1 and the Mobile app
- * project; a rate at every level (from before the first entry), and every
- * seeded entry rated with them through the same SQL the app uses.
+ * Phase 4: three groups and the tasks they see (decision 11: the demo shows
+ * tasks by group), the manager manages member1 and the Mobile app project, a
+ * rate at every level (from before the first entry), and every seeded entry
+ * rated with them through the same SQL the app uses.
+ *
+ * The group assignments keep the demo-tenant e2e specs true: member2 (Design,
+ * Engineering) keeps seeing Internal (Meetings) and never Mobile app, member1
+ * (Design, Finance) keeps Mobile app › iOS, and the manager (Engineering) keeps
+ * Website redesign in their picker. Internal › Admin is the task with no group;
+ * Mobile app's tasks give Finance the private project's access (rule 9).
  */
 async function seedTeamAndRates(
   db: DbExecutor,
   workspaceId: string,
   ids: Map<string, string>,
-  catalog: { projectIds: string[]; firstTaskIds: (string | null)[] },
+  catalog: { projectIds: string[]; firstTaskIds: (string | null)[]; taskIds: Map<string, string> },
 ) {
   const user = (email: string) => {
     const id = ids.get(email);
@@ -445,20 +471,52 @@ async function seedTeamAndRates(
   };
   const groups = [
     { name: "Design", members: ["member1@demo.test", "member2@demo.test"] },
-    { name: "Developers", members: ["admin@demo.test", "member2@demo.test"] },
+    { name: "Engineering", members: ["admin@demo.test", "manager@demo.test", "member2@demo.test"] },
+    { name: "Finance", members: ["member1@demo.test"] },
   ];
+  const groupIds = new Map<string, string>();
   for (const g of groups) {
     const groupId = randomUUID();
+    groupIds.set(g.name, groupId);
     await db.insert(userGroup).values({ id: groupId, workspaceId, name: g.name });
     await db
       .insert(userGroupMember)
       .values(g.members.map((email) => ({ groupId, userId: user(email) })));
   }
+  const group = (name: string) => {
+    const id = groupIds.get(name);
+    if (!id) throw new Error(`seed: group ${name} missing`);
+    return id;
+  };
+  const taskOf = (key: string) => {
+    const id = catalog.taskIds.get(key);
+    if (!id) throw new Error(`seed: task ${key} missing`);
+    return id;
+  };
+  const assignments: [task: string, groups: string[]][] = [
+    ["Website redesign/Design", ["Design"]],
+    ["Website redesign/Development", ["Engineering"]],
+    ["Mobile app/iOS", ["Finance"]],
+    ["Mobile app/Android", ["Finance"]],
+    ["Internal/Meetings", ["Design", "Engineering"]],
+    // Internal/Admin stays without a group: the "No group" case.
+    ["Client onboarding/Kickoff", ["Design"]],
+    ["Client onboarding/Handover", ["Design"]],
+    ["Finance ops/Invoicing", ["Finance"]],
+    ["Finance ops/Payroll", ["Finance"]],
+  ];
+  await db.insert(taskGroup).values(
+    assignments.flatMap(([key, names]) =>
+      names.map((name) => ({ taskId: taskOf(key), groupId: group(name), assignedBy: user("owner@demo.test") })),
+    ),
+  );
 
   const manager = user("manager@demo.test");
   const [website, mobile] = catalog.projectIds;
   const ios = catalog.firstTaskIds[1];
   if (!website || !mobile || !ios) throw new Error("seed: projects or tasks missing");
+  // Rule 9: Finance's tasks on the private Mobile app give the group its access.
+  await db.insert(projectGroup).values({ projectId: mobile, groupId: group("Finance") });
   await db
     .insert(managedUser)
     .values({ workspaceId, managerId: manager, userId: user("member1@demo.test") });
