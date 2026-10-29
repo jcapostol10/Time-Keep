@@ -41,7 +41,7 @@ import {
   rate,
   sql,
   task,
-  taskAssignee,
+  taskGroup,
   timeEntry,
   userGroup,
 } from "@timekeep/db";
@@ -292,7 +292,7 @@ export async function listTemplates(
 
 /**
  * A copy of a project (Phase 4b templates): its settings, unless the caller
- * overrides them, its active tasks with their assignees, its members with
+ * overrides them, its active tasks with their groups, its members with
  * their manager flag, its groups, and the rates in force now at the project,
  * project-member and task levels, written as new rows effective from now.
  * The source must be visible to the caller; the caller's `project.create`
@@ -314,9 +314,9 @@ export async function copyProject(
     .from(task)
     .where(and(eq(task.projectId, sourceId), eq(task.status, "ACTIVE")));
   const taskIds = tasks.map((t) => t.id);
-  const [assignees, members, groups, rateRows] = await Promise.all([
+  const [taskGroups, members, groups, rateRows] = await Promise.all([
     taskIds.length > 0
-      ? db.select().from(taskAssignee).where(inArray(taskAssignee.taskId, taskIds))
+      ? db.select().from(taskGroup).where(inArray(taskGroup.taskId, taskIds))
       : [],
     db.select().from(projectMember).where(eq(projectMember.projectId, sourceId)),
     db.select().from(projectGroup).where(eq(projectGroup.projectId, sourceId)),
@@ -371,10 +371,15 @@ export async function copyProject(
         })),
       );
     }
-    if (assignees.length > 0) {
-      await tx
-        .insert(taskAssignee)
-        .values(assignees.map((a) => ({ taskId: taskMap.get(a.taskId)!, userId: a.userId })));
+    // Decision 11: a copy carries the tasks' groups (task_assignee is unread).
+    if (taskGroups.length > 0) {
+      await tx.insert(taskGroup).values(
+        taskGroups.map((g) => ({
+          taskId: taskMap.get(g.taskId)!,
+          groupId: g.groupId,
+          assignedBy: viewer.userId,
+        })),
+      );
     }
     if (members.length > 0) {
       await tx.insert(projectMember).values(
