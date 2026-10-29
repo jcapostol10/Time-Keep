@@ -48,12 +48,17 @@ import {
 import type { SQL } from "drizzle-orm";
 
 import type { ProjectDetail, ProjectListItem, ProjectStatus } from "@/lib/catalog-types";
-import type { PickerProject } from "@/lib/tracker-types";
+import type { PickerProject, PickerTask } from "@/lib/tracker-types";
 
 import { CatalogError, isUniqueViolation } from "./errors";
 import { scopeFilter } from "../authz";
+import { visibleTasksFor } from "./tasks";
 import { type Viewer, visibleProjectFilter } from "./viewer";
-import { reassignProjectEntries, softDeleteProjectEntries } from "../time-entries";
+import {
+  type EntryScope,
+  reassignProjectEntries,
+  softDeleteProjectEntries,
+} from "../time-entries";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
 
@@ -228,27 +233,43 @@ export async function listPickerProjects(db: Executor, viewer: Viewer): Promise<
     ),
     with: {
       client: { columns: { name: true } },
-      tasks: {
-        where: eq(task.status, "ACTIVE"),
-        columns: { id: true, name: true },
-        orderBy: asc(task.name),
-      },
       favorites: { where: eq(projectFavorite.userId, viewer.userId), columns: { userId: true } },
     },
   });
+  // Tasks come from the one task-visibility read (decision 11): the visible
+  // ones are listed, and a project with active tasks the viewer cannot see at
+  // all is left out (rule 8). A project with no tasks behaves as always.
+  const tasks = await visibleTasksFor(db, viewer, {
+    projectIds: rows.map((r) => r.id),
+    includeHidden: true,
+  });
+  const byProject = new Map<string, { visible: PickerTask[]; hidden: number }>();
+  for (const t of tasks) {
+    const entry = byProject.get(t.projectId) ?? { visible: [], hidden: 0 };
+    if (t.visible) entry.visible.push({ id: t.id, name: t.name });
+    else entry.hidden++;
+    byProject.set(t.projectId, entry);
+  }
+  // The inline "Create task" runs as the signed-in person, even on someone else's entries.
+  const actor = (viewer as EntryScope).actedBy ?? viewer.actor;
   return rows
-    .map((r): PickerProject => ({
-      id: r.id,
-      name: r.name,
-      color: r.color,
-      clientId: r.clientId,
-      clientName: r.client?.name ?? null,
-      billable: r.billable,
-      favorite: r.favorites.length > 0,
-      tasks: r.tasks,
-      // Filled by the task-visibility read (Task 4 of the task-groups plan).
-      canCreateTask: false,
-    }))
+    .flatMap((r): PickerProject[] => {
+      const t = byProject.get(r.id) ?? { visible: [], hidden: 0 };
+      if (t.visible.length === 0 && t.hidden > 0) return [];
+      return [
+        {
+          id: r.id,
+          name: r.name,
+          color: r.color,
+          clientId: r.clientId,
+          clientName: r.client?.name ?? null,
+          billable: r.billable,
+          favorite: r.favorites.length > 0,
+          tasks: t.visible,
+          canCreateTask: can(actor, "task.create", { kind: "task", projectId: r.id }),
+        },
+      ];
+    })
     .sort(comparePicker);
 }
 

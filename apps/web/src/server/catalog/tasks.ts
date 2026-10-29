@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import type { TaskInput, TaskPatch } from "@timekeep/core";
+import { can, type TaskInput, type TaskPatch } from "@timekeep/core";
 import {
   and,
   asc,
@@ -12,23 +12,107 @@ import {
   isNotNull,
   isNull,
   membership,
+  or,
+  project,
   sql,
   task,
   taskAssignee,
+  taskGroup,
   timeEntry,
+  userGroup,
 } from "@timekeep/db";
+import type { SQL } from "drizzle-orm";
 
-import type { TaskDTO } from "@/lib/catalog-types";
+import type { TaskAccessDTO, TaskDTO } from "@/lib/catalog-types";
 
+import { assertCan, loadViewer } from "../authz";
 import { CatalogError, isUniqueViolation } from "./errors";
 import { requireVisibleProject } from "./projects";
-import type { Viewer } from "./viewer";
+import { type Viewer, visibleProjectFilter } from "./viewer";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
 
 const DUPLICATE_NAME = "A task with this name already exists in this project.";
 
-type TaskRow = typeof task.$inferSelect & { assignees: { userId: string }[] };
+type TaskRow = typeof task.$inferSelect & {
+  assignees: { userId: string }[];
+  groups: { groupId: string }[];
+};
+
+const taskRelations = {
+  assignees: { columns: { userId: true } },
+  groups: { columns: { groupId: true } },
+} as const;
+
+/** An active task as the pickers and the access lists see it (decision 11). */
+export interface VisibleTask {
+  id: string;
+  projectId: string;
+  name: string;
+  groupIds: string[];
+  /** Whether the viewer may track on it; always true unless tasks are by group. */
+  visible: boolean;
+}
+
+/**
+ * SQL for the tasks `viewer` may track on: none when every task is open to
+ * them (everyone mode, owners, admins); otherwise the tasks of a group they
+ * belong to, plus every task on a project they manage (rules 3, 6 and 7:
+ * a task with no group matches nobody). Combine with the project filter.
+ */
+function taskVisibilityFilter(viewer: Viewer): SQL | undefined {
+  // Whoever may track on a task with no group (owners, admins, everyone mode) sees all.
+  const unfiltered = can(viewer.actor, "task.trackTime", {
+    kind: "task",
+    projectId: "",
+    groupIds: [],
+  });
+  if (unfiltered) return undefined;
+  const throughGroups = sql`EXISTS (SELECT 1 FROM "task_group" tg JOIN "user_group_member" gm ON gm."group_id" = tg."group_id" WHERE tg."task_id" = ${task.id} AND gm."user_id" = ${viewer.userId})`;
+  const managed = [...viewer.actor.managedProjectIds];
+  return managed.length > 0 ? or(inArray(task.projectId, managed), throughGroups) : throughGroups;
+}
+
+/**
+ * The one source of member-facing task lists: ACTIVE tasks on the viewer's
+ * visible, live, non-template projects, filtered by `taskVisibilityFilter`
+ * (or marked by it with `includeHidden`). Ordered by project, then name.
+ */
+export async function visibleTasksFor(
+  db: Executor,
+  viewer: Viewer,
+  opts: { projectIds?: string[]; includeHidden?: boolean } = {},
+): Promise<VisibleTask[]> {
+  if (opts.projectIds && opts.projectIds.length === 0) return [];
+  const filter = taskVisibilityFilter(viewer);
+  const rows = await db
+    .select({
+      id: task.id,
+      projectId: task.projectId,
+      name: task.name,
+      groupIds: sql<
+        string[]
+      >`coalesce(array_agg(${taskGroup.groupId} ORDER BY ${taskGroup.groupId}) FILTER (WHERE ${taskGroup.groupId} IS NOT NULL), '{}')`,
+      visible: filter ? sql<boolean>`(${filter})` : sql<boolean>`true`,
+    })
+    .from(task)
+    .innerJoin(project, eq(project.id, task.projectId))
+    .leftJoin(taskGroup, eq(taskGroup.taskId, task.id))
+    .where(
+      and(
+        eq(task.workspaceId, viewer.workspaceId),
+        eq(task.status, "ACTIVE"),
+        eq(project.archived, false),
+        eq(project.isTemplate, false),
+        visibleProjectFilter(viewer),
+        opts.projectIds ? inArray(task.projectId, opts.projectIds) : undefined,
+        opts.includeHidden ? undefined : filter,
+      ),
+    )
+    .groupBy(task.id, task.projectId, task.name, project.name)
+    .orderBy(asc(project.name), asc(task.name));
+  return rows.map((r) => ({ ...r, groupIds: [...r.groupIds], visible: Boolean(r.visible) }));
+}
 
 /** Tracked seconds and live entry counts per task of a project. */
 async function usageByTask(
@@ -64,6 +148,7 @@ function toDTO(row: TaskRow, usage: { seconds: number; entries: number } | undef
     name: row.name,
     status: row.status,
     assigneeIds: row.assignees.map((a) => a.userId).sort(),
+    groupIds: row.groups.map((g) => g.groupId).sort(),
     trackedSeconds: usage?.seconds ?? 0,
     entryCount: usage?.entries ?? 0,
   };
@@ -73,7 +158,7 @@ function toDTO(row: TaskRow, usage: { seconds: number; entries: number } | undef
 async function requireVisibleTask(db: Executor, viewer: Viewer, taskId: string): Promise<TaskRow> {
   const row = await db.query.task.findFirst({
     where: and(eq(task.id, taskId), eq(task.workspaceId, viewer.workspaceId)),
-    with: { assignees: { columns: { userId: true } } },
+    with: taskRelations,
   });
   if (!row) throw new CatalogError("NOT_FOUND", "Task not found.");
   try {
@@ -108,7 +193,11 @@ async function replaceAssignees(db: Executor, taskId: string, userIds: string[])
   }
 }
 
-/** A project's tasks, alphabetical, with assignees and tracked time. */
+/**
+ * A project's tasks, alphabetical, with their groups and tracked time. Whoever
+ * edits the project's tasks (admins, its managers) sees every task, ACTIVE and
+ * DONE; anyone else sees the active tasks `visibleTasksFor` gives them.
+ */
 export async function listTasks(
   db: Executor,
   viewer: Viewer,
@@ -117,11 +206,112 @@ export async function listTasks(
   await requireVisibleProject(db, viewer, projectId);
   const rows = await db.query.task.findMany({
     where: eq(task.projectId, projectId),
-    with: { assignees: { columns: { userId: true } } },
+    with: taskRelations,
     orderBy: asc(task.name),
   });
+  const manages = can(viewer.actor, "task.update", { kind: "task", projectId });
+  const listed = manages
+    ? rows
+    : await (async () => {
+        const allowed = new Set((await visibleTasksFor(db, viewer, { projectIds: [projectId] })).map((t) => t.id));
+        return rows.filter((r) => allowed.has(r.id));
+      })();
   const usage = await usageByTask(db, projectId);
-  return rows.map((r) => toDTO(r, usage.get(r.id)));
+  return listed.map((r) => toDTO(r, usage.get(r.id)));
+}
+
+/** ACTIVE tasks on live, non-template projects that no group has yet (the "By group" confirmation). */
+export async function countTasksWithoutGroup(db: Executor, workspaceId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(task)
+    .innerJoin(project, eq(project.id, task.projectId))
+    .where(
+      and(
+        eq(task.workspaceId, workspaceId),
+        eq(task.status, "ACTIVE"),
+        eq(project.archived, false),
+        eq(project.isTemplate, false),
+        sql`NOT EXISTS (SELECT 1 FROM "task_group" tg WHERE tg."task_id" = ${task.id})`,
+      ),
+    );
+  return row?.n ?? 0;
+}
+
+/** Project and group names for a list of visible tasks, grouped by project. */
+async function toAccessDTO(
+  db: Executor,
+  workspaceId: string,
+  tasks: VisibleTask[],
+): Promise<TaskAccessDTO> {
+  const projectIds = [...new Set(tasks.map((t) => t.projectId))];
+  const groupIds = [...new Set(tasks.flatMap((t) => t.groupIds))];
+  const [projects, groups] = await Promise.all([
+    projectIds.length
+      ? db
+          .select({ id: project.id, name: project.name })
+          .from(project)
+          .where(and(eq(project.workspaceId, workspaceId), inArray(project.id, projectIds)))
+      : Promise.resolve([]),
+    groupIds.length
+      ? db
+          .select({ id: userGroup.id, name: userGroup.name })
+          .from(userGroup)
+          .where(and(eq(userGroup.workspaceId, workspaceId), inArray(userGroup.id, groupIds)))
+      : Promise.resolve([]),
+  ]);
+  const projectName = new Map(projects.map((p) => [p.id, p.name]));
+  const groupName = new Map(groups.map((g) => [g.id, g.name]));
+  const byProject = new Map<string, TaskAccessDTO["byProject"][number]>();
+  for (const t of tasks) {
+    const entry = byProject.get(t.projectId) ?? {
+      projectId: t.projectId,
+      projectName: projectName.get(t.projectId) ?? "",
+      tasks: [],
+    };
+    entry.tasks.push({
+      id: t.id,
+      name: t.name,
+      groupNames: t.groupIds.flatMap((g) => groupName.get(g) ?? []).sort(),
+    });
+    byProject.set(t.projectId, entry);
+  }
+  return {
+    byProject: [...byProject.values()]
+      .map((p) => ({ ...p, tasks: p.tasks.sort((a, b) => a.name.localeCompare(b.name)) }))
+      .sort((a, b) => a.projectName.localeCompare(b.projectName)),
+  };
+}
+
+/** The active tasks a group gives its members, by project (the Team page's "Tasks"). */
+export async function listGroupTasks(
+  db: Executor,
+  viewer: Viewer,
+  groupId: string,
+): Promise<TaskAccessDTO> {
+  assertCan(viewer.actor, "group.manage", { kind: "none" });
+  const [group] = await db
+    .select({ id: userGroup.id })
+    .from(userGroup)
+    .where(and(eq(userGroup.id, groupId), eq(userGroup.workspaceId, viewer.workspaceId)));
+  if (!group) throw new CatalogError("NOT_FOUND", "Group not found.");
+  const all = await visibleTasksFor(db, viewer, { includeHidden: true });
+  return toAccessDTO(
+    db,
+    viewer.workspaceId,
+    all.filter((t) => t.groupIds.includes(groupId)),
+  );
+}
+
+/** The active tasks a member can see, by project (the Team page's "Tasks available"). */
+export async function listTasksAvailableTo(
+  db: Executor,
+  viewer: Viewer,
+  userId: string,
+): Promise<TaskAccessDTO> {
+  assertCan(viewer.actor, "group.manage", { kind: "none" });
+  const target = await loadViewer(db, viewer.workspaceId, userId);
+  return toAccessDTO(db, viewer.workspaceId, await visibleTasksFor(db, target));
 }
 
 export async function createTask(

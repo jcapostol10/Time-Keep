@@ -53,6 +53,22 @@ async function requireGroup(db: Database, viewer: Viewer, groupId: string) {
   return row;
 }
 
+/**
+ * Group names only, for choosers outside the Team page (the task dialogs, the
+ * import's "Groups for new tasks"). No `group.manage`: the callers' pages and
+ * routes gate access, and names are what the Team page shows every manager.
+ */
+export async function listGroupOptions(
+  db: Pick<Database, "select">,
+  viewer: Pick<Viewer, "workspaceId">,
+): Promise<{ id: string; name: string }[]> {
+  return db
+    .select({ id: userGroup.id, name: userGroup.name })
+    .from(userGroup)
+    .where(eq(userGroup.workspaceId, viewer.workspaceId))
+    .orderBy(asc(userGroup.name));
+}
+
 export async function listGroups(db: Database, viewer: Viewer): Promise<GroupDTO[]> {
   const [groups, members] = await Promise.all([
     db

@@ -56,10 +56,22 @@ export interface TaskDTO {
   projectId: string;
   name: string;
   status: "ACTIVE" | "DONE";
+  /** Kept for the data; no longer edited or read for access (decision 11). */
   assigneeIds: string[];
+  /** The groups whose members see and track on the task when tasks are by group. */
+  groupIds: string[];
   trackedSeconds: number;
   /** Live entries on the task; the delete dialog says how many lose it. */
   entryCount: number;
+}
+
+/** The tasks a group gives, or a person can see: the Team page's lists (decision 11). */
+export interface TaskAccessDTO {
+  byProject: {
+    projectId: string;
+    projectName: string;
+    tasks: { id: string; name: string; groupNames: string[] }[];
+  }[];
 }
 
 /** One saved set of timesheet rows. */

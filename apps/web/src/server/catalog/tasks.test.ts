@@ -50,6 +50,8 @@ describe("tasks service", () => {
       name: "Design",
       status: "ACTIVE",
       assigneeIds: [member.userId],
+      // No groups until one is assigned (decision 11).
+      groupIds: [],
       trackedSeconds: 0,
     });
     await expect(
