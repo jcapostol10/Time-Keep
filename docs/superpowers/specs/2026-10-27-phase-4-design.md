@@ -42,6 +42,22 @@ Each half gets its own implementation plan, written when it starts (the 4b plan 
 14. **Share links never carry amounts unless asked.** The share dialog gains "Include amounts", offered only to someone who can see them. It is stored on the link and checked against the creator's current permissions when the link is read.
 15. **Permissions are code, and the doc is generated from it.** The matrix is a typed table in `packages/core/src/permissions.ts`. `pnpm permissions:doc` writes `docs/PERMISSIONS.md` from it, and a test fails when the checked-in doc is stale. A second test fails when an exported server action or JSON route handler does not call `authorize` (the guard that "every server action and route handler uses it").
 
+**11 (change request, 2026-10-29). Tasks by group.** The owner's decision, numbered 11 in the request, reverses the former out-of-scope line "task assignees restricting who may track". Departments are the existing user groups (`user_group` / `user_group_member`); no new entity, and the UI keeps the word "Groups". The rule:
+
+1. New workspace setting "Task visibility": EVERYONE (default, today's behaviour) or BY_GROUP. Everything below applies only when it is BY_GROUP. Switching it on shows a confirmation listing how many active tasks have no group yet.
+2. A task is assigned to one or more groups. People are not assigned to tasks individually.
+3. A member sees and may track time on an ACTIVE task only if they belong to at least one of the task's groups. A person in several groups sees the union of all their groups' tasks.
+4. Joining a group (added on the Team page, via an invitation with groups, via CSV user import) makes its tasks appear at once. Leaving a group or being deactivated makes them disappear.
+5. Only owners, admins and managers of that project (`project_member.is_manager`) create tasks and set or change a task's groups. Members never create tasks: not inline in the project picker, not through the "Who can create" workspace rule, not through CSV import.
+6. Owners and admins see all tasks. Managers see every task on projects they manage, plus the tasks of the groups they belong to.
+7. Tasks with no group are invisible to members; managers and admins see a "No group" badge and filter.
+8. On a project with at least one active task the member can see, the member must pick one of those tasks ("no task" is refused). A member's project picker shows a project only if it is visible to them AND (it has no active tasks at all OR they can see at least one of its active tasks). Projects with no tasks behave as today.
+9. Private projects: giving a group a task on a private project also adds that group to the project's access (`project_group`) in the same transaction, after the dialog says so. Removing the last such task does not remove project access.
+10. Existing entries are never changed. A member keeps seeing their own past entries on a task they can no longer see, and may still edit their times, description, tags and billable flag, and split them. Changing the project or task, Continue, Duplicate and starting a favourite on such a task are refused with "This task isn't available to your groups."
+11. When time is added for someone else (add-for-others, bulk edit of others' entries, import with an Email column), the check runs against the entry owner's groups, not the actor's.
+
+How it combines with decision 5 (required fields): rule 8 binds where required fields bind, on Stop and on every save, never when a timer starts, and it reuses the same refusal ("Task is required."); it applies to an entry owner whose role is manager or member, since owners and admins see every task. With "task required" switched on as well, the required task must be one the entry owner can see. `task_assignee` stays in the schema with its data but is no longer read for access, and tasks leave the "who can create" setting (`task_creators` is kept, unread). With EVERYONE nothing changes. Plan: `docs/superpowers/plans/2026-10-29-task-groups.md`.
+
 ## Part 1 — Roles and permissions
 
 `packages/core/src/permissions.ts` (pure, no I/O):
@@ -175,7 +191,6 @@ Every table enables RLS. `docs/DATA_MODEL.md` gains them, and the recalculation 
 - An audit log of who changed what (Phase 8).
 - Who-edited-this on entries.
 - Timers for other people.
-- Task assignees restricting who may track (`task_assignee` stays informational).
 
 ## Risks
 

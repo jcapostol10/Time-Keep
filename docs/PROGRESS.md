@@ -200,6 +200,32 @@ Bugs found while building 4b and fixed: the bulk edit dialog could apply before 
 
 Bugs found while building 4a and fixed: `updated_at` mixed the database's and the app server's clocks, so an update could be stamped before its insert (two time-entry tests flaked); `setProjectMembers` deleted a project's managers with its member list; a new user's personal workspace was always UTC, so "New entries only" missed entries early in their day; the recalculation cursor lost microseconds and looped forever on its last entry (found by the perf run). The final review then found, and this branch fixed: a backdated or "All entries" rate lost to later rows at its level (it now replaces them); Better Auth's organization endpoints let a deactivated admin change roles and remove members (closed with `disabledPaths`; the app writes memberships itself); Better Auth's default limit of 100 invitations and members capped bulk invite and import; a request merged into a waiting job kept that job's cursor and a failed job's entries were left behind (both now fold into one job started over, and polling fails a killed job and starts a stuck one); removing a member deleted their rates, so a later recalculation shifted their past amounts; the reports had no Groups filter.
 
+### Tasks by group (change request, 2026-10-29)
+
+The owner reversed the Phase 4 design's out-of-scope line "task assignees restricting who may track": decision 11 of `docs/superpowers/specs/2026-10-27-phase-4-design.md`; plan `docs/superpowers/plans/2026-10-29-task-groups.md`. Departments are the existing groups. The rule, one line each:
+
+1. Workspace setting "Task visibility": Everyone (default, today) or By group; switching it on confirms with the count of active tasks without a group.
+2. A task belongs to one or more groups; people are never assigned to tasks individually.
+3. A member sees and tracks an active task only through one of its groups; several groups give the union.
+4. Joining a group (Team page, invitation with groups, CSV user import) shows its tasks at once; leaving or deactivation hides them.
+5. Only owners, admins and the project's managers create tasks and set their groups; members never (not inline, not through "Who can create", not through CSV import).
+6. Owners and admins see every task; managers see their managed projects' tasks plus their own groups'.
+7. Tasks with no group are invisible to members; admins and managers see a "No group" badge and filter.
+8. On a project with a visible active task the member must pick one; a member's picker lists a project only when it has no active tasks or one they can see.
+9. A group given a task on a private project gets the project's access in the same transaction; removing the last task keeps it.
+10. Existing entries are untouched: times, description, tags, billable and split still work; project or task changes, Continue, Duplicate and favourites on an unavailable task are refused with "This task isn't available to your groups."
+11. Time added for someone else is checked against the entry owner's groups.
+
+Rulings made while planning (the owner approved the plan on 2026-10-29): rule 8 binds on Stop and saves, never Start, for managers and members only, through the required-field plumbing; in By group mode a task is never created without a group, so the picker's inline "Create task" shows only in Everyone mode; the rule 10 refusal is a validation error on every path, crafted ids included; the actor's groups load only in By group mode; the Team page's "Tasks" and "Tasks available" are dialogs from the row menus; `task_creators` and `task_assignee` stay in the schema unread; the demo seed keeps the demo-tenant specs' expectations; the perf seed gains groups and tasks.
+
+- [ ] Data: migration 0012 (`task_group`, `workspace_settings.task_visibility`), the assignee UI hidden
+- [ ] Permissions: `task.trackTime`, `task.assignGroups`, actors carry their groups, tasks leave "who can create"
+- [ ] Reads: `visibleTasksFor` behind the pickers, filter options and the Tasks tab; the task-list coverage test
+- [ ] Writes: the check in the entry service on every path, favourites, import; `setTaskGroups` with rule 9
+- [ ] Templates copy task groups
+- [ ] UI: the setting and its confirmation, the Tasks tab, the Team page lists, the import's groups for new tasks
+- [ ] Seed, integration and e2e tests, perf, docs
+
 ## Phase 5 — Approvals, time off, attendance, reminders, kiosk
 
 - [ ] Approval periods and state machine; lock dates
