@@ -58,13 +58,14 @@ export async function addMember(
  */
 export function asViewer(
   v: { workspaceId: string; userId: string; role: Role },
-  scope: { userIds?: string[]; projectIds?: string[] } = {},
+  scope: { userIds?: string[]; projectIds?: string[]; groupIds?: string[] } = {},
 ): Viewer {
   const actor: Actor = {
     userId: v.userId,
     role: v.role,
     managedUserIds: new Set(scope.userIds ?? []),
     managedProjectIds: new Set(scope.projectIds ?? []),
+    groupIds: new Set(scope.groupIds ?? []),
     settings: DEFAULT_PERMISSION_SETTINGS,
   };
   return { ...v, actor };

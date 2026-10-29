@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
+
 import { can } from "@timekeep/core";
-import { eq, workspaceSettings } from "@timekeep/db";
+import { eq, userGroup, userGroupMember, workspaceSettings } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -82,5 +84,17 @@ describe("workspace rules reach the matrix", () => {
     expect(can(bob.actor, "entry.writeTimes", own(bobId))).toBe(false);
     expect(can(ann.actor, "entry.writeTimes", own(annId))).toBe(true);
     expect(can(ann.actor, "entry.writeTimes", own(bobId))).toBe(true);
+  });
+
+  it("carries the actor's groups only when tasks are shown by group", async () => {
+    const groupId = randomUUID();
+    await db.insert(userGroup).values({ id: groupId, workspaceId: wsId, name: "Design" });
+    await db.insert(userGroupMember).values({ groupId, userId: bobId });
+
+    expect((await loadViewer(db, wsId, bobId)).actor.groupIds.size).toBe(0);
+
+    await setRules({ taskVisibility: "BY_GROUP" });
+    expect([...(await loadViewer(db, wsId, bobId)).actor.groupIds]).toEqual([groupId]);
+    expect((await loadViewer(db, wsId, annId)).actor.groupIds.size).toBe(0);
   });
 });

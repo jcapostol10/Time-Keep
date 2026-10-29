@@ -59,8 +59,10 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 
 | Action | Owner | Admin | Manager | Member |
 | --- | --- | --- | --- | --- |
-| `task.create` | yes | yes | if the workspace allows | if the workspace allows |
+| `task.create` | yes | yes | projects they manage | — |
 | `task.update` | yes | yes | projects they manage | — |
+| `task.assignGroups` | yes | yes | projects they manage | — |
+| `task.trackTime` | yes | yes | every task, or when tasks are by group: their groups' tasks and projects they manage | every task, or when tasks are by group: their groups' tasks and projects they manage |
 
 ## Tags
 

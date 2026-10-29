@@ -211,7 +211,6 @@ export function EntryRow({
         current={{ project: entry.project, task: entry.task }}
         compact
         canCreate={canCreate.project}
-        canCreateTask={canCreate.task}
         onChange={(sel) => save({ projectId: sel.projectId, taskId: sel.taskId })}
       />
       <TagPicker

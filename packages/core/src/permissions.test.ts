@@ -20,6 +20,8 @@ const MANAGED = "u-managed";
 const OTHER = "u-other";
 const MANAGED_PROJECT = "p-managed";
 const OTHER_PROJECT = "p-other";
+const MY_GROUP = "g-mine";
+const OTHER_GROUP = "g-other";
 
 function actor(role: Role, settings: Partial<PermissionSettings> = {}): Actor {
   const scoped = role === "manager";
@@ -28,9 +30,16 @@ function actor(role: Role, settings: Partial<PermissionSettings> = {}): Actor {
     role,
     managedUserIds: new Set(scoped ? [MANAGED] : []),
     managedProjectIds: new Set(scoped ? [MANAGED_PROJECT] : []),
+    groupIds: new Set([MY_GROUP]),
     settings: { ...DEFAULT_PERMISSION_SETTINGS, ...settings },
   };
 }
+
+const taskOn = (projectId: string, groupIds: string[] = []): Resource => ({
+  kind: "task",
+  projectId,
+  groupIds,
+});
 
 const entry = (userId: string, projectId: string | null = OTHER_PROJECT): Resource => ({
   kind: "entry",
@@ -103,10 +112,14 @@ const TABLE: Row[] = [
     true,
     false,
   ],
-  ["task.create", { kind: "task", projectId: MANAGED_PROJECT }, true, true, true, false],
-  ["task.create", { kind: "task", projectId: OTHER_PROJECT }, true, true, false, false],
-  ["task.update", { kind: "task", projectId: MANAGED_PROJECT }, true, true, true, false],
-  ["task.update", { kind: "task", projectId: OTHER_PROJECT }, true, true, false, false],
+  ["task.create", taskOn(MANAGED_PROJECT), true, true, true, false],
+  ["task.create", taskOn(OTHER_PROJECT), true, true, false, false],
+  ["task.update", taskOn(MANAGED_PROJECT), true, true, true, false],
+  ["task.update", taskOn(OTHER_PROJECT), true, true, false, false],
+  ["task.assignGroups", taskOn(MANAGED_PROJECT), true, true, true, false],
+  ["task.assignGroups", taskOn(OTHER_PROJECT), true, true, false, false],
+  // Tasks are visible to everyone until the workspace shows them by group.
+  ["task.trackTime", taskOn(OTHER_PROJECT), true, true, true, true],
   ["tag.create", NONE, true, true, false, false],
   ["tag.update", NONE, true, true, false, false],
   ["rate.view", NONE, true, true, false, false],
@@ -211,15 +224,16 @@ describe("workspace settings", () => {
 
   it("creation follows the creators setting", () => {
     const everyone = {
-      creators: { project: "everyone", client: "managers", task: "everyone", tag: "admins" },
+      creators: { project: "everyone", client: "managers", tag: "admins" },
     } as const;
     expect(can(actor("member", everyone), "project.create", project(null))).toBe(true);
     expect(can(actor("member", everyone), "client.create", NONE)).toBe(false);
     expect(can(actor("manager", everyone), "client.create", NONE)).toBe(true);
-    expect(
-      can(actor("member", everyone), "task.create", { kind: "task", projectId: OTHER_PROJECT }),
-    ).toBe(true);
     expect(can(actor("manager", everyone), "tag.create", NONE)).toBe(false);
+    // Tasks left the setting (decision 11): admins and project managers only.
+    expect(can(actor("member", everyone), "task.create", taskOn(OTHER_PROJECT))).toBe(false);
+    expect(can(actor("manager", everyone), "task.create", taskOn(OTHER_PROJECT))).toBe(false);
+    expect(can(actor("manager", everyone), "task.create", taskOn(MANAGED_PROJECT))).toBe(true);
   });
 
   it("force timer blocks members' and managers' own times, never time for someone else", () => {
@@ -245,6 +259,53 @@ describe("workspace settings", () => {
     expect(can(actor("manager", hidden), "page.view", { kind: "page", page: "reports" })).toBe(
       true,
     );
+  });
+});
+
+describe("tasks by group", () => {
+  const byGroup = { taskVisibility: "BY_GROUP" } as const;
+  const inTwoGroups = (role: Role): Actor => ({
+    ...actor(role, byGroup),
+    groupIds: new Set([MY_GROUP, "g-two"]),
+  });
+  const inNoGroup = (role: Role): Actor => ({ ...actor(role, byGroup), groupIds: new Set() });
+
+  type Case = [title: string, actor: Actor, resource: Resource, allowed: boolean];
+  const CASES: Case[] = [
+    ["a member on a task of their group", actor("member", byGroup), taskOn(OTHER_PROJECT, [MY_GROUP]), true],
+    ["a member in two groups on a task of the second", inTwoGroups("member"), taskOn(OTHER_PROJECT, ["g-two"]), true],
+    ["a member on a task of another group", actor("member", byGroup), taskOn(OTHER_PROJECT, [OTHER_GROUP]), false],
+    ["a member who left the group", inNoGroup("member"), taskOn(OTHER_PROJECT, [MY_GROUP]), false],
+    ["a member on a task with no group", actor("member", byGroup), taskOn(OTHER_PROJECT), false],
+    ["a manager on a managed project's task of another group", actor("manager", byGroup), taskOn(MANAGED_PROJECT, [OTHER_GROUP]), true],
+    ["a manager on another project's task of another group", actor("manager", byGroup), taskOn(OTHER_PROJECT, [OTHER_GROUP]), false],
+    ["a manager on another project's task of their own group", actor("manager", byGroup), taskOn(OTHER_PROJECT, [MY_GROUP]), true],
+    ["a manager on a managed project's task with no group", actor("manager", byGroup), taskOn(MANAGED_PROJECT), true],
+    ["an owner on a task with no group", actor("owner", byGroup), taskOn(OTHER_PROJECT), true],
+    ["an admin on a task with no group", actor("admin", byGroup), taskOn(OTHER_PROJECT), true],
+    ["a member in no group with everyone mode", inNoGroup("member"), { ...taskOn(OTHER_PROJECT, [OTHER_GROUP]) }, false],
+  ];
+
+  it.each(CASES)("%s", (_title, who, resource, allowed) => {
+    expect(can(who, "task.trackTime", resource)).toBe(allowed);
+  });
+
+  it("refuses with 404: the task's groups are the resource, not the role", () => {
+    const m = actor("member", byGroup);
+    expect(denial(m, "task.trackTime", taskOn(OTHER_PROJECT, [OTHER_GROUP]))).toBe(404);
+    expect(denial(m, "task.trackTime", taskOn(OTHER_PROJECT, [MY_GROUP]))).toBeNull();
+  });
+
+  it("is open to everyone while the workspace shows tasks to everyone", () => {
+    const m = inNoGroup("member");
+    m.settings = { ...m.settings, taskVisibility: "EVERYONE" };
+    expect(can(m, "task.trackTime", taskOn(OTHER_PROJECT, [OTHER_GROUP]))).toBe(true);
+    expect(can(m, "task.trackTime", taskOn(OTHER_PROJECT))).toBe(true);
+  });
+
+  it("documents the rule", () => {
+    expect(renderPermissionsMarkdown()).toContain("`task.trackTime`");
+    expect(renderPermissionsMarkdown()).toContain("`task.assignGroups`");
   });
 });
 

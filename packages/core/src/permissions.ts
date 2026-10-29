@@ -33,6 +33,10 @@ export const ACTIONS = [
   "project.manageMembers",
   "task.create",
   "task.update",
+  /** set or change a task's groups (decision 11) */
+  "task.assignGroups",
+  /** track time on a task: open to all, or by group when the workspace says so */
+  "task.trackTime",
   "tag.create",
   "tag.update",
   "rate.view",
@@ -56,7 +60,8 @@ export type CreatorSetting = (typeof CREATOR_SETTINGS)[number];
 /** Who sees a task: everyone (today's behaviour) or only the members of its groups. */
 export const TASK_VISIBILITY = ["EVERYONE", "BY_GROUP"] as const;
 export type TaskVisibility = (typeof TASK_VISIBILITY)[number];
-export type CatalogType = "project" | "client" | "task" | "tag";
+/** What "who can create" covers; tasks are always admins and project managers (decision 11). */
+export type CatalogType = "project" | "client" | "tag";
 
 /** The workspace switches that change answers (Phase 4b makes them editable). */
 export interface PermissionSettings {
@@ -64,14 +69,16 @@ export interface PermissionSettings {
   membersSeeTeamTime: boolean;
   creators: Record<CatalogType, CreatorSetting>;
   forceTimer: boolean;
+  taskVisibility: TaskVisibility;
 }
 
 /** Today's behaviour: nothing hidden, members see their own time, admins create the catalog. */
 export const DEFAULT_PERMISSION_SETTINGS: PermissionSettings = {
   hiddenPages: [],
   membersSeeTeamTime: false,
-  creators: { project: "admins", client: "admins", task: "admins", tag: "admins" },
+  creators: { project: "admins", client: "admins", tag: "admins" },
   forceTimer: false,
+  taskVisibility: "EVERYONE",
 };
 
 export interface Actor {
@@ -79,6 +86,8 @@ export interface Actor {
   role: Role;
   managedUserIds: ReadonlySet<string>;
   managedProjectIds: ReadonlySet<string>;
+  /** The groups the actor belongs to in this workspace (loaded when tasks are by group). */
+  groupIds: ReadonlySet<string>;
   settings: PermissionSettings;
 }
 
@@ -95,7 +104,12 @@ export type Resource =
       /** the actor is on the project's member list */
       isMember?: boolean;
     }
-  | { kind: "task"; projectId: string }
+  | {
+      kind: "task";
+      projectId: string;
+      /** the task's groups, for `task.trackTime` (absent while the task is being created) */
+      groupIds?: readonly string[];
+    }
   | { kind: "entry"; userId: string; projectId: string | null }
   | { kind: "shareLink"; createdBy: string };
 
@@ -126,7 +140,9 @@ export type Rule =
   /** allowed when the workspace lets members see team time */
   | "teamSetting"
   /** allowed unless force timer is on, and then only for someone else's time */
-  | "unlessForced";
+  | "unlessForced"
+  /** every task, or when tasks are by group: the tasks of their groups and of projects they manage */
+  | "taskGroups";
 
 const SCOPED: ReadonlySet<Rule> = new Set([
   "own",
@@ -135,6 +151,7 @@ const SCOPED: ReadonlySet<Rule> = new Set([
   "managedPeople",
   "managedProjects",
   "visible",
+  "taskGroups",
 ]);
 
 const ADMINS = { owner: "yes", admin: "yes", manager: "no", member: "no" } as const;
@@ -164,8 +181,10 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
   "project.update": PROJECT_MANAGERS,
   "project.delete": ADMINS,
   "project.manageMembers": PROJECT_MANAGERS,
-  "task.create": CREATOR,
+  "task.create": PROJECT_MANAGERS,
   "task.update": PROJECT_MANAGERS,
+  "task.assignGroups": PROJECT_MANAGERS,
+  "task.trackTime": { owner: "yes", admin: "yes", manager: "taskGroups", member: "taskGroups" },
   "tag.create": CREATOR,
   "tag.update": ADMINS,
   "rate.view": ADMINS,
@@ -184,7 +203,6 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
 const CREATED: Partial<Record<Action, CatalogType>> = {
   "client.create": "client",
   "project.create": "project",
-  "task.create": "task",
   "tag.create": "tag",
 };
 
@@ -260,10 +278,15 @@ function check(actor: Actor, action: Action, rule: Rule, resource: Resource): bo
       );
     case "creator": {
       const type = CREATED[action];
-      if (!type) return false;
-      if (allowsRole(actor.settings.creators[type], actor.role)) return true;
-      // Project managers add tasks to their own projects whatever the setting says.
-      return type === "task" && projectId !== null && actor.managedProjectIds.has(projectId);
+      return type !== undefined && allowsRole(actor.settings.creators[type], actor.role);
+    }
+    case "taskGroups": {
+      // Decision 11: with tasks by group, a task is tracked through one of its
+      // groups, or by a manager on a project they manage.
+      if (actor.settings.taskVisibility === "EVERYONE") return true;
+      if (resource.kind !== "task") return false;
+      if (actor.managedProjectIds.has(resource.projectId)) return true;
+      return (resource.groupIds ?? []).some((g) => actor.groupIds.has(g));
     }
     case "unlessHidden":
       return resource.kind === "page" && !actor.settings.hiddenPages.includes(resource.page);
@@ -304,6 +327,7 @@ const RULE_WORDS: Record<Rule, string> = {
   unlessHidden: "unless the workspace hides it",
   teamSetting: "if the workspace allows",
   unlessForced: "unless force timer is on (own time)",
+  taskGroups: "every task, or when tasks are by group: their groups' tasks and projects they manage",
 };
 
 const SECTION_TITLES: Record<string, string> = {

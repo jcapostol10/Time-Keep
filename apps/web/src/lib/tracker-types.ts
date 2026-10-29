@@ -34,6 +34,8 @@ export interface PickerProject {
   billable: boolean;
   favorite: boolean;
   tasks: PickerTask[];
+  /** The viewer may add a task to this project inline (owner, admin, the project's managers). */
+  canCreateTask: boolean;
 }
 
 export interface EntryTag {

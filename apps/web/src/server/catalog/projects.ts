@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   bucketFor,
+  can,
   type CopyProjectInput,
   DEFAULT_REPORT_QUERY,
   type DeleteProjectMode,
@@ -245,6 +246,8 @@ export async function listPickerProjects(db: Executor, viewer: Viewer): Promise<
       billable: r.billable,
       favorite: r.favorites.length > 0,
       tasks: r.tasks,
+      // Filled by the task-visibility read (Task 4 of the task-groups plan).
+      canCreateTask: false,
     }))
     .sort(comparePicker);
 }
@@ -451,6 +454,7 @@ export async function createProject(
     billable: row.billable,
     favorite: false,
     tasks: [],
+    canCreateTask: can(viewer.actor, "task.create", { kind: "task", projectId: row.id }),
   };
 }
 

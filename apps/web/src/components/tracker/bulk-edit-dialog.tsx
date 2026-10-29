@@ -115,7 +115,6 @@ export function BulkEditDialog({
                 value={selection}
                 onChange={setSelection}
                 canCreate={canCreate.project}
-                canCreateTask={canCreate.task}
               />
             ) : null}
           </div>

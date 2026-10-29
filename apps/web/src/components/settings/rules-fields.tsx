@@ -57,14 +57,14 @@ const CREATOR_LABELS: Record<CreatorSetting, string> = {
   everyone: "Everyone",
 };
 
+// Tasks are not here: owners, admins and a project's managers create them (decision 11).
 const CREATOR_FIELDS: {
-  name: "projectCreators" | "clientCreators" | "taskCreators" | "tagCreators";
+  name: "projectCreators" | "clientCreators" | "tagCreators";
   type: CatalogType;
   label: string;
 }[] = [
   { name: "projectCreators", type: "project", label: "Who can create projects" },
   { name: "clientCreators", type: "client", label: "Who can create clients" },
-  { name: "taskCreators", type: "task", label: "Who can create tasks" },
   { name: "tagCreators", type: "tag", label: "Who can create tags" },
 ];
 

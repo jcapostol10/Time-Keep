@@ -90,7 +90,6 @@ export function ProjectPicker({
   compact = false,
   disabled = false,
   canCreate = false,
-  canCreateTask = false,
   invalid = false,
   current = null,
 }: {
@@ -101,8 +100,6 @@ export function ProjectPicker({
   compact?: boolean;
   disabled?: boolean;
   canCreate?: boolean;
-  /** Inline "Create task" for the chosen project (the workspace's "who can create" setting). */
-  canCreateTask?: boolean;
   /** The server refused a save for the project or task (required fields). */
   invalid?: boolean;
   current?: CurrentSelection | null;
@@ -133,10 +130,11 @@ export function ProjectPicker({
     trimmed.length > 0 &&
     !projects.some((p) => p.name.toLowerCase() === trimmed.toLowerCase());
 
-  // A task is created in the chosen project, once the typed name matches none of its tasks.
+  // A task is created in the chosen project (by its managers and admins: the
+  // project says), once the typed name matches none of its tasks.
   const showCreateTask =
-    canCreateTask &&
     listed !== undefined &&
+    listed.canCreateTask &&
     trimmed.length > 0 &&
     !listed.tasks.some((t) => t.name.toLowerCase() === trimmed.toLowerCase());
 

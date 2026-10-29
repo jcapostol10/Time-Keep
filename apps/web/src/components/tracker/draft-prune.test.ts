@@ -13,6 +13,7 @@ const options = {
       clientName: null,
       billable: true,
       favorite: false,
+      canCreateTask: false,
       tasks: [{ id: "t1", name: "T" }],
     },
   ],

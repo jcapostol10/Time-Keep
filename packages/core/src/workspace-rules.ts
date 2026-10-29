@@ -6,6 +6,7 @@ import {
   PAGES,
   type Page,
   type PermissionSettings,
+  TASK_VISIBILITY,
 } from "./permissions";
 import { planAllows } from "./plans";
 import { REQUIRED_FIELDS, type RequiredField } from "./required-fields";
@@ -21,13 +22,14 @@ export interface WorkspaceRuleColumns {
   membersSeeTeamTime: boolean;
   projectCreators: string;
   clientCreators: string;
-  taskCreators: string;
   tagCreators: string;
   forceTimer: boolean;
   requiredFields: string[];
   allowBreaks: boolean;
   roundingMode: string;
   roundingMinutes: number;
+  /** `task_creators` is still a column but unread: tasks are admins' and project managers'. */
+  taskVisibility: string;
 }
 
 function oneOf<T extends string | number>(allowed: readonly T[], value: unknown, fallback: T): T {
@@ -53,10 +55,10 @@ export function permissionSettingsOf(
     creators: {
       project: creator(row.projectCreators, "project"),
       client: creator(row.clientCreators, "client"),
-      task: creator(row.taskCreators, "task"),
       tag: creator(row.tagCreators, "tag"),
     },
     forceTimer: row.forceTimer && planAllows(workspace, "forceTimer"),
+    taskVisibility: oneOf(TASK_VISIBILITY, row.taskVisibility, "EVERYONE"),
   };
 }
 

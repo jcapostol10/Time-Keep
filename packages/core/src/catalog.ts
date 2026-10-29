@@ -10,6 +10,9 @@ export type ProjectVisibility = (typeof PROJECT_VISIBILITIES)[number];
 export const TASK_STATUSES = ["ACTIVE", "DONE"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
+/** Decision 11 (tasks by group): the one refusal for a task outside the entry owner's groups. */
+export const TASK_UNAVAILABLE_MESSAGE = "This task isn't available to your groups.";
+
 export interface TrackingDetails {
   project: { id: string; archived: boolean; isTemplate?: boolean } | null;
   task: { projectId: string; status: TaskStatus } | null;

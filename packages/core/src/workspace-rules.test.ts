@@ -15,13 +15,13 @@ function row(overrides: Partial<WorkspaceRuleColumns> = {}): WorkspaceRuleColumn
     membersSeeTeamTime: false,
     projectCreators: "admins",
     clientCreators: "admins",
-    taskCreators: "admins",
     tagCreators: "admins",
     forceTimer: false,
     requiredFields: [],
     allowBreaks: false,
     roundingMode: "off",
     roundingMinutes: 15,
+    taskVisibility: "EVERYONE",
     ...overrides,
   };
 }
@@ -36,6 +36,16 @@ describe("permissionSettingsOf", () => {
     expect(settings.creators.project).toBe("everyone");
     expect(settings.creators.tag).toBe("admins");
     expect(settings.membersSeeTeamTime).toBe(false);
+  });
+
+  it("reads task visibility and falls back to everyone", () => {
+    expect(permissionSettingsOf(row({ taskVisibility: "BY_GROUP" }), WS).taskVisibility).toBe(
+      "BY_GROUP",
+    );
+    expect(permissionSettingsOf(row({ taskVisibility: "bogus" }), WS).taskVisibility).toBe(
+      "EVERYONE",
+    );
+    expect(permissionSettingsOf(row(), WS).taskVisibility).toBe("EVERYONE");
   });
 
   it("passes force timer through the plan stub", () => {

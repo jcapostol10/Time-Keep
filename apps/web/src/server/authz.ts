@@ -29,6 +29,7 @@ import {
   projectMember,
   sql,
   timeEntry,
+  userGroup,
   userGroupMember,
   workspaceSettings,
 } from "@timekeep/db";
@@ -75,10 +76,25 @@ export function workspaceRules(ctx: Pick<WorkspaceContext, "settings">): Workspa
   return { ...entryRulesOf(ctx.settings), rounding: roundingRuleOf(ctx.settings) };
 }
 
+/** The groups the person belongs to in this workspace, for `task.trackTime` (decision 11). */
+async function loadGroupIds(
+  db: Executor,
+  workspaceId: string,
+  userId: string,
+): Promise<ReadonlySet<string>> {
+  const rows = await db
+    .select({ groupId: userGroupMember.groupId })
+    .from(userGroupMember)
+    .innerJoin(userGroup, eq(userGroup.id, userGroupMember.groupId))
+    .where(and(eq(userGroup.workspaceId, workspaceId), eq(userGroupMember.userId, userId)));
+  return new Set(rows.map((r) => r.groupId));
+}
+
 /**
  * A manager's scope: the people in `managed_user`, the current members of
  * their `managed_group`s, and the projects where they are a manager. Only
  * managers have one; owners and admins are unscoped and members have none.
+ * When the workspace shows tasks by group, every role also carries its groups.
  */
 export async function loadActor(
   db: Executor,
@@ -88,8 +104,19 @@ export async function loadActor(
   settings?: PermissionSettings,
 ): Promise<Actor> {
   settings ??= await loadPermissionSettings(db, workspaceId);
+  const groupIds =
+    settings.taskVisibility === "BY_GROUP"
+      ? await loadGroupIds(db, workspaceId, userId)
+      : new Set<string>();
   if (role !== "manager") {
-    return { userId, role, managedUserIds: new Set(), managedProjectIds: new Set(), settings };
+    return {
+      userId,
+      role,
+      managedUserIds: new Set(),
+      managedProjectIds: new Set(),
+      groupIds,
+      settings,
+    };
   }
   const [direct, viaGroups, projects] = await Promise.all([
     db
@@ -120,6 +147,7 @@ export async function loadActor(
     role,
     managedUserIds,
     managedProjectIds: new Set(projects.map((r) => r.projectId)),
+    groupIds,
     settings,
   };
 }

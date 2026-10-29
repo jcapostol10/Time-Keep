@@ -5,7 +5,7 @@ import { RATE_APPLY, RATE_LEVELS } from "./rates";
 import { PROJECT_VISIBILITIES, TASK_STATUSES } from "./catalog";
 import { hexColorSchema } from "./colors";
 import { IMPORT_COLUMNS } from "./entry-import";
-import { CREATOR_SETTINGS, PAGES } from "./permissions";
+import { CREATOR_SETTINGS, PAGES, TASK_VISIBILITY } from "./permissions";
 import { REQUIRED_FIELDS } from "./required-fields";
 import { ROLES } from "./roles";
 import { ROUNDING_MODES, ROUNDING_STEPS } from "./rounding";
@@ -107,11 +107,12 @@ export const workspaceSettingsSchema = z.object({
   membersSeeTeamTime: z.boolean(),
   projectCreators: z.enum(CREATOR_SETTINGS),
   clientCreators: z.enum(CREATOR_SETTINGS),
-  taskCreators: z.enum(CREATOR_SETTINGS),
   tagCreators: z.enum(CREATOR_SETTINGS),
   requiredFields: z.array(z.enum(REQUIRED_FIELDS)).max(REQUIRED_FIELDS.length),
   forceTimer: z.boolean(),
   allowBreaks: z.boolean(),
+  // Tasks by group (decision 11). `taskCreators` left the form: tasks are admins' and project managers'.
+  taskVisibility: z.enum(TASK_VISIBILITY),
 });
 export type WorkspaceSettingsInput = z.infer<typeof workspaceSettingsSchema>;
 
@@ -128,11 +129,11 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettingsInput = {
   membersSeeTeamTime: false,
   projectCreators: "admins",
   clientCreators: "admins",
-  taskCreators: "admins",
   tagCreators: "admins",
   requiredFields: [],
   forceTimer: false,
   allowBreaks: false,
+  taskVisibility: "EVERYONE",
 };
 
 export const updateProfileSchema = z.object({
