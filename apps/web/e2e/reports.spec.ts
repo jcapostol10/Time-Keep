@@ -25,7 +25,7 @@ import {
 
 /** The Summary report: totals, chart, grouped table, filters and presets in the URL. */
 
-test.describe("reports", () => {
+test.describe("reports", { tag: "@nightly" }, () => {
   test("the summary shows the week's total, a chart and a grouped table", async ({
     page,
     freshUser,

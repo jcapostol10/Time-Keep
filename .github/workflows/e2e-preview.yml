@@ -54,9 +54,12 @@ jobs:
         env:
           DATABASE_URL_SESSION: ${{ secrets.DATABASE_URL_SESSION }}
 
+      # The preview lane skips the specs tagged @nightly (e2e-nightly.yml runs
+      # them every day), so the run stays inside its 10-minute budget.
       - name: End-to-end tests
         run: pnpm --filter @timekeep/web e2e
         env:
+          E2E_LANE: preview
           E2E_SECRET: ${{ secrets.E2E_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
 

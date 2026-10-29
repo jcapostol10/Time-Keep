@@ -1,0 +1,87 @@
+name: e2e nightly
+
+# The specs tagged @nightly (the slowest, mature ones: reports, team) run every
+# night against a production server built from main, with Docker's Postgres,
+# Mailpit and object storage, as the local gate runs them. The preview run
+# (e2e-preview.yml) skips them to stay inside its 10-minute budget.
+on:
+  schedule:
+    - cron: "0 18 * * *" # 02:00 Manila
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-nightly
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    name: nightly e2e (@nightly specs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CI: "true"
+      E2E_LANE: nightly
+      DATABASE_URL: postgres://timekeep:timekeep@localhost:5432/timekeep
+      DATABASE_URL_SESSION: postgres://timekeep:timekeep@localhost:5432/timekeep
+      TEST_DATABASE_URL: postgres://timekeep:timekeep@localhost:5432/timekeep_test
+      BETTER_AUTH_SECRET: ci-only-secret-not-for-production-0123456789abcdef
+      BETTER_AUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      # e2e signs in dozens of times from one IP.
+      AUTH_RATE_LIMIT_ENABLED: "false"
+      SMTP_HOST: localhost
+      SMTP_PORT: "1025"
+      SMTP_SECURE: "false"
+      MAIL_FROM: TimeKeep <no-reply@timekeep.local>
+      MAILPIT_URL: http://localhost:8025
+      S3_ENDPOINT: http://localhost:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: timekeep
+      S3_EXPORT_BUCKET: timekeep-exports
+      S3_ACCESS_KEY_ID: rustfsadmin
+      S3_SECRET_ACCESS_KEY: rustfsadmin
+      S3_PUBLIC_URL: http://localhost:9000/timekeep
+      EXPORT_JOB_THRESHOLD: "5"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @timekeep/web exec playwright install --with-deps chromium
+
+      - name: Start Postgres, Mailpit and object storage
+        run: docker compose up -d --wait
+
+      - name: Prepare storage buckets
+        run: pnpm storage:init
+
+      - name: Migrate and seed
+        run: pnpm db:migrate && pnpm db:seed
+
+      - name: Build the production server
+        run: pnpm --filter @timekeep/web build
+
+      - name: End-to-end tests (@nightly)
+        run: pnpm --filter @timekeep/web e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-nightly
+          path: apps/web/playwright-report
+          retention-days: 7

@@ -109,7 +109,7 @@ docs/                PRD.md, DATA_MODEL.md, PROGRESS.md, E2E_COVERAGE.md, BACKLO
   - `docs/E2E_COVERAGE.md` lists every user-facing function. `pnpm --filter @timekeep/web e2e:coverage` (run in CI) fails when a ticked line names a missing test.
   - Tick a line only after its test was seen to fail with the guarded behaviour broken; the commit message records the break.
   - `test.skip` / `test.fixme` in `e2e/` are lint errors (a skip inside a test body is invisible to the coverage check). A deliberate skip needs an `eslint-disable` with a reason, and its coverage line is unticked.
-  - The suite must stay under 10 minutes on a Vercel preview; slow tests move to a nightly run rather than being deleted.
+  - The suite must stay under 10 minutes on a Vercel preview; slow tests move to the nightly lane rather than being deleted. A spec tagged `@nightly` (`test.describe("…", { tag: "@nightly" }, …)`: today `reports.spec.ts` and `team.spec.ts`) is skipped by the preview run (`E2E_LANE=preview`, set in `e2e-preview.yml`) and run every night by `.github/workflows/e2e-nightly.yml` (`E2E_LANE=nightly`, a production server with Docker services, also runnable by hand from Actions). A run without a lane, like the local gate, runs everything.
   - Local runs clean up `@e2e.test` users in a global teardown that only ever touches a local database.
   - Helpers under `e2e/helpers/` can have Vitest unit tests named `*.unit.test.ts`; Playwright ignores them.
 - UI: shadcn/ui components from `@timekeep/ui/components/*`, icons from `lucide-react`, toasts via `sonner`. Theme tokens are in `packages/ui/src/styles/globals.css` (our own teal palette; light + dark via `.dark` class and `next-themes`). Every page must work at 375px.

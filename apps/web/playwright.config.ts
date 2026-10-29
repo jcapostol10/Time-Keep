@@ -11,6 +11,8 @@ const isCI = Boolean(process.env.CI);
  *   secret, and emails are read from the preview's capture endpoint.
  */
 const remoteUrl = process.env.E2E_BASE_URL?.replace(/\/$/, "");
+/** "preview" (skip @nightly specs), "nightly" (only them), or unset for the whole suite. */
+const lane = process.env.E2E_LANE;
 const baseURL = remoteUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
@@ -29,6 +31,11 @@ export default defineConfig({
   // Retries are for telling a flaky test from a broken one, not for hiding
   // it: a test that only passed on retry still fails the run in CI.
   failOnFlakyTests: isCI || Boolean(remoteUrl),
+  // Lanes: the preview run skips the specs tagged @nightly (the slowest, mature
+  // ones) to stay inside its 10-minute budget; e2e-nightly.yml runs only them;
+  // a run without a lane (local, the gate) runs everything.
+  ...(lane === "preview" ? { grepInvert: /@nightly/ } : {}),
+  ...(lane === "nightly" ? { grep: /@nightly/ } : {}),
   timeout: remoteUrl ? 120_000 : 60_000,
   expect: { timeout: remoteUrl ? 20_000 : 10_000 },
   reporter: isCI ? [["github"], ["html", { open: "never" }]] : [["list"]],

@@ -23,7 +23,7 @@ async function slowFilterNavigations(page: Page) {
   });
 }
 
-test.describe("team", () => {
+test.describe("team", { tag: "@nightly" }, () => {
   test("bulk invite reports each address", async ({ page, freshUser }) => {
     const newcomer = uniqueEmail("newcomer");
     const dialog = await inviteViaUi(

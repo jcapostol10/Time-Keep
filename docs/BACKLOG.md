@@ -58,7 +58,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
 - [ ] Re-prove the 26 coverage ticks carried over from Phases 0–1: break each guarded behaviour once and watch its test fail.
 - [ ] "Cancel a pending invitation" has no e2e test (an `E2E_COVERAGE.md` gap since Phase 4a).
-- [ ] The preview run is at its 10-minute budget: 10.4 min on 2026-10-28 (161 tests, 3 workers, one test failing three times), against 3.8 min locally; the runner reaches the `sin1` deployment over a long round trip. If a clean run stays over, move the slowest specs (team, reports) to a nightly run.
+- [ ] `settings.spec.ts` "a required project blocks Stop until it is picked" was flaky once on the preview run of 2026-10-29 (Start pressed, no Stop within 20 s; passed on retry). Not reproduced locally; watch for a recurrence before adding a wait.
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)
 
@@ -70,6 +70,8 @@ Nothing open.
 
 ## Done
 
+- [x] The preview run passed its 10-minute budget (10.4 min on 2026-10-29 with 164 tests, 29.5 min of test time over 3 workers). The two slowest mature specs, `reports.spec.ts` (3.5 min) and `team.spec.ts` (2.2 min), are tagged `@nightly`: the preview lane skips them and `e2e-nightly.yml` runs them every night against a local production server. Done 2026-10-29 ("e2e: a nightly lane for the slowest specs; others.spec finds Max by session").
+- [x] `others.spec.ts` "a manager's person picker lists only their people" looked Max Member up by name in the report options while `profile.spec.ts` was renaming him (the cross-spec race noted above); it now takes his id from his own session. Done 2026-10-29 (same commit).
 - [x] `docs/E2E_COVERAGE.md` listed "Change a member's role — gap" although the ticked team line "a member's role, deactivation and removal" covers it; the duplicate line is gone. Done 2026-10-28 ("docs: drop the duplicate role-change coverage gap").
 - [x] **Export bucket:** the owner created the private `timekeep-exports` bucket in Supabase Storage; `S3_EXPORT_BUCKET=timekeep-exports` is set for production and preview, `EXPORT_JOB_THRESHOLD=5` for previews only. The preview e2e passed 123/123 with the export-job test. Done 2026-10-26 ("docs: the export bucket is set up").
 - [x] Phase 3 review minors (2026-10-25), all done 2026-10-25:

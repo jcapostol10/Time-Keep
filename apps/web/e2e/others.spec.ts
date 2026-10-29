@@ -47,11 +47,11 @@ test.describe("add time for others", () => {
   });
 
   test("a manager's person picker lists only their people", async ({ page, demoUser }) => {
-    await demoUser("owner");
-    const res = await page.request.get("/api/w/demo/reports/options");
-    const { users } = (await res.json()) as { users: { id: string; name: string }[] };
-    const max = users.find((u) => u.name === "Max Member");
-    if (!max) throw new Error("seed has no Max Member");
+    // Max's id from his own session, not by name: profile.spec renames him for a moment.
+    await demoUser("member2");
+    const session = await page.request.get("/api/auth/get-session");
+    const { user: max } = (await session.json()) as { user: { id: string } };
+    if (!max?.id) throw new Error("no session for member2");
 
     await demoUser("manager");
     await page.goto("/w/demo/tracker");
