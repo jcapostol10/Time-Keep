@@ -12,7 +12,6 @@ import {
   AlertDialogTitle,
 } from "@timekeep/ui/components/alert-dialog";
 import { Button } from "@timekeep/ui/components/button";
-import { Checkbox } from "@timekeep/ui/components/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -50,9 +49,20 @@ import {
 } from "@/server/actions/team";
 
 import { RateDialog } from "../rates/rate-dialog";
+import { Checklist, ChecklistDialog } from "../shared/checklist-dialog";
+import { TaskAccessDialog } from "./task-access-dialog";
 import type { TeamContext } from "./team-view";
 
-type Open = "role" | "groups" | "rate" | "scope" | "deactivate" | "remove" | "transfer" | null;
+type Open =
+  | "role"
+  | "groups"
+  | "tasks"
+  | "rate"
+  | "scope"
+  | "deactivate"
+  | "remove"
+  | "transfer"
+  | null;
 
 /** The row menu on the Team page and the dialogs it opens. */
 export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) {
@@ -108,6 +118,7 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
   const items = [
     changeable ? "role" : null,
     permissions.groups ? "groups" : null,
+    permissions.groups ? "tasks" : null,
     permissions.rates ? "rate" : null,
     row.role === "manager" ? "scope" : null,
     permissions.transfer && row.role === "admin" && row.status === "ACTIVE" ? "transfer" : null,
@@ -128,6 +139,9 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
           ) : null}
           {permissions.groups ? (
             <DropdownMenuItem onSelect={() => setOpen("groups")}>Groups</DropdownMenuItem>
+          ) : null}
+          {permissions.groups ? (
+            <DropdownMenuItem onSelect={() => setOpen("tasks")}>Tasks available</DropdownMenuItem>
           ) : null}
           {permissions.rates ? (
             <DropdownMenuItem onSelect={() => setOpen("rate")}>Billable rate</DropdownMenuItem>
@@ -187,6 +201,15 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
           onSave={(groupIds) =>
             run(() => setMemberGroupsAction(ctx.slug, { userId, groupIds }), "Groups saved")
           }
+        />
+      ) : null}
+      {open === "tasks" ? (
+        <TaskAccessDialog
+          slug={ctx.slug}
+          title={`Tasks available to ${row.name}`}
+          description="The active tasks this person can see and track on, through their groups, by project."
+          query={{ userId }}
+          onClose={() => setOpen(null)}
         />
       ) : null}
       {open === "rate" ? (
@@ -327,90 +350,6 @@ function RoleDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** A dialog of checkboxes saved as a whole. */
-export function ChecklistDialog({
-  title,
-  description,
-  options,
-  initial,
-  empty,
-  onClose,
-  onSave,
-}: {
-  title: string;
-  description?: string;
-  options: { id: string; name: string }[];
-  initial: string[];
-  empty: string;
-  onClose: () => void;
-  onSave: (ids: string[]) => Promise<boolean>;
-}) {
-  const [picked, setPicked] = useState(() => new Set(initial));
-  const [saving, setSaving] = useState(false);
-  return (
-    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
-      <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description ? <DialogDescription>{description}</DialogDescription> : null}
-        </DialogHeader>
-        <Checklist options={options} picked={picked} onChange={setPicked} empty={empty} />
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={saving}
-            onClick={async () => {
-              setSaving(true);
-              await onSave([...picked]);
-              setSaving(false);
-            }}
-          >
-            Save
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function Checklist({
-  options,
-  picked,
-  onChange,
-  empty,
-}: {
-  options: { id: string; name: string }[];
-  picked: Set<string>;
-  onChange: (next: Set<string>) => void;
-  empty: string;
-}) {
-  const id = useId();
-  if (options.length === 0) return <p className="text-muted-foreground text-sm">{empty}</p>;
-  return (
-    <ul className="max-h-56 space-y-2 overflow-y-auto">
-      {options.map((o) => (
-        <li key={o.id} className="flex items-center gap-2">
-          <Checkbox
-            id={`${id}-${o.id}`}
-            checked={picked.has(o.id)}
-            onCheckedChange={(checked) => {
-              const next = new Set(picked);
-              if (checked === true) next.add(o.id);
-              else next.delete(o.id);
-              onChange(next);
-            }}
-          />
-          <Label htmlFor={`${id}-${o.id}`} className="font-normal">
-            {o.name}
-          </Label>
-        </li>
-      ))}
-    </ul>
   );
 }
 

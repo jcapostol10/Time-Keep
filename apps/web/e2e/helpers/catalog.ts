@@ -48,6 +48,37 @@ export const projectRow = (page: Page, name: string) =>
     has: page.getByRole("cell", { name: new RegExp(`^${escapeRegExp(name)}( Archived)?$`) }),
   });
 
+/**
+ * Adds a task through the project's Tasks tab, in the given groups (the
+ * dialog's "Groups" checkboxes, by group name), and waits for its row.
+ */
+export async function addTaskViaUi(
+  page: Page,
+  slug: string,
+  project: string,
+  task: string,
+  groups: string[] = [],
+) {
+  // Already on the project's Tasks tab (a second task): no need to go through the list.
+  const onProject = await page
+    .getByRole("heading", { level: 1, name: project, exact: true })
+    .isVisible()
+    .catch(() => false);
+  if (!onProject || !(await page.getByRole("button", { name: "Add task" }).isVisible())) {
+    await page.goto(`/w/${slug}/projects`);
+    await waitForApp(page);
+    await projectRow(page, project).getByRole("link", { name: project }).click();
+    await waitForApp(page);
+  }
+  await page.getByRole("button", { name: "Add task" }).click();
+  const dialog = page.getByRole("dialog", { name: "New task" });
+  await dialog.getByLabel("Name").fill(task);
+  for (const group of groups) await dialog.getByRole("checkbox", { name: group }).check();
+  await dialog.getByRole("button", { name: "Add task" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("row", { name: new RegExp(escapeRegExp(task)) })).toBeVisible();
+}
+
 /** Creates a project through the Projects page dialog and waits for its row. */
 export async function createProjectViaUi(
   page: Page,
@@ -60,7 +91,10 @@ export async function createProjectViaUi(
     color?: string;
   } = {},
 ) {
-  if (!page.url().includes(`/w/${slug}/projects`)) await page.goto(`/w/${slug}/projects`);
+  // The list page only: a project's own page shares the prefix and has no "New project".
+  if (new URL(page.url()).pathname !== `/w/${slug}/projects`) {
+    await page.goto(`/w/${slug}/projects`);
+  }
   await waitForApp(page);
   await page.getByRole("button", { name: "New project" }).click();
   const dialog = page.getByRole("dialog", { name: "New project" });

@@ -38,11 +38,13 @@ import {
   TableHeader,
   TableRow,
 } from "@timekeep/ui/components/table";
+import { useQuery } from "@tanstack/react-query";
 import { FileUpIcon, Loader2Icon } from "lucide-react";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 
 import { TimezoneSelect } from "@/components/settings/timezone-select";
+import { fetchJson } from "@/lib/fetch-json";
 import type { ImportPlan } from "@/lib/import-types";
 
 import { useTracker } from "./tracker-provider";
@@ -88,7 +90,8 @@ async function post<T>(
  * the ready ones. Everything is written through the entry service.
  */
 export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { slug, viewer, notifyEntriesChanged } = useTracker();
+  const { slug, viewer, notifyEntriesChanged, rules } = useTracker();
+  const byGroup = rules.taskVisibility === "BY_GROUP";
   const cache = useTrackerCache(slug);
   const id = useId();
   const [file, setFile] = useState<File | null>(null);
@@ -97,6 +100,13 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const [timezone, setTimezone] = useState(viewer.timezone);
   const [dateFormat, setDateFormat] = useState<DateFormat>(viewer.dateFormat);
   const [createMissing, setCreateMissing] = useState(true);
+  // Decision 11: with tasks by group, a task the import creates needs its groups.
+  const [newTaskGroupIds, setNewTaskGroupIds] = useState<string[]>([]);
+  const groupsQuery = useQuery({
+    queryKey: ["groups", slug],
+    queryFn: () => fetchJson<{ groups: { id: string; name: string }[] }>(`/api/w/${slug}/groups`),
+    enabled: open && byGroup,
+  });
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -124,7 +134,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     setMapping(autoMapColumns(header));
   }
 
-  const options = { timezone, dateFormat, createMissing, mapping };
+  const options = { timezone, dateFormat, createMissing, mapping, newTaskGroupIds };
 
   async function check() {
     if (!file) return;
@@ -232,6 +242,35 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                   Create missing projects, clients, tasks and tags
                 </Label>
               </div>
+              {byGroup && createMissing ? (
+                <fieldset className="space-y-2">
+                  <legend className="text-sm font-medium">Groups for new tasks</legend>
+                  {groupsQuery.data?.groups.length ? (
+                    groupsQuery.data.groups.map((g) => (
+                      <div key={g.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`${id}-group-${g.id}`}
+                          aria-label={g.name}
+                          checked={newTaskGroupIds.includes(g.id)}
+                          onCheckedChange={(v) => {
+                            setPlan(null);
+                            setNewTaskGroupIds((ids) =>
+                              v === true ? [...ids, g.id] : ids.filter((x) => x !== g.id),
+                            );
+                          }}
+                        />
+                        <Label htmlFor={`${id}-group-${g.id}`} className="font-normal">
+                          {g.name}
+                        </Label>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      {groupsQuery.isPending ? "Loading…" : "No groups yet: tasks cannot be created."}
+                    </p>
+                  )}
+                </fieldset>
+              ) : null}
               <div className="grid gap-2 sm:grid-cols-2">
                 {IMPORT_COLUMNS.map((column) => (
                   <div key={column} className="flex items-center justify-between gap-2">

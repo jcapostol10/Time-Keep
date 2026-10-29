@@ -1,8 +1,11 @@
-import type { Page } from "@playwright/test";
-
 import { expect, test } from "./fixtures";
-import { waitForApp } from "./helpers/app";
-import { createClientViaUi, createProjectViaUi, projectRow, rowAction } from "./helpers/catalog";
+import {
+  addTaskViaUi,
+  createClientViaUi,
+  createProjectViaUi,
+  projectRow,
+  rowAction,
+} from "./helpers/catalog";
 import {
   addManualEntry,
   entry,
@@ -15,19 +18,6 @@ import {
 } from "./helpers/tracker";
 
 /** The project-and-task picker in the timer bar and entry rows, and who sees what in it. */
-
-async function addTaskViaUi(page: Page, slug: string, project: string, task: string) {
-  await page.goto(`/w/${slug}/projects`);
-  await waitForApp(page);
-  await projectRow(page, project).getByRole("link", { name: project }).click();
-  await waitForApp(page);
-  await page.getByRole("button", { name: "Add task" }).click();
-  const dialog = page.getByRole("dialog", { name: "New task" });
-  await dialog.getByLabel("Name").fill(task);
-  await dialog.getByRole("button", { name: "Add task" }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole("row", { name: new RegExp(task) })).toBeVisible();
-}
 
 test.describe("project and task picker", () => {
   test("pick a task and the entry shows project and task", async ({

@@ -12,14 +12,21 @@ export async function openTeam(page: Page, slug: string, query = "") {
   await waitForApp(page);
 }
 
-/** Invites `emails` (one per line) from the Team page with one role; returns the dialog. */
-export async function inviteViaUi(page: Page, slug: string, emails: string[], role: InviteRole) {
+/** Invites `emails` (one per line) from the Team page with one role and optional groups; returns the dialog. */
+export async function inviteViaUi(
+  page: Page,
+  slug: string,
+  emails: string[],
+  role: InviteRole,
+  groups: string[] = [],
+) {
   await openTeam(page, slug);
   await page.getByRole("button", { name: "Invite members" }).click();
   const dialog = page.getByRole("dialog", { name: "Invite members" });
   await dialog.getByLabel("Email addresses").fill(emails.join("\n"));
   await dialog.getByRole("combobox", { name: "Role" }).click();
   await page.getByRole("option", { name: role, exact: true }).click();
+  for (const group of groups) await dialog.getByRole("checkbox", { name: group }).check();
   await dialog.getByRole("button", { name: "Send invitations" }).click();
   await expect(dialog.getByRole("list", { name: "Invitation results" })).toBeVisible();
   return dialog;
@@ -42,10 +49,11 @@ export async function addTeammate(
   slug: string,
   name: string,
   role: InviteRole,
+  groups: string[] = [],
 ): Promise<Teammate> {
   const context = await browser.newContext();
   const user = await signUpFreshUser(context.request, baseURL, name);
-  const dialog = await inviteViaUi(owner, slug, [user.email], role);
+  const dialog = await inviteViaUi(owner, slug, [user.email], role, groups);
   await expect(dialog.getByRole("listitem").filter({ hasText: user.email })).toContainText(
     "Invited",
   );

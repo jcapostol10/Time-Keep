@@ -26,12 +26,24 @@ test.describe("project detail", () => {
     await openProject(page, freshUser.slug, "Website");
     await expect(tab(page, "Tasks")).toHaveAttribute("aria-selected", "true");
 
+    // A group to put the task in (decision 11: tasks belong to groups).
+    await page.goto(`/w/${freshUser.slug}/team`);
+    await page.getByRole("tab", { name: "Groups" }).click();
+    await page.getByRole("button", { name: "New group" }).click();
+    const group = page.getByRole("dialog", { name: "New group" });
+    await group.getByLabel("Name").fill("Designers");
+    await group.getByRole("button", { name: "Create group" }).click();
+    await expect(group).toBeHidden();
+    await openProject(page, freshUser.slug, "Website");
+
     await page.getByRole("button", { name: "Add task" }).click();
     const dialog = page.getByRole("dialog", { name: "New task" });
     await dialog.getByLabel("Name").fill("Design");
+    await dialog.getByRole("checkbox", { name: "Designers" }).check();
     await dialog.getByRole("button", { name: "Add task" }).click();
     await expect(dialog).toBeHidden();
     const row = page.getByRole("row", { name: /Design/ });
+    await expect(row).toContainText("Designers");
 
     await rowAction(page, row, "Rename");
     const rename = page.getByRole("dialog", { name: "Rename task" });

@@ -4,6 +4,7 @@ import {
   formatClock,
   REQUIRED_FIELDS,
   type RequiredField,
+  type TaskVisibility,
   type TrackerSettingsInput,
   type ViewerPrefs,
 } from "@timekeep/core";
@@ -52,6 +53,8 @@ export interface TrackerRules {
   allowBreaks: boolean;
   /** False under force timer for members and managers: no manual entries, no time edits. */
   canWriteTimes: boolean;
+  /** Decision 11: with tasks by group the picker creates no tasks inline and the import asks for groups. */
+  taskVisibility: TaskVisibility;
 }
 
 /** The required field a refused Stop named, until the entry changes again. */

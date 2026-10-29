@@ -18,6 +18,7 @@ import { requireSession } from "@/server/session";
 import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
 import { createWorkspace } from "@/server/workspaces";
 import { authorize } from "@/server/authz";
+import { countTasksWithoutGroup } from "@/server/catalog/tasks";
 import { relabelWorkspaceCurrency, workspaceHasRates } from "@/server/rates";
 
 export async function createWorkspaceAction(
@@ -56,6 +57,8 @@ const updateSettingsSchema = workspaceSettingsSchema.extend({
   name: workspaceNameSchema,
   /** The person saw that a new currency relabels rates without converting them. */
   confirmCurrencyChange: z.boolean().optional(),
+  /** The person saw how many active tasks have no group before switching to "By group". */
+  confirmTaskVisibility: z.boolean().optional(),
 });
 export type UpdateWorkspaceSettingsInput = z.infer<typeof updateSettingsSchema>;
 
@@ -68,13 +71,24 @@ export async function updateWorkspaceSettingsAction(
     await authorize(ctx, "workspace.update");
     const parsed = updateSettingsSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const { name, confirmCurrencyChange, ...settings } = parsed.data;
+    const { name, confirmCurrencyChange, confirmTaskVisibility, ...settings } = parsed.data;
 
     const db = getDb();
     const newCurrency = settings.currency !== ctx.settings.currency;
     if (newCurrency && !confirmCurrencyChange && (await workspaceHasRates(db, ctx.workspace.id))) {
       const message = `Rates and amounts will show in ${settings.currency}; they are not converted.`;
       return fail(message, { currency: [message] });
+    }
+    // Decision 11, rule 1: switching tasks to "By group" says how many tasks nobody will see yet.
+    const toByGroup =
+      settings.taskVisibility === "BY_GROUP" && ctx.settings.taskVisibility !== "BY_GROUP";
+    if (toByGroup && !confirmTaskVisibility) {
+      const n = await countTasksWithoutGroup(db, ctx.workspace.id);
+      const message =
+        n === 0
+          ? "Every active task already has a group."
+          : `${n} active ${n === 1 ? "task has" : "tasks have"} no group yet. Members will not see ${n === 1 ? "it" : "them"} until a group is assigned.`;
+      return fail(message, { taskVisibility: [message] });
     }
     await db.transaction(async (tx) => {
       await tx.update(workspace).set({ name }).where(eq(workspace.id, ctx.workspace.id));

@@ -125,7 +125,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Project detail
 
-- [x] Add a task — `project-detail.spec.ts` › "manage a project's tasks"
+- [x] Add a task with groups — `project-detail.spec.ts` › "manage a project's tasks"
 - [x] Rename a task — `project-detail.spec.ts` › "manage a project's tasks"
 - [x] Mark a task done and reopen it — `project-detail.spec.ts` › "manage a project's tasks"
 - [x] A done task takes no new time and is hidden from the picker — `project-picker.spec.ts` › "a done task takes no new time and is hidden from the picker"
@@ -288,6 +288,16 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 - [x] Import entries from a CSV: map columns, check every row, then import the ready ones — `import.spec.ts` › "import entries from a CSV: check, then import"
 - [x] An import for another person's email needs permission — `import.spec.ts` › "a member cannot import time for someone else"
+
+## Tasks by group
+
+- [x] Turn on task visibility by group after a confirmation that counts the tasks without a group — `task-groups.spec.ts` › "an admin turns on task visibility by group and assigns groups to tasks"
+- [x] Assign groups to tasks from the Tasks tab, with chips, a multi-select, the "No group" badge and filter, and the banner — `task-groups.spec.ts` › "an admin turns on task visibility by group and assigns groups to tasks"
+- [x] A group given a task on a private project also gets access to the project — `task-groups.spec.ts` › "an admin turns on task visibility by group and assigns groups to tasks"
+- [x] A member in two groups sees exactly their groups' tasks in the tracker, timesheet, calendar and bulk-edit pickers, and must pick one on a project that has them — `task-groups.spec.ts` › "a member in two groups sees exactly their groups' tasks and loses them on leaving"
+- [x] Leaving a group hides its tasks at once; the member's old entry stays and Continue is refused — `task-groups.spec.ts` › "a member in two groups sees exactly their groups' tasks and loses them on leaving"
+- [x] The Team page lists a group's tasks and the tasks available to a member — `task-groups.spec.ts` › "a member in two groups sees exactly their groups' tasks and loses them on leaving"
+- [x] An invitee invited into a group sees its tasks on first sign-in — `task-groups.spec.ts` › "a new invitee invited into a group sees its tasks on first sign-in"
 
 ## Small screens (375px)
 

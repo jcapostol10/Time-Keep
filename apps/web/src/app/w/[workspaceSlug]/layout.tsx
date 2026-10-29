@@ -39,6 +39,7 @@ export default async function WorkspaceLayout({
       rules={{
         requiredFields: rules.requiredFields,
         allowBreaks: rules.allowBreaks,
+        taskVisibility: ctx.settings.taskVisibility,
         canWriteTimes: can(scope.actor, "entry.writeTimes", {
           kind: "entry",
           userId: ctx.user.id,

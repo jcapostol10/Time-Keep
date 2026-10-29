@@ -35,6 +35,8 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] Phase 4a review: `commitUserImport` creates the CSV's groups before any invite succeeds, and sends up to 500 invites (Better Auth plus SMTP) one after another in one action, which can run past the function budget part-way through. Re-running is safe ("invited already"), but the first result is lost. Move the sending into a job once the worker exists.
 - [ ] A second rate change on the same effective date replaces that date's row (Phase 4a Task 8 ruling), so History loses the earlier value of the day, and entries created between the two changes keep the replaced rate until a recalculation runs.
 
+- [ ] Tasks by group (decision 11) sends no email when a group gains tasks: members learn about them in the picker. An email or a digest when a group's tasks change is an option if teams ask for it.
+- [ ] `workspace_settings.task_creators` and `task_assignee` are unread since tasks by group (2026-10-29) and kept for a later contract migration, once every open preview runs code that no longer reads them.
 - [ ] The CSV import parses and resolves the file twice (the dry run and the commit) and writes up to 10,000 rows inside one request. Fine within the 300 s budget today; move the commit to a job with the export jobs once the worker exists.
 - [ ] Rounding rounds each entry before summing (Clockify's rule); a workspace that wants the total rounded instead has no setting for it.
 - [ ] Phase 4b review: the import route reads the whole multipart body (`formData()`) before checking the file's size, and a malformed `options` JSON answers 500 instead of 400. Check `Content-Length` first and map the parse error to a 400 (Vercel's 4.5 MB body cap bounds it in production).

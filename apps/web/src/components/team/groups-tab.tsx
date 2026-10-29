@@ -48,10 +48,11 @@ import {
   setGroupMembersAction,
 } from "@/server/actions/groups";
 
-import { ChecklistDialog } from "./member-actions";
+import { ChecklistDialog } from "../shared/checklist-dialog";
+import { TaskAccessDialog } from "./task-access-dialog";
 import type { TeamContext } from "./team-view";
 
-type Open = { group: GroupDTO; dialog: "rename" | "members" | "delete" } | "new" | null;
+type Open = { group: GroupDTO; dialog: "rename" | "members" | "tasks" | "delete" } | "new" | null;
 
 /** Groups: named sets of people for private projects, report filters and manager scope. */
 export function GroupsTab({ ctx }: { ctx: TeamContext }) {
@@ -123,6 +124,11 @@ export function GroupsTab({ ctx }: { ctx: TeamContext }) {
                             Members
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            onSelect={() => setOpen({ group: g, dialog: "tasks" })}
+                          >
+                            Tasks
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
                             onSelect={() => setOpen({ group: g, dialog: "rename" })}
                           >
                             Rename
@@ -163,6 +169,15 @@ export function GroupsTab({ ctx }: { ctx: TeamContext }) {
           onSave={(name) =>
             run(() => renameGroupAction(ctx.slug, open.group.id, { name }), "Group renamed")
           }
+        />
+      ) : null}
+      {open && open !== "new" && open.dialog === "tasks" ? (
+        <TaskAccessDialog
+          slug={ctx.slug}
+          title={`Tasks for ${open.group.name}`}
+          description="The active tasks this group's members can see and track on, by project."
+          query={{ groupId: open.group.id }}
+          onClose={() => setOpen(null)}
         />
       ) : null}
       {open && open !== "new" && open.dialog === "members" ? (

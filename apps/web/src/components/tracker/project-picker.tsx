@@ -21,6 +21,7 @@ import { createTaskAction } from "@/server/actions/tasks";
 
 import { trackDraftWrite } from "./draft-writes";
 import { useTargetKey } from "./target-context";
+import { useTracker } from "./tracker-provider";
 import { useTrackerCache, useTrackerOptions } from "./use-tracker-cache";
 
 export function ColorDot({ color, className }: { color: string; className?: string }) {
@@ -104,6 +105,7 @@ export function ProjectPicker({
   invalid?: boolean;
   current?: CurrentSelection | null;
 }) {
+  const { rules } = useTracker();
   const { data } = useTrackerOptions(slug, useTargetKey());
   const cache = useTrackerCache(slug, useTargetKey());
   const projects = useMemo(() => data?.projects ?? [], [data]);
@@ -132,7 +134,9 @@ export function ProjectPicker({
 
   // A task is created in the chosen project (by its managers and admins: the
   // project says), once the typed name matches none of its tasks.
+  // With tasks by group a task is created with its groups, from the project page.
   const showCreateTask =
+    rules.taskVisibility === "EVERYONE" &&
     listed !== undefined &&
     listed.canCreateTask &&
     trimmed.length > 0 &&

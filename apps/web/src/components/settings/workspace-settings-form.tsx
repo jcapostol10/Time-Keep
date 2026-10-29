@@ -69,24 +69,36 @@ export function WorkspaceSettingsForm({
   const router = useRouter();
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues });
 
-  // A new currency relabels existing rates (decision 4): the server asks first.
-  const [confirmCurrency, setConfirmCurrency] = useState<{
+  // Changes the server asks about first: a new currency relabels existing rates
+  // (decision 4); tasks by group hides tasks that have no group (decision 11).
+  const [confirm, setConfirm] = useState<{
+    field: ConfirmField;
     values: Values;
+    confirmed: ConfirmField[];
     message: string;
   } | null>(null);
 
-  async function onSubmit(values: Values, confirmCurrencyChange = false) {
-    const result = await updateWorkspaceSettingsAction(slug, { ...values, confirmCurrencyChange });
+  async function onSubmit(values: Values, confirmed: ConfirmField[] = []) {
+    const result = await updateWorkspaceSettingsAction(slug, {
+      ...values,
+      confirmCurrencyChange: confirmed.includes("currency"),
+      confirmTaskVisibility: confirmed.includes("taskVisibility"),
+    });
     if (!result.ok) {
-      const currency = result.fieldErrors?.currency?.[0];
-      if (currency && !confirmCurrencyChange) setConfirmCurrency({ values, message: currency });
-      else toast.error(result.error);
+      const field = CONFIRM_FIELDS.find(
+        (f) => result.fieldErrors?.[f]?.[0] !== undefined && !confirmed.includes(f),
+      );
+      if (field) {
+        setConfirm({ field, values, confirmed, message: result.fieldErrors![field]![0]! });
+      } else toast.error(result.error);
       return;
     }
     toast.success("Workspace settings saved");
     form.reset(values);
     router.refresh();
   }
+
+  const dialog = confirm ? CONFIRM_COPY[confirm.field] : null;
 
   return (
     <Form {...form}>
@@ -237,25 +249,24 @@ export function WorkspaceSettingsForm({
           </Button>
         )}
       </form>
-      <AlertDialog
-        open={confirmCurrency !== null}
-        onOpenChange={(open) => (open ? null : setConfirmCurrency(null))}
-      >
+      <AlertDialog open={confirm !== null} onOpenChange={(open) => (open ? null : setConfirm(null))}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Change the workspace currency?</AlertDialogTitle>
-            <AlertDialogDescription>{confirmCurrency?.message}</AlertDialogDescription>
+            <AlertDialogTitle>{dialog?.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirm?.message}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep {defaultValues.currency}</AlertDialogCancel>
+            <AlertDialogCancel>
+              {confirm?.field === "currency" ? `Keep ${defaultValues.currency}` : dialog?.cancel}
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                const pending = confirmCurrency;
-                setConfirmCurrency(null);
-                if (pending) void onSubmit(pending.values, true);
+                const pending = confirm;
+                setConfirm(null);
+                if (pending) void onSubmit(pending.values, [...pending.confirmed, pending.field]);
               }}
             >
-              Change currency
+              {dialog?.action}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -263,3 +274,14 @@ export function WorkspaceSettingsForm({
     </Form>
   );
 }
+
+type ConfirmField = "currency" | "taskVisibility";
+const CONFIRM_FIELDS: ConfirmField[] = ["currency", "taskVisibility"];
+const CONFIRM_COPY: Record<ConfirmField, { title: string; cancel: string; action: string }> = {
+  currency: { title: "Change the workspace currency?", cancel: "Keep", action: "Change currency" },
+  taskVisibility: {
+    title: "Show tasks by group?",
+    cancel: "Keep everyone",
+    action: "Switch to by group",
+  },
+};

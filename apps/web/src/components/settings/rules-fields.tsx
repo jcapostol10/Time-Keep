@@ -11,6 +11,8 @@ import {
   ROUNDING_MODES,
   ROUNDING_STEPS,
   type RoundingMode,
+  TASK_VISIBILITY,
+  type TaskVisibility,
   type WorkspaceSettingsInput,
 } from "@timekeep/core";
 import { Checkbox } from "@timekeep/ui/components/checkbox";
@@ -55,6 +57,11 @@ const CREATOR_LABELS: Record<CreatorSetting, string> = {
   admins: "Admins",
   managers: "Admins and managers",
   everyone: "Everyone",
+};
+
+const TASK_VISIBILITY_LABELS: Record<TaskVisibility, string> = {
+  EVERYONE: "Everyone",
+  BY_GROUP: "By group",
 };
 
 // Tasks are not here: owners, admins and a project's managers create them (decision 11).
@@ -204,13 +211,44 @@ export function RulesFields() {
             </FormItem>
           )}
         />
+        <FormField
+          control={form.control}
+          name="taskVisibility"
+          render={({ field }) => (
+            <FormItem className="max-w-xs">
+              <FormLabel>Task visibility</FormLabel>
+              <Select value={field.value} onValueChange={field.onChange}>
+                <FormControl>
+                  <SelectTrigger aria-label="Task visibility" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {TASK_VISIBILITY.map((v) => (
+                    <SelectItem key={v} value={v}>
+                      {TASK_VISIBILITY_LABELS[v]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                By group: members see and track only the tasks of their groups, and must pick one
+                on a project that has them. Owners and admins see every task.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
       </Section>
 
       <Section
         id="creators"
         title="Who can create"
-        description="Owners and admins always can. A project's managers can always add tasks to the projects they manage."
+        description="Owners and admins always can. Tasks are created by owners, admins and a project's managers."
       >
+        <p className="text-sm">
+          <span className="font-medium">Tasks:</span> Admins and project managers
+        </p>
         <div className="grid gap-6 sm:grid-cols-2">
           {CREATOR_FIELDS.map(({ name, type, label }) => (
             <FormField
