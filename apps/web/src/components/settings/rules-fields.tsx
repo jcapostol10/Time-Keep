@@ -114,7 +114,7 @@ export function RulesFields() {
         title="Rounding"
         description="Rounds each entry in reports, exports and shared links. The tracker, timesheet and calendar always show real time."
       >
-        <div className="grid gap-6 sm:grid-cols-2">
+        <div className="grid items-start gap-6 sm:grid-cols-2">
           <FormField
             control={form.control}
             name="roundingMode"
@@ -249,7 +249,7 @@ export function RulesFields() {
         <p className="text-sm">
           <span className="font-medium">Tasks:</span> Admins and project managers
         </p>
-        <div className="grid gap-6 sm:grid-cols-2">
+        <div className="grid items-start gap-6 sm:grid-cols-2">
           {CREATOR_FIELDS.map(({ name, type, label }) => (
             <FormField
               key={name}
