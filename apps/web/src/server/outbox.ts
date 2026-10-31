@@ -1,0 +1,107 @@
+import "server-only";
+
+import { randomUUID } from "node:crypto";
+
+import {
+  isUndeliverable,
+  OUTBOX_BACKOFF_MINUTES,
+  OUTBOX_LEASE_MINUTES,
+  OUTBOX_MAX_ATTEMPTS,
+} from "@timekeep/core";
+import { type Database, type DbExecutor, emailOutbox, eq, sql } from "@timekeep/db";
+
+import { type EmailContent, renderEmail, type RenderedEmail, sendRenderedEmail } from "./mail";
+
+export type { RenderedEmail };
+
+/**
+ * The email outbox (Phase 5a decision 1). A cause (a submitted period, a
+ * reminder) enqueues its email in its own transaction, so a rolled-back cause
+ * sends nothing; nothing is sent inside a request. `drainOutbox` sends what is
+ * due: after the request (`drainSoon`), from the daily cron, and locally from
+ * the worker every minute.
+ */
+
+export interface OutgoingMessage extends EmailContent {
+  workspaceId: string | null;
+  to: string;
+  subject: string;
+  /** What it is, e.g. "approval.submitted"; a reminder carries its period. */
+  kind: string;
+}
+
+export async function enqueueEmail(
+  db: Pick<DbExecutor, "insert">,
+  msg: OutgoingMessage,
+): Promise<void> {
+  const { html, text } = renderEmail(msg);
+  await db.insert(emailOutbox).values({
+    id: randomUUID(),
+    workspaceId: msg.workspaceId,
+    toAddress: msg.to.trim(),
+    subject: msg.subject,
+    html,
+    text,
+    kind: msg.kind,
+    status: isUndeliverable(msg.to) ? "SKIPPED" : "PENDING",
+  });
+}
+
+const MINUTE = 60_000;
+
+export async function drainOutbox(
+  db: Database,
+  opts: {
+    limit?: number;
+    now?: Date;
+    send?: (msg: RenderedEmail) => Promise<unknown>;
+  } = {},
+): Promise<{ sent: number; failed: number }> {
+  const now = opts.now ?? new Date();
+  const send = opts.send ?? sendRenderedEmail;
+  const lease = new Date(now.getTime() + OUTBOX_LEASE_MINUTES * MINUTE);
+  // One statement claims the due rows: SKIP LOCKED lets a concurrent drain take
+  // others, and the lease moves them out of "due" so nobody claims them again
+  // until it ends (a crashed sender's rows come back then).
+  const claimed = await db
+    .update(emailOutbox)
+    .set({ attempts: sql`${emailOutbox.attempts} + 1`, nextAttemptAt: lease })
+    .where(
+      sql`${emailOutbox.id} in (
+        select id from email_outbox
+        where status = 'PENDING' and next_attempt_at <= ${now}
+        order by next_attempt_at
+        limit ${opts.limit ?? 50}
+        for update skip locked
+      )`,
+    )
+    .returning();
+
+  let sent = 0;
+  let failed = 0;
+  for (const row of claimed) {
+    try {
+      await send({ to: row.toAddress, subject: row.subject, html: row.html, text: row.text });
+      await db
+        .update(emailOutbox)
+        .set({ status: "SENT", sentAt: now, lastError: null })
+        .where(eq(emailOutbox.id, row.id));
+      sent++;
+    } catch (error) {
+      failed++;
+      const message = error instanceof Error ? error.message : String(error);
+      const giveUp = row.attempts >= OUTBOX_MAX_ATTEMPTS;
+      const wait = OUTBOX_BACKOFF_MINUTES[row.attempts - 1] ?? 0;
+      await db
+        .update(emailOutbox)
+        .set({
+          status: giveUp ? "FAILED" : "PENDING",
+          nextAttemptAt: new Date(now.getTime() + wait * MINUTE),
+          lastError: message.slice(0, 1000),
+        })
+        .where(eq(emailOutbox.id, row.id));
+      if (giveUp) console.error(`[outbox] gave up on "${row.subject}" (${row.kind})`, error);
+    }
+  }
+  return { sent, failed };
+}

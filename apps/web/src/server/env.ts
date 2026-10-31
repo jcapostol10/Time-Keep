@@ -30,6 +30,8 @@ const schema = z.object({
   MAIL_CAPTURE: boolish,
   /** Shared secret for the preview-only test endpoints. */
   E2E_SECRET: optionalString,
+  /** Bearer token of the cron routes (Vercel Cron sends it; the local worker too). */
+  CRON_SECRET: optionalString,
 
   GOOGLE_CLIENT_ID: optionalString,
   GOOGLE_CLIENT_SECRET: optionalString,

@@ -83,11 +83,26 @@ export class MailConfigurationError extends Error {
   }
 }
 
+/** A message ready to go: what the outbox stores. */
+export interface RenderedEmail {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}
+
 /** Sends, or on a preview captures or drops the message; says which. */
 export async function sendEmail(
   args: { to: string; subject: string } & EmailContent,
 ): Promise<"sent" | "captured" | "dropped"> {
-  const { html, text } = renderEmail(args);
+  return sendRenderedEmail({ to: args.to, subject: args.subject, ...renderEmail(args) });
+}
+
+/** `sendEmail` for a message rendered earlier (the outbox). */
+export async function sendRenderedEmail(
+  args: RenderedEmail,
+): Promise<"sent" | "captured" | "dropped"> {
+  const { html, text } = args;
   const mode = previewMailMode(env(), args.to);
   if (mode === "capture") {
     // Preview deployments: store e2e mail instead of sending; e2e reads /api/test/emails.
