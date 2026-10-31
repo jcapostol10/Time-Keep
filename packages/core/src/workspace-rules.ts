@@ -1,4 +1,11 @@
 import {
+  APPROVAL_PERIODS,
+  APPROVAL_REVIEWERS,
+  LOCK_MODES,
+  type LockRule,
+  type PeriodRule,
+} from "./approvals";
+import {
   type CatalogType,
   CREATOR_SETTINGS,
   type CreatorSetting,
@@ -11,6 +18,7 @@ import {
 import { planAllows } from "./plans";
 import { REQUIRED_FIELDS, type RequiredField } from "./required-fields";
 import { ROUNDING_MODES, ROUNDING_STEPS, type RoundingRule, type RoundingStep } from "./rounding";
+import { WEEK_START_DAYS } from "./schemas";
 
 /**
  * The workspace's rules as the `workspace_settings` row stores them. Stored
@@ -30,6 +38,13 @@ export interface WorkspaceRuleColumns {
   roundingMinutes: number;
   /** `task_creators` is still a column but unread: tasks are admins' and project managers'. */
   taskVisibility: string;
+  // Phase 5a: approvals and lock dates.
+  approvalEnabled: boolean;
+  approvalPeriod: string;
+  approvalReviewers: string;
+  lockMode: string;
+  lockDate: string | null;
+  lockDays: number | null;
 }
 
 function oneOf<T extends string | number>(allowed: readonly T[], value: unknown, fallback: T): T {
@@ -59,6 +74,31 @@ export function permissionSettingsOf(
     },
     forceTimer: row.forceTimer && planAllows(workspace, "forceTimer"),
     taskVisibility: oneOf(TASK_VISIBILITY, row.taskVisibility, "EVERYONE"),
+    approvalReviewers: oneOf(APPROVAL_REVIEWERS, row.approvalReviewers, "ADMINS"),
+  };
+}
+
+/** Whether periods are submitted, how long they are, and the lock, in the workspace zone. */
+export function approvalRulesOf(
+  row: Pick<
+    WorkspaceRuleColumns,
+    "approvalEnabled" | "approvalPeriod" | "lockMode" | "lockDate" | "lockDays"
+  >,
+  zone: { timezone: string; weekStart: number },
+): { enabled: boolean; period: PeriodRule; lock: LockRule } {
+  return {
+    enabled: row.approvalEnabled,
+    period: {
+      period: oneOf(APPROVAL_PERIODS, row.approvalPeriod, "WEEKLY"),
+      timezone: zone.timezone,
+      weekStart: oneOf(WEEK_START_DAYS, zone.weekStart, 1),
+    },
+    lock: {
+      mode: oneOf(LOCK_MODES, row.lockMode, "OFF"),
+      date: row.lockDate,
+      days: row.lockDays,
+      timezone: zone.timezone,
+    },
   };
 }
 

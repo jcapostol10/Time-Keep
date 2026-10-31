@@ -53,6 +53,11 @@ const member = (userId: string, role: Role = "member"): Resource => ({
 });
 const project = (projectId: string | null): Resource => ({ kind: "project", projectId });
 const NONE: Resource = { kind: "none" };
+const approval = (userId: string, projectIds: string[] = []): Resource => ({
+  kind: "approval",
+  userId,
+  projectIds,
+});
 
 type Row = [Action, Resource, owner: boolean, admin: boolean, manager: boolean, member: boolean];
 
@@ -141,6 +146,13 @@ const TABLE: Row[] = [
   // Without force timer everyone may set times; "entry.write" decides whose.
   ["entry.writeTimes", entry(ME), true, true, true, true],
   ["import.entries", NONE, true, true, true, true],
+  ["approval.submit", approval(ME), true, true, true, true],
+  ["approval.submit", approval(OTHER), true, true, false, false],
+  // Approvers default to admins: a manager reviews nobody until the workspace says so.
+  ["approval.review", approval(MANAGED), true, true, false, false],
+  ["approval.review", approval(ME), true, true, false, false],
+  ["approval.editLocked", NONE, true, true, false, false],
+  ["lock.manage", NONE, true, true, false, false],
 ];
 
 describe("can", () => {
@@ -354,5 +366,38 @@ describe("renderPermissionsMarkdown", () => {
     const md = renderPermissionsMarkdown();
     expect(md).toContain("| Action | Owner | Admin | Manager | Member |");
     for (const action of ACTIONS) expect(md).toContain(`\`${action}\``);
+  });
+});
+
+describe("approvers", () => {
+  const at = (approvalReviewers: PermissionSettings["approvalReviewers"]) =>
+    actor("manager", { approvalReviewers });
+
+  it.each([
+    ["ADMINS", approval(MANAGED), false],
+    ["TEAM_MANAGERS", approval(MANAGED), true],
+    ["PROJECT_MANAGERS", approval(MANAGED), true],
+    ["TEAM_MANAGERS", approval(OTHER, [MANAGED_PROJECT]), false],
+    ["PROJECT_MANAGERS", approval(OTHER, [MANAGED_PROJECT]), true],
+    ["PROJECT_MANAGERS", approval(OTHER, [MANAGED_PROJECT, OTHER_PROJECT]), false],
+    ["PROJECT_MANAGERS", approval(OTHER, []), false],
+    ["PROJECT_MANAGERS", approval(ME, [MANAGED_PROJECT]), false],
+    ["TEAM_MANAGERS", approval(ME), false],
+  ] as const)("a manager at %s on %o: %s", (setting, resource, allowed) => {
+    expect(can(at(setting), "approval.review", resource)).toBe(allowed);
+  });
+
+  it("refuses a manager with 404, so a request outside the scope stays hidden", () => {
+    expect(denial(at("TEAM_MANAGERS"), "approval.review", approval(OTHER))).toBe(404);
+  });
+
+  it("lets owners and admins approve their own", () => {
+    expect(can(actor("admin"), "approval.review", approval(ME))).toBe(true);
+    expect(can(actor("owner"), "approval.review", approval(ME))).toBe(true);
+  });
+
+  it("never lets a member review", () => {
+    const m = actor("member", { approvalReviewers: "PROJECT_MANAGERS" });
+    expect(denial(m, "approval.review", approval(OTHER))).toBe(403);
   });
 });

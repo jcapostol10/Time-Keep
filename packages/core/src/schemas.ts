@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { RATE_APPLY, RATE_LEVELS } from "./rates";
 
+import { APPROVAL_PERIODS, APPROVAL_REVIEWERS, LOCK_MODES } from "./approvals";
+
 import { PROJECT_VISIBILITIES, TASK_STATUSES } from "./catalog";
 import { hexColorSchema } from "./colors";
 import { IMPORT_COLUMNS } from "./entry-import";
@@ -113,6 +115,14 @@ export const workspaceSettingsSchema = z.object({
   allowBreaks: z.boolean(),
   // Tasks by group (decision 11). `taskCreators` left the form: tasks are admins' and project managers'.
   taskVisibility: z.enum(TASK_VISIBILITY),
+  // Phase 5a: approvals and lock dates. The lock's own check is `lockSettingsCheck`,
+  // applied after `.extend` (zod refuses to extend a refined object).
+  approvalEnabled: z.boolean(),
+  approvalPeriod: z.enum(APPROVAL_PERIODS),
+  approvalReviewers: z.enum(APPROVAL_REVIEWERS),
+  lockMode: z.enum(LOCK_MODES),
+  lockDate: z.iso.date().nullable(),
+  lockDays: z.number().int().min(0).max(365).nullable(),
 });
 export type WorkspaceSettingsInput = z.infer<typeof workspaceSettingsSchema>;
 
@@ -134,7 +144,26 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettingsInput = {
   forceTimer: false,
   allowBreaks: false,
   taskVisibility: "EVERYONE",
+  approvalEnabled: false,
+  approvalPeriod: "WEEKLY",
+  approvalReviewers: "ADMINS",
+  lockMode: "OFF",
+  lockDate: null,
+  lockDays: null,
 };
+
+/** A fixed lock needs its date, a rolling one its days. */
+export function lockSettingsCheck(
+  value: Pick<WorkspaceSettingsInput, "lockMode" | "lockDate" | "lockDays">,
+  ctx: z.RefinementCtx,
+): void {
+  if (value.lockMode === "FIXED" && !value.lockDate) {
+    ctx.addIssue({ code: "custom", path: ["lockDate"], message: "Pick the lock date" });
+  }
+  if (value.lockMode === "ROLLING" && value.lockDays === null) {
+    ctx.addIssue({ code: "custom", path: ["lockDays"], message: "Enter a number of days" });
+  }
+}
 
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
@@ -206,6 +235,11 @@ export const ENTRY_DESCRIPTION_MAX = 3000;
 /** ISO 8601 instant (with offset or Z) → Date. Every action/route payload uses this. */
 export const isoInstantSchema = z.iso.datetime({ offset: true }).transform((s) => new Date(s));
 
+/** Why an owner or admin changes submitted time (Phase 5a decision 5); logged with the change. */
+export const entryNoteSchema = z.string().trim().min(3, "Say why").max(500);
+/** The optional note every entry write accepts. */
+export const entryNoteInputSchema = z.object({ note: entryNoteSchema.optional() });
+
 /** A work entry, or a break (decision 6): no project, task, tags, billing or amount. */
 export const ENTRY_TYPES = ["work", "break"] as const;
 export type EntryType = (typeof ENTRY_TYPES)[number];
@@ -238,6 +272,7 @@ export const createManualEntrySchema = entryDetailsSchema.extend({
   end: isoInstantSchema,
   /** The person the entry is for (add time for others); the caller by default. */
   userId: z.string().min(1).optional(),
+  note: entryNoteSchema.optional(),
 });
 export type CreateManualEntryInput = z.infer<typeof createManualEntrySchema>;
 
@@ -250,11 +285,13 @@ export const updateEntrySchema = z.object({
   billable: z.boolean().optional(),
   start: isoInstantSchema.optional(),
   end: isoInstantSchema.optional(),
+  note: entryNoteSchema.optional(),
 });
 export type UpdateEntryInput = z.infer<typeof updateEntrySchema>;
 
 export const entryIdsSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(500),
+  note: entryNoteSchema.optional(),
 });
 export type EntryIdsInput = z.infer<typeof entryIdsSchema>;
 
@@ -276,7 +313,10 @@ export const bulkEntryPatchSchema = z
 export type BulkEntryPatch = z.infer<typeof bulkEntryPatchSchema>;
 
 /** Split (Phase 4b): the instant inside the entry where the second part starts. */
-export const splitEntrySchema = z.object({ at: isoInstantSchema });
+export const splitEntrySchema = z.object({
+  at: isoInstantSchema,
+  note: entryNoteSchema.optional(),
+});
 
 /** Importing entries (Phase 4b): the file's times' zone and format, what may be created, the mapping. */
 export const importOptionsSchema = z.object({
@@ -294,7 +334,26 @@ export type ImportOptionsInput = z.infer<typeof importOptionsSchema>;
 export const bulkUpdateEntriesSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(500),
   patch: bulkEntryPatchSchema,
+  note: entryNoteSchema.optional(),
 });
+
+// --- Approvals (Phase 5a) -----------------------------------------------------
+
+export const submitPeriodSchema = z.object({ periodStart: z.iso.date() });
+
+export const reviewRequestsSchema = z
+  .object({
+    ids: z.array(z.string().min(1)).min(1).max(200),
+    decision: z.enum(["APPROVE", "REJECT"]),
+    note: entryNoteSchema.optional(),
+  })
+  .refine((v) => v.decision === "APPROVE" || v.note !== undefined, {
+    path: ["note"],
+    message: "Say what needs fixing",
+  });
+export type ReviewRequestsInput = z.infer<typeof reviewRequestsSchema>;
+
+export const reopenRequestSchema = z.object({ note: entryNoteSchema });
 
 // --- Catalog: clients, projects, tasks, tags ----------------------------------
 

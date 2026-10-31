@@ -106,3 +106,17 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 | --- | --- | --- | --- | --- |
 | `import.users` | yes | yes | — | — |
 | `import.entries` | yes | yes | yes | yes |
+
+## Approvals
+
+| Action | Owner | Admin | Manager | Member |
+| --- | --- | --- | --- | --- |
+| `approval.submit` | yes | yes | their own | their own |
+| `approval.review` | yes | yes | per the approvers setting: their people, or periods all on their projects | — |
+| `approval.editLocked` | yes | yes | — | — |
+
+## Lock dates
+
+| Action | Owner | Admin | Manager | Member |
+| --- | --- | --- | --- | --- |
+| `lock.manage` | yes | yes | — | — |

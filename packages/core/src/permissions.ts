@@ -1,3 +1,4 @@
+import type { ApprovalReviewers } from "./approvals";
 import type { ProjectVisibility } from "./catalog";
 import { ROLE_LABELS, ROLES, type Role } from "./roles";
 
@@ -51,6 +52,13 @@ export const ACTIONS = [
   /** start, end or duration by hand: the force-timer gate */
   "entry.writeTimes",
   "import.entries",
+  /** submit, withdraw and resubmit a period of one's own time (Phase 5a) */
+  "approval.submit",
+  /** approve, reject or reopen someone's period, per the approvers setting */
+  "approval.review",
+  /** change time in a submitted or locked period (with a note when submitted) */
+  "approval.editLocked",
+  "lock.manage",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -70,6 +78,8 @@ export interface PermissionSettings {
   creators: Record<CatalogType, CreatorSetting>;
   forceTimer: boolean;
   taskVisibility: TaskVisibility;
+  /** who approves periods (Phase 5a decision 4) */
+  approvalReviewers: ApprovalReviewers;
 }
 
 /** Today's behaviour: nothing hidden, members see their own time, admins create the catalog. */
@@ -79,6 +89,7 @@ export const DEFAULT_PERMISSION_SETTINGS: PermissionSettings = {
   creators: { project: "admins", client: "admins", tag: "admins" },
   forceTimer: false,
   taskVisibility: "EVERYONE",
+  approvalReviewers: "ADMINS",
 };
 
 export interface Actor {
@@ -111,7 +122,14 @@ export type Resource =
       groupIds?: readonly string[];
     }
   | { kind: "entry"; userId: string; projectId: string | null }
-  | { kind: "shareLink"; createdBy: string };
+  | { kind: "shareLink"; createdBy: string }
+  | {
+      kind: "approval";
+      /** whose period it is */
+      userId: string;
+      /** the projects of the period's entries (for project-manager approvers) */
+      projectIds: readonly string[];
+    };
 
 /**
  * How a role's answer is decided. Rules that read the role or the workspace
@@ -142,7 +160,9 @@ export type Rule =
   /** allowed unless force timer is on, and then only for someone else's time */
   | "unlessForced"
   /** every task, or when tasks are by group: the tasks of their groups and of projects they manage */
-  | "taskGroups";
+  | "taskGroups"
+  /** per the approvers setting: the people they manage, or periods all on their projects */
+  | "approvers";
 
 const SCOPED: ReadonlySet<Rule> = new Set([
   "own",
@@ -152,6 +172,7 @@ const SCOPED: ReadonlySet<Rule> = new Set([
   "managedProjects",
   "visible",
   "taskGroups",
+  "approvers",
 ]);
 
 const ADMINS = { owner: "yes", admin: "yes", manager: "no", member: "no" } as const;
@@ -203,6 +224,10 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
     member: "unlessForced",
   },
   "import.entries": { owner: "yes", admin: "yes", manager: "yes", member: "yes" },
+  "approval.submit": { owner: "yes", admin: "yes", manager: "own", member: "own" },
+  "approval.review": { owner: "yes", admin: "yes", manager: "approvers", member: "no" },
+  "approval.editLocked": ADMINS,
+  "lock.manage": ADMINS,
 };
 
 const CREATED: Partial<Record<Action, CatalogType>> = {
@@ -234,6 +259,7 @@ function ownerOf(resource: Resource): string | null {
   switch (resource.kind) {
     case "entry":
     case "member":
+    case "approval":
       return resource.userId;
     case "shareLink":
       return resource.createdBy;
@@ -301,6 +327,18 @@ function check(actor: Actor, action: Action, rule: Rule, resource: Resource): bo
       // Decision 7: force timer binds a person's own time; time added for
       // someone else (an admin or manager for a managed person) is exempt.
       return !actor.settings.forceTimer || ownerOf(resource) !== actor.userId;
+    case "approvers": {
+      // Decision 4: managers never approve their own; each level includes the previous.
+      if (resource.kind !== "approval" || resource.userId === actor.userId) return false;
+      const level = actor.settings.approvalReviewers;
+      if (level === "ADMINS") return false;
+      if (actor.managedUserIds.has(resource.userId)) return true;
+      return (
+        level === "PROJECT_MANAGERS" &&
+        resource.projectIds.length > 0 &&
+        resource.projectIds.every((id) => actor.managedProjectIds.has(id))
+      );
+    }
   }
 }
 
@@ -334,6 +372,7 @@ const RULE_WORDS: Record<Rule, string> = {
   unlessForced: "unless force timer is on (own time)",
   taskGroups:
     "every task, or when tasks are by group: their groups' tasks and projects they manage",
+  approvers: "per the approvers setting: their people, or periods all on their projects",
 };
 
 const SECTION_TITLES: Record<string, string> = {
@@ -350,6 +389,8 @@ const SECTION_TITLES: Record<string, string> = {
   report: "Reports",
   shareLink: "Share links",
   import: "Import",
+  approval: "Approvals",
+  lock: "Lock dates",
 };
 
 /** The matrix as markdown, for docs/PERMISSIONS.md. */
