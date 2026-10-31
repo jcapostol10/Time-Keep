@@ -263,20 +263,22 @@ test.describe("approvals and locks", () => {
     browser,
     baseURL,
   }) => {
+    // Room for one retried send (the outbox waits a minute after a failure).
+    test.setTimeout(180_000);
     const { slug, timezone } = freshUser;
     const { current, last } = weeks(timezone);
     await enableApproval(page, slug);
     const mia = await addTeammate(page, browser, baseURL, slug, "Mia Member", "Member");
     await addLastWeek(mia.page, slug, timezone, "Forgotten week");
     // The job runs early on the first day after the week, in the workspace's zone.
-    await runDailyJob(
-      page.request,
-      slug,
-      zonedDateTimeToInstant({ date: current.start, hours: 6, minutes: 0 }, timezone),
-    );
-    await waitForEmail(mia.user.email, {
-      subject: new RegExp(`Submit your time for ${formatPeriod(last)}`),
-    });
+    // Running it again sends nothing new but drains a send the outbox is retrying
+    // (a transient SMTP failure waits a minute), so the test re-runs it until the mail lands.
+    const at = zonedDateTimeToInstant({ date: current.start, hours: 6, minutes: 0 }, timezone);
+    const subject = new RegExp(`Submit your time for ${formatPeriod(last)}`);
+    await expect(async () => {
+      await runDailyJob(page.request, slug, at);
+      await waitForEmail(mia.user.email, { subject, timeoutMs: 5_000 });
+    }).toPass({ timeout: 100_000, intervals: [5_000] });
     await mia.context.close();
   });
 });

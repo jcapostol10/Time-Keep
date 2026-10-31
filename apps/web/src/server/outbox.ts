@@ -81,8 +81,6 @@ export async function enqueueEmail(
   });
 }
 
-const MINUTE = 60_000;
-
 export async function drainOutbox(
   db: Database,
   opts: {
@@ -92,16 +90,21 @@ export async function drainOutbox(
     audience?: OutboxAudience;
   } = {},
 ): Promise<{ sent: number; failed: number }> {
-  const now = opts.now ?? new Date();
+  // Times are the database's: a row is stamped with its now(), and the app
+  // server's clock can be off it (a test passes an explicit `now`).
+  const now = opts.now ? sql`${opts.now}::timestamptz` : sql`now()`;
+  const later = (minutes: number) => sql`${now} + make_interval(mins => ${minutes})`;
   const audience = opts.audience ?? outboxAudience(env());
   const send = opts.send ?? sendRenderedEmail;
-  const lease = new Date(now.getTime() + OUTBOX_LEASE_MINUTES * MINUTE);
   // One statement claims the due rows: SKIP LOCKED lets a concurrent drain take
   // others, and the lease moves them out of "due" so nobody claims them again
   // until it ends (a crashed sender's rows come back then).
   const claimed = await db
     .update(emailOutbox)
-    .set({ attempts: sql`${emailOutbox.attempts} + 1`, nextAttemptAt: lease })
+    .set({
+      attempts: sql`${emailOutbox.attempts} + 1`,
+      nextAttemptAt: later(OUTBOX_LEASE_MINUTES),
+    })
     .where(
       sql`${emailOutbox.id} in (
         select id from email_outbox
@@ -132,11 +135,12 @@ export async function drainOutbox(
         .update(emailOutbox)
         .set({
           status: giveUp ? "FAILED" : "PENDING",
-          nextAttemptAt: new Date(now.getTime() + wait * MINUTE),
+          nextAttemptAt: later(wait),
           lastError: message.slice(0, 1000),
         })
         .where(eq(emailOutbox.id, row.id));
       if (giveUp) console.error(`[outbox] gave up on "${row.subject}" (${row.kind})`, error);
+      else console.warn(`[outbox] send failed, retrying in ${wait} min (${row.kind}): ${message}`);
     }
   }
   return { sent, failed };

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { emailOutbox, eq } from "@timekeep/db";
 
@@ -181,5 +181,21 @@ describe("drainAll", () => {
     const { sent, send } = recorder();
     expect(await drainAll(db, { send, limit: 3, now: minutes(1) })).toEqual({ sent: 7, failed: 0 });
     expect(sent).toHaveLength(7);
+  });
+});
+
+describe("clocks", () => {
+  it("a row is due by the database's clock, even when the app's clock is behind it", async () => {
+    await enqueueEmail(db, mail("ann@test.local"));
+    // The app server's clock a minute slow (the Docker VM's clock drifts).
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.now() - 60_000));
+    try {
+      const { sent, send } = recorder();
+      expect(await drainOutbox(db, { send })).toEqual({ sent: 1, failed: 0 });
+      expect(sent).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
