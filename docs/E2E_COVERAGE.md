@@ -299,6 +299,16 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The Team page lists a group's tasks and the tasks available to a member — `task-groups.spec.ts` › "a member in two groups sees exactly their groups' tasks and loses them on leaving"
 - [x] An invitee invited into a group sees its tasks on first sign-in — `task-groups.spec.ts` › "a new invitee invited into a group sees its tasks on first sign-in"
 
+## Approvals and locks
+
+- [ ] An approved week cannot be edited by its member (tracker row, timesheet cell, an import) — `approvals.spec.ts` › "an approved week cannot be edited by its member"
+- [ ] Submit a week, withdraw it, and resubmit it after a rejection whose note is shown — `approvals.spec.ts` › "submit, withdraw and resubmit after a rejection"
+- [ ] Approve several periods at once from the Pending tab; they move to the Archive — `approvals.spec.ts` › "bulk approve from the Pending tab"
+- [ ] Approvers get the "submitted" email and the member the decision — `approvals.spec.ts` › "approval emails reach approvers and the member"
+- [ ] An owner or admin changes approved time only with a note, which the period's history shows — `approvals.spec.ts` › "an admin edits approved time with a note"
+- [ ] A rolling lock blocks a member's entry in the locked days, not an admin's — `approvals.spec.ts` › "a rolling lock blocks a member, not an admin"
+- [ ] The daily job emails a reminder for a closed period with time and no submission — `approvals.spec.ts` › "the daily job reminds an unsubmitted period"
+
 ## Small screens (375px)
 
 - [x] The tracker page fits a 375px screen without horizontal scrolling — `power.spec.ts` › "the tracker fits a 375px screen with favourites and the person picker"

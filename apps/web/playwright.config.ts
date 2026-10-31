@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { LOCAL_E2E_SECRET } from "./e2e/helpers/approvals";
+
 const isCI = Boolean(process.env.CI);
 
 /**
@@ -70,10 +72,12 @@ export default defineConfig({
           timeout: 180_000,
           stdout: "ignore" as const,
           stderr: "pipe" as const,
-          // Six entries make an export job in e2e (production keeps 10,000).
+          // Six entries make an export job in e2e (production keeps 10,000). The e2e
+          // secret opens /api/test/run-daily on this local server (helpers/approvals.ts).
           env: {
             ...process.env,
             EXPORT_JOB_THRESHOLD: process.env.EXPORT_JOB_THRESHOLD ?? "5",
+            E2E_SECRET: process.env.E2E_SECRET ?? LOCAL_E2E_SECRET,
           } as Record<string, string>,
         },
       }),
