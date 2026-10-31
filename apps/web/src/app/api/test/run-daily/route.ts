@@ -31,6 +31,7 @@ export async function GET(request: Request) {
     .limit(1);
   if (!ws) return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
   const jobs = await runDailyJobs(db, { now, workspaceIds: [ws.id] });
-  const mail = await drainOutbox(db, { now });
+  // The jobs run at `now`; the mail they enqueued is due from the real clock.
+  const mail = await drainOutbox(db);
   return Response.json({ ...jobs, ...mail }, { headers: NO_STORE });
 }

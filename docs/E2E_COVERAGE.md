@@ -307,7 +307,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Approvers get the "submitted" email and the member the decision — `approvals.spec.ts` › "approval emails reach approvers and the member"
 - [x] An owner or admin changes approved time only with a note, which the period's history shows — `approvals.spec.ts` › "an admin edits approved time with a note"
 - [x] A rolling lock blocks a member's entry in the locked days, not an admin's — `approvals.spec.ts` › "a rolling lock blocks a member, not an admin"
-- [ ] The daily job emails a reminder for a closed period with time and no submission — `approvals.spec.ts` › "the daily job reminds an unsubmitted period"
+- [x] The daily job emails a reminder for a closed period with time and no submission — `approvals.spec.ts` › "the daily job reminds an unsubmitted period"
 
 ## Small screens (375px)
 
