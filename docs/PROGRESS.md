@@ -29,7 +29,7 @@ Decisions and deviations from the prompt:
 - Roles are stored lowercase because Better Auth's organization plugin persists them that way.
 - `cacheComponents` is off in Next 16: every page is auth-gated and dynamic.
 - A minimal Team page and workspace Settings page were built in Phase 0 because invites and settings needed a UI; Phase 4 expands both.
-- Emails are sent directly from the web app; Phase 5 moves sending into the pg-boss worker.
+- Emails were sent directly from the web app until Phase 5a, which put the approval emails through the outbox (`email_outbox`); auth and invitation emails are still sent in the request.
 - Google OAuth verified end to end on 2026-10-12 (user + `google` account row + auto-created personal workspace). OAuth flows must start and finish on the `NEXT_PUBLIC_APP_URL` host; failures land on `/auth-error`.
 - Known gap for Phase 1 (closed in Phase 1): sign-up via Google did not capture the browser timezone. The workspace layout now saves the browser timezone once when `user.timezone` is null.
 - Local object storage is RustFS instead of MinIO: MinIO's community images were pulled from Docker Hub during this phase. Same S3 API and ports; bucket setup is a Node script (`pnpm storage:init`) rather than the `mc` CLI.
@@ -232,10 +232,23 @@ Review (2026-10-29): a fresh reviewer read the whole branch (no Critical, 5 Impo
 
 ## Phase 5 — Approvals, time off, attendance, reminders, kiosk
 
-- [ ] Approval periods and state machine; lock dates
-- [ ] Time off policies, holidays, requests, balances
-- [ ] Attendance/overtime report; targets and reminders
-- [ ] Kiosk with PIN/QR
+Design: `docs/superpowers/specs/2026-10-31-phase-5-design.md` (approved 2026-11-01). Delivered in three parts: 5a (approvals, lock dates, the email outbox and the daily cron; migration 0013), 5b (time off, holidays, attendance, targets; 0014), 5c (kiosk; 0015). Jobs run on Vercel only (the owner's choice): `after()` plus one daily Vercel Cron; the pg-boss worker drains the outbox locally. Holidays are country-neutral (imported per country from a bundled dataset), with the Philippines as the demo's.
+
+### 5a — Approvals and lock dates (plan `docs/superpowers/plans/2026-11-01-phase-5a.md`)
+
+- [x] Core: workspace periods (weekly from the week start, 1–15/16–end, monthly) in the workspace timezone, the lock boundary, the request state machine; the matrix's `approval.submit`, `approval.review` (the approvers setting), `approval.editLocked`, `lock.manage`
+- [x] Data: migration 0013 (`approval_request`, `approval_event`, `email_outbox`, the approval and lock columns, `mute_target_reminders`)
+- [x] Email outbox: enqueued in the cause's transaction, drained after the response, by `/api/cron/daily` and by the local worker (`/api/cron/outbox`), with retries and `.invalid` skipped
+- [x] The write guard on every entry path (`assertWritable`, `writable-coverage.test.ts`); the rate job skips approved periods; deleting a project with submitted time is refused
+- [x] Approvals: submit, withdraw, resubmit, approve or reject in bulk with a note, reopen; the Approvals page, a period's page with its history, the period bar on the tracker and timesheet; read-only time; the note prompt for owners' and admins' changes
+- [x] Settings: Approval and Lock entries sections; no period change while pending; turning approval off withdraws pending periods after a confirmation
+- [x] Daily job: the "submit your time" reminder for a closed period with time and no submission
+- [x] Seed, e2e (`approvals.spec.ts`), integration tests (`entry-guard`, `approvals`, `outbox`, `daily-jobs`, `cron-auth`, `writable-coverage`), docs
+- [ ] Time off policies, holidays, requests, balances (5b)
+- [ ] Attendance/overtime report; targets and reminders (5b)
+- [ ] Kiosk with PIN/QR (5c)
+
+Rulings made while building 5a are in the plan's ledger and listed in the branch's hand-off; the notable ones: the lookup of submitted periods ignores `approval_enabled` (approved time stays read-only after approval is turned off); every guarded write and a submission take the person's advisory lock, so a submission's totals never miss an edit the guard let through; empty timesheet cells in locked or submitted days stay typeable and the server refuses the write; the Unsubmitted tab lists, for a manager, the people they manage; members reviewing get a 403 and managers outside the setting a 404.
 
 ## Phase 6 — Expenses, invoicing, budgets and profit
 

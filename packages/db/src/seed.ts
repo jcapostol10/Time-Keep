@@ -5,8 +5,11 @@ import {
   computeDurationSeconds,
   localDateKey,
   localWeekday,
+  periodBounds,
+  periodOf,
   personalWorkspaceName,
   pickColor,
+  previousPeriod,
   slugify,
   uniqueSlug,
   zonedDateTimeToInstant,
@@ -20,6 +23,8 @@ import { type JournalEntry, listPendingMigrations } from "./migrations-status";
 import { rateEntriesSql } from "./rates-sql";
 import {
   account,
+  approvalEvent,
+  approvalRequest,
   client,
   managedUser,
   membership,
@@ -183,9 +188,88 @@ export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}
 
     const catalog = await seedTrackerData(tx, demo.id, ids);
     await seedTeamAndRates(tx, demo.id, ids, catalog);
+    await seedApprovals(tx, demo.id, ids);
 
     return { workspaceSlug: demo.slug };
   });
+}
+
+/**
+ * Approvals (Phase 5a): weekly periods approved by team managers; member1's
+ * week before last is submitted and approved by the manager, so the demo
+ * shows an approved, read-only week. Locks stay off.
+ */
+async function seedApprovals(db: DbExecutor, workspaceId: string, ids: Map<string, string>) {
+  await db
+    .update(workspaceSettings)
+    .set({ approvalEnabled: true, approvalPeriod: "WEEKLY", approvalReviewers: "TEAM_MANAGERS" })
+    .where(eq(workspaceSettings.workspaceId, workspaceId));
+  const member = ids.get("member1@demo.test");
+  const manager = ids.get("manager@demo.test");
+  if (!member || !manager) throw new Error("seed: member1 or manager missing");
+  const rule = {
+    period: "WEEKLY" as const,
+    timezone: DEMO_WORKSPACE.timezone,
+    weekStart: 1 as const,
+  };
+  const period = previousPeriod(previousPeriod(periodOf(new Date(), rule), rule), rule);
+  const bounds = periodBounds(period, rule.timezone);
+  const [totals] = await db
+    .select({
+      work: sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::bigint`.mapWith(Number),
+      billable:
+        sql<number>`coalesce(sum(case when ${timeEntry.billable} then ${timeEntry.durationSeconds} else 0 end), 0)::bigint`.mapWith(
+          Number,
+        ),
+      count: sql<number>`count(*)::int`,
+    })
+    .from(timeEntry)
+    .where(
+      and(
+        eq(timeEntry.workspaceId, workspaceId),
+        eq(timeEntry.userId, member),
+        eq(timeEntry.type, "work"),
+        sql`${timeEntry.end} is not null`,
+        sql`${timeEntry.start} >= ${bounds.from} and ${timeEntry.start} < ${bounds.to}`,
+      ),
+    );
+  const requestId = randomUUID();
+  const submittedAt = bounds.to;
+  const decidedAt = new Date(bounds.to.getTime() + 26 * 3_600_000);
+  await db.insert(approvalRequest).values({
+    id: requestId,
+    workspaceId,
+    userId: member,
+    periodStart: period.start,
+    periodEnd: period.end,
+    status: "APPROVED",
+    workSeconds: totals?.work ?? 0,
+    billableSeconds: totals?.billable ?? 0,
+    entryCount: totals?.count ?? 0,
+    submittedAt,
+    decidedBy: manager,
+    decidedAt,
+  });
+  await db.insert(approvalEvent).values([
+    {
+      id: randomUUID(),
+      workspaceId,
+      requestId,
+      userId: member,
+      actorId: member,
+      action: "SUBMIT",
+      createdAt: submittedAt,
+    },
+    {
+      id: randomUUID(),
+      workspaceId,
+      requestId,
+      userId: member,
+      actorId: manager,
+      action: "APPROVE",
+      createdAt: decidedAt,
+    },
+  ]);
 }
 
 /** Deterministic PRNG so every seed run produces the same demo entries. */

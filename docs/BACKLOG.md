@@ -9,6 +9,14 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## App
 
+- [ ] Phase 5a: auth (verification, reset, magic link) and invitation emails are still sent inside the request; move them to the outbox (`enqueueEmail` + `drainSoon`) so a slow SMTP never holds a response and a failure retries.
+- [ ] Phase 5a: an empty timesheet cell in a locked day or a submitted period stays typeable (the server refuses the write with its message); mark those days read-only from the period list and the lock boundary.
+- [ ] Phase 5a: a locked row's Duplicate, Split and Delete stay enabled in its menu (the server refuses them); disable them with the reason.
+- [ ] Phase 5a: the Unsubmitted tab shows a project manager only the people they manage, not people whose time is all on the manager's projects.
+- [ ] Phase 5a: `assertWritable` reads its own `workspace_settings` row next to `rulesOf`'s; fold the two reads into one if writes slow down.
+- [ ] Phase 5a: an owner's or admin's import into submitted periods writes one `ADMIN_EDIT` event per entry; a large import writes as many rows.
+- [ ] Phase 5a: the daily cron runs at 22:00 UTC, which is the next morning in Asia and the evening before in the Americas; a workspace far west of UTC gets its reminder a day late. Run the job hourly (a paid Vercel plan) or per timezone once that matters.
+
 - [ ] Export jobs and the rate recalculation job (`runRateRecalcJob`, 76 s for 1M entries) run inside the web function after the response (`after()`, within the 300 s budget). Once a worker host exists, enqueue `runExportJob(db, jobId)` on pg-boss instead (decision 1 of the Phase 3 design); the function is already one call, but `apps/worker` cannot import the web app's `server-only` storage and mail modules, so they need a shared package first.
 - [ ] `sign-up-form.tsx` maps `USER_ALREADY_EXISTS` to the email field, but Better Auth 1.7.7 emits `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; moot while `requireEmailVerification` answers a duplicate sign-up with a generic success (predates Phase 2). A refused password-reset send also looks like success, by Better Auth's design, which keeps account existence private.
 - [ ] After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
