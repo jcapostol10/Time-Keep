@@ -25,6 +25,7 @@ import {
 
 import type { EntryScope } from "./time-entries";
 import { TimeEntryError } from "./entry-error";
+import { timerLock } from "./person-lock";
 
 /**
  * The write guard of Phase 5a (decisions 5 and 6), called by every write path
@@ -95,7 +96,7 @@ function startsOf(change: WriteChange): Date[] {
 }
 
 export async function assertWritable(
-  db: Pick<DbExecutor, "select" | "insert">,
+  db: Pick<DbExecutor, "select" | "insert" | "execute">,
   scope: EntryScope,
   input: WriteChange | WriteChange[],
   opts: { note?: string; now?: Date; rules?: WriteRules } = {},
@@ -116,6 +117,9 @@ export async function assertWritable(
     }
   }
 
+  // A submission takes the same lock: this write lands before its totals, or
+  // sees the request (callers run inside a transaction, which holds the lock).
+  await db.execute(timerLock(scope.workspaceId, scope.userId));
   const keys = starts.map((s) => localDateKey(s, rules.timezone));
   const sorted = [...keys].sort();
   const requests = await db

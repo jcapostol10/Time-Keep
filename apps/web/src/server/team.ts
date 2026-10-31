@@ -30,7 +30,8 @@ import { CatalogError } from "./catalog/errors";
 import type { AssignableRole, TeamFilters, TeamRow } from "@/lib/team-types";
 
 import type { Viewer } from "./catalog/viewer";
-import { getRunningEntry, stopTimer, timerLock } from "./time-entries";
+import { timerLock } from "./person-lock";
+import { getRunningEntry, stopTimer } from "./time-entries";
 import { WorkspaceAccessError } from "./access-error";
 
 /**

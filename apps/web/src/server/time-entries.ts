@@ -59,6 +59,7 @@ import type {
 
 import { WorkspaceAccessError } from "./access-error";
 import { assertWritable } from "./entry-guard";
+import { timerLock } from "./person-lock";
 import { TimeEntryError } from "./entry-error";
 import { CatalogError } from "./catalog/errors";
 import { visibleTasksFor } from "./catalog/tasks";
@@ -79,14 +80,7 @@ import { assertCan, projectResource, scopeForUser } from "./authz";
  * the user may put time on (private projects need membership).
  */
 
-/**
- * The per-person timer lock: `startTimer` holds it while it stops the running
- * entry and starts the next, and deactivation and removal hold it while they
- * change the membership (invariant 4).
- */
-export function timerLock(workspaceId: string, userId: string) {
-  return sql`SELECT pg_advisory_xact_lock(hashtext(${`${workspaceId}:${userId}`}))`;
-}
+export { timerLock };
 
 /**
  * The person whose entries are read and written, with their role and scope.
@@ -153,7 +147,7 @@ const withRelations = {
   tags: { with: { tag: true } },
 } as const;
 
-function scopeWhere(scope: EntryScope) {
+function scopeWhere(scope: Pick<EntryScope, "workspaceId" | "userId">) {
   return and(
     eq(timeEntry.workspaceId, scope.workspaceId),
     eq(timeEntry.userId, scope.userId),
@@ -884,12 +878,21 @@ export async function createManualEntries(
 
 /** Soft-deletes stopped entries in scope; ids that don't match are ignored. */
 export async function deleteEntries(
-  db: Executor,
+  db: Database,
   scope: EntryScope,
   ids: string[],
   opts: WriteNote = {},
 ): Promise<{ deleted: string[] }> {
   if (ids.length === 0) return { deleted: [] };
+  return db.transaction((tx) => softDelete(tx, scope, ids, opts));
+}
+
+async function softDelete(
+  db: Executor,
+  scope: EntryScope,
+  ids: string[],
+  opts: WriteNote,
+): Promise<{ deleted: string[] }> {
   const targets = await db
     .select({ id: timeEntry.id, start: timeEntry.start })
     .from(timeEntry)
@@ -913,12 +916,21 @@ export async function deleteEntries(
 }
 
 export async function restoreEntries(
-  db: Executor,
+  db: Database,
   scope: EntryScope,
   ids: string[],
   opts: WriteNote = {},
 ): Promise<{ restored: string[] }> {
   if (ids.length === 0) return { restored: [] };
+  return db.transaction((tx) => restore(tx, scope, ids, opts));
+}
+
+async function restore(
+  db: Executor,
+  scope: EntryScope,
+  ids: string[],
+  opts: WriteNote,
+): Promise<{ restored: string[] }> {
   const deleted = and(
     inArray(timeEntry.id, ids),
     eq(timeEntry.workspaceId, scope.workspaceId),
@@ -1245,7 +1257,7 @@ export async function bulkUpdateEntries(
 /** The caller's stopped entries starting in `[from, to)`, oldest first. */
 export async function listEntriesInRange(
   db: Executor,
-  scope: EntryScope,
+  scope: Pick<EntryScope, "workspaceId" | "userId">,
   range: { from: Date; to: Date },
 ): Promise<TimeEntryDTO[]> {
   const rows = await db.query.timeEntry.findMany({
