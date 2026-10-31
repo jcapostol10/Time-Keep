@@ -51,7 +51,7 @@ import type { ProjectDetail, ProjectListItem, ProjectStatus } from "@/lib/catalo
 import type { PickerProject, PickerTask } from "@/lib/tracker-types";
 
 import { CatalogError, isUniqueViolation } from "./errors";
-import { inSubmittedPeriodSql } from "../approval-sql";
+import { inSubmittedPeriodSql, SUBMITTED_TIME_MESSAGE } from "../approval-sql";
 import { scopeFilter } from "../authz";
 import { visibleTasksFor } from "./tasks";
 import { type Viewer, visibleProjectFilter } from "./viewer";
@@ -568,7 +568,7 @@ export async function deleteProject(
       )
       .limit(1);
     if (submitted) {
-      throw new CatalogError("CONFLICT", "Archive it instead: it has time in submitted periods.");
+      throw new CatalogError("CONFLICT", SUBMITTED_TIME_MESSAGE);
     }
     if (mode.mode === "reassign") {
       if (mode.projectId) {

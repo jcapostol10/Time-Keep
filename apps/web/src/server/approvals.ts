@@ -213,7 +213,8 @@ async function projectIdsOf(db: Executor, requestIds: string[]): Promise<Map<str
      and e.deleted_at is null
      and e."end" is not null
      and e.type = 'work'
-     and (e.start at time zone s.timezone)::date between r.period_start and r.period_end
+     and e.start >= (r.period_start::timestamp at time zone s.timezone)
+     and e.start < ((r.period_end + 1)::timestamp at time zone s.timezone)
     where r.id = any(${sql.param(requestIds)}::text[])
     group by r.id
   `);
@@ -588,6 +589,25 @@ export async function listApprovals(
   now: Date = new Date(),
 ): Promise<ApprovalRequestDTO[] | UnsubmittedPeriodDTO[]> {
   if (query.tab === "unsubmitted") return listUnsubmitted(db, viewer, now);
+  if (query.tab === "mine") {
+    // Everyone's own requests, whatever their role (spec Part 1).
+    const own = await selectRequests(db)
+      .where(
+        and(
+          eq(approvalRequest.workspaceId, viewer.workspaceId),
+          eq(approvalRequest.userId, viewer.userId),
+        ),
+      )
+      .orderBy(desc(approvalRequest.periodStart))
+      .limit(200);
+    return own.map(toDTO);
+  }
+  const { actor } = viewer;
+  const admin = actor.role === "owner" || actor.role === "admin";
+  if (!admin && !mayReview(actor)) return [];
+  // A team manager's people go into the query, so the limit cannot cut them off.
+  const teamOnly = !admin && actor.settings.approvalReviewers === "TEAM_MANAGERS";
+  if (teamOnly && actor.managedUserIds.size === 0) return [];
   const rows = await selectRequests(db)
     .where(
       and(
@@ -595,6 +615,7 @@ export async function listApprovals(
         query.tab === "pending"
           ? eq(approvalRequest.status, "PENDING")
           : inArray(approvalRequest.status, ["APPROVED", "REJECTED"]),
+        teamOnly ? inArray(approvalRequest.userId, [...actor.managedUserIds]) : undefined,
       ),
     )
     .orderBy(
@@ -603,15 +624,23 @@ export async function listApprovals(
         : [desc(approvalRequest.decidedAt), desc(approvalRequest.periodStart)]),
     )
     .limit(500);
-  const projects = await projectIdsOf(
-    db,
-    rows.map((r) => r.id),
-  );
+  if (admin) return rows.map(toDTO);
+  // Only project-manager approvers need each request's projects.
+  const projects =
+    actor.settings.approvalReviewers === "PROJECT_MANAGERS"
+      ? await projectIdsOf(
+          db,
+          rows.map((r) => r.id),
+        )
+      : new Map<string, string[]>();
   return rows
-    .filter((r) =>
-      can(viewer.actor, "approval.review", reviewResource(r, projects.get(r.id) ?? [])),
-    )
+    .filter((r) => can(actor, "approval.review", reviewResource(r, projects.get(r.id) ?? [])))
     .map(toDTO);
+}
+
+/** Whether the actor may review anyone's period under the workspace's setting. */
+function mayReview(actor: Viewer["actor"]): boolean {
+  return actor.role === "manager" && actor.settings.approvalReviewers !== "ADMINS";
 }
 
 async function listUnsubmitted(
@@ -870,6 +899,13 @@ async function pendingCount(db: Executor, workspaceId: string): Promise<number> 
   return row?.n ?? 0;
 }
 
+interface ApprovalSettingsShape {
+  approvalEnabled: boolean;
+  approvalPeriod: string;
+  timezone: string;
+  weekStart: number;
+}
+
 /**
  * What the settings change needs first (decision 2): a new period type waits
  * until nothing is pending; turning approval off asks before it withdraws the
@@ -878,11 +914,19 @@ async function pendingCount(db: Executor, workspaceId: string): Promise<number> 
 export async function checkApprovalSettings(
   db: Executor,
   workspaceId: string,
-  current: { approvalEnabled: boolean; approvalPeriod: string },
-  next: { approvalEnabled: boolean; approvalPeriod: string },
+  current: ApprovalSettingsShape,
+  next: ApprovalSettingsShape,
   confirmedOff: boolean,
-): Promise<{ field: "approvalPeriod" | "confirmApprovalOff"; message: string } | null> {
-  const periodChanged = next.approvalPeriod !== current.approvalPeriod;
+): Promise<{
+  field: "approvalPeriod" | "timezone" | "weekStart" | "confirmApprovalOff";
+  message: string;
+} | null> {
+  // Periods are made of the period type, the workspace timezone and its week start:
+  // changing any of them would move the periods of pending requests.
+  const moved = (["approvalPeriod", "timezone", "weekStart"] as const).find(
+    (f) => next[f] !== current[f],
+  );
+  const periodChanged = moved !== undefined;
   const turningOff = current.approvalEnabled && !next.approvalEnabled;
   if (!periodChanged && !turningOff) return null;
   const n = await pendingCount(db, workspaceId);
@@ -894,7 +938,7 @@ export async function checkApprovalSettings(
       message: `${n} pending ${n === 1 ? "period" : "periods"} will be withdrawn.`,
     };
   }
-  return { field: "approvalPeriod", message: "Approve or reject the pending periods first." };
+  return { field: moved!, message: "Approve or reject the pending periods first." };
 }
 
 /** Turning approval off: every pending request is withdrawn, logged as AUTO_WITHDRAW. */

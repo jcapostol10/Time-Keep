@@ -732,6 +732,8 @@ export async function updateEntry(
   now: Date = new Date(),
 ): Promise<TimeEntryDTO> {
   return db.transaction(async (tx) => {
+    // The person lock before the row, as startTimer takes them (no deadlock).
+    await tx.execute(timerLock(scope.workspaceId, scope.userId));
     await lockOwned(tx, scope, entryId);
     const row = await findOwned(tx, scope, entryId);
     await assertWritable(
@@ -1036,6 +1038,8 @@ export async function splitEntry(
   opts: WriteNote = {},
 ): Promise<{ first: TimeEntryDTO; second: TimeEntryDTO }> {
   return db.transaction(async (tx) => {
+    // The person lock before the row, as startTimer takes them (no deadlock).
+    await tx.execute(timerLock(scope.workspaceId, scope.userId));
     await lockOwned(tx, scope, entryId);
     const row = await findOwned(tx, scope, entryId);
     if (!row.end) throw new TimeEntryError("INVALID", "Stop the timer before splitting it.");
@@ -1248,6 +1252,12 @@ export async function bulkUpdateEntries(
 ): Promise<{ updated: TimeEntryDTO[] }> {
   const total = groups.reduce((n, g) => n + g.ids.length, 0);
   return db.transaction(async (tx) => {
+    // Every owner's person lock first, in one order, then the rows (no deadlock
+    // with a single edit or a start, which take the person lock first too).
+    const owners = [...new Set(groups.map((g) => g.scope.userId))].sort();
+    for (const userId of owners) {
+      await tx.execute(timerLock(groups[0]!.scope.workspaceId, userId));
+    }
     const failures: string[] = [];
     const updated: TimeEntryDTO[] = [];
     for (const { scope, ids } of groups) {

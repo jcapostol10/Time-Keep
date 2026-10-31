@@ -7,6 +7,8 @@ import type { SQL } from "drizzle-orm";
  * statuses": the entry's local date (workspace timezone) inside the period.
  * The SQL twin of `assertWritable`'s lookup, for set-based writers.
  */
+export const SUBMITTED_TIME_MESSAGE = "Archive it instead: it has time in submitted periods.";
+
 export function inSubmittedPeriodSql(statuses: readonly ApprovalStatus[]): SQL {
   return sql`exists (
     select 1

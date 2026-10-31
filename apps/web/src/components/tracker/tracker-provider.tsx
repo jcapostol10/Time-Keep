@@ -57,6 +57,8 @@ export interface TrackerRules {
   canWriteTimes: boolean;
   /** Decision 11: with tasks by group the picker creates no tasks inline and the import asks for groups. */
   taskVisibility: TaskVisibility;
+  /** "Entries before … are locked." for whoever the lock binds (Phase 5a); null otherwise. */
+  lockNotice: string | null;
 }
 
 /** The required field a refused Stop named, until the entry changes again. */

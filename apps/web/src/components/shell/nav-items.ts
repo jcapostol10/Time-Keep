@@ -60,7 +60,8 @@ export const NAV_GROUPS: NavGroup[] = [
         label: "Approvals",
         href: (slug) => workspaceRoutes.approvals(slug),
         icon: CheckCheckIcon,
-        visible: (actor, flags) => flags.approvalEnabled && mayReviewAny(actor),
+        // Everyone, for their own requests; reviewers also see the team's.
+        visible: (_actor, flags) => flags.approvalEnabled,
       },
       {
         label: "Reports",

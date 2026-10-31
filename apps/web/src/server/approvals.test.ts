@@ -340,6 +340,18 @@ describe("listApprovals", () => {
     expect(await names("pat", "pending")).toEqual(["Carol Member"]);
   });
 
+  it("shows everyone their own requests under Mine, whatever their role", async () => {
+    const bobs = await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
+    await submitPeriod(db, await viewer("carol"), LAST_WEEK, NOW);
+    await reviewRequests(db, await viewer("ann"), { ids: [bobs.id], decision: "APPROVE" }, NOW);
+    const mine = (await listApprovals(db, await viewer("bob"), { tab: "mine" }, NOW)) as {
+      id: string;
+      status: string;
+    }[];
+    expect(mine.map((r) => [r.id, r.status])).toEqual([[bobs.id, "APPROVED"]]);
+    expect(await listApprovals(db, await viewer("ann"), { tab: "mine" }, NOW)).toEqual([]);
+  });
+
   it("archives decided requests", async () => {
     const request = await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
     await reviewRequests(db, await viewer("ann"), { ids: [request.id], decision: "APPROVE" }, NOW);
@@ -416,25 +428,51 @@ describe("a submit racing an edit", () => {
 describe("approval settings", () => {
   it("refuses a new period type while a request is pending", async () => {
     await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
-    const current = { approvalEnabled: true, approvalPeriod: "WEEKLY" };
+    const current = {
+      approvalEnabled: true,
+      approvalPeriod: "WEEKLY",
+      timezone: "Asia/Manila",
+      weekStart: 1,
+    };
     expect(
       await checkApprovalSettings(
         db,
         wsId,
         current,
-        { approvalEnabled: true, approvalPeriod: "MONTHLY" },
+        { ...current, approvalPeriod: "MONTHLY" },
         false,
       ),
     ).toEqual({ field: "approvalPeriod", message: "Approve or reject the pending periods first." });
     expect(await checkApprovalSettings(db, wsId, current, current, false)).toBeNull();
   });
 
+  it("refuses a new timezone or week start while a request is pending: periods would move", async () => {
+    await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
+    const current = {
+      approvalEnabled: true,
+      approvalPeriod: "WEEKLY",
+      timezone: "Asia/Manila",
+      weekStart: 1,
+    };
+    expect(
+      await checkApprovalSettings(db, wsId, current, { ...current, timezone: "UTC" }, false),
+    ).toEqual({ field: "timezone", message: "Approve or reject the pending periods first." });
+    expect(
+      await checkApprovalSettings(db, wsId, current, { ...current, weekStart: 0 }, false),
+    ).toEqual({ field: "weekStart", message: "Approve or reject the pending periods first." });
+  });
+
   it("asks before turning approval off, then withdraws the pending periods and keeps approved ones", async () => {
     const bobs = await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
     const carols = await submitPeriod(db, await viewer("carol"), LAST_WEEK, NOW);
     await reviewRequests(db, await viewer("ann"), { ids: [carols.id], decision: "APPROVE" }, NOW);
-    const current = { approvalEnabled: true, approvalPeriod: "WEEKLY" };
-    const off = { approvalEnabled: false, approvalPeriod: "WEEKLY" };
+    const current = {
+      approvalEnabled: true,
+      approvalPeriod: "WEEKLY",
+      timezone: "Asia/Manila",
+      weekStart: 1,
+    };
+    const off = { ...current, approvalEnabled: false };
     expect(await checkApprovalSettings(db, wsId, current, off, false)).toEqual({
       field: "confirmApprovalOff",
       message: "1 pending period will be withdrawn.",

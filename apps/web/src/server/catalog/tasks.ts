@@ -26,6 +26,7 @@ import type { SQL } from "drizzle-orm";
 
 import type { TaskAccessDTO, TaskDTO } from "@/lib/catalog-types";
 
+import { inSubmittedPeriodSql, SUBMITTED_TIME_MESSAGE } from "../approval-sql";
 import { assertCan, loadViewer } from "../authz";
 import { CatalogError, isUniqueViolation } from "./errors";
 import { requireVisibleProject } from "./projects";
@@ -508,6 +509,19 @@ export async function deleteTask(
   taskId: string,
 ): Promise<{ affectedEntries: number }> {
   await requireVisibleTask(db, viewer, taskId);
+  // Deleting it would strip the task from submitted or approved time (Phase 5a).
+  const [submitted] = await db
+    .select({ id: timeEntry.id })
+    .from(timeEntry)
+    .where(
+      and(
+        eq(timeEntry.taskId, taskId),
+        isNull(timeEntry.deletedAt),
+        inSubmittedPeriodSql(["PENDING", "APPROVED"]),
+      ),
+    )
+    .limit(1);
+  if (submitted) throw new CatalogError("CONFLICT", SUBMITTED_TIME_MESSAGE);
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(timeEntry)

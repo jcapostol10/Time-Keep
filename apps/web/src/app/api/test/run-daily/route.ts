@@ -1,9 +1,9 @@
-import { eq, getDb, workspace } from "@timekeep/db";
+import { getDb } from "@timekeep/db";
 
 import { testHookAuthorized } from "@/server/cron-auth";
-import { runDailyJobs } from "@/server/daily-jobs";
+import { e2eWorkspaceId, runDailyJobs } from "@/server/daily-jobs";
 import { env } from "@/server/env";
-import { drainOutbox } from "@/server/outbox";
+import { drainAll } from "@/server/outbox";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -24,14 +24,12 @@ export async function GET(request: Request) {
     return Response.json({ error: "Bad now" }, { status: 400, headers: NO_STORE });
   }
   const db = getDb();
-  const [ws] = await db
-    .select({ id: workspace.id })
-    .from(workspace)
-    .where(eq(workspace.slug, slug))
-    .limit(1);
-  if (!ws) return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
-  const jobs = await runDailyJobs(db, { now, workspaceIds: [ws.id] });
+  // Only an e2e tenant: a customer's workspace is the same 404 as none.
+  const workspaceId = await e2eWorkspaceId(db, slug);
+  if (!workspaceId)
+    return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
+  const jobs = await runDailyJobs(db, { now, workspaceIds: [workspaceId] });
   // The jobs run at `now`; the mail they enqueued is due from the real clock.
-  const mail = await drainOutbox(db);
+  const mail = await drainAll(db);
   return Response.json({ ...jobs, ...mail }, { headers: NO_STORE });
 }

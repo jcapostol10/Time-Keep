@@ -5,7 +5,7 @@ import { listApprovals } from "@/server/approvals";
 import { authorize } from "@/server/authz";
 import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
 
-const TABS: readonly ApprovalsTab[] = ["pending", "unsubmitted", "archive"];
+const TABS: readonly ApprovalsTab[] = ["pending", "unsubmitted", "archive", "mine"];
 
 /** The Approvals page: the requests (or unsubmitted periods) the caller may review. */
 export async function GET(request: Request, ctx: RouteContext<"/api/w/[workspaceSlug]/approvals">) {

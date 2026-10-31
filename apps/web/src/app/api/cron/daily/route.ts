@@ -3,7 +3,7 @@ import { getDb } from "@timekeep/db";
 import { cronAuthorized } from "@/server/cron-auth";
 import { runDailyJobs } from "@/server/daily-jobs";
 import { env } from "@/server/env";
-import { drainOutbox } from "@/server/outbox";
+import { drainAll } from "@/server/outbox";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -16,6 +16,6 @@ export async function GET(request: Request) {
   }
   const db = getDb();
   const jobs = await runDailyJobs(db);
-  const mail = await drainOutbox(db, { limit: 500 });
+  const mail = await drainAll(db, { budgetMs: 200_000 });
   return Response.json({ ...jobs, ...mail }, { headers: NO_STORE });
 }

@@ -74,4 +74,4 @@ export interface MyPeriodDTO {
   canSubmit: boolean;
 }
 
-export type ApprovalsTab = "pending" | "unsubmitted" | "archive";
+export type ApprovalsTab = "pending" | "unsubmitted" | "archive" | "mine";

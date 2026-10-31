@@ -4,6 +4,7 @@ import { Button } from "@timekeep/ui/components/button";
 import { FileUpIcon } from "lucide-react";
 import { useState } from "react";
 
+import { LockNotice } from "@/components/approvals/lock-notice";
 import { PeriodBar } from "@/components/approvals/period-bar";
 
 import { EntryList } from "./entry-list";
@@ -41,6 +42,7 @@ export function TrackerPageClient({
           </p>
         ) : null}
       </div>
+      <LockNotice />
       {target ? null : <PeriodBar from={periodRange.from} to={periodRange.to} />}
       <EntryList />
     </div>

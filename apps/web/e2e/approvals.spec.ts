@@ -231,6 +231,11 @@ test.describe("approvals and locks", () => {
     await setRollingLock(page, slug, 1);
 
     await openTracker(mia.page, slug);
+    // The pages say so up front (spec Part 2).
+    await expect(mia.page.getByRole("note")).toContainText(/^Entries before .* are locked\.$/);
+    await openTimesheetWeek(mia.page, slug, lastWednesday);
+    await expect(mia.page.getByRole("note")).toContainText("are locked.");
+    await openTracker(mia.page, slug);
     await timer(mia.page).getByRole("button", { name: "Manual mode" }).click();
     await timer(mia.page).getByRole("combobox", { name: "Description" }).fill("Too late");
     await timer(mia.page).getByRole("textbox", { name: "Date" }).fill(lastWednesday);
@@ -241,10 +246,13 @@ test.describe("approvals and locks", () => {
     await duration.fill("1");
     await duration.press("Tab");
     await timer(mia.page).getByRole("button", { name: "Add" }).click();
-    await expect(mia.page.getByText(/^Entries before .* are locked\.$/)).toBeVisible();
+    await expect(
+      mia.page.locator("[data-sonner-toast]").filter({ hasText: /are locked\./ }),
+    ).toBeVisible();
 
-    // The owner is never locked.
+    // The owner is never locked, and sees no notice.
     await addLastWeek(page, slug, timezone, "Owner's late entry");
+    await expect(page.getByRole("note")).toHaveCount(0);
     await revealRow(page, "Owner's late entry");
     await mia.context.close();
   });

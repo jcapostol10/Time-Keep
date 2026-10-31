@@ -91,6 +91,19 @@ export const PENDING_MESSAGE = "This period is submitted for approval.";
 export const APPROVED_MESSAGE = "This period is approved.";
 export const NOTE_REQUIRED_MESSAGE = "Say why you are changing submitted time.";
 
+/** The lock line the tracker, timesheet and calendar show (spec Part 2); null when none binds. */
+export async function lockNoticeFor(
+  db: Pick<DbExecutor, "select">,
+  scope: EntryScope,
+  now: Date = new Date(),
+): Promise<string | null> {
+  const actor = scope.actedBy ?? scope.actor;
+  if (can(actor, "approval.editLocked", { kind: "none" })) return null;
+  const rules = await writeRulesOf(db, scope.workspaceId);
+  const key = lockDateKey(rules.lock, now);
+  return key ? `Entries before ${formatDateKey(key)} are locked.` : null;
+}
+
 /**
  * Why the scope's actor may not change each entry, for the editor's reads
  * (rows and cells shown read-only): the lock date, or a submitted period.

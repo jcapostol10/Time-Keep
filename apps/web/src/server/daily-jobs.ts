@@ -27,6 +27,8 @@ import {
   workspaceSettings,
 } from "@timekeep/db";
 
+import { e2eOnlyWorkspaceIds } from "@timekeep/db/e2e-tenant";
+
 import { unsubmittedReminderEmail } from "./approval-emails";
 import { env } from "./env";
 import { enqueueEmail } from "./outbox";
@@ -149,4 +151,19 @@ async function remindUnsubmitted(
     sent++;
   }
   return sent;
+}
+
+/**
+ * The workspace the e2e hook may run the daily job for: one whose members are
+ * all e2e or demo users (production and previews share the database, and
+ * e2e stays in its own tenants). Null for a customer's workspace or none.
+ */
+export async function e2eWorkspaceId(db: Database, slug: string): Promise<string | null> {
+  const [ws] = await db
+    .select({ id: workspace.id })
+    .from(workspace)
+    .where(eq(workspace.slug, slug))
+    .limit(1);
+  if (!ws) return null;
+  return (await e2eOnlyWorkspaceIds(db)).includes(ws.id) ? ws.id : null;
 }

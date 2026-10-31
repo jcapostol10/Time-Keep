@@ -1,4 +1,4 @@
-import { emailOutbox, eq, userSettings, workspaceSettings } from "@timekeep/db";
+import { emailOutbox, eq, user, userSettings, workspaceSettings } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -10,7 +10,7 @@ import {
 } from "../../test/db";
 import { submitPeriod } from "./approvals";
 import { loadViewer } from "./authz";
-import { runDailyJobs } from "./daily-jobs";
+import { e2eWorkspaceId, runDailyJobs } from "./daily-jobs";
 import { createManualEntry } from "./time-entries";
 
 const handle = connectTestDb();
@@ -128,5 +128,21 @@ describe("runDailyJobs", () => {
     expect(await runDailyJobs(db, { now: MONDAY_MANILA, workspaceIds: [manila] })).toEqual({
       reminders: 1,
     });
+  });
+});
+
+describe("e2eWorkspaceId", () => {
+  it("finds a workspace for the e2e hook only when every member is an e2e or demo user", async () => {
+    const [e2eUser] = await db
+      .insert(user)
+      .values({ id: "u-e2e", name: "E2E", email: "fresh.1@e2e.test", emailVerified: true })
+      .returning();
+    const fenced = await createTestWorkspace(db, "Fenced", e2eUser!.id);
+    const slugOf = async (id: string) =>
+      (await db.query.workspace.findFirst({ where: (w, { eq: e }) => e(w.id, id) }))!.slug;
+    expect(await e2eWorkspaceId(db, await slugOf(fenced.id))).toBe(fenced.id);
+    // A customer's workspace (a real member) is never touched by the hook.
+    expect(await e2eWorkspaceId(db, await slugOf(manila))).toBeNull();
+    expect(await e2eWorkspaceId(db, "no-such-workspace")).toBeNull();
   });
 });

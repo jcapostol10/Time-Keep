@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { emailOutbox, eq } from "@timekeep/db";
 
 import { connectTestDb, truncateAll } from "../../test/db";
-import { drainOutbox, enqueueEmail, type RenderedEmail } from "./outbox";
+import { drainAll, drainOutbox, enqueueEmail, outboxAudience, type RenderedEmail } from "./outbox";
 
 const h = connectTestDb();
 const db = h.db;
@@ -134,5 +134,52 @@ describe("drainOutbox", () => {
     expect(row).toMatchObject({ status: "FAILED", attempts: 5, lastError: "SMTP is down" });
     await drainOutbox(db, { send, now: minutes(10_000) });
     expect(calls).toBe(5);
+  });
+});
+
+describe("one outbox shared by production and previews", () => {
+  it("knows which mail each environment owns", () => {
+    expect(outboxAudience({ VERCEL_ENV: "production", MAIL_CAPTURE: true })).toBe("real");
+    expect(outboxAudience({ VERCEL_ENV: "preview", MAIL_CAPTURE: true })).toBe("e2e");
+    expect(outboxAudience({ VERCEL_ENV: "preview" })).toBe("e2e");
+    expect(outboxAudience({})).toBe("all");
+  });
+
+  it("a preview never claims a customer's email, and production never claims e2e mail", async () => {
+    await enqueueEmail(db, mail("boss@customer.com"));
+    await enqueueEmail(db, mail("tina@e2e.test"));
+    await enqueueEmail(db, mail("member1@demo.test"));
+    const preview = recorder();
+    expect(await drainOutbox(db, { send: preview.send, now: minutes(1), audience: "e2e" })).toEqual(
+      {
+        sent: 2,
+        failed: 0,
+      },
+    );
+    expect(preview.sent.map((m) => m.to).sort()).toEqual(["member1@demo.test", "tina@e2e.test"]);
+    const production = recorder();
+    await drainOutbox(db, { send: production.send, now: minutes(2), audience: "real" });
+    expect(production.sent.map((m) => m.to)).toEqual(["boss@customer.com"]);
+  });
+
+  it("production stores mail for e2e and demo addresses as skipped, a preview a customer's", async () => {
+    await enqueueEmail(db, mail("member1@demo.test"), { audience: "real" });
+    await enqueueEmail(db, mail("boss@customer.com"), { audience: "e2e" });
+    await enqueueEmail(db, mail("ann@test.local"), { audience: "real" });
+    const byTo = Object.fromEntries((await rows()).map((r) => [r.toAddress, r.status]));
+    expect(byTo).toEqual({
+      "member1@demo.test": "SKIPPED",
+      "boss@customer.com": "SKIPPED",
+      "ann@test.local": "PENDING",
+    });
+  });
+});
+
+describe("drainAll", () => {
+  it("keeps draining full batches until the outbox is empty", async () => {
+    for (let i = 0; i < 7; i++) await enqueueEmail(db, mail(`p${i}@test.local`));
+    const { sent, send } = recorder();
+    expect(await drainAll(db, { send, limit: 3, now: minutes(1) })).toEqual({ sent: 7, failed: 0 });
+    expect(sent).toHaveLength(7);
   });
 });

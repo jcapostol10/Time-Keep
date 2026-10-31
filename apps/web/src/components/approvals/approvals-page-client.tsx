@@ -31,6 +31,7 @@ const TAB_LABELS: Record<ApprovalsTab, string> = {
   pending: "Pending",
   unsubmitted: "Unsubmitted",
   archive: "Archive",
+  mine: "Mine",
 };
 
 const STATUS_LABELS = { PENDING: "Pending", APPROVED: "Approved", REJECTED: "Rejected" } as const;
@@ -38,7 +39,16 @@ const STATUS_LABELS = { PENDING: "Pending", APPROVED: "Approved", REJECTED: "Rej
 type Rows = ApprovalRequestDTO[] | UnsubmittedPeriodDTO[];
 
 /** The Approvals page: tabs in the URL, a table per tab, bulk approve and reject on Pending. */
-export function ApprovalsPageClient({ slug, tab }: { slug: string; tab: ApprovalsTab }) {
+export function ApprovalsPageClient({
+  slug,
+  tab,
+  reviewer,
+}: {
+  slug: string;
+  tab: ApprovalsTab;
+  /** Whether the viewer reviews anyone's periods; otherwise only Mine shows. */
+  reviewer: boolean;
+}) {
   const { data, isPending } = useQuery({
     queryKey: trackerKeys.approvals(slug, tab),
     queryFn: () =>
@@ -49,7 +59,7 @@ export function ApprovalsPageClient({ slug, tab }: { slug: string; tab: Approval
   return (
     <div className="space-y-4">
       <nav role="tablist" aria-label="Approvals" className="flex gap-1 border-b">
-        {(Object.keys(TAB_LABELS) as ApprovalsTab[]).map((t) => (
+        {(reviewer ? (Object.keys(TAB_LABELS) as ApprovalsTab[]) : (["mine"] as const)).map((t) => (
           <Link
             key={t}
             role="tab"
@@ -86,7 +96,7 @@ function RequestsTable({
   rows,
 }: {
   slug: string;
-  tab: "pending" | "archive";
+  tab: "pending" | "archive" | "mine";
   rows: ApprovalRequestDTO[];
 }) {
   const { viewer } = useTracker();
@@ -120,7 +130,15 @@ function RequestsTable({
   }
 
   if (rows.length === 0) {
-    return <Empty>{pending ? "Nothing waiting for approval." : "No decisions yet."}</Empty>;
+    return (
+      <Empty>
+        {pending
+          ? "Nothing waiting for approval."
+          : tab === "mine"
+            ? "You have not submitted any periods yet."
+            : "No decisions yet."}
+      </Empty>
+    );
   }
 
   return (
@@ -196,7 +214,13 @@ function RequestsTable({
                     ) : (
                       <span className="flex flex-col gap-0.5">
                         <Badge
-                          variant={r.status === "APPROVED" ? "default" : "destructive"}
+                          variant={
+                            r.status === "APPROVED"
+                              ? "default"
+                              : r.status === "PENDING"
+                                ? "secondary"
+                                : "destructive"
+                          }
                           className="w-fit"
                         >
                           {STATUS_LABELS[r.status]}

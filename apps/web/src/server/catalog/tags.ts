@@ -19,6 +19,7 @@ import {
 import type { TagDTO } from "@/lib/catalog-types";
 import type { EntryTag } from "@/lib/tracker-types";
 
+import { inSubmittedPeriodSql, SUBMITTED_TIME_MESSAGE } from "../approval-sql";
 import { CatalogError, isUniqueViolation } from "./errors";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
@@ -159,6 +160,21 @@ export async function deleteTag(
   id: string,
 ): Promise<{ affectedEntries: number }> {
   await findOwned(db, workspaceId, id);
+  // Deleting it would strip the tag from submitted or approved time (Phase 5a).
+  const [submitted] = await db
+    .select({ id: timeEntry.id })
+    .from(timeEntryTag)
+    .innerJoin(timeEntry, eq(timeEntry.id, timeEntryTag.timeEntryId))
+    .where(
+      and(
+        eq(timeEntryTag.tagId, id),
+        eq(timeEntry.workspaceId, workspaceId),
+        isNull(timeEntry.deletedAt),
+        inSubmittedPeriodSql(["PENDING", "APPROVED"]),
+      ),
+    )
+    .limit(1);
+  if (submitted) throw new CatalogError("CONFLICT", SUBMITTED_TIME_MESSAGE);
   const affectedEntries = (await usageCounts(db, workspaceId)).get(id) ?? 0;
   await db.delete(tag).where(and(eq(tag.id, id), eq(tag.workspaceId, workspaceId)));
   return { affectedEntries };

@@ -13,6 +13,7 @@ import { cn } from "@timekeep/ui/lib/utils";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { LockNotice } from "@/components/approvals/lock-notice";
 import { PeriodNav } from "@/components/period-nav";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -90,6 +91,7 @@ export function CalendarPageClient({
 
   return (
     <div data-saving={saving} className="space-y-4">
+      <LockNotice />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PeriodNav
           label={label}

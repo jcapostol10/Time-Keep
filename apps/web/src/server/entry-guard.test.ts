@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   and,
+  sql,
   approvalEvent,
   approvalRequest,
   eq,
@@ -10,6 +11,7 @@ import {
   timeEntry,
   workspaceSettings,
 } from "@timekeep/db";
+import { taskInputSchema } from "@timekeep/core";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -20,7 +22,10 @@ import {
   truncateAll,
 } from "../../test/db";
 import { loadViewer, scopeForUser } from "./authz";
+import { timerLock } from "./person-lock";
 import { createProject, deleteProject, updateProject } from "./catalog/projects";
+import { createTag, deleteTag } from "./catalog/tags";
+import { createTask, deleteTask } from "./catalog/tasks";
 import { requestRateRecalc, runRateRecalcJob } from "./rate-recalc";
 import {
   bulkUpdateEntries,
@@ -302,6 +307,27 @@ describe("writes outside the entry editor", () => {
     expect(byId.get(outId)?.billableRateMinor).toBe(5000);
   });
 
+  it("deleting a task or a tag on submitted time is refused", async () => {
+    const owner = await loadViewer(db, wsId, ids.olga!);
+    const web = await createProject(db, owner, { name: "Web" });
+    const design = await createTask(db, owner, web.id, taskInputSchema.parse({ name: "Design" }));
+    const urgent = await createTag(db, wsId, { name: "urgent" });
+    await updateEntry(
+      db,
+      await as("bob"),
+      inId,
+      { projectId: web.id, taskId: design.id, tagIds: [urgent.id] },
+      NOW,
+    );
+    await request(ids.bob!, SUBMITTED, "APPROVED");
+    await expect(deleteTask(db, owner, design.id)).rejects.toThrow(
+      "Archive it instead: it has time in submitted periods.",
+    );
+    await expect(deleteTag(db, wsId, urgent.id)).rejects.toThrow(
+      "Archive it instead: it has time in submitted periods.",
+    );
+  });
+
   it("deleting a project with submitted time is refused; archiving still works", async () => {
     const owner = await loadViewer(db, wsId, ids.olga!);
     const web = await createProject(db, owner, { name: "Web" });
@@ -311,5 +337,45 @@ describe("writes outside the entry editor", () => {
       "Archive it instead: it has time in submitted periods.",
     );
     await expect(updateProject(db, owner, web.id, { archived: true })).resolves.toBeDefined();
+  });
+});
+
+describe("lock order", () => {
+  // startTimer takes the person lock, then writes the running row. Every other
+  // writer must take the person lock before the row too, or the two deadlock.
+  it("an edit waits for the person lock before it locks the row", async () => {
+    const other = connectTestDb();
+    try {
+      const bob = await as("bob");
+      let edit: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        await tx.execute(timerLock(wsId, ids.bob!));
+        edit = updateEntry(other.db, bob, inId, { description: "edited" }, NOW);
+        // Let the edit run as far as it can while the lock is held.
+        await new Promise((r) => setTimeout(r, 400));
+        await tx.execute(sql`select id from time_entry where id = ${inId} for update`);
+      });
+      await expect(edit).resolves.toMatchObject({ description: "edited" });
+    } finally {
+      await other.close();
+    }
+  });
+
+  it("a bulk edit takes its people's locks before any row", async () => {
+    const other = connectTestDb();
+    try {
+      const viewer = await loadViewer(db, wsId, ids.bob!);
+      const groups = await scopesForEntries(db, viewer, [outId, inId]);
+      let bulk: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        await tx.execute(timerLock(wsId, ids.bob!));
+        bulk = bulkUpdateEntries(other.db, groups, { description: "bulk" }, NOW);
+        await new Promise((r) => setTimeout(r, 400));
+        await tx.execute(sql`select id from time_entry where id in (${inId}, ${outId}) for update`);
+      });
+      await expect(bulk).resolves.toBeDefined();
+    } finally {
+      await other.close();
+    }
   });
 });
