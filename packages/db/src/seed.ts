@@ -507,7 +507,11 @@ async function seedTeamAndRates(
   ];
   await db.insert(taskGroup).values(
     assignments.flatMap(([key, names]) =>
-      names.map((name) => ({ taskId: taskOf(key), groupId: group(name), assignedBy: user("owner@demo.test") })),
+      names.map((name) => ({
+        taskId: taskOf(key),
+        groupId: group(name),
+        assignedBy: user("owner@demo.test"),
+      })),
     ),
   );
 

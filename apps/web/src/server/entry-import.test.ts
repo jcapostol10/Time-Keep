@@ -81,9 +81,9 @@ describe("entry import", () => {
     const kickoff = rows.find((r) => r.description === "Kickoff")!;
     const [created] = await db.select().from(project).where(eq(project.id, kickoff.projectId!));
     expect(created?.name).toBe("New Proj");
-    expect((await db.select().from(tag).where(eq(tag.workspaceId, wsId))).map((t) => t.name).sort()).toEqual(
-      ["fresh", "t1"],
-    );
+    expect(
+      (await db.select().from(tag).where(eq(tag.workspaceId, wsId))).map((t) => t.name).sort(),
+    ).toEqual(["fresh", "t1"]);
     const review = rows.find((r) => r.description === "Design review")!;
     expect(review).toMatchObject({ billable: true, userId: ids.olga, durationSeconds: 5400 });
     expect(review.start.toISOString()).toBe("2026-03-09T01:00:00.000Z");
@@ -120,7 +120,7 @@ describe("entry import", () => {
     const plan = await planEntryImport(db, olga, forBob, OPTIONS);
     expect(plan.rows[0]).toMatchObject({ status: "ok", userName: "Bob Member" });
     await commitEntryImport(db, olga, forBob, OPTIONS, plan.fingerprint);
-    expect((await db.select().from(timeEntry).where(eq(timeEntry.userId, ids.bob!)))).toHaveLength(1);
+    expect(await db.select().from(timeEntry).where(eq(timeEntry.userId, ids.bob!))).toHaveLength(1);
 
     const bob = await viewer("bob");
     const upward = await planEntryImport(
@@ -149,15 +149,22 @@ describe("entry import", () => {
   it("a BOM and a ; delimiter parse, and two identical lines import two entries", async () => {
     const text =
       "﻿" +
-      ["Date;Start;End;Description;Project", "2026-03-09;09:00;10:00;Twice;Web", "2026-03-09;09:00;10:00;Twice;Web"].join(
-        "\r\n",
-      );
+      [
+        "Date;Start;End;Description;Project",
+        "2026-03-09;09:00;10:00;Twice;Web",
+        "2026-03-09;09:00;10:00;Twice;Web",
+      ].join("\r\n");
     const olga = await viewer("olga");
-    const options = { ...OPTIONS, mapping: autoMapColumns(["Date", "Start", "End", "Description", "Project"]) };
+    const options = {
+      ...OPTIONS,
+      mapping: autoMapColumns(["Date", "Start", "End", "Description", "Project"]),
+    };
     const plan = await planEntryImport(db, olga, text, options);
     expect(plan.ok).toBe(2);
     await commitEntryImport(db, olga, text, options, plan.fingerprint);
-    expect(await db.select().from(timeEntry).where(eq(timeEntry.workspaceId, wsId))).toHaveLength(2);
+    expect(await db.select().from(timeEntry).where(eq(timeEntry.workspaceId, wsId))).toHaveLength(
+      2,
+    );
   });
 
   it("too many rows and too big a file are refused before parsing", async () => {

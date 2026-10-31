@@ -29,6 +29,7 @@ export function userErrorMessage(error: unknown): string {
 /** The failed result for an error; a required-field refusal names its field. */
 export function actionFailure(error: unknown): ActionResult<never> {
   const message = userErrorMessage(error);
-  if (error instanceof TimeEntryError && error.field) return fail(message, { [error.field]: [message] });
+  if (error instanceof TimeEntryError && error.field)
+    return fail(message, { [error.field]: [message] });
   return fail(message);
 }

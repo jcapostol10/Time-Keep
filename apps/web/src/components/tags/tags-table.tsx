@@ -114,30 +114,30 @@ export function TagsTable({
                 </TableCell>
                 <TableCell>
                   {canManage ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" aria-label="More actions">
-                        <MoreHorizontalIcon />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => setEditing(t)}>Rename</DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          run(
-                            () => updateTagAction(slug, t.id, { archived: !t.archived }),
-                            t.archived ? `${t.name} unarchived` : `${t.name} archived`,
-                          )
-                        }
-                      >
-                        {t.archived ? "Unarchive" : "Archive"}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(t)}>
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label="More actions">
+                          <MoreHorizontalIcon />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => setEditing(t)}>Rename</DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            run(
+                              () => updateTagAction(slug, t.id, { archived: !t.archived }),
+                              t.archived ? `${t.name} unarchived` : `${t.name} archived`,
+                            )
+                          }
+                        >
+                          {t.archived ? "Unarchive" : "Archive"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(t)}>
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   ) : null}
                 </TableCell>
               </TableRow>

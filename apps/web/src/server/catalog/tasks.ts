@@ -260,7 +260,9 @@ export async function setTaskGroups(
     } else if (mode === "remove" && uniqueGroups.length > 0) {
       await tx
         .delete(taskGroup)
-        .where(and(inArray(taskGroup.taskId, uniqueTasks), inArray(taskGroup.groupId, uniqueGroups)));
+        .where(
+          and(inArray(taskGroup.taskId, uniqueTasks), inArray(taskGroup.groupId, uniqueGroups)),
+        );
     }
     if (mode !== "remove" && uniqueGroups.length > 0) {
       await tx
@@ -296,7 +298,9 @@ export async function listTasks(
   const listed = manages
     ? rows
     : await (async () => {
-        const allowed = new Set((await visibleTasksFor(db, viewer, { projectIds: [projectId] })).map((t) => t.id));
+        const allowed = new Set(
+          (await visibleTasksFor(db, viewer, { projectIds: [projectId] })).map((t) => t.id),
+        );
         return rows.filter((r) => allowed.has(r.id));
       })();
   const usage = await usageByTask(db, projectId);

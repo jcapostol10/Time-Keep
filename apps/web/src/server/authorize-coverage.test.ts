@@ -107,9 +107,11 @@ function unguarded(): string[] {
     ]),
   );
   const shared = new Set(
-    [...bodies].filter(([, b]) => b.includes("authorize(") || b.includes("assertCan(")).map(([n]) => n),
+    [...bodies]
+      .filter(([, b]) => b.includes("authorize(") || b.includes("assertCan("))
+      .map(([n]) => n),
   );
-  for (let grew = true; grew; ) {
+  for (let grew = true; grew;) {
     grew = false;
     for (const [name, body] of bodies) {
       if (!shared.has(name) && authorizes(body, shared)) {

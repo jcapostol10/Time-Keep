@@ -141,7 +141,12 @@ export function BulkEditDialog({
                     ))}
                   </SelectContent>
                 </Select>
-                <TagPicker slug={slug} value={tagIds} onChange={setTagIds} canCreate={canCreate.tag} />
+                <TagPicker
+                  slug={slug}
+                  value={tagIds}
+                  onChange={setTagIds}
+                  canCreate={canCreate.tag}
+                />
               </div>
             ) : null}
           </div>

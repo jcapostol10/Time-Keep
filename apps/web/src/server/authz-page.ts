@@ -36,7 +36,8 @@ export async function shownPerson(
   const me = await viewerFor(ctx);
   const people = await writableUsers(db, me);
   const userParam = typeof raw.user === "string" ? raw.user : null;
-  if (!userParam || userParam === ctx.user.id) return { scope: me, people, target: null, key: "me" };
+  if (!userParam || userParam === ctx.user.id)
+    return { scope: me, people, target: null, key: "me" };
   const scope = await authorizePage(() => targetScope(ctx, userParam));
   const name = people.find((p) => p.id === userParam)?.name ?? "";
   return {

@@ -107,23 +107,23 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
           </Button>
           {target ? null : (
             <>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!canWriteTimes}
-            onClick={() => setCopying(true)}
-          >
-            <CopyIcon /> Copy last week
-          </Button>
-          <TemplatesMenu
-            slug={slug}
-            currentRows={rows.map((r) => ({
-              projectId: r.projectId,
-              taskId: r.taskId,
-              description: r.description,
-            }))}
-            onApply={addRows}
-          />
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canWriteTimes}
+                onClick={() => setCopying(true)}
+              >
+                <CopyIcon /> Copy last week
+              </Button>
+              <TemplatesMenu
+                slug={slug}
+                currentRows={rows.map((r) => ({
+                  projectId: r.projectId,
+                  taskId: r.taskId,
+                  description: r.description,
+                }))}
+                onApply={addRows}
+              />
             </>
           )}
           <span className="text-muted-foreground ml-2 text-sm">

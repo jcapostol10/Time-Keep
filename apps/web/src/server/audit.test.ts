@@ -47,7 +47,13 @@ describe("audit criteria", () => {
     const withTasks = await createProject(db, me, { name: "With tasks" });
     const setup = await createTask(db, me, withTasks.id, { name: "Setup", assigneeIds: [] });
     const bare = await createProject(db, me, { name: "Bare" });
-    const entry = (description: string, projectId: string | null, taskId: string | null, start: Date, seconds: number) =>
+    const entry = (
+      description: string,
+      projectId: string | null,
+      taskId: string | null,
+      start: Date,
+      seconds: number,
+    ) =>
       createManualEntry(db, me, {
         description,
         projectId,
@@ -82,9 +88,13 @@ describe("audit criteria", () => {
   });
 
   it("reads its thresholds from the query", async () => {
-    expect(await audit({ audit: ["short"], shortMinutes: 120 })).toEqual(
-      ["bare project", "no project", "no task", "short", "with task"],
-    );
+    expect(await audit({ audit: ["short"], shortMinutes: 120 })).toEqual([
+      "bare project",
+      "no project",
+      "no task",
+      "short",
+      "with task",
+    ]);
     expect(await audit({ audit: ["long"], longHours: 12 })).toEqual([]);
   });
 });

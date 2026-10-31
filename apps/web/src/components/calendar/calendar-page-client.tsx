@@ -100,24 +100,28 @@ export function CalendarPageClient({
           onToday={() => go(null)}
         />
         <div className="flex items-center gap-2">
-        <PersonPicker />
-        <div role="radiogroup" aria-label="View" className="bg-muted flex rounded-md p-0.5 text-sm">
-          {(["day", "week"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              role="radio"
-              aria-checked={view === v}
-              onClick={() => go(viewParam || dateKey !== today ? dayStart : null, v)}
-              className={cn(
-                "rounded px-3 py-1 capitalize",
-                view === v ? "bg-background shadow-xs font-medium" : "text-muted-foreground",
-              )}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
+          <PersonPicker />
+          <div
+            role="radiogroup"
+            aria-label="View"
+            className="bg-muted flex rounded-md p-0.5 text-sm"
+          >
+            {(["day", "week"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={view === v}
+                onClick={() => go(viewParam || dateKey !== today ? dayStart : null, v)}
+                className={cn(
+                  "rounded px-3 py-1 capitalize",
+                  view === v ? "bg-background shadow-xs font-medium" : "text-muted-foreground",
+                )}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

@@ -54,11 +54,7 @@ import { CatalogError, isUniqueViolation } from "./errors";
 import { scopeFilter } from "../authz";
 import { visibleTasksFor } from "./tasks";
 import { type Viewer, visibleProjectFilter } from "./viewer";
-import {
-  type EntryScope,
-  reassignProjectEntries,
-  softDeleteProjectEntries,
-} from "../time-entries";
+import { type EntryScope, reassignProjectEntries, softDeleteProjectEntries } from "../time-entries";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
 
@@ -322,9 +318,7 @@ export async function copyProject(
     .where(and(eq(task.projectId, sourceId), eq(task.status, "ACTIVE")));
   const taskIds = tasks.map((t) => t.id);
   const [taskGroups, members, groups, rateRows] = await Promise.all([
-    taskIds.length > 0
-      ? db.select().from(taskGroup).where(inArray(taskGroup.taskId, taskIds))
-      : [],
+    taskIds.length > 0 ? db.select().from(taskGroup).where(inArray(taskGroup.taskId, taskIds)) : [],
     db.select().from(projectMember).where(eq(projectMember.projectId, sourceId)),
     db.select().from(projectGroup).where(eq(projectGroup.projectId, sourceId)),
     db
@@ -389,12 +383,14 @@ export async function copyProject(
       );
     }
     if (members.length > 0) {
-      await tx.insert(projectMember).values(
-        members.map((m) => ({ projectId: id, userId: m.userId, isManager: m.isManager })),
-      );
+      await tx
+        .insert(projectMember)
+        .values(members.map((m) => ({ projectId: id, userId: m.userId, isManager: m.isManager })));
     }
     if (groups.length > 0) {
-      await tx.insert(projectGroup).values(groups.map((g) => ({ projectId: id, groupId: g.groupId })));
+      await tx
+        .insert(projectGroup)
+        .values(groups.map((g) => ({ projectId: id, groupId: g.groupId })));
     }
     const copied = [...inForce.values()].filter(
       (r) => r.amountMinor !== null && (r.taskId === null || taskMap.has(r.taskId)),

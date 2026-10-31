@@ -184,9 +184,24 @@ describe("add time for others", () => {
   it("scopesForEntries groups ids by owner and refuses ids outside the scope", async () => {
     const bob = await viewer("bob");
     const carol = await viewer("carol");
-    const b1 = await createManualEntry(db, bob, { ...bare, projectId: webId, start: START, end: at(30) });
-    const b2 = await createManualEntry(db, bob, { ...bare, projectId: webId, start: at(30), end: at(60) });
-    const c1 = await createManualEntry(db, carol, { ...bare, projectId: webId, start: START, end: at(30) });
+    const b1 = await createManualEntry(db, bob, {
+      ...bare,
+      projectId: webId,
+      start: START,
+      end: at(30),
+    });
+    const b2 = await createManualEntry(db, bob, {
+      ...bare,
+      projectId: webId,
+      start: at(30),
+      end: at(60),
+    });
+    const c1 = await createManualEntry(db, carol, {
+      ...bare,
+      projectId: webId,
+      start: START,
+      end: at(30),
+    });
     const max = await viewer("max");
     const groups = await scopesForEntries(db, max, [b1.id, b2.id]);
     expect(groups).toHaveLength(1);
@@ -213,7 +228,8 @@ describe("add time for others", () => {
   });
 
   it("writableUsers lists the viewer first, then the people they may write for", async () => {
-    const names = async (who: string) => (await writableUsers(db, await viewer(who))).map((u) => u.name);
+    const names = async (who: string) =>
+      (await writableUsers(db, await viewer(who))).map((u) => u.name);
     expect(await names("max")).toEqual(["Max Manager", "Bob Member"]);
     expect(await names("bob")).toEqual(["Bob Member"]);
     expect(await names("ann")).toEqual([

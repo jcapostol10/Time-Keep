@@ -139,7 +139,14 @@ describe("rounding in reports", () => {
   });
 
   it("shows rounded rows in the Detailed report", async () => {
-    const page = await detailedReport(db, rounded.me, q(), PREFS, { sort: "start", dir: "asc" }, NOW);
+    const page = await detailedReport(
+      db,
+      rounded.me,
+      q(),
+      PREFS,
+      { sort: "start", dir: "asc" },
+      NOW,
+    );
     expect(page.entries.map((e) => e.durationSeconds)).toEqual([0, 900]);
     expect(page.entries.map((e) => e.amountMinor)).toEqual([0, amountFor(5000, 900)]);
   });

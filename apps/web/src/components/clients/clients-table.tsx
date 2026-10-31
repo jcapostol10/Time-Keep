@@ -118,35 +118,35 @@ export function ClientsTable({
                 </TableCell>
                 <TableCell>
                   {canManage ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" aria-label="More actions">
-                        <MoreHorizontalIcon />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => setEditing(c)}>Edit</DropdownMenuItem>
-                      <DropdownMenuItem
-                        onSelect={() =>
-                          run(
-                            () => updateClientAction(slug, c.id, { archived: !c.archived }),
-                            c.archived ? `${c.name} unarchived` : `${c.name} archived`,
-                          )
-                        }
-                      >
-                        {c.archived ? "Unarchive" : "Archive"}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        disabled={c.projectCount > 0}
-                        title={c.projectCount > 0 ? DELETE_BLOCKED : undefined}
-                        onSelect={() => setDeleting(c)}
-                      >
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label="More actions">
+                          <MoreHorizontalIcon />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => setEditing(c)}>Edit</DropdownMenuItem>
+                        <DropdownMenuItem
+                          onSelect={() =>
+                            run(
+                              () => updateClientAction(slug, c.id, { archived: !c.archived }),
+                              c.archived ? `${c.name} unarchived` : `${c.name} archived`,
+                            )
+                          }
+                        >
+                          {c.archived ? "Unarchive" : "Archive"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          disabled={c.projectCount > 0}
+                          title={c.projectCount > 0 ? DELETE_BLOCKED : undefined}
+                          onSelect={() => setDeleting(c)}
+                        >
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   ) : null}
                 </TableCell>
               </TableRow>

@@ -54,15 +54,7 @@ import { TaskAccessDialog } from "./task-access-dialog";
 import type { TeamContext } from "./team-view";
 
 type Open =
-  | "role"
-  | "groups"
-  | "tasks"
-  | "rate"
-  | "scope"
-  | "deactivate"
-  | "remove"
-  | "transfer"
-  | null;
+  "role" | "groups" | "tasks" | "rate" | "scope" | "deactivate" | "remove" | "transfer" | null;
 
 /** The row menu on the Team page and the dialogs it opens. */
 export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) {

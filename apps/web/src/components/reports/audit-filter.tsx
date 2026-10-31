@@ -56,7 +56,10 @@ export function AuditFilter() {
                   aria-label="Shorter than (minutes)"
                   value={query.shortMinutes}
                   onChange={(e) =>
-                    set({ shortMinutes: Math.max(1, Number(e.target.value) || 1) }, { replace: true })
+                    set(
+                      { shortMinutes: Math.max(1, Number(e.target.value) || 1) },
+                      { replace: true },
+                    )
                   }
                   className="h-8 w-20"
                 />

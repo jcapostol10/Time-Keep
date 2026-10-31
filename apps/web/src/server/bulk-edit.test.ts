@@ -157,6 +157,6 @@ describe("bulk edit", () => {
     expect((await stored(a.id)).billableRateMinor).toBe(8000);
     await db.update(rate).set({ amountMinor: 9000 }).where(eq(rate.projectId, webId));
     await bulk("bob", [a.id], { description: "renamed" });
-    expect((await stored(a.id))).toMatchObject({ billableRateMinor: 8000, description: "renamed" });
+    expect(await stored(a.id)).toMatchObject({ billableRateMinor: 8000, description: "renamed" });
   });
 });

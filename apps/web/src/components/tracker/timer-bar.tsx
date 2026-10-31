@@ -3,7 +3,14 @@
 import { formatClock } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import { cn } from "@timekeep/ui/lib/utils";
-import { ListPlusIcon, Loader2Icon, PlayIcon, SquareIcon, TimerIcon, CoffeeIcon } from "lucide-react";
+import {
+  ListPlusIcon,
+  Loader2Icon,
+  PlayIcon,
+  SquareIcon,
+  TimerIcon,
+  CoffeeIcon,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useHydrated } from "@/hooks/use-hydrated";
@@ -119,149 +126,152 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
 
   return (
     <TargetProvider target={null}>
-    <section
-      aria-label="Timer"
-      data-hydrated={hydrated}
-      className="bg-card shadow-xs flex flex-wrap items-center gap-1 rounded-lg border p-2 md:flex-nowrap"
-    >
-      {running ? (
-        <RunningDescription
-          key={`${running.id}:${running.description}`}
-          slug={slug}
-          saved={running.description}
-          onSave={(description) => change({ description })}
-          onPick={(s) => change(detailsOf(s))}
-          inputRef={tracker.registerDescriptionInput}
-          invalid={stopProblem?.field === "description"}
-        />
-      ) : (
-        <DescriptionInput
-          slug={slug}
-          value={draft.description}
-          onChange={(description) => setDraft({ description })}
-          onPick={(s) => setDraft(detailsOf(s))}
-          onEnter={() => {
-            if (mode === "timer") void tracker.start();
-          }}
-          inputRef={tracker.registerDescriptionInput}
-          className="basis-full md:flex-1 md:basis-auto"
-        />
-      )}
-
-      <div className="flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap">
-        {rules.allowBreaks ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label="Break"
-            aria-pressed={values.type === "break"}
-            disabled={Boolean(running)}
-            onClick={() =>
-              setDraft(
-                values.type === "break"
-                  ? { type: "work" }
-                  : { type: "break", projectId: null, taskId: null, tagIds: [], billable: false },
-              )
-            }
-            className={cn(
-              values.type === "break" ? "text-primary bg-primary/10" : "text-muted-foreground",
-            )}
-          >
-            <CoffeeIcon /> Break
-          </Button>
-        ) : null}
-        {values.type === "break" ? null : (
-          <>
-        <ProjectPicker
-          slug={slug}
-          value={{ projectId: values.projectId, taskId: values.taskId }}
-          current={running ? { project: running.project, task: running.task } : null}
-          canCreate={canCreate.project}
-          invalid={stopProblem?.field === "project" || stopProblem?.field === "task"}
-          onChange={(sel) => change({ projectId: sel.projectId, taskId: sel.taskId })}
-        />
-        <TagPicker
-          key={running?.id ?? "draft"}
-          slug={slug}
-          value={values.tagIds}
-          current={running?.tags ?? []}
-          canCreate={canCreate.tag}
-          invalid={stopProblem?.field === "tag"}
-          onChange={(tagIds) => change({ tagIds })}
-        />
-        <BillableToggle value={values.billable} onChange={(billable) => change({ billable })} />
-          </>
-        )}
-      </div>
-
-      <div className="ml-auto flex items-center gap-1">
-        {mode === "timer" ? (
-          <>
-            <LiveClock />
-            <Button
-              type="button"
-              onClick={() => void tracker.toggle()}
-              disabled={pending}
-              variant={running ? "destructive" : "default"}
-              className="min-w-24"
-            >
-              {pending ? (
-                <Loader2Icon className="animate-spin" />
-              ) : running ? (
-                <SquareIcon />
-              ) : (
-                <PlayIcon />
-              )}
-              {running ? "Stop" : "Start"}
-            </Button>
-          </>
+      <section
+        aria-label="Timer"
+        data-hydrated={hydrated}
+        className="bg-card shadow-xs flex flex-wrap items-center gap-1 rounded-lg border p-2 md:flex-nowrap"
+      >
+        {running ? (
+          <RunningDescription
+            key={`${running.id}:${running.description}`}
+            slug={slug}
+            saved={running.description}
+            onSave={(description) => change({ description })}
+            onPick={(s) => change(detailsOf(s))}
+            inputRef={tracker.registerDescriptionInput}
+            invalid={stopProblem?.field === "description"}
+          />
         ) : (
-          <ManualEntryFields
-            draft={draft}
-            onSubmit={async (input) => {
-              // A project or tag still being created belongs on this entry, as on Start.
-              const details = await settledDraft();
-              const ok = await createManual({ ...input, ...details });
-              if (ok) setDraft(EMPTY_DRAFT);
-              return ok;
+          <DescriptionInput
+            slug={slug}
+            value={draft.description}
+            onChange={(description) => setDraft({ description })}
+            onPick={(s) => setDraft(detailsOf(s))}
+            onEnter={() => {
+              if (mode === "timer") void tracker.start();
             }}
+            inputRef={tracker.registerDescriptionInput}
+            className="basis-full md:flex-1 md:basis-auto"
           />
         )}
-        {canWriteTimes ? (
-        <div className="flex flex-col" role="group" aria-label="Entry mode">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Timer mode"
-            aria-pressed={mode === "timer"}
-            onClick={() => setMode("timer")}
-            className={cn(mode === "timer" ? "text-primary" : "text-muted-foreground")}
-          >
-            <TimerIcon />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Manual mode"
-            aria-pressed={mode === "manual"}
-            disabled={Boolean(running)}
-            onClick={() => setMode("manual")}
-            className={cn(mode === "manual" ? "text-primary" : "text-muted-foreground")}
-          >
-            <ListPlusIcon />
-          </Button>
+
+        <div className="flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap">
+          {rules.allowBreaks ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label="Break"
+              aria-pressed={values.type === "break"}
+              disabled={Boolean(running)}
+              onClick={() =>
+                setDraft(
+                  values.type === "break"
+                    ? { type: "work" }
+                    : { type: "break", projectId: null, taskId: null, tagIds: [], billable: false },
+                )
+              }
+              className={cn(
+                values.type === "break" ? "text-primary bg-primary/10" : "text-muted-foreground",
+              )}
+            >
+              <CoffeeIcon /> Break
+            </Button>
+          ) : null}
+          {values.type === "break" ? null : (
+            <>
+              <ProjectPicker
+                slug={slug}
+                value={{ projectId: values.projectId, taskId: values.taskId }}
+                current={running ? { project: running.project, task: running.task } : null}
+                canCreate={canCreate.project}
+                invalid={stopProblem?.field === "project" || stopProblem?.field === "task"}
+                onChange={(sel) => change({ projectId: sel.projectId, taskId: sel.taskId })}
+              />
+              <TagPicker
+                key={running?.id ?? "draft"}
+                slug={slug}
+                value={values.tagIds}
+                current={running?.tags ?? []}
+                canCreate={canCreate.tag}
+                invalid={stopProblem?.field === "tag"}
+                onChange={(tagIds) => change({ tagIds })}
+              />
+              <BillableToggle
+                value={values.billable}
+                onChange={(billable) => change({ billable })}
+              />
+            </>
+          )}
         </div>
+
+        <div className="ml-auto flex items-center gap-1">
+          {mode === "timer" ? (
+            <>
+              <LiveClock />
+              <Button
+                type="button"
+                onClick={() => void tracker.toggle()}
+                disabled={pending}
+                variant={running ? "destructive" : "default"}
+                className="min-w-24"
+              >
+                {pending ? (
+                  <Loader2Icon className="animate-spin" />
+                ) : running ? (
+                  <SquareIcon />
+                ) : (
+                  <PlayIcon />
+                )}
+                {running ? "Stop" : "Start"}
+              </Button>
+            </>
+          ) : (
+            <ManualEntryFields
+              draft={draft}
+              onSubmit={async (input) => {
+                // A project or tag still being created belongs on this entry, as on Start.
+                const details = await settledDraft();
+                const ok = await createManual({ ...input, ...details });
+                if (ok) setDraft(EMPTY_DRAFT);
+                return ok;
+              }}
+            />
+          )}
+          {canWriteTimes ? (
+            <div className="flex flex-col" role="group" aria-label="Entry mode">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Timer mode"
+                aria-pressed={mode === "timer"}
+                onClick={() => setMode("timer")}
+                className={cn(mode === "timer" ? "text-primary" : "text-muted-foreground")}
+              >
+                <TimerIcon />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Manual mode"
+                aria-pressed={mode === "manual"}
+                disabled={Boolean(running)}
+                onClick={() => setMode("manual")}
+                className={cn(mode === "manual" ? "text-primary" : "text-muted-foreground")}
+              >
+                <ListPlusIcon />
+              </Button>
+            </div>
+          ) : null}
+        </div>
+        {stopProblem ? (
+          <p role="alert" className="text-destructive basis-full px-1 text-sm">
+            {stopProblem.message}
+          </p>
         ) : null}
-      </div>
-      {stopProblem ? (
-        <p role="alert" className="text-destructive basis-full px-1 text-sm">
-          {stopProblem.message}
-        </p>
-      ) : null}
-    </section>
+      </section>
     </TargetProvider>
   );
 }

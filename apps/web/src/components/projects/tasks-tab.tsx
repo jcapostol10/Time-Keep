@@ -230,8 +230,8 @@ export function TasksTab({
         >
           <UsersIcon className="size-4 shrink-0" aria-hidden />
           <span>
-            {ungrouped} active {ungrouped === 1 ? "task has" : "tasks have"} no group. Members cannot
-            see {ungrouped === 1 ? "it" : "them"}.
+            {ungrouped} active {ungrouped === 1 ? "task has" : "tasks have"} no group. Members
+            cannot see {ungrouped === 1 ? "it" : "them"}.
           </span>
         </div>
       ) : null}
@@ -242,9 +242,7 @@ export function TasksTab({
           aria-label="Task actions"
           className="bg-background mb-3 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2"
         >
-          <span className="text-sm font-medium">
-            {selectedIds.length} selected
-          </span>
+          <span className="text-sm font-medium">{selectedIds.length} selected</span>
           <Button size="sm" variant="outline" onClick={() => setGroupsDialog("add")}>
             Add to groups…
           </Button>

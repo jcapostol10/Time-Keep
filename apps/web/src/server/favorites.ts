@@ -47,7 +47,11 @@ async function groupsOfTasks(db: Executor, taskIds: string[]): Promise<Map<strin
   return groups;
 }
 
-function mayTrack(viewer: Viewer, t: { id: string; projectId: string }, groups: Map<string, string[]>) {
+function mayTrack(
+  viewer: Viewer,
+  t: { id: string; projectId: string },
+  groups: Map<string, string[]>,
+) {
   return can(viewer.actor, "task.trackTime", {
     kind: "task",
     projectId: t.projectId,

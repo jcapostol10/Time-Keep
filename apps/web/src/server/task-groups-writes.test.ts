@@ -173,9 +173,9 @@ describe("tasks by group: writes", () => {
     const dev = { ...bare, projectId: ids.web!, taskId: ids.tDev! };
 
     await expect(startTimer(db, bob, dev)).rejects.toThrow(TASK_UNAVAILABLE_MESSAGE);
-    await expect(createManualEntry(db, bob, { ...dev, start: at(120), end: at(150) })).rejects.toThrow(
-      TASK_UNAVAILABLE_MESSAGE,
-    );
+    await expect(
+      createManualEntry(db, bob, { ...dev, start: at(120), end: at(150) }),
+    ).rejects.toThrow(TASK_UNAVAILABLE_MESSAGE);
     await expect(updateEntry(db, bob, own.id, { taskId: ids.tDev! })).rejects.toThrow(
       TASK_UNAVAILABLE_MESSAGE,
     );
@@ -261,7 +261,12 @@ describe("tasks by group: writes", () => {
     await stopTimer(db, bob, { entryId: started.id });
 
     // A project with no tasks behaves as today; one whose tasks are all hidden takes no untasked time.
-    await createManualEntry(db, bob, { ...bare, projectId: ids.empty!, start: at(60), end: at(90) });
+    await createManualEntry(db, bob, {
+      ...bare,
+      projectId: ids.empty!,
+      start: at(60),
+      end: at(90),
+    });
     await expect(
       createManualEntry(db, bob, { ...bare, projectId: ids.hidden!, start: at(60), end: at(90) }),
     ).rejects.toMatchObject(required);
@@ -321,7 +326,12 @@ describe("tasks by group: writes", () => {
     expect(noTask.rows[0]!.error).toBe("Line 2: Task is required.");
     expect(noTask.creates.projects).toEqual([]);
     // For Ann herself the project is open and no task is forced.
-    const own = await planEntryImport(db, ann, csv("2026-03-09,09:00,10:00,Work,Hidden,,,yes,"), OPTIONS);
+    const own = await planEntryImport(
+      db,
+      ann,
+      csv("2026-03-09,09:00,10:00,Work,Hidden,,,yes,"),
+      OPTIONS,
+    );
     expect(own).toMatchObject({ ok: 1, errors: 0 });
   });
 
@@ -359,7 +369,13 @@ describe("tasks by group: writes", () => {
     await byGroup();
     const forBobByAnn = await scopeForUser(db, await viewer("ann"), ids.bob!);
     const forBobByMax = await scopeForUser(db, await viewer("max"), ids.bob!);
-    const design = { ...bare, projectId: ids.web!, taskId: ids.tDesign!, start: at(60), end: at(90) };
+    const design = {
+      ...bare,
+      projectId: ids.web!,
+      taskId: ids.tDesign!,
+      start: at(60),
+      end: at(90),
+    };
     const dev = { ...design, taskId: ids.tDev!, start: at(120), end: at(150) };
 
     await createManualEntry(db, forBobByAnn, design);
@@ -395,7 +411,9 @@ describe("tasks by group: writes", () => {
       csv(`2026-03-09,09:00,10:00,Work,Web,Dev,,yes,${emails.bob}`),
       OPTIONS,
     );
-    expect(annPlan.rows[0]!.error).toBe(`Line 2: task "Dev" isn't available to Bob Member's groups`);
+    expect(annPlan.rows[0]!.error).toBe(
+      `Line 2: task "Dev" isn't available to Bob Member's groups`,
+    );
 
     const fresh = csv("2026-03-09,09:00,10:00,Work,Web,Fresh,,yes,");
     expect((await planEntryImport(db, olga, fresh, OPTIONS)).rows[0]!.error).toBe(

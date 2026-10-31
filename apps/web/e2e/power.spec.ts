@@ -38,7 +38,10 @@ test.describe("power features", () => {
     await addManualEntry(page, { description: "Row C", start: "00:35", duration: "0.25" });
 
     await page.getByRole("checkbox", { name: "Select all entries for Today" }).check();
-    await page.getByRole("toolbar", { name: "Bulk actions" }).getByRole("button", { name: "Edit" }).click();
+    await page
+      .getByRole("toolbar", { name: "Bulk actions" })
+      .getByRole("button", { name: "Edit" })
+      .click();
     const dialog = page.getByRole("dialog", { name: "Edit 3 entries" });
     await dialog.getByRole("checkbox", { name: "Change project" }).check();
     await pickProjectIn(page, dialog, "Alpha");
@@ -142,7 +145,9 @@ test.describe("power features", () => {
     await page.getByRole("tab", { name: "Rates" }).click();
     await setRateIn(
       page,
-      page.getByRole("region", { name: "Project rate" }).getByRole("button", { name: "Change rate" }),
+      page
+        .getByRole("region", { name: "Project rate" })
+        .getByRole("button", { name: "Change rate" }),
       { amount: "80", apply: "New entries only" },
     );
 
@@ -172,7 +177,9 @@ test.describe("power features", () => {
     // The template itself takes no time: the picker does not list it.
     await page.goto(`/w/${freshUser.slug}/tracker`);
     await expect(page.locator('section[aria-label="Timer"][data-hydrated="true"]')).toBeVisible();
-    await timer(page).getByRole("button", { name: /^Project:/ }).click();
+    await timer(page)
+      .getByRole("button", { name: /^Project:/ })
+      .click();
     await page.getByRole("combobox", { name: "Search projects" }).fill("Base");
     await expect(page.getByRole("option", { name: "Client X", exact: true })).toHaveCount(0);
     await expect(page.getByRole("option", { name: "Base template", exact: true })).toHaveCount(0);
@@ -201,7 +208,10 @@ test.describe("power features", () => {
 
     // Fix the lost entry where it was found.
     await detailedRow(page, "Lost").getByRole("checkbox", { name: "Select Lost" }).check();
-    await page.getByRole("toolbar", { name: "Selected entries" }).getByRole("button", { name: "Edit" }).click();
+    await page
+      .getByRole("toolbar", { name: "Selected entries" })
+      .getByRole("button", { name: "Edit" })
+      .click();
     const dialog = page.getByRole("dialog", { name: "Edit 1 entry" });
     await dialog.getByRole("checkbox", { name: "Change project" }).check();
     await pickProjectIn(page, dialog, "Alpha");

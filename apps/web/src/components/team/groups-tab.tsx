@@ -123,9 +123,7 @@ export function GroupsTab({ ctx }: { ctx: TeamContext }) {
                           >
                             Members
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => setOpen({ group: g, dialog: "tasks" })}
-                          >
+                          <DropdownMenuItem onSelect={() => setOpen({ group: g, dialog: "tasks" })}>
                             Tasks
                           </DropdownMenuItem>
                           <DropdownMenuItem

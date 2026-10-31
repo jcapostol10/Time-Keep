@@ -239,7 +239,10 @@ test.describe("tasks by group", () => {
       .click();
     const bulk = mia.page.getByRole("dialog", { name: "Edit 2 entries" });
     await bulk.getByRole("checkbox", { name: "Change project" }).check();
-    const bulkOptions = await pickerOptions(mia.page, bulk.getByRole("button", { name: /^Project:/ }));
+    const bulkOptions = await pickerOptions(
+      mia.page,
+      bulk.getByRole("button", { name: /^Project:/ }),
+    );
     expect(bulkOptions).toEqual(expect.arrayContaining(["Web › Design", "Web › Dev"]));
     expect(bulkOptions).not.toEqual(expect.arrayContaining(["Web › Books", "Ops"]));
     await mia.page.keyboard.press("Escape");
@@ -247,7 +250,10 @@ test.describe("tasks by group", () => {
     await openCalendar(mia.page, slug, "week");
     await mia.page.getByRole("button", { name: /^Calendar work, Web/ }).click();
     const edit = mia.page.getByRole("dialog", { name: "Edit entry" });
-    const calendarOptions = await pickerOptions(mia.page, edit.getByRole("button", { name: /^Project:/ }));
+    const calendarOptions = await pickerOptions(
+      mia.page,
+      edit.getByRole("button", { name: /^Project:/ }),
+    );
     expect(calendarOptions).toEqual(expect.arrayContaining(["Web › Design", "Web › Dev"]));
     expect(calendarOptions).not.toEqual(expect.arrayContaining(["Web › Books", "Ops"]));
     await mia.page.keyboard.press("Escape");

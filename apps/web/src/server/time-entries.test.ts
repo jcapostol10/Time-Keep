@@ -1,7 +1,18 @@
 import { randomUUID } from "node:crypto";
 
 import { type EntryDetails, MAX_ENTRY_SECONDS } from "@timekeep/core";
-import { and, count, eq, isNull, project, projectMember, sql, tag, task, timeEntry } from "@timekeep/db";
+import {
+  and,
+  count,
+  eq,
+  isNull,
+  project,
+  projectMember,
+  sql,
+  tag,
+  task,
+  timeEntry,
+} from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {

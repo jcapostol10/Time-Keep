@@ -202,8 +202,7 @@ export async function runRateRecalcJob(
       .select({ start: sql<string | null>`${rateRecalcJob.cursorStart}::text` })
       .from(rateRecalcJob)
       .where(eq(rateRecalcJob.id, job.id));
-    let cursor =
-      stored?.start && job.cursorId ? { start: stored.start, id: job.cursorId } : null;
+    let cursor = stored?.start && job.cursorId ? { start: stored.start, id: job.cursorId } : null;
     try {
       for (;;) {
         const rows: { id: string; start: string }[] = await db

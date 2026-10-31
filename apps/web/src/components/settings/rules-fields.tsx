@@ -190,7 +190,9 @@ export function RulesFields() {
                       }
                     />
                   </FormControl>
-                  <FormLabel className="font-normal">Hide {PAGE_LABELS[page]} from members</FormLabel>
+                  <FormLabel className="font-normal">
+                    Hide {PAGE_LABELS[page]} from members
+                  </FormLabel>
                 </FormItem>
               ))}
               <FormMessage />
@@ -203,7 +205,10 @@ export function RulesFields() {
           render={({ field }) => (
             <FormItem className="flex items-center gap-2 space-y-0">
               <FormControl>
-                <Checkbox checked={field.value} onCheckedChange={(on) => field.onChange(on === true)} />
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={(on) => field.onChange(on === true)}
+                />
               </FormControl>
               <FormLabel className="font-normal">
                 Members see everyone&apos;s time (durations only)
@@ -232,8 +237,8 @@ export function RulesFields() {
                 </SelectContent>
               </Select>
               <FormDescription>
-                By group: members see and track only the tasks of their groups, and must pick one
-                on a project that has them. Owners and admins see every task.
+                By group: members see and track only the tasks of their groups, and must pick one on
+                a project that has them. Owners and admins see every task.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -296,7 +301,9 @@ export function RulesFields() {
                   <FormControl>
                     <Checkbox
                       checked={field.value.includes(rf)}
-                      onCheckedChange={(on) => field.onChange(toggled(field.value, rf, on === true))}
+                      onCheckedChange={(on) =>
+                        field.onChange(toggled(field.value, rf, on === true))
+                      }
                     />
                   </FormControl>
                   <FormLabel className="font-normal">{REQUIRED_FIELD_LABELS[rf]}</FormLabel>

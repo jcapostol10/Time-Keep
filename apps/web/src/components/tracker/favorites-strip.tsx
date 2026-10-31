@@ -30,7 +30,7 @@ export function FavoritesStrip() {
         return (
           <div
             key={f.id}
-            className="bg-card flex items-center gap-1 rounded-full border py-0.5 pr-0.5 pl-3 text-sm"
+            className="bg-card flex items-center gap-1 rounded-full border py-0.5 pl-3 pr-0.5 text-sm"
           >
             {f.project ? (
               <span

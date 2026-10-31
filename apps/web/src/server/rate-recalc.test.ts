@@ -223,7 +223,9 @@ describe("the apply-to-past-entries job", () => {
     const failed = await db
       .select()
       .from(rateRecalcJob)
-      .where(and(eq(rateRecalcJob.workspaceId, me.workspaceId), eq(rateRecalcJob.status, "failed")));
+      .where(
+        and(eq(rateRecalcJob.workspaceId, me.workspaceId), eq(rateRecalcJob.status, "failed")),
+      );
     expect(failed).toEqual([]);
   });
 

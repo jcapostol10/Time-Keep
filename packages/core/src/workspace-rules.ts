@@ -63,9 +63,10 @@ export function permissionSettingsOf(
 }
 
 /** The rules the entry service applies on every write. */
-export function entryRulesOf(
-  row: Pick<WorkspaceRuleColumns, "requiredFields" | "allowBreaks">,
-): { requiredFields: RequiredField[]; allowBreaks: boolean } {
+export function entryRulesOf(row: Pick<WorkspaceRuleColumns, "requiredFields" | "allowBreaks">): {
+  requiredFields: RequiredField[];
+  allowBreaks: boolean;
+} {
   return {
     requiredFields: known<RequiredField>(REQUIRED_FIELDS, row.requiredFields),
     allowBreaks: row.allowBreaks,

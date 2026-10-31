@@ -44,8 +44,26 @@ const parse = (rows: string[][], dateFormat: "yyyy-MM-dd" | "dd/MM/yyyy" = "yyyy
 describe("autoMapColumns", () => {
   it("matches header names loosely, each header once", () => {
     expect(
-      autoMapColumns(["Date", "Start time", "End Time", "Description", "Project", "Tags", "Billable", "User email"]),
-    ).toEqual({ date: 0, start: 1, end: 2, description: 3, project: 4, tags: 5, billable: 6, email: 7 });
+      autoMapColumns([
+        "Date",
+        "Start time",
+        "End Time",
+        "Description",
+        "Project",
+        "Tags",
+        "Billable",
+        "User email",
+      ]),
+    ).toEqual({
+      date: 0,
+      start: 1,
+      end: 2,
+      description: 3,
+      project: 4,
+      tags: 5,
+      billable: 6,
+      email: 7,
+    });
     expect(autoMapColumns(["Day", "From", "To", "Hours", "What", "Customer"])).toEqual({
       date: 0,
       start: 1,

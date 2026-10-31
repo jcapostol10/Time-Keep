@@ -127,7 +127,9 @@ describe("tasks by group: reads", () => {
     const all = ["Admin", "Books", "Design", "Dev", "Ledger"];
     expect(names(await visibleTasksFor(db, await viewer("bob")))).toEqual(all);
     expect(names(await visibleTasksFor(db, await viewer("max")))).toEqual(all);
-    expect(names(await visibleTasksFor(db, await viewer("olga")))).toEqual([...all, "Audit"].sort());
+    expect(names(await visibleTasksFor(db, await viewer("olga")))).toEqual(
+      [...all, "Audit"].sort(),
+    );
   });
 
   describe("BY_GROUP", () => {
@@ -238,9 +240,7 @@ describe("tasks by group: reads", () => {
     it("listGroupTasks and listTasksAvailableTo group by project", async () => {
       const olga = await viewer("olga");
       const finance = await listGroupTasks(db, olga, ids.finance!);
-      expect(
-        finance.byProject.map((p) => [p.projectName, p.tasks.map((t) => t.name)]),
-      ).toEqual([
+      expect(finance.byProject.map((p) => [p.projectName, p.tasks.map((t) => t.name)])).toEqual([
         ["Ops", ["Ledger"]],
         ["Secret", ["Audit"]],
         ["Web", ["Books"]],

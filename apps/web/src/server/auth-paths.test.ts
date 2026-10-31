@@ -45,8 +45,7 @@ describe("Better Auth organization routes", () => {
 describe("Better Auth organization limits", () => {
   it("allows more invitations and members than a 500-row user import", () => {
     const plugin = getAuth().options.plugins?.find((p) => p.id === "organization") as
-      | { options?: { invitationLimit?: unknown; membershipLimit?: unknown } }
-      | undefined;
+      { options?: { invitationLimit?: unknown; membershipLimit?: unknown } } | undefined;
     // Better Auth defaults both to 100; seats arrive with plans in Phase 8.
     expect(Number(plugin?.options?.invitationLimit)).toBeGreaterThanOrEqual(1000);
     expect(Number(plugin?.options?.membershipLimit)).toBeGreaterThanOrEqual(1000);

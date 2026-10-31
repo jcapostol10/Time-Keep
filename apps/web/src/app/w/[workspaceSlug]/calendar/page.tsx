@@ -65,7 +65,7 @@ export default async function CalendarPage({
       <PageHeader title="Calendar" />
       <HydrationBoundary state={dehydrate(queryClient)}>
         <TargetProvider target={target}>
-        <CalendarPageClient from={from} to={to} dateKey={dateKey} view={view} />
+          <CalendarPageClient from={from} to={to} dateKey={dateKey} view={view} />
         </TargetProvider>
       </HydrationBoundary>
     </>

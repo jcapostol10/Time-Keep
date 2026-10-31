@@ -245,16 +245,43 @@ describe("rates", () => {
   it("lets a backdated or all-entries rate replace later rows at its level", async () => {
     const owner = await viewer("olga");
     const target = { level: "project" as const, projectId: ids.Web! };
-    await setRate(db, owner, { ...target, amount: "100", apply: "new" }, new Date("2026-10-01T12:00:00Z"));
+    await setRate(
+      db,
+      owner,
+      { ...target, amount: "100", apply: "new" },
+      new Date("2026-10-01T12:00:00Z"),
+    );
     // "All entries, past and future": the Oct 1 row must not keep winning after Oct 1.
-    await setRate(db, owner, { ...target, amount: "150", apply: "all" }, new Date("2026-10-27T12:00:00Z"));
-    expect((await currentRate(db, owner, target, new Date("2026-10-27T12:00:00Z")))?.amountMinor).toBe(15000);
+    await setRate(
+      db,
+      owner,
+      { ...target, amount: "150", apply: "all" },
+      new Date("2026-10-27T12:00:00Z"),
+    );
+    expect(
+      (await currentRate(db, owner, target, new Date("2026-10-27T12:00:00Z")))?.amountMinor,
+    ).toBe(15000);
     expect((await rateHistory(db, owner, target)).map((h) => h.amountMinor)).toEqual([15000]);
 
     // From a date before an existing later row: from then on, the new amount.
-    await setRate(db, owner, { ...target, amount: "120", apply: "from", from: "2026-11-01" }, new Date("2026-10-27T12:00:00Z"));
-    await setRate(db, owner, { ...target, amount: "130", apply: "from", from: "2026-09-01" }, new Date("2026-10-27T12:00:00Z"));
-    expect((await rateHistory(db, owner, target)).map((h) => [h.amountMinor, h.effectiveFrom.slice(0, 10)])).toEqual([
+    await setRate(
+      db,
+      owner,
+      { ...target, amount: "120", apply: "from", from: "2026-11-01" },
+      new Date("2026-10-27T12:00:00Z"),
+    );
+    await setRate(
+      db,
+      owner,
+      { ...target, amount: "130", apply: "from", from: "2026-09-01" },
+      new Date("2026-10-27T12:00:00Z"),
+    );
+    expect(
+      (await rateHistory(db, owner, target)).map((h) => [
+        h.amountMinor,
+        h.effectiveFrom.slice(0, 10),
+      ]),
+    ).toEqual([
       [13000, "2026-09-01"],
       [15000, "1970-01-01"],
     ]);

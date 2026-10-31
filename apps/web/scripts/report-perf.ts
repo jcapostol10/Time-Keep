@@ -140,7 +140,9 @@ async function main() {
       process.exitCode = 1;
     }
     if (pickerMs > PICKER_BUDGET_MS) {
-      console.error(`[perf] picker over budget: ${pickerMs.toFixed(0)} ms > ${PICKER_BUDGET_MS} ms`);
+      console.error(
+        `[perf] picker over budget: ${pickerMs.toFixed(0)} ms > ${PICKER_BUDGET_MS} ms`,
+      );
       process.exitCode = 1;
     }
     if (recalcMs > RECALC_BUDGET_MS) {

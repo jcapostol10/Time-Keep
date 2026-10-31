@@ -196,7 +196,12 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
   "report.viewAmounts": { owner: "yes", admin: "yes", manager: "yes", member: "no" },
   "shareLink.manage": { owner: "yes", admin: "yes", manager: "own", member: "own" },
   "import.users": ADMINS,
-  "entry.writeTimes": { owner: "yes", admin: "yes", manager: "unlessForced", member: "unlessForced" },
+  "entry.writeTimes": {
+    owner: "yes",
+    admin: "yes",
+    manager: "unlessForced",
+    member: "unlessForced",
+  },
   "import.entries": { owner: "yes", admin: "yes", manager: "yes", member: "yes" },
 };
 
@@ -327,7 +332,8 @@ const RULE_WORDS: Record<Rule, string> = {
   unlessHidden: "unless the workspace hides it",
   teamSetting: "if the workspace allows",
   unlessForced: "unless force timer is on (own time)",
-  taskGroups: "every task, or when tasks are by group: their groups' tasks and projects they manage",
+  taskGroups:
+    "every task, or when tasks are by group: their groups' tasks and projects they manage",
 };
 
 const SECTION_TITLES: Record<string, string> = {

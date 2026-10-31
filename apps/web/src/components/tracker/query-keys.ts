@@ -39,7 +39,8 @@ export const trackerUrls = {
   running: (slug: string) => `/api/w/${slug}/time-entries/running`,
   range: (slug: string, from: string, to: string, userId = "me") =>
     `/api/w/${slug}/time-entries/range?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${forUser(userId, false)}`,
-  options: (slug: string, userId = "me") => `/api/w/${slug}/tracker-options${forUser(userId, true)}`,
+  options: (slug: string, userId = "me") =>
+    `/api/w/${slug}/tracker-options${forUser(userId, true)}`,
   people: (slug: string) => `/api/w/${slug}/people`,
   favorites: (slug: string) => `/api/w/${slug}/favorites`,
   report: (slug: string, kind: string, params: string) =>

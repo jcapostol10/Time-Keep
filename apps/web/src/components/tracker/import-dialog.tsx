@@ -66,12 +66,7 @@ const FIELD_LABELS: Record<ImportColumn, string> = {
 const NONE = "__none__";
 
 /** Posts the file and options; `dryRun` answers the plan, otherwise the count written. */
-async function post<T>(
-  slug: string,
-  file: File,
-  options: object,
-  dryRun: boolean,
-): Promise<T> {
+async function post<T>(slug: string, file: File, options: object, dryRun: boolean): Promise<T> {
   const form = new FormData();
   form.set("file", file);
   form.set("options", JSON.stringify(options));
@@ -89,7 +84,13 @@ async function post<T>(
  * choose the times' timezone and date format, check every row, then import
  * the ready ones. Everything is written through the entry service.
  */
-export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function ImportDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { slug, viewer, notifyEntriesChanged, rules } = useTracker();
   const byGroup = rules.taskVisibility === "BY_GROUP";
   // Only someone who may add a task somewhere (owners, admins, a project's managers)
@@ -270,7 +271,9 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                     ))
                   ) : (
                     <p className="text-muted-foreground text-sm">
-                      {groupsQuery.isPending ? "Loading…" : "No groups yet: tasks cannot be created."}
+                      {groupsQuery.isPending
+                        ? "Loading…"
+                        : "No groups yet: tasks cannot be created."}
                     </p>
                   )}
                 </fieldset>
@@ -353,11 +356,20 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           <Button type="button" variant="outline" onClick={() => reset(false)}>
             Cancel
           </Button>
-          <Button type="button" variant="secondary" disabled={!file || busy} onClick={() => void check()}>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={!file || busy}
+            onClick={() => void check()}
+          >
             {busy && !plan ? <Loader2Icon className="animate-spin" /> : <FileUpIcon />}
             Check
           </Button>
-          <Button type="button" disabled={!plan || plan.ok === 0 || busy} onClick={() => void commit()}>
+          <Button
+            type="button"
+            disabled={!plan || plan.ok === 0 || busy}
+            onClick={() => void commit()}
+          >
             {busy && plan ? <Loader2Icon className="animate-spin" /> : null}
             Import {plan?.ok ?? 0} {plan?.ok === 1 ? "entry" : "entries"}
           </Button>

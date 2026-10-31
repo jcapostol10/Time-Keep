@@ -217,16 +217,18 @@ function measures(rule: RoundingRule | null): Measures {
   const a = rule ? roundedAmountSql(rule) : sql`${timeEntry.amountMinor}`;
   return {
     duration: sql`coalesce(sum(${s}), 0)::bigint`.mapWith(Number),
-    billable: sql`coalesce(sum(case when ${timeEntry.billable} then ${s} else 0 end), 0)::bigint`.mapWith(
-      Number,
-    ),
+    billable:
+      sql`coalesce(sum(case when ${timeEntry.billable} then ${s} else 0 end), 0)::bigint`.mapWith(
+        Number,
+      ),
     nonBillable:
       sql`coalesce(sum(case when ${timeEntry.billable} then 0 else ${s} end), 0)::bigint`.mapWith(
         Number,
       ),
-    amount: sql`coalesce(sum(case when ${timeEntry.billable} then ${a} else 0 end), 0)::bigint`.mapWith(
-      Number,
-    ),
+    amount:
+      sql`coalesce(sum(case when ${timeEntry.billable} then ${a} else 0 end), 0)::bigint`.mapWith(
+        Number,
+      ),
   };
 }
 
@@ -572,7 +574,10 @@ export async function detailedReport(
     .innerJoin(user, eq(user.id, timeEntry.userId))
     .leftJoin(
       membership,
-      and(eq(membership.workspaceId, timeEntry.workspaceId), eq(membership.userId, timeEntry.userId)),
+      and(
+        eq(membership.workspaceId, timeEntry.workspaceId),
+        eq(membership.userId, timeEntry.userId),
+      ),
     )
     .where(and(...conds))
     .orderBy(order(sortColumn), order(timeEntry.id))

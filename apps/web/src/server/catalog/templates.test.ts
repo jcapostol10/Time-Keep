@@ -23,7 +23,13 @@ import {
 } from "../../../test/db";
 import { loadViewer } from "../authz";
 import { createManualEntry } from "../time-entries";
-import { copyProject, createProject, listPickerProjects, listProjects, listTemplates } from "./projects";
+import {
+  copyProject,
+  createProject,
+  listPickerProjects,
+  listProjects,
+  listTemplates,
+} from "./projects";
 import { createTask } from "./tasks";
 import type { Viewer } from "./viewer";
 
@@ -98,8 +104,18 @@ describe("project templates", () => {
     // Rule 9 already gave Design access to the private template through its task.
     await db.insert(projectGroup).values({ projectId: base.id, groupId }).onConflictDoNothing();
     await addRate({ level: "project", projectId: base.id, amountMinor: 8000 });
-    await addRate({ level: "project", projectId: base.id, amountMinor: 7000, effectiveFrom: new Date("2020-01-01") });
-    await addRate({ level: "project_member", projectId: base.id, userId: bob.id, amountMinor: 9000 });
+    await addRate({
+      level: "project",
+      projectId: base.id,
+      amountMinor: 7000,
+      effectiveFrom: new Date("2020-01-01"),
+    });
+    await addRate({
+      level: "project_member",
+      projectId: base.id,
+      userId: bob.id,
+      amountMinor: 9000,
+    });
     await addRate({ level: "task", projectId: base.id, taskId: setupTaskId, amountMinor: 12000 });
     await db
       .update(task)
@@ -140,7 +156,10 @@ describe("project templates", () => {
         (g) => g.groupId,
       ),
     ).toEqual([groupId]);
-    const members = await db.select().from(projectMember).where(eq(projectMember.projectId, copy.id));
+    const members = await db
+      .select()
+      .from(projectMember)
+      .where(eq(projectMember.projectId, copy.id));
     expect(members.map((m) => [m.userId, m.isManager]).sort()).toEqual(
       [
         [ids.bob, false],
@@ -174,9 +193,9 @@ describe("project templates", () => {
     await createProject(db, olga, { name: "Real" });
     expect((await listPickerProjects(db, olga)).map((p) => p.name)).toEqual(["Real"]);
     expect((await listProjects(db, olga, LIST)).map((p) => p.name)).toEqual(["Real"]);
-    expect((await listProjects(db, olga, { ...LIST, kind: "templates" })).map((p) => p.name)).toEqual(
-      ["Base"],
-    );
+    expect(
+      (await listProjects(db, olga, { ...LIST, kind: "templates" })).map((p) => p.name),
+    ).toEqual(["Base"]);
     expect((await listTemplates(db, olga)).map((t) => t.name)).toEqual(["Base"]);
     await expect(
       createManualEntry(db, olga, {
@@ -198,12 +217,18 @@ describe("project templates", () => {
       .where(eq(workspaceSettings.workspaceId, wsId));
     const max = await viewer("max");
     expect(can(max.actor, "project.create", { kind: "project", projectId: null })).toBe(true);
-    const copy = await copyProject(db, max, templateId, { name: "Mine", clientId: null, isTemplate: false });
+    const copy = await copyProject(db, max, templateId, {
+      name: "Mine",
+      clientId: null,
+      isTemplate: false,
+    });
     expect(copy.name).toBe("Mine");
     // A template outside their view is not found.
     const bob = await viewer("bob");
     const hidden = await createProject(db, olga, { name: "Hidden", visibility: "PRIVATE" });
-    await db.execute(/* sql */ `update "project" set "is_template" = true where "id" = '${hidden.id}'`);
+    await db.execute(
+      /* sql */ `update "project" set "is_template" = true where "id" = '${hidden.id}'`,
+    );
     await expect(
       copyProject(db, bob, hidden.id, { name: "Nope", clientId: null, isTemplate: false }),
     ).rejects.toThrow("Project not found.");

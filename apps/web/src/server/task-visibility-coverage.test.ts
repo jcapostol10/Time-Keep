@@ -19,7 +19,8 @@ const ALLOWED: Record<string, string> = {
   "time-entries.ts": "loads one task by id to validate an entry's details",
   "favorites.ts": "loads pinned tasks by id",
   "rates.ts": "resolves a rate target by id; the Rates page is admin-only",
-  "reports.ts": "joins task for names and the Audit noTask criterion; its options come from listPickerProjects",
+  "reports.ts":
+    "joins task for names and the Audit noTask criterion; its options come from listPickerProjects",
   "actions/tasks.ts": "finds a task's project for authorize",
 };
 

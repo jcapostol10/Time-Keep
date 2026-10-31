@@ -11,7 +11,14 @@ import {
 import { Skeleton } from "@timekeep/ui/components/skeleton";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@timekeep/ui/components/table";
 import { Checkbox } from "@timekeep/ui/components/checkbox";
-import { ArrowDownIcon, ArrowUpIcon, Columns3Icon, Loader2Icon, Trash2Icon, PencilIcon } from "lucide-react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  Columns3Icon,
+  Loader2Icon,
+  Trash2Icon,
+  PencilIcon,
+} from "lucide-react";
 import { useState } from "react";
 
 import type { DetailedPaging, DetailedSort } from "@/lib/report-types";

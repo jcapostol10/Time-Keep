@@ -64,10 +64,18 @@ describe("trackingBlock", () => {
 describe("trackingBlock and templates", () => {
   it("takes no time on a template", () => {
     expect(
-      trackingBlock({ project: { id: "p", archived: false, isTemplate: true }, task: null, tags: [] }),
+      trackingBlock({
+        project: { id: "p", archived: false, isTemplate: true },
+        task: null,
+        tags: [],
+      }),
     ).toBe("This project is a template.");
     expect(
-      trackingBlock({ project: { id: "p", archived: false, isTemplate: false }, task: null, tags: [] }),
+      trackingBlock({
+        project: { id: "p", archived: false, isTemplate: false },
+        task: null,
+        tags: [],
+      }),
     ).toBeNull();
   });
 });

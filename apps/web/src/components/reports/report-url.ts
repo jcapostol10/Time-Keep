@@ -3,7 +3,9 @@
 import {
   parseReportQuery,
   type ReportQuery,
-  reportQueryToSearchParams, type ReportView } from "@timekeep/core";
+  reportQueryToSearchParams,
+  type ReportView,
+} from "@timekeep/core";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 

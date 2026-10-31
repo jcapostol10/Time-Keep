@@ -46,7 +46,13 @@ export default async function ProjectsPage({
     listProjects(db, viewer, query),
     listClientOptions(db, ctx.workspace.id),
     // "Start from template" lists every template the viewer can see.
-    listProjects(db, viewer, { ...query, q: "", clientId: undefined, status: "all", kind: "templates" }),
+    listProjects(db, viewer, {
+      ...query,
+      q: "",
+      clientId: undefined,
+      status: "all",
+      kind: "templates",
+    }),
   ]);
 
   return (
@@ -58,7 +64,11 @@ export default async function ProjectsPage({
             ? "What time is tracked against. Group projects by client and control who can see them."
             : "The projects you can track time on."
         }
-        actions={canCreate ? <NewProjectButton slug={workspaceSlug} clients={clients} templates={templates} /> : null}
+        actions={
+          canCreate ? (
+            <NewProjectButton slug={workspaceSlug} clients={clients} templates={templates} />
+          ) : null
+        }
       />
       <ProjectsToolbar query={query} clients={clients} />
       <ProjectsTable

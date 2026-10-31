@@ -28,7 +28,11 @@ import { toast } from "sonner";
 import type { z } from "zod";
 
 import type { ProjectListItem } from "@/lib/catalog-types";
-import { createProjectAction, updateProjectAction, copyProjectAction } from "@/server/actions/projects";
+import {
+  createProjectAction,
+  updateProjectAction,
+  copyProjectAction,
+} from "@/server/actions/projects";
 
 import { ProjectFormFields } from "./project-form-fields";
 import type { ClientOption } from "./projects-toolbar";
@@ -178,7 +182,13 @@ export function NewProjectButton({
         <PlusIcon /> New project
       </Button>
       {open ? (
-        <ProjectDialog slug={slug} clients={clients} templates={templates} open={open} onOpenChange={setOpen} />
+        <ProjectDialog
+          slug={slug}
+          clients={clients}
+          templates={templates}
+          open={open}
+          onOpenChange={setOpen}
+        />
       ) : null}
     </>
   );
