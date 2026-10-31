@@ -2,7 +2,7 @@
 
 PostgreSQL (16 locally, Supabase in production) via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
 
-## Entity overview (Phases 0–4b)
+## Entity overview (Phases 0–5a)
 
 ```
 user ──< session            (activeWorkspaceId → workspace)
@@ -32,6 +32,9 @@ workspace ──< managed_user / managed_group   (a manager's people and groups)
 workspace ──< rate   (billable rate history per level);  workspace ──< rate_recalc_job
 workspace ──< export_job >── user          (large exports built after the response)
 workspace ──< favorite_entry >── user      (pinned entry details; Phase 4b)
+workspace ──< approval_request >── user    (a period submitted for approval; Phase 5a)
+approval_request ──< approval_event        (its history and admins' edit notes)
+workspace ──< email_outbox                 (every email, sent after the request)
 ```
 
 ## Tables
@@ -88,6 +91,12 @@ One row per workspace, created in the same transaction as the workspace.
 | required_fields | text[] of `project`, `task`, `tag`, `description` | `{}` |
 | force_timer | boolean | `false` |
 | allow_breaks | boolean | `false` |
+| approval_enabled | boolean | `false` (0013): people submit periods for approval |
+| approval_period | enum `approval_period` (`WEEKLY`, `SEMI_MONTHLY`, `MONTHLY`) | `WEEKLY`; in the workspace timezone and week start; refused while a request is PENDING |
+| approval_reviewers | enum `approval_reviewers` (`ADMINS`, `TEAM_MANAGERS`, `PROJECT_MANAGERS`) | `ADMINS`; each level includes the previous |
+| lock_mode | enum `lock_mode` (`OFF`, `FIXED`, `ROLLING`) | `OFF` |
+| lock_date | date? | FIXED: entries starting before this local date are locked |
+| lock_days | smallint? | ROLLING: entries starting before the local day this many days ago are locked |
 
 The Phase 4b rule columns (from `rounding_mode` down) default to the behaviour before the rule existed; `packages/core/src/workspace-rules.ts` reads them and ignores an unknown stored value. Rounding applies to reports, exports and share links only (decision 13).
 
@@ -250,6 +259,7 @@ Per-user tracker preferences. The row is created on first save; until then the d
 | reminder_end_minutes | smallint | 1020 | 17:00 |
 | test_email_sent_at | timestamptz | null | last "Send me a test email" (Profile settings) |
 | test_email_count | smallint | 0 | sends in the day that started at test_email_sent_at; 5 a day, a minute apart |
+| mute_target_reminders | boolean | false | no "unsubmitted period" (Phase 5a) or target (5b) reminder emails |
 | created_at, updated_at | timestamptz | | |
 
 ### timesheet_template
@@ -422,6 +432,61 @@ Measured on the perf tenant (`pnpm db:seed:perf`: 1,000,000 entries, rates at fo
 - "Apply to past entries" over every entry (`runRateRecalcJob`, batches of 5,000, one `rateEntriesSql` update each): 76.2 s for 1,000,000 entries, inside a function's 300 s. One batch is about 380 ms (a primary-key scan plus five rate-lookup probes per entry).
 - One-year Summary with amounts: owner median 328 ms (334,000 entries), manager median 146 ms (109,000 entries in scope). The amount is one more `sum(bigint)` over a stored column; the scope filter is an `OR` of the manager's own, managed people's and managed projects' entries.
 
+### approval_request (Phase 5a)
+
+A person's period submitted for approval. Periods are inclusive local dates in the workspace timezone; an entry belongs to the period containing its start. A person's PENDING and APPROVED requests never overlap (the service refuses it). A withdrawn request is deleted; REJECTED rows stay and become PENDING again on resubmission.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| user_id | text → user (cascade) | whose period |
+| period_start, period_end | date | inclusive; unique `(workspace_id, user_id, period_start)` |
+| status | enum `approval_status` (`PENDING`, `APPROVED`, `REJECTED`) | |
+| work_seconds, billable_seconds | bigint | totals of the stopped work entries at submission |
+| entry_count | integer | |
+| submitted_at | timestamptz | the latest submission |
+| decided_by | text? → user (set null) | |
+| decided_at | timestamptz? | |
+| note | text? | the reviewer's note (reject, reopen) |
+| created_at, updated_at | timestamptz | |
+
+Indexes: `approval_request_cover_idx (workspace_id, user_id, period_start, period_end)` for the write guard (`assertWritable`: "a PENDING or APPROVED request of this person covering this date"), `approval_request_status_idx (workspace_id, status, period_start)` for the Approvals page.
+
+### approval_event (Phase 5a)
+
+The history of a request, and every owner's or admin's change of submitted time with its note.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| request_id | text? → approval_request (set null) | null once a withdrawn request is gone |
+| user_id | text → user (cascade) | whose period |
+| actor_id | text? → user (set null) | who acted |
+| action | enum `approval_action` (`SUBMIT`, `WITHDRAW`, `APPROVE`, `REJECT`, `REOPEN`, `ADMIN_EDIT`, `AUTO_WITHDRAW`) | AUTO_WITHDRAW: approval was turned off |
+| note | text? | |
+| entry_id | text? | ADMIN_EDIT: the entry (no foreign key: it may be deleted later) |
+| changes | jsonb? | ADMIN_EDIT: `{ field: { from, to } }` |
+| created_at | timestamptz | index `(workspace_id, user_id, created_at)`; index `(request_id)` |
+
+### email_outbox (Phase 5a)
+
+Every email the app sends. A row is written in the same transaction as its cause, already rendered, and sent after the request (`after()`), by the daily cron and, locally, by the worker; a sender claims rows with `FOR UPDATE SKIP LOCKED` and a 10-minute lease. Failures retry after 1, 5, 30 and 120 minutes, then the row is FAILED. Addresses ending `.invalid` (limited users) are stored as SKIPPED and never sent.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text? → workspace (cascade) | null for account mail |
+| to_address | text | |
+| subject, html, text | text | rendered at enqueue time |
+| kind | text | e.g. `approval.submitted`; reminders carry their period (`approval.unsubmitted:2026-10-26`) so the daily job sends each once; index `(workspace_id, kind)` |
+| status | enum `outbox_status` (`PENDING`, `SENT`, `FAILED`, `SKIPPED`) | index `(status, next_attempt_at)` |
+| attempts | smallint | |
+| next_attempt_at | timestamptz | due time, or the lease's end while a sender holds it |
+| last_error | text? | |
+| created_at, sent_at | timestamptz | |
+
 ## Rules at scale (Phase 4b)
 
 Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf`, 2026-10-28, after the rule columns, `time_entry.type` and the work-only rating:
@@ -439,7 +504,7 @@ Measured on the perf tenant (`pnpm db:seed:perf` now adds three groups over peop
 
 ## Planned (later phases)
 
-Phase 5: `approval_request`, `lock_period`, `time_off_policy`, `time_off_request`, `holiday`, `kiosk`, `kiosk_pin`.
+Phase 5b: `time_off_policy`, `time_off_request`, `holiday`, targets. Phase 5c: `kiosk`, `kiosk_pin`. (Lock dates are `workspace_settings` columns, not a `lock_period` table.)
 Phase 6: `expense`, `expense_category`, `invoice`, `invoice_item`, `payment`, `budget`, `custom_field`.
 Phase 7: `assignment`, `milestone`.
 Phase 8: `subscription`, `api_key`, `webhook`, `webhook_delivery`, `audit_log`, `sso_config`.

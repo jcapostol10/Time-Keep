@@ -10,6 +10,7 @@ export * from "./entry-grouping";
 export * from "./entry-import";
 export * from "./permissions";
 export * from "./money";
+export * from "./outbox";
 export * from "./plans";
 export * from "./prefs";
 export * from "./rates";

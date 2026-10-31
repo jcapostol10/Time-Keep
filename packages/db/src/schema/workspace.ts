@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   char,
+  date,
   index,
   pgTable,
   primaryKey,
@@ -14,7 +15,10 @@ import {
 import { user } from "./auth";
 import { timestamps } from "./columns";
 import {
+  approvalPeriodEnum,
+  approvalReviewersEnum,
   creatorSettingEnum,
+  lockModeEnum,
   durationFormatEnum,
   membershipStatusEnum,
   roundingModeEnum,
@@ -128,6 +132,15 @@ export const workspaceSettings = pgTable(
     allowBreaks: boolean("allow_breaks").notNull().default(false),
     /** Tasks by group (decision 11): members see only the tasks of their groups. */
     taskVisibility: taskVisibilityEnum("task_visibility").notNull().default("EVERYONE"),
+    // Phase 5a: approvals (decisions 2-5) and lock dates (decision 6), in the workspace timezone.
+    approvalEnabled: boolean("approval_enabled").notNull().default(false),
+    approvalPeriod: approvalPeriodEnum("approval_period").notNull().default("WEEKLY"),
+    approvalReviewers: approvalReviewersEnum("approval_reviewers").notNull().default("ADMINS"),
+    lockMode: lockModeEnum("lock_mode").notNull().default("OFF"),
+    /** FIXED: entries before this local date are locked. */
+    lockDate: date("lock_date"),
+    /** ROLLING: entries older than this many days are locked. */
+    lockDays: smallint("lock_days"),
     ...timestamps,
   },
   (t) => [primaryKey({ columns: [t.workspaceId] })],

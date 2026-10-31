@@ -1,4 +1,10 @@
 import {
+  APPROVAL_ACTIONS,
+  APPROVAL_PERIODS,
+  APPROVAL_REVIEWERS,
+  APPROVAL_STATUSES,
+  LOCK_MODES,
+  OUTBOX_STATUSES,
   CREATOR_SETTINGS,
   DURATION_FORMATS,
   ENTRY_TYPES,
@@ -36,3 +42,9 @@ export const roundingModeEnum = pgEnum("rounding_mode", ROUNDING_MODES);
 export const creatorSettingEnum = pgEnum("creator_setting", CREATOR_SETTINGS);
 export const entryTypeEnum = pgEnum("entry_type", ENTRY_TYPES);
 export const taskVisibilityEnum = pgEnum("task_visibility", TASK_VISIBILITY);
+export const approvalPeriodEnum = pgEnum("approval_period", APPROVAL_PERIODS);
+export const approvalReviewersEnum = pgEnum("approval_reviewers", APPROVAL_REVIEWERS);
+export const lockModeEnum = pgEnum("lock_mode", LOCK_MODES);
+export const approvalStatusEnum = pgEnum("approval_status", APPROVAL_STATUSES);
+export const approvalActionEnum = pgEnum("approval_action", APPROVAL_ACTIONS);
+export const outboxStatusEnum = pgEnum("outbox_status", OUTBOX_STATUSES);

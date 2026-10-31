@@ -112,6 +112,8 @@ export const userSettings = pgTable("user_settings", {
   /** The test-email limit (core test-email.ts): the last send and how many that day. */
   testEmailSentAt: timestamp("test_email_sent_at", { withTimezone: true }),
   testEmailCount: smallint("test_email_count").notNull().default(0),
+  /** Phase 5: no "unsubmitted period" or target reminders by email. */
+  muteTargetReminders: boolean("mute_target_reminders").notNull().default(false),
   ...timestamps,
 }).enableRLS();
 
