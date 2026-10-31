@@ -1,4 +1,4 @@
-import { resolveViewerPrefs } from "@timekeep/core";
+import { addDaysInZone, resolveViewerPrefs, weekBounds } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 import { dehydrate, HydrationBoundary, QueryClient } from "@tanstack/react-query";
 import type { Metadata } from "next";
@@ -38,6 +38,12 @@ export default async function TrackerPage({
     listFavorites(db, await viewerFor(ctx)),
   ]);
   const tags = tagRows.map((t) => ({ id: t.id, name: t.name, color: t.color }));
+  // The approval periods of last week and this one (Phase 5a), in the viewer's weeks.
+  const week = weekBounds(new Date(), viewer.timezone, viewer.weekStart);
+  const periodRange = {
+    from: addDaysInZone(week.weekStart, -7, viewer.timezone).toISOString(),
+    to: week.weekEnd.toISOString(),
+  };
 
   // Fresh per request; HydrationBoundary merges it into the browser cache.
   const queryClient = new QueryClient();
@@ -58,7 +64,7 @@ export default async function TrackerPage({
       <PageHeader title="Time Tracker" />
       <HydrationBoundary state={dehydrate(queryClient)}>
         <TargetProvider target={target}>
-          <TrackerPageClient autoFocus={focus === "description"} />
+          <TrackerPageClient autoFocus={focus === "description"} periodRange={periodRange} />
         </TargetProvider>
       </HydrationBoundary>
     </>

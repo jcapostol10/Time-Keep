@@ -75,7 +75,7 @@ const CREATOR_FIELDS: {
   { name: "tagCreators", type: "tag", label: "Who can create tags" },
 ];
 
-function Section({
+export function SettingsSection({
   id,
   title,
   description,
@@ -109,7 +109,7 @@ export function RulesFields() {
 
   return (
     <div className="space-y-10">
-      <Section
+      <SettingsSection
         id="rounding"
         title="Rounding"
         description="Rounds each entry in reports, exports and shared links. The tracker, timesheet and calendar always show real time."
@@ -168,9 +168,9 @@ export function RulesFields() {
             )}
           />
         </div>
-      </Section>
+      </SettingsSection>
 
-      <Section
+      <SettingsSection
         id="visibility"
         title="Who can see what"
         description="Members always see their own time. Owners, admins and managers are never restricted here."
@@ -244,9 +244,9 @@ export function RulesFields() {
             </FormItem>
           )}
         />
-      </Section>
+      </SettingsSection>
 
-      <Section
+      <SettingsSection
         id="creators"
         title="Who can create"
         description="Owners and admins always can. Tasks are created by owners, admins and a project's managers."
@@ -283,9 +283,9 @@ export function RulesFields() {
             />
           ))}
         </div>
-      </Section>
+      </SettingsSection>
 
-      <Section
+      <SettingsSection
         id="required-fields"
         title="Required fields"
         description="Checked when an entry is stopped or saved, never when a timer starts. A task is required only on projects that have tasks; breaks are exempt."
@@ -313,9 +313,9 @@ export function RulesFields() {
             </fieldset>
           )}
         />
-      </Section>
+      </SettingsSection>
 
-      <Section
+      <SettingsSection
         id="force-timer"
         title="Force timer"
         description="Members and managers track with the timer only: no manual entries, and no changes to start, end or duration of their own time. Owners and admins, and time added for someone else, are not affected."
@@ -332,9 +332,9 @@ export function RulesFields() {
             </FormItem>
           )}
         />
-      </Section>
+      </SettingsSection>
 
-      <Section
+      <SettingsSection
         id="breaks"
         title="Breaks"
         description="Lets people track breaks. A break has no project, tags or billing, and reports count work time unless the Type filter says otherwise."
@@ -354,7 +354,7 @@ export function RulesFields() {
             </FormItem>
           )}
         />
-      </Section>
+      </SettingsSection>
     </div>
   );
 }

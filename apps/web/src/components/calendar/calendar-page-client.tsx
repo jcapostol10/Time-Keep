@@ -136,7 +136,8 @@ export function CalendarPageClient({
           setDialog({ kind: "create", dayKey, start: range.start, end: range.end });
         }}
         onMove={(entry, dayKey, startMinutes) => {
-          if (!entry.end || !canWriteTimes) return; // the running timer is not dragged
+          // The running timer is not dragged; locked or submitted time is read-only (Phase 5a).
+          if (!entry.end || !canWriteTimes || entry.lockedReason) return;
           const range = movedRange(
             { start: entry.start, end: entry.end },
             dayKey,
@@ -149,7 +150,7 @@ export function CalendarPageClient({
           });
         }}
         onResize={(entry, edge, dayKey, minutes) => {
-          if (!entry.end || !canWriteTimes) return;
+          if (!entry.end || !canWriteTimes || entry.lockedReason) return;
           const range = resizedRange(
             { start: entry.start, end: entry.end },
             edge,

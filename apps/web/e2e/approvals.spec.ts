@@ -33,6 +33,18 @@ async function openTracker(page: Page, slug: string) {
   await expect(page.locator('section[aria-label="Timer"][data-hydrated="true"]')).toBeVisible();
 }
 
+/** An older entry's row in the tracker list, loading older weeks until it shows. */
+async function revealRow(page: Page, description: string) {
+  const row = page.getByRole("group", { name: `Entry ${description}`, exact: true });
+  const more = page.getByRole("button", { name: "Load more" });
+  // The list also loads older weeks by itself when its end scrolls into view.
+  await expect(async () => {
+    if (!(await row.isVisible()) && (await more.isVisible())) await more.click({ timeout: 2_000 });
+    await expect(row).toBeVisible({ timeout: 2_000 });
+  }).toPass();
+  return row;
+}
+
 async function addLastWeek(page: Page, slug: string, tz: string, description: string) {
   await openTracker(page, slug);
   await addManualEntryOn(page, {
@@ -74,10 +86,7 @@ test.describe("approvals and locks", () => {
 
     // The tracker row: every field disabled.
     await openTracker(mia.page, slug);
-    const row = mia.page.getByRole("group", { name: "Entry Approved work", exact: true });
-    const more = mia.page.getByRole("button", { name: "Load more" });
-    await expect(row.or(more).first()).toBeVisible();
-    if (!(await row.isVisible())) await more.click();
+    const row = await revealRow(mia.page, "Approved work");
     await expect(row.getByRole("textbox", { name: "Description" })).toBeDisabled();
 
     // A crafted import into the week is refused by the server.
@@ -236,11 +245,7 @@ test.describe("approvals and locks", () => {
 
     // The owner is never locked.
     await addLastWeek(page, slug, timezone, "Owner's late entry");
-    const row = page.getByRole("group", { name: "Entry Owner's late entry", exact: true });
-    const more = page.getByRole("button", { name: "Load more" });
-    await expect(row.or(more).first()).toBeVisible();
-    if (!(await row.isVisible())) await more.click();
-    await expect(row).toBeVisible();
+    await revealRow(page, "Owner's late entry");
     await mia.context.close();
   });
 

@@ -19,6 +19,11 @@ export const trackerKeys = {
   report: (slug: string, kind: string, params: string) =>
     ["tracker", slug, "entries", "report", kind, params] as const,
   reportOptions: (slug: string) => ["tracker", slug, "report-options"] as const,
+  /** The viewer's approval periods (Phase 5a); under `entries`, so a write refreshes its total. */
+  periods: (slug: string, from: string, to: string) =>
+    ["tracker", slug, "entries", "me", "periods", from, to] as const,
+  /** The Approvals page's tab; under `entries`, so decisions and writes refetch it. */
+  approvals: (slug: string, tab: string) => ["tracker", slug, "entries", "approvals", tab] as const,
   templates: (slug: string) => ["tracker", slug, "templates"] as const,
   rates: (slug: string, target: string) => ["tracker", slug, "rates", target] as const,
   rateRecalc: (slug: string) => ["tracker", slug, "rate-recalc"] as const,
@@ -46,6 +51,8 @@ export const trackerUrls = {
   report: (slug: string, kind: string, params: string) =>
     `/api/w/${slug}/reports/${kind}${params ? `?${params}` : ""}`,
   reportOptions: (slug: string) => `/api/w/${slug}/reports/options`,
+  periods: (slug: string, from: string, to: string) =>
+    `/api/w/${slug}/approvals/periods?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   rates: (slug: string, target: string) => `/api/w/${slug}/rates?${target}`,
   rateRecalc: (slug: string) => `/api/w/${slug}/rate-recalc`,
   templates: (slug: string) => `/api/w/${slug}/timesheet-templates`,

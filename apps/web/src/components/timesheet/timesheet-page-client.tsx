@@ -14,6 +14,7 @@ import { CopyIcon, PlusIcon } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { PeriodBar } from "@/components/approvals/period-bar";
 import { PeriodNav } from "@/components/period-nav";
 import { useHydrated } from "@/hooks/use-hydrated";
 
@@ -134,6 +135,8 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
           </span>
         </div>
       </div>
+
+      {target ? null : <PeriodBar from={from} to={to} />}
 
       <TimesheetGrid
         sheet={{ ...sheet, rows }}

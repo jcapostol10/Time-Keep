@@ -55,9 +55,13 @@ export function TimesheetCell({
   // Local text while editing; null means "show the saved value".
   const [text, setText] = useState<string | null>(null);
   const [choosing, setChoosing] = useState<TimesheetEntry[] | null>(null);
+  // An entry in a locked day or a submitted period makes the cell read-only (Phase 5a).
+  const lockedReason =
+    entries.find((e) => cell.entryIds.includes(e.id) && e.lockedReason)?.lockedReason ?? null;
+  const readOnly = !canWriteTimes || lockedReason !== null;
 
   async function commit(raw: string) {
-    if (!canWriteTimes) return;
+    if (readOnly) return;
     setText(null);
     const trimmed = raw.trim();
     const seconds = trimmed === "" ? 0 : parseDuration(trimmed);
@@ -107,7 +111,8 @@ export function TimesheetCell({
     <>
       <Input
         aria-label={label}
-        readOnly={!canWriteTimes}
+        readOnly={readOnly}
+        title={lockedReason ?? undefined}
         data-row={rowIndex}
         data-col={colIndex}
         inputMode="text"

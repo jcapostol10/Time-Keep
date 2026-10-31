@@ -91,6 +91,54 @@ export const PENDING_MESSAGE = "This period is submitted for approval.";
 export const APPROVED_MESSAGE = "This period is approved.";
 export const NOTE_REQUIRED_MESSAGE = "Say why you are changing submitted time.";
 
+/**
+ * Why the scope's actor may not change each entry, for the editor's reads
+ * (rows and cells shown read-only): the lock date, or a submitted period.
+ * Owners and admins may change everything (with a note), so they get none.
+ */
+export async function lockedReasons(
+  db: Pick<DbExecutor, "select">,
+  scope: EntryScope,
+  entries: { id: string; start: string }[],
+  now: Date = new Date(),
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (entries.length === 0) return out;
+  const actor = scope.actedBy ?? scope.actor;
+  if (can(actor, "approval.editLocked", { kind: "none" })) return out;
+  const rules = await writeRulesOf(db, scope.workspaceId);
+  const boundary = lockBoundary(rules.lock, now);
+  const lockMessage = boundary
+    ? `Entries before ${formatDateKey(lockDateKey(rules.lock, now)!)} are locked.`
+    : "";
+  const keys = entries.map((e) => localDateKey(new Date(e.start), rules.timezone));
+  const sorted = [...keys].sort();
+  const requests = await db
+    .select({
+      status: approvalRequest.status,
+      periodStart: approvalRequest.periodStart,
+      periodEnd: approvalRequest.periodEnd,
+    })
+    .from(approvalRequest)
+    .where(
+      and(
+        eq(approvalRequest.workspaceId, scope.workspaceId),
+        eq(approvalRequest.userId, scope.userId),
+        inArray(approvalRequest.status, ["PENDING", "APPROVED"]),
+        lte(approvalRequest.periodStart, sorted.at(-1)!),
+        gte(approvalRequest.periodEnd, sorted[0]!),
+      ),
+    );
+  entries.forEach((e, i) => {
+    const key = keys[i]!;
+    const request = requests.find((r) => r.periodStart <= key && key <= r.periodEnd);
+    if (request) out.set(e.id, request.status === "PENDING" ? PENDING_MESSAGE : APPROVED_MESSAGE);
+    else if (boundary && new Date(e.start).getTime() < boundary.getTime())
+      out.set(e.id, lockMessage);
+  });
+  return out;
+}
+
 function startsOf(change: WriteChange): Date[] {
   return [change.before, change.after].filter((d): d is Date => d !== undefined);
 }

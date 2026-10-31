@@ -15,6 +15,8 @@ import {
   updateEntryAction,
 } from "@/server/actions/time-entries";
 
+import { withNoteRetry } from "@/components/approvals/note-prompt";
+
 import { trackSave } from "./saving-store";
 import { useTracker } from "./tracker-provider";
 import { useTargetKey } from "./target-context";
@@ -33,7 +35,13 @@ export function useEntryMutations() {
   const createManual = useCallback(
     async (input: EntryDraft & { start: string; end: string }) => {
       const result = await trackSave(() =>
-        createManualEntryAction(slug, { ...input, userId: target === "me" ? undefined : target }),
+        withNoteRetry((note) =>
+          createManualEntryAction(slug, {
+            ...input,
+            note,
+            userId: target === "me" ? undefined : target,
+          }),
+        ),
       );
       if (!result.ok) {
         toast.error(result.error);
@@ -59,7 +67,9 @@ export function useEntryMutations() {
         ...cache.resolveDetails(patch),
         ...(end ? { durationSeconds: computeDurationSeconds(new Date(start), new Date(end)) } : {}),
       });
-      const result = await trackSave(() => updateEntryAction(slug, entry.id, patch));
+      const result = await trackSave(() =>
+        withNoteRetry((note) => updateEntryAction(slug, entry.id, { ...patch, note })),
+      );
       if (!result.ok) {
         cache.restoreEntries(snapshot);
         toast.error(result.error);
@@ -75,7 +85,9 @@ export function useEntryMutations() {
 
   const restore = useCallback(
     async (ids: string[]) => {
-      const result = await trackSave(() => restoreEntriesAction(slug, { ids }));
+      const result = await trackSave(() =>
+        withNoteRetry((note) => restoreEntriesAction(slug, { ids, note })),
+      );
       if (!result.ok) {
         toast.error(result.error);
         return false;
@@ -93,7 +105,9 @@ export function useEntryMutations() {
       if (ids.length === 0) return false;
       const snapshot = await cache.snapshotEntries();
       cache.removeEntries(ids);
-      const result = await trackSave(() => deleteEntriesAction(slug, { ids }));
+      const result = await trackSave(() =>
+        withNoteRetry((note) => deleteEntriesAction(slug, { ids, note })),
+      );
       if (!result.ok) {
         cache.restoreEntries(snapshot);
         toast.error(result.error);
@@ -112,7 +126,9 @@ export function useEntryMutations() {
 
   const duplicate = useCallback(
     async (entryId: string) => {
-      const result = await trackSave(() => duplicateEntryAction(slug, entryId));
+      const result = await trackSave(() =>
+        withNoteRetry((note) => duplicateEntryAction(slug, entryId, { note })),
+      );
       if (!result.ok) {
         toast.error(result.error);
         return false;
@@ -128,7 +144,9 @@ export function useEntryMutations() {
   /** Bulk edit: all the selected entries or none; the list refetches. */
   const bulkUpdate = useCallback(
     async (ids: string[], patch: BulkEntryPatch) => {
-      const result = await trackSave(() => bulkUpdateEntriesAction(slug, { ids, patch }));
+      const result = await trackSave(() =>
+        withNoteRetry((note) => bulkUpdateEntriesAction(slug, { ids, patch, note })),
+      );
       if (!result.ok) {
         toast.error(result.error);
         return false;
@@ -147,7 +165,7 @@ export function useEntryMutations() {
   const split = useCallback(
     async (entry: TimeEntryDTO, at: Date) => {
       const result = await trackSave(() =>
-        splitEntryAction(slug, entry.id, { at: at.toISOString() }),
+        withNoteRetry((note) => splitEntryAction(slug, entry.id, { at: at.toISOString(), note })),
       );
       if (!result.ok) {
         toast.error(result.error);

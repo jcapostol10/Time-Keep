@@ -31,6 +31,7 @@ import {
   EllipsisVerticalIcon,
   PlayIcon,
   ScissorsIcon,
+  LockIcon,
   StarIcon,
   TagIcon,
   Trash2Icon,
@@ -185,10 +186,14 @@ export function EntryRow({
     save({ end: withDuration(times, seconds).end.toISOString() });
   }
 
+  // A lock date or a submitted period (Phase 5a): the fields are read-only and say why.
+  const locked = Boolean(entry.lockedReason);
+
   return (
     <div
       role="group"
       aria-label={`Entry ${entryName(entry)}`}
+      title={entry.lockedReason ?? undefined}
       className={cn(ROW, nested && "bg-muted/20 pl-8")}
     >
       <Checkbox
@@ -197,83 +202,94 @@ export function EntryRow({
         onCheckedChange={(v) => onSelectedChange(v === true)}
         className="mr-1"
       />
-      <CommitInput
-        label="Description"
-        value={entry.description}
-        placeholder="Add description"
-        onCommit={(description) => save({ description })}
-        className="hover:border-input min-w-0 flex-1 basis-[calc(100%-2rem)] border-transparent text-left shadow-none md:basis-auto"
-      />
-      {entry.type === "break" ? (
-        <Badge variant="secondary">
-          <CoffeeIcon /> Break
-        </Badge>
-      ) : (
-        <>
-          <ProjectPicker
-            slug={slug}
-            value={{ projectId: entry.projectId, taskId: entry.taskId }}
-            current={{ project: entry.project, task: entry.task }}
-            compact
-            canCreate={canCreate.project}
-            onChange={(sel) => save({ projectId: sel.projectId, taskId: sel.taskId })}
-          />
-          <TagPicker
-            slug={slug}
-            value={entry.tagIds}
-            current={entry.tags}
-            canCreate={canCreate.tag}
-            onChange={(tagIds) => save({ tagIds })}
-          />
-          <BillableToggle value={entry.billable} onChange={(billable) => save({ billable })} />
-        </>
-      )}
+      {locked ? (
+        <LockIcon
+          className="text-muted-foreground size-4 shrink-0"
+          role="img"
+          aria-label={entry.lockedReason ?? "Locked"}
+        />
+      ) : null}
+      <fieldset disabled={locked} className="contents">
+        <CommitInput
+          label="Description"
+          value={entry.description}
+          placeholder="Add description"
+          onCommit={(description) => save({ description })}
+          className="hover:border-input min-w-0 flex-1 basis-[calc(100%-2rem)] border-transparent text-left shadow-none md:basis-auto"
+        />
+        {entry.type === "break" ? (
+          <Badge variant="secondary">
+            <CoffeeIcon /> Break
+          </Badge>
+        ) : (
+          <>
+            <ProjectPicker
+              slug={slug}
+              value={{ projectId: entry.projectId, taskId: entry.taskId }}
+              current={{ project: entry.project, task: entry.task }}
+              compact
+              canCreate={canCreate.project}
+              onChange={(sel) => save({ projectId: sel.projectId, taskId: sel.taskId })}
+            />
+            <TagPicker
+              slug={slug}
+              value={entry.tagIds}
+              current={entry.tags}
+              canCreate={canCreate.tag}
+              onChange={(tagIds) => save({ tagIds })}
+            />
+            <BillableToggle value={entry.billable} onChange={(billable) => save({ billable })} />
+          </>
+        )}
+      </fieldset>
       <div className="ml-auto flex flex-wrap items-center justify-end gap-0.5 md:shrink-0 md:flex-nowrap">
-        <CommitInput
-          label="Start time"
-          value={formatTimeOfDay(times.start, tz, viewer.timeFormat)}
-          onCommit={(t) => editTime("start", t)}
-          disabled={!canWriteTimes}
-          className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none"
-        />
-        <span className="text-muted-foreground" aria-hidden>
-          –
-        </span>
-        <CommitInput
-          label="End time"
-          value={formatTimeOfDay(times.end, tz, viewer.timeFormat)}
-          onCommit={(t) => editTime("end", t)}
-          disabled={!canWriteTimes}
-          className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none"
-        />
-        <sup
-          className={cn("text-muted-foreground w-4", !crossesMidnight && "invisible")}
-          title="Ends the next day"
-        >
-          +1
-        </sup>
-        <Input
-          type="date"
-          aria-label="Date"
-          disabled={!canWriteTimes}
-          defaultValue={localDateKey(times.start, tz)}
-          key={entry.start}
-          onBlur={(e) => {
-            const value = e.currentTarget.value;
-            if (value && value !== localDateKey(times.start, tz)) {
-              const next = withDate(times, value, tz);
-              save({ start: next.start.toISOString(), end: next.end.toISOString() });
-            }
-          }}
-          className="hover:border-input h-8 w-[9rem] shrink-0 border-transparent px-2 shadow-none"
-        />
-        <CommitInput
-          label="Duration"
-          value={formatDuration(entry.durationSeconds ?? 0, viewer.durationFormat)}
-          onCommit={editDuration}
-          disabled={!canWriteTimes}
-          className="hover:border-input w-[6rem] shrink-0 border-transparent font-semibold shadow-none"
-        />
+        <fieldset disabled={locked} className="contents">
+          <CommitInput
+            label="Start time"
+            value={formatTimeOfDay(times.start, tz, viewer.timeFormat)}
+            onCommit={(t) => editTime("start", t)}
+            disabled={!canWriteTimes}
+            className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none"
+          />
+          <span className="text-muted-foreground" aria-hidden>
+            –
+          </span>
+          <CommitInput
+            label="End time"
+            value={formatTimeOfDay(times.end, tz, viewer.timeFormat)}
+            onCommit={(t) => editTime("end", t)}
+            disabled={!canWriteTimes}
+            className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none"
+          />
+          <sup
+            className={cn("text-muted-foreground w-4", !crossesMidnight && "invisible")}
+            title="Ends the next day"
+          >
+            +1
+          </sup>
+          <Input
+            type="date"
+            aria-label="Date"
+            disabled={!canWriteTimes}
+            defaultValue={localDateKey(times.start, tz)}
+            key={entry.start}
+            onBlur={(e) => {
+              const value = e.currentTarget.value;
+              if (value && value !== localDateKey(times.start, tz)) {
+                const next = withDate(times, value, tz);
+                save({ start: next.start.toISOString(), end: next.end.toISOString() });
+              }
+            }}
+            className="hover:border-input h-8 w-[9rem] shrink-0 border-transparent px-2 shadow-none"
+          />
+          <CommitInput
+            label="Duration"
+            value={formatDuration(entry.durationSeconds ?? 0, viewer.durationFormat)}
+            onCommit={editDuration}
+            disabled={!canWriteTimes}
+            className="hover:border-input w-[6rem] shrink-0 border-transparent font-semibold shadow-none"
+          />
+        </fieldset>
         <ContinueButton entry={entry} />
         <RowActions entry={entry} />
       </div>

@@ -2,6 +2,7 @@
 
 import {
   DURATION_FORMATS,
+  lockSettingsCheck,
   TIME_FORMATS,
   WEEK_START_DAYS,
   WEEKDAY_LABELS,
@@ -44,11 +45,14 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { type z } from "zod";
 
+import { ApprovalFields } from "@/components/settings/approval-fields";
 import { RulesFields } from "@/components/settings/rules-fields";
 import { TimezoneSelect } from "@/components/settings/timezone-select";
 import { updateWorkspaceSettingsAction } from "@/server/actions/workspaces";
 
-const schema = workspaceSettingsSchema.extend({ name: workspaceNameSchema });
+const schema = workspaceSettingsSchema
+  .extend({ name: workspaceNameSchema })
+  .superRefine(lockSettingsCheck);
 type Values = z.infer<typeof schema>;
 
 const DURATION_LABELS: Record<(typeof DURATION_FORMATS)[number], string> = {
@@ -83,6 +87,7 @@ export function WorkspaceSettingsForm({
       ...values,
       confirmCurrencyChange: confirmed.includes("currency"),
       confirmTaskVisibility: confirmed.includes("taskVisibility"),
+      confirmApprovalOff: confirmed.includes("approvalOff"),
     });
     if (!result.ok) {
       // The server asks by naming the confirmation it needs, never the setting itself,
@@ -243,6 +248,7 @@ export function WorkspaceSettingsForm({
           </div>
 
           <RulesFields />
+          <ApprovalFields />
         </fieldset>
 
         {readOnly ? (
@@ -285,11 +291,15 @@ export function WorkspaceSettingsForm({
   );
 }
 
-type ConfirmField = "currency" | "taskVisibility";
-const CONFIRM_FIELDS: ConfirmField[] = ["currency", "taskVisibility"];
-const CONFIRM_KEY: Record<ConfirmField, "confirmCurrencyChange" | "confirmTaskVisibility"> = {
+type ConfirmField = "currency" | "taskVisibility" | "approvalOff";
+const CONFIRM_FIELDS: ConfirmField[] = ["currency", "taskVisibility", "approvalOff"];
+const CONFIRM_KEY: Record<
+  ConfirmField,
+  "confirmCurrencyChange" | "confirmTaskVisibility" | "confirmApprovalOff"
+> = {
   currency: "confirmCurrencyChange",
   taskVisibility: "confirmTaskVisibility",
+  approvalOff: "confirmApprovalOff",
 };
 const CONFIRM_COPY: Record<ConfirmField, { title: string; cancel: string; action: string }> = {
   currency: { title: "Change the workspace currency?", cancel: "Keep", action: "Change currency" },
@@ -297,5 +307,10 @@ const CONFIRM_COPY: Record<ConfirmField, { title: string; cancel: string; action
     title: "Show tasks by group?",
     cancel: "Keep everyone",
     action: "Switch to by group",
+  },
+  approvalOff: {
+    title: "Turn approval off?",
+    cancel: "Keep approval on",
+    action: "Turn off and withdraw",
   },
 };

@@ -22,6 +22,8 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import { withNoteRetry } from "@/components/approvals/note-prompt";
+
 import { useNow } from "@/hooks/use-now";
 import { fetchJson } from "@/lib/fetch-json";
 import { workspaceRoutes } from "@/lib/routes";
@@ -297,7 +299,11 @@ export function TrackerProvider({
       try {
         // A project or tag still being created belongs on this entry.
         if (!details) await draftWritesSettled();
-        const result = await trackSave(() => startTimerAction(slug, details ?? draftRef.current));
+        const result = await trackSave(() =>
+          withNoteRetry((note) =>
+            startTimerAction(slug, { ...(details ?? draftRef.current), note }),
+          ),
+        );
         if (!result.ok) {
           toast.error(result.error);
           // The options may be stale (a project archived meanwhile): refetch
@@ -359,7 +365,9 @@ export function TrackerProvider({
     async (entryId: string) => {
       if (!begin()) return false;
       try {
-        const result = await trackSave(() => continueEntryAction(slug, entryId));
+        const result = await trackSave(() =>
+          withNoteRetry((note) => continueEntryAction(slug, entryId, { note })),
+        );
         if (!result.ok) {
           toast.error(result.error);
           return false;
@@ -382,7 +390,9 @@ export function TrackerProvider({
         ...patch,
         ...cache.resolveDetails(patch),
       });
-      const result = await trackSave(() => updateEntryAction(slug, current.id, patch));
+      const result = await trackSave(() =>
+        withNoteRetry((note) => updateEntryAction(slug, current.id, { ...patch, note })),
+      );
       if (!result.ok) {
         qc.setQueryData<TimeEntryDTO | null>(runningKey, (r) =>
           r?.id === current.id ? current : r,

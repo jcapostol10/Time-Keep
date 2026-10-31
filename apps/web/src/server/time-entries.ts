@@ -58,7 +58,7 @@ import type {
 } from "@/lib/tracker-types";
 
 import { WorkspaceAccessError } from "./access-error";
-import { assertWritable } from "./entry-guard";
+import { assertWritable, lockedReasons } from "./entry-guard";
 import { timerLock } from "./person-lock";
 import { TimeEntryError } from "./entry-error";
 import { CatalogError } from "./catalog/errors";
@@ -494,9 +494,28 @@ export async function listEntriesPage(
   return {
     weekStart: weekStart.toISOString(),
     weekEnd: weekEnd.toISOString(),
-    entries: rows.map(toDTO),
+    entries: await withLockedReasons(db, scope, rows.map(toDTO)),
     nextCursor: older ? weekStart.toISOString() : null,
   };
+}
+
+/** The entries with `lockedReason` set for the scope's actor (Phase 5a). */
+async function withLockedReasons(
+  db: Executor,
+  scope: EntryScope,
+  entries: TimeEntryDTO[],
+): Promise<TimeEntryDTO[]> {
+  const reasons = await lockedReasons(db, scope, entries);
+  return entries.map((e) => ({ ...e, lockedReason: reasons.get(e.id) ?? null }));
+}
+
+/** `listEntriesInRange` for the timesheet and calendar: entries the actor may not change say why. */
+export async function listEditableEntriesInRange(
+  db: Executor,
+  scope: EntryScope,
+  range: { from: Date; to: Date },
+): Promise<TimeEntryDTO[]> {
+  return withLockedReasons(db, scope, await listEntriesInRange(db, scope, range));
 }
 
 /** Distinct recent descriptions with the details of their latest use, newest first. */

@@ -17,6 +17,9 @@ export const workspaceRoutes = {
   clients: (slug: string) => `/w/${slug}/clients`,
   tags: (slug: string) => `/w/${slug}/tags`,
   settings: (slug: string) => `/w/${slug}/settings`,
+  approvals: (slug: string, tab?: "pending" | "unsubmitted" | "archive") =>
+    `/w/${slug}/approvals${tab ? `?tab=${tab}` : ""}`,
+  approval: (slug: string, requestId: string) => `/w/${slug}/approvals/${requestId}`,
 } as const;
 
 /**

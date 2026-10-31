@@ -15,6 +15,8 @@ import { Loader2Icon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { withNoteRetry } from "@/components/approvals/note-prompt";
+
 import { copyWeekAction } from "@/server/actions/timesheet";
 
 import { trackSave } from "../tracker/saving-store";
@@ -65,10 +67,13 @@ export function CopyLastWeekDialog({
     }
     setBusy(true);
     const result = await trackSave(() =>
-      copyWeekAction(slug, {
-        fromWeekStart: lastWeekStart.toISOString(),
-        toWeekStart: weekStart.toISOString(),
-      }),
+      withNoteRetry((note) =>
+        copyWeekAction(slug, {
+          fromWeekStart: lastWeekStart.toISOString(),
+          toWeekStart: weekStart.toISOString(),
+          note,
+        }),
+      ),
     );
     setBusy(false);
     if (!result.ok) {

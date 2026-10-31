@@ -1,5 +1,6 @@
 import {
   BarChart3Icon,
+  CheckCheckIcon,
   Building2Icon,
   CalendarDaysIcon,
   FolderKanbanIcon,
@@ -22,6 +23,19 @@ export interface NavItem {
   icon: LucideIcon;
   /** Hidden unless the permission matrix allows this (the page itself also checks). */
   permission?: { action: Action; resource: Resource };
+  /** Hidden unless this holds (a rule the matrix cannot say alone). */
+  visible?: (actor: Actor, flags: NavFlags) => boolean;
+}
+
+/** Workspace switches that show or hide items. */
+export interface NavFlags {
+  approvalEnabled: boolean;
+}
+
+/** Whoever may review someone's period: owners, admins, and managers unless only admins approve. */
+export function mayReviewAny(actor: Actor): boolean {
+  if (actor.role === "owner" || actor.role === "admin") return true;
+  return actor.role === "manager" && actor.settings.approvalReviewers !== "ADMINS";
 }
 
 export interface NavGroup {
@@ -42,6 +56,12 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Analyze",
     items: [
       { label: "Dashboard", href: workspaceRoutes.dashboard, icon: LayoutDashboardIcon },
+      {
+        label: "Approvals",
+        href: (slug) => workspaceRoutes.approvals(slug),
+        icon: CheckCheckIcon,
+        visible: (actor, flags) => flags.approvalEnabled && mayReviewAny(actor),
+      },
       {
         label: "Reports",
         href: workspaceRoutes.reports,
@@ -84,10 +104,15 @@ export const NAV_GROUPS: NavGroup[] = [
 ];
 
 /** Labels of the items this actor may not open; computed on the server. */
-export function hiddenNavLabels(actor: Actor): string[] {
+export function hiddenNavLabels(
+  actor: Actor,
+  flags: NavFlags = { approvalEnabled: false },
+): string[] {
   return NAV_GROUPS.flatMap((g) => g.items)
     .filter(
-      (item) => item.permission && !can(actor, item.permission.action, item.permission.resource),
+      (item) =>
+        (item.permission && !can(actor, item.permission.action, item.permission.resource)) ||
+        (item.visible && !item.visible(actor, flags)),
     )
     .map((item) => item.label);
 }

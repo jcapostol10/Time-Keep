@@ -1,7 +1,7 @@
 import { dateRangeSchema } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 
-import { listEntriesInRange } from "@/server/time-entries";
+import { listEditableEntriesInRange } from "@/server/time-entries";
 import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-access";
 import { targetScope } from "@/server/authz";
 
@@ -17,7 +17,7 @@ export async function GET(
     const parsed = dateRangeSchema.safeParse({ from: params.get("from"), to: params.get("to") });
     if (!parsed.success) return Response.json({ error: "Invalid range" }, { status: 400 });
 
-    const entries = await listEntriesInRange(
+    const entries = await listEditableEntriesInRange(
       getDb(),
       await targetScope(access, params.get("userId") ?? access.user.id),
       parsed.data,

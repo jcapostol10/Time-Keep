@@ -13,7 +13,7 @@ import { PageHeader } from "@/components/page-header";
 import { trackerKeys, type TrackerOptions } from "@/components/tracker/query-keys";
 import { listPickerProjects } from "@/server/catalog/projects";
 import { listTags } from "@/server/catalog/tags";
-import { listEntriesInRange, listRecentDescriptions } from "@/server/time-entries";
+import { listEditableEntriesInRange, listRecentDescriptions } from "@/server/time-entries";
 import { requireWorkspacePage } from "@/server/workspace-access";
 import { shownPerson } from "@/server/authz-page";
 import { TargetProvider } from "@/components/tracker/target-context";
@@ -45,7 +45,7 @@ export default async function CalendarPage({
   const to = weekEnd.toISOString();
 
   const [entries, projects, tagRows, recent] = await Promise.all([
-    listEntriesInRange(db, scope, { from: weekStart, to: weekEnd }),
+    listEditableEntriesInRange(db, scope, { from: weekStart, to: weekEnd }),
     listPickerProjects(db, scope),
     listTags(db, scope.workspaceId, { includeArchived: false }),
     listRecentDescriptions(db, scope),

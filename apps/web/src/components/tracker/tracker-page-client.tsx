@@ -4,6 +4,8 @@ import { Button } from "@timekeep/ui/components/button";
 import { FileUpIcon } from "lucide-react";
 import { useState } from "react";
 
+import { PeriodBar } from "@/components/approvals/period-bar";
+
 import { EntryList } from "./entry-list";
 import { FavoritesStrip } from "./favorites-strip";
 import { ImportDialog } from "./import-dialog";
@@ -12,7 +14,14 @@ import { useIsSaving } from "./saving-store";
 import { useTarget } from "./target-context";
 import { TimerBar } from "./timer-bar";
 
-export function TrackerPageClient({ autoFocus }: { autoFocus: boolean }) {
+export function TrackerPageClient({
+  autoFocus,
+  periodRange,
+}: {
+  autoFocus: boolean;
+  /** Last week and this one: the approval periods shown above the list. */
+  periodRange: { from: string; to: string };
+}) {
   const saving = useIsSaving();
   const target = useTarget();
   const [importing, setImporting] = useState(false);
@@ -32,6 +41,7 @@ export function TrackerPageClient({ autoFocus }: { autoFocus: boolean }) {
           </p>
         ) : null}
       </div>
+      {target ? null : <PeriodBar from={periodRange.from} to={periodRange.to} />}
       <EntryList />
     </div>
   );

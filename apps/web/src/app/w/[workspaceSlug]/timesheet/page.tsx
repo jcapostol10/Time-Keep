@@ -8,7 +8,7 @@ import { TimesheetPageClient } from "@/components/timesheet/timesheet-page-clien
 import { trackerKeys, type TrackerOptions } from "@/components/tracker/query-keys";
 import { listPickerProjects } from "@/server/catalog/projects";
 import { listTags } from "@/server/catalog/tags";
-import { listEntriesInRange, listRecentDescriptions } from "@/server/time-entries";
+import { listEditableEntriesInRange, listRecentDescriptions } from "@/server/time-entries";
 import { listTemplates } from "@/server/timesheet";
 import { requireWorkspacePage } from "@/server/workspace-access";
 import { shownPerson } from "@/server/authz-page";
@@ -39,7 +39,7 @@ export default async function TimesheetPage({
   const to = weekEnd.toISOString();
 
   const [entries, projects, tagRows, recent, templates] = await Promise.all([
-    listEntriesInRange(db, scope, { from: weekStart, to: weekEnd }),
+    listEditableEntriesInRange(db, scope, { from: weekStart, to: weekEnd }),
     listPickerProjects(db, scope),
     listTags(db, scope.workspaceId, { includeArchived: false }),
     listRecentDescriptions(db, scope),

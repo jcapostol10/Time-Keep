@@ -1,6 +1,7 @@
 import { resolveViewerPrefs, can } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 
+import { NotePromptHost } from "@/components/approvals/note-prompt";
 import { AppShell } from "@/components/shell/app-shell";
 import { TimezoneDetector } from "@/components/tracker/timezone-detector";
 import { TrackerProvider } from "@/components/tracker/tracker-provider";
@@ -59,11 +60,14 @@ export default async function WorkspaceLayout({
           role: ctx.role,
         }}
         workspaces={workspaces.map((w) => ({ id: w.id, name: w.name, slug: w.slug, role: w.role }))}
-        hiddenNav={hiddenNavLabels(scope.actor)}
+        hiddenNav={hiddenNavLabels(scope.actor, {
+          approvalEnabled: ctx.settings.approvalEnabled,
+        })}
       >
         {children}
       </AppShell>
       <TimezoneDetector hasTimezone={Boolean(ctx.user.timezone)} />
+      <NotePromptHost />
     </TrackerProvider>
   );
 }

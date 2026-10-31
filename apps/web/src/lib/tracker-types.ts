@@ -62,6 +62,11 @@ export interface TimeEntryDTO {
   end: string | null;
   durationSeconds: number | null;
   updatedAt: string;
+  /**
+   * Why the viewer may not change it (a lock date, a submitted or approved
+   * period: Phase 5a); set by the editor's reads, absent elsewhere.
+   */
+  lockedReason?: string | null;
 }
 
 /** One week of entries (in the viewer's timezone), newest first. */

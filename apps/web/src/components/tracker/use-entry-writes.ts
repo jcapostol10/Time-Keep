@@ -5,6 +5,7 @@ import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import type { z } from "zod";
 
+import { withNoteRetry } from "@/components/approvals/note-prompt";
 import type { TimeEntryDTO } from "@/lib/tracker-types";
 import {
   createManualEntryAction,
@@ -47,7 +48,13 @@ export function useEntryWrites() {
       },
     ): Promise<TimeEntryDTO | null> => {
       const result = await trackSave(() =>
-        createManualEntryAction(slug, { ...input, userId: target === "me" ? undefined : target }),
+        withNoteRetry((note) =>
+          createManualEntryAction(slug, {
+            ...input,
+            note,
+            userId: target === "me" ? undefined : target,
+          }),
+        ),
       );
       if (!result.ok) {
         toast.error(result.error);
@@ -61,7 +68,9 @@ export function useEntryWrites() {
 
   const update = useCallback(
     async (id: string, patch: UpdateEntryPatch): Promise<TimeEntryDTO | null> => {
-      const result = await trackSave(() => updateEntryAction(slug, id, patch));
+      const result = await trackSave(() =>
+        withNoteRetry((note) => updateEntryAction(slug, id, { ...patch, note })),
+      );
       if (!result.ok) {
         toast.error(result.error);
         return null;
@@ -74,7 +83,9 @@ export function useEntryWrites() {
 
   const restore = useCallback(
     async (ids: string[]): Promise<boolean> => {
-      const result = await trackSave(() => restoreEntriesAction(slug, { ids }));
+      const result = await trackSave(() =>
+        withNoteRetry((note) => restoreEntriesAction(slug, { ids, note })),
+      );
       if (!result.ok) {
         toast.error(result.error);
         return false;
@@ -88,7 +99,9 @@ export function useEntryWrites() {
   /** Soft delete with a 5-second Undo toast, like the tracker list's. */
   const remove = useCallback(
     async (ids: string[]): Promise<boolean> => {
-      const result = await trackSave(() => deleteEntriesAction(slug, { ids }));
+      const result = await trackSave(() =>
+        withNoteRetry((note) => deleteEntriesAction(slug, { ids, note })),
+      );
       if (!result.ok) {
         toast.error(result.error);
         return false;

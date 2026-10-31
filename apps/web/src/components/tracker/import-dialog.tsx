@@ -43,6 +43,8 @@ import { FileUpIcon, Loader2Icon } from "lucide-react";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 
+import { askForNote } from "@/components/approvals/note-prompt";
+
 import { TimezoneSelect } from "@/components/settings/timezone-select";
 import { fetchJson } from "@/lib/fetch-json";
 import type { ImportPlan } from "@/lib/import-types";
@@ -74,9 +76,19 @@ async function post<T>(slug: string, file: File, options: object, dryRun: boolea
     method: "POST",
     body: form,
   });
-  const body = (await res.json()) as T & { error?: string };
-  if (!res.ok) throw new Error(body.error ?? "The import failed.");
+  const body = (await res.json()) as T & { error?: string; field?: string };
+  if (!res.ok) throw new ImportRefused(body.error ?? "The import failed.", body.field);
   return body;
+}
+
+class ImportRefused extends Error {
+  constructor(
+    message: string,
+    /** "note": an owner or admin imports into submitted time and must say why. */
+    readonly field?: string,
+  ) {
+    super(message);
+  }
 }
 
 /**
@@ -157,12 +169,22 @@ export function ImportDialog({
     if (!file || !plan) return;
     setBusy(true);
     try {
-      const { imported } = await post<{ imported: number }>(
-        slug,
-        file,
-        { ...options, fingerprint: plan.fingerprint },
-        false,
-      );
+      const send = (note?: string) =>
+        post<{ imported: number }>(
+          slug,
+          file,
+          { ...options, fingerprint: plan.fingerprint, note },
+          false,
+        );
+      let imported: number;
+      try {
+        ({ imported } = await send());
+      } catch (error) {
+        if (!(error instanceof ImportRefused) || error.field !== "note") throw error;
+        const note = await askForNote();
+        if (note === null) return;
+        ({ imported } = await send(note));
+      }
       await cache.invalidateEntries();
       void cache.invalidateOptions();
       notifyEntriesChanged();
