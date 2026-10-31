@@ -12,7 +12,6 @@ import {
   MAX_ENTRY_SECONDS,
   missingRequiredField,
   needsRerate,
-  type RequiredField,
   requiredFieldMessage,
   TASK_UNAVAILABLE_MESSAGE,
   TIMER_STOP_FUTURE_GRACE_MS,
@@ -59,6 +58,8 @@ import type {
 } from "@/lib/tracker-types";
 
 import { WorkspaceAccessError } from "./access-error";
+import { assertWritable } from "./entry-guard";
+import { TimeEntryError } from "./entry-error";
 import { CatalogError } from "./catalog/errors";
 import { visibleTasksFor } from "./catalog/tasks";
 import type { Viewer } from "./catalog/viewer";
@@ -66,9 +67,12 @@ import { assertCan, projectResource, scopeForUser } from "./authz";
 
 /**
  * The single write path for time entries. Server actions and route handlers
- * call these db-injected functions after `requireWorkspaceAccess`; later
- * phases hook rate snapshots (4), locks and approvals (5) in here, so nothing
- * else may insert or update `time_entry` rows.
+ * call these db-injected functions after `requireWorkspaceAccess`; rate
+ * snapshots (Phase 4) and the lock and approval guard (Phase 5a,
+ * `assertWritable` in `entry-guard.ts`) hook in here, so nothing else may
+ * insert or update `time_entry` rows. Every exported writer passes the guard
+ * (`writable-coverage.test.ts`); a write into a submitted period by an owner
+ * or admin takes a `note`.
  *
  * Every function is scoped to one (workspace, user): members only ever see
  * and edit their own entries until Phase 4. The role decides which projects
@@ -94,16 +98,45 @@ export type EntryScope = Viewer & { actedBy?: Actor };
 /** New-entry details; the type defaults to work (the schemas default it too). */
 export type EntryInput = Omit<EntryDetails, "type"> & { type?: EntryDetails["type"] };
 
-export class TimeEntryError extends Error {
-  constructor(
-    public readonly code: "NOT_FOUND" | "INVALID" | "CONFLICT",
-    message: string,
-    /** The required field the entry lacks, for the UI to mark. */
-    public readonly field?: RequiredField,
-  ) {
-    super(message);
-    this.name = "TimeEntryError";
-  }
+export { TimeEntryError };
+
+/** Why an owner or admin changes submitted time (Phase 5a); see `assertWritable`. */
+export interface WriteNote {
+  note?: string;
+}
+
+type Patch = Partial<EntryDetails & { start: Date; end: Date }>;
+
+/** The patched fields that change, for the ADMIN_EDIT log. */
+function changesOf(
+  row: {
+    description: string;
+    projectId: string | null;
+    taskId: string | null;
+    billable: boolean;
+    start: Date;
+    end: Date | null;
+    tagIds: string[];
+  },
+  patch: Patch,
+): Record<string, { from: unknown; to: unknown }> {
+  const out: Record<string, { from: unknown; to: unknown }> = {};
+  const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
+  const put = (key: string, from: unknown, to: unknown) => {
+    if (to !== undefined && JSON.stringify(from) !== JSON.stringify(to)) out[key] = { from, to };
+  };
+  put("description", row.description, patch.description?.trim());
+  put("projectId", row.projectId, patch.projectId);
+  put("taskId", row.taskId, patch.taskId);
+  put("billable", row.billable, patch.billable);
+  put("start", iso(row.start), patch.start === undefined ? undefined : iso(patch.start));
+  put("end", iso(row.end), patch.end === undefined ? undefined : iso(patch.end));
+  put(
+    "tagIds",
+    [...row.tagIds].sort(),
+    patch.tagIds === undefined ? undefined : [...patch.tagIds].sort(),
+  );
+  return out;
 }
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
@@ -514,6 +547,7 @@ export async function startTimer(
   scope: EntryScope,
   input: EntryInput,
   now: Date = new Date(),
+  opts: WriteNote = {},
 ): Promise<{ started: TimeEntryDTO; stopped: TimeEntryDTO | null }> {
   return db.transaction(async (tx) => {
     await tx.execute(timerLock(scope.workspaceId, scope.userId));
@@ -526,6 +560,9 @@ export async function startTimer(
         and(eq(membership.workspaceId, scope.workspaceId), eq(membership.userId, scope.userId)),
       );
     if (member?.status !== "ACTIVE") throw new WorkspaceAccessError(404, "Not found");
+    const id = randomUUID();
+    // The implicit stop below is a stop, never guarded; the new timer starts now.
+    await assertWritable(tx, scope, { entryId: id, after: now }, { note: opts.note, now });
     const details = await breakAware(tx, scope, input);
     await assertDetailsUsable(tx, scope, details);
 
@@ -554,7 +591,6 @@ export async function startTimer(
       stopped = await loadDTO(tx, scope, running.id);
     }
 
-    const id = randomUUID();
     try {
       await tx.insert(timeEntry).values({
         id,
@@ -628,7 +664,7 @@ export async function stopTimer(
 export async function createManualEntry(
   db: Database,
   scope: EntryScope,
-  input: EntryInput & { start: Date; end: Date },
+  input: EntryInput & { start: Date; end: Date } & WriteNote,
   _now: Date = new Date(),
 ): Promise<TimeEntryDTO> {
   assertCanWriteTimes(scope, input.projectId);
@@ -641,11 +677,17 @@ export async function createManualEntry(
   if (!check.ok) throw new TimeEntryError("INVALID", check.error);
 
   return db.transaction(async (tx) => {
+    const id = randomUUID();
+    await assertWritable(
+      tx,
+      scope,
+      { entryId: id, after: input.start },
+      { note: input.note, now: _now },
+    );
     const details = await breakAware(tx, scope, input);
     await assertDetailsUsable(tx, scope, details);
     await assertRequiredFields(tx, scope, details);
     await assertTaskPicked(tx, scope, details);
-    const id = randomUUID();
     await tx.insert(timeEntry).values({
       id,
       workspaceId: scope.workspaceId,
@@ -673,12 +715,23 @@ export async function updateEntry(
   db: Database,
   scope: EntryScope,
   entryId: string,
-  patch: Partial<EntryDetails & { start: Date; end: Date }>,
+  patch: Patch & WriteNote,
   now: Date = new Date(),
 ): Promise<TimeEntryDTO> {
   return db.transaction(async (tx) => {
     await lockOwned(tx, scope, entryId);
     const row = await findOwned(tx, scope, entryId);
+    await assertWritable(
+      tx,
+      scope,
+      {
+        entryId,
+        before: row.start,
+        after: patch.start ?? row.start,
+        changes: changesOf({ ...row, tagIds: row.tags.map((t) => t.tag.id) }, patch),
+      },
+      { note: patch.note, now },
+    );
     if (patch.start !== undefined || patch.end !== undefined) {
       assertCanWriteTimes(scope, row.projectId);
     }
@@ -768,6 +821,7 @@ export async function createManualEntries(
   scope: EntryScope,
   inputs: (EntryInput & { start: Date; end: Date })[],
   now: Date = new Date(),
+  opts: WriteNote = {},
 ): Promise<{ ids: string[] }> {
   if (inputs.length === 0) return { ids: [] };
   assertCanWriteTimes(scope, null);
@@ -809,6 +863,12 @@ export async function createManualEntries(
     });
     for (const tagId of new Set(details.tagIds)) tagRows.push({ timeEntryId: id, tagId });
   }
+  await assertWritable(
+    db,
+    scope,
+    rows.map((r) => ({ entryId: r.id, after: r.start as Date })),
+    { note: opts.note, now },
+  );
   for (let i = 0; i < rows.length; i += 500) {
     await db.insert(timeEntry).values(rows.slice(i, i + 500));
   }
@@ -827,8 +887,23 @@ export async function deleteEntries(
   db: Executor,
   scope: EntryScope,
   ids: string[],
+  opts: WriteNote = {},
 ): Promise<{ deleted: string[] }> {
   if (ids.length === 0) return { deleted: [] };
+  const targets = await db
+    .select({ id: timeEntry.id, start: timeEntry.start })
+    .from(timeEntry)
+    .where(and(inArray(timeEntry.id, ids), scopeWhere(scope), isNotNull(timeEntry.end)));
+  await assertWritable(
+    db,
+    scope,
+    targets.map((t) => ({
+      entryId: t.id,
+      before: t.start,
+      changes: { deleted: { from: false, to: true } },
+    })),
+    { note: opts.note },
+  );
   const rows = await db
     .update(timeEntry)
     .set({ deletedAt: new Date() })
@@ -841,19 +916,33 @@ export async function restoreEntries(
   db: Executor,
   scope: EntryScope,
   ids: string[],
+  opts: WriteNote = {},
 ): Promise<{ restored: string[] }> {
   if (ids.length === 0) return { restored: [] };
+  const deleted = and(
+    inArray(timeEntry.id, ids),
+    eq(timeEntry.workspaceId, scope.workspaceId),
+    eq(timeEntry.userId, scope.userId),
+    isNotNull(timeEntry.deletedAt),
+  );
+  const targets = await db
+    .select({ id: timeEntry.id, start: timeEntry.start })
+    .from(timeEntry)
+    .where(deleted);
+  await assertWritable(
+    db,
+    scope,
+    targets.map((t) => ({
+      entryId: t.id,
+      after: t.start,
+      changes: { deleted: { from: true, to: false } },
+    })),
+    { note: opts.note },
+  );
   const rows = await db
     .update(timeEntry)
     .set({ deletedAt: null })
-    .where(
-      and(
-        inArray(timeEntry.id, ids),
-        eq(timeEntry.workspaceId, scope.workspaceId),
-        eq(timeEntry.userId, scope.userId),
-        isNotNull(timeEntry.deletedAt),
-      ),
-    )
+    .where(deleted)
     .returning({ id: timeEntry.id });
   return { restored: rows.map((r) => r.id) };
 }
@@ -863,17 +952,24 @@ export async function duplicateEntry(
   db: Database,
   scope: EntryScope,
   entryId: string,
+  opts: WriteNote = {},
 ): Promise<TimeEntryDTO> {
   return db.transaction(async (tx) => {
     const row = await findOwned(tx, scope, entryId);
     if (!row.end) throw new TimeEntryError("INVALID", "Stop the timer before duplicating it.");
     assertCanWriteTimes(scope, row.projectId);
+    const id = randomUUID();
+    await assertWritable(
+      tx,
+      scope,
+      { entryId: id, after: row.start, changes: { duplicateOf: { from: null, to: row.id } } },
+      { note: opts.note },
+    );
     await assertDetailsUsable(tx, scope, {
       projectId: row.projectId,
       taskId: row.taskId,
       tagIds: row.tags.map((t) => t.tag.id),
     });
-    const id = randomUUID();
     await tx.insert(timeEntry).values({
       id,
       workspaceId: scope.workspaceId,
@@ -906,11 +1002,23 @@ export async function splitEntry(
   entryId: string,
   at: Date,
   now: Date = new Date(),
+  opts: WriteNote = {},
 ): Promise<{ first: TimeEntryDTO; second: TimeEntryDTO }> {
   return db.transaction(async (tx) => {
     await lockOwned(tx, scope, entryId);
     const row = await findOwned(tx, scope, entryId);
     if (!row.end) throw new TimeEntryError("INVALID", "Stop the timer before splitting it.");
+    await assertWritable(
+      tx,
+      scope,
+      {
+        entryId,
+        before: row.start,
+        after: at,
+        changes: { splitAt: { from: null, to: at.toISOString() } },
+      },
+      { note: opts.note, now },
+    );
     assertCanWriteTimes(scope, row.projectId);
     // A split copies the entry's details unchanged, so task.trackTime is not
     // re-checked (rule 10 of decision 11): a task the person can no longer
@@ -958,6 +1066,7 @@ export async function continueEntry(
   entryId: string,
   now: Date = new Date(),
   startFor: EntryScope = scope,
+  opts: WriteNote = {},
 ): Promise<{ started: TimeEntryDTO; stopped: TimeEntryDTO | null }> {
   const row = await findOwned(db, scope, entryId);
   return startTimer(
@@ -972,6 +1081,7 @@ export async function continueEntry(
       type: row.type,
     },
     now,
+    opts,
   );
 }
 
@@ -1024,6 +1134,7 @@ async function applyBulkPatch(
   entryId: string,
   patch: BulkEntryPatch,
   now: Date,
+  note: string | undefined,
 ): Promise<TimeEntryDTO> {
   await lockOwned(tx, scope, entryId);
   const row = await findOwned(tx, scope, entryId);
@@ -1039,6 +1150,16 @@ async function applyBulkPatch(
     ...(patch.billable !== undefined ? { billable: patch.billable } : {}),
     ...(patch.description !== undefined ? { description: patch.description } : {}),
   };
+  await assertWritable(
+    tx,
+    scope,
+    {
+      entryId,
+      before: row.start,
+      changes: changesOf({ ...row, tagIds: currentTags }, details),
+    },
+    { note, now },
+  );
   if (row.type === "break" && wantsDetails(details)) {
     throw new TimeEntryError("INVALID", "A break has no project, tags or billing.");
   }
@@ -1092,6 +1213,7 @@ export async function bulkUpdateEntries(
   groups: { scope: EntryScope; ids: string[] }[],
   patch: BulkEntryPatch,
   now: Date = new Date(),
+  opts: WriteNote = {},
 ): Promise<{ updated: TimeEntryDTO[] }> {
   const total = groups.reduce((n, g) => n + g.ids.length, 0);
   return db.transaction(async (tx) => {
@@ -1100,9 +1222,10 @@ export async function bulkUpdateEntries(
     for (const { scope, ids } of groups) {
       for (const id of ids) {
         try {
-          updated.push(await applyBulkPatch(tx, scope, id, patch, now));
+          updated.push(await applyBulkPatch(tx, scope, id, patch, now, opts.note));
         } catch (error) {
-          if (!(error instanceof TimeEntryError)) throw error;
+          // A missing note is asked for once, for the whole edit.
+          if (!(error instanceof TimeEntryError) || error.code === "NOTE_REQUIRED") throw error;
           failures.push(error.message);
         }
       }

@@ -4,6 +4,7 @@ import {
   bulkUpdateEntriesSchema,
   createManualEntrySchema,
   entryIdsSchema,
+  entryNoteInputSchema,
   splitEntrySchema,
   startTimerSchema,
   stopTimerSchema,
@@ -65,7 +66,8 @@ export async function startTimerAction(
     const scope = await scopeFor(slug);
     const parsed = startTimerSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    return ok(await startTimer(getDb(), scope, parsed.data));
+    const { note, ...details } = parsed.data;
+    return ok(await startTimer(getDb(), scope, details, undefined, { note }));
   } catch (error) {
     return actionFailure(error);
   }
@@ -127,7 +129,9 @@ export async function deleteEntriesAction(
     const db = getDb();
     const deleted: string[] = [];
     for (const g of await scopesForEntries(db, await viewerFor(ctx), parsed.data.ids)) {
-      deleted.push(...(await deleteEntries(db, g.scope, g.ids)).deleted);
+      deleted.push(
+        ...(await deleteEntries(db, g.scope, g.ids, { note: parsed.data.note })).deleted,
+      );
     }
     return ok({ deleted });
   } catch (error) {
@@ -148,7 +152,11 @@ export async function restoreEntriesAction(
       includeDeleted: true,
     });
     const restored: string[] = [];
-    for (const g of groups) restored.push(...(await restoreEntries(db, g.scope, g.ids)).restored);
+    for (const g of groups) {
+      restored.push(
+        ...(await restoreEntries(db, g.scope, g.ids, { note: parsed.data.note })).restored,
+      );
+    }
     return ok({ restored });
   } catch (error) {
     return actionFailure(error);
@@ -158,10 +166,13 @@ export async function restoreEntriesAction(
 export async function duplicateEntryAction(
   slug: string,
   entryId: string,
+  input: unknown = {},
 ): Promise<ActionResult<TimeEntryDTO>> {
   try {
     const ctx = await requireWorkspaceAccess(slug);
-    return ok(await duplicateEntry(getDb(), await entryScope(ctx, entryId), entryId));
+    const parsed = entryNoteInputSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    return ok(await duplicateEntry(getDb(), await entryScope(ctx, entryId), entryId, parsed.data));
   } catch (error) {
     return actionFailure(error);
   }
@@ -170,11 +181,16 @@ export async function duplicateEntryAction(
 export async function continueEntryAction(
   slug: string,
   entryId: string,
+  input: unknown = {},
 ): Promise<ActionResult<StartResult>> {
   try {
     const ctx = await requireWorkspaceAccess(slug);
+    const parsed = entryNoteInputSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
     const scope = await entryScope(ctx, entryId);
-    return ok(await continueEntry(getDb(), scope, entryId, undefined, await ownScope(ctx)));
+    return ok(
+      await continueEntry(getDb(), scope, entryId, undefined, await ownScope(ctx), parsed.data),
+    );
   } catch (error) {
     return actionFailure(error);
   }
@@ -191,7 +207,9 @@ export async function bulkUpdateEntriesAction(
     if (!parsed.success) return fromZodError(parsed.error);
     const db = getDb();
     const groups = await scopesForEntries(db, await viewerFor(ctx), parsed.data.ids);
-    return ok(await bulkUpdateEntries(db, groups, parsed.data.patch));
+    return ok(
+      await bulkUpdateEntries(db, groups, parsed.data.patch, undefined, { note: parsed.data.note }),
+    );
   } catch (error) {
     return actionFailure(error);
   }
@@ -208,7 +226,11 @@ export async function splitEntryAction(
     const parsed = splitEntrySchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     const scope = await entryScope(ctx, entryId);
-    return ok(await splitEntry(getDb(), scope, entryId, parsed.data.at));
+    return ok(
+      await splitEntry(getDb(), scope, entryId, parsed.data.at, undefined, {
+        note: parsed.data.note,
+      }),
+    );
   } catch (error) {
     return actionFailure(error);
   }

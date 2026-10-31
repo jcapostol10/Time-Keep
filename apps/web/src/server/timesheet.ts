@@ -88,7 +88,7 @@ export async function deleteTemplate(db: Executor, viewer: Viewer, id: string): 
 export async function copyWeek(
   db: Database,
   scope: EntryScope,
-  args: { fromWeekStart: Date; toWeekStart: Date; tz: string },
+  args: { fromWeekStart: Date; toWeekStart: Date; tz: string; note?: string },
 ): Promise<TimeEntryDTO[]> {
   const days = daysBetweenInZone(args.fromWeekStart, args.toWeekStart, args.tz);
   if (days === 0) throw new TimeEntryError("INVALID", "Choose a different week.");
@@ -111,6 +111,7 @@ export async function copyWeek(
           billable: e.billable,
           start: new Date(e.start),
           end: new Date(e.end),
+          note: args.note,
         }),
       );
     }

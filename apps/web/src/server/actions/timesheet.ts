@@ -6,7 +6,7 @@ import { getDb } from "@timekeep/db";
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
 import type { TimesheetTemplateDTO } from "@/lib/catalog-types";
 import type { TimeEntryDTO } from "@/lib/tracker-types";
-import { userErrorMessage } from "@/server/actions/errors";
+import { actionFailure, userErrorMessage } from "@/server/actions/errors";
 import { copyWeek, deleteTemplate, saveTemplate } from "@/server/timesheet";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
 import { authorize } from "@/server/authz";
@@ -59,6 +59,6 @@ export async function copyWeekAction(
     const tz = resolveViewerPrefs(ctx.user, ctx.settings).timezone;
     return ok(await copyWeek(getDb(), scope, { ...parsed.data, tz }));
   } catch (error) {
-    return fail(userErrorMessage(error));
+    return actionFailure(error);
   }
 }

@@ -64,6 +64,8 @@ export interface ImportOptions {
   mapping: ColumnMapping;
   /** The groups a task created by the import belongs to; required when tasks are by group. */
   newTaskGroupIds?: string[];
+  /** Why an owner or admin imports into submitted periods (Phase 5a). */
+  note?: string;
 }
 
 export type { ImportCreates, ImportPlan, ImportRowResult } from "@/lib/import-types";
@@ -539,7 +541,9 @@ export async function commitEntryImport(
           end: r.row.end!,
         };
       });
-      const { ids } = await createManualEntries(tx, scope, inputs);
+      const { ids } = await createManualEntries(tx, scope, inputs, undefined, {
+        note: options.note,
+      });
       imported += ids.length;
     }
     return { imported };

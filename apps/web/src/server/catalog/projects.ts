@@ -51,6 +51,7 @@ import type { ProjectDetail, ProjectListItem, ProjectStatus } from "@/lib/catalo
 import type { PickerProject, PickerTask } from "@/lib/tracker-types";
 
 import { CatalogError, isUniqueViolation } from "./errors";
+import { inSubmittedPeriodSql } from "../approval-sql";
 import { scopeFilter } from "../authz";
 import { visibleTasksFor } from "./tasks";
 import { type Viewer, visibleProjectFilter } from "./viewer";
@@ -553,6 +554,22 @@ export async function deleteProject(
 ): Promise<void> {
   await db.transaction(async (tx) => {
     await requireVisibleProject(tx, viewer, projectId);
+    // Moving or deleting submitted time would change what was approved.
+    const [submitted] = await tx
+      .select({ id: timeEntry.id })
+      .from(timeEntry)
+      .where(
+        and(
+          eq(timeEntry.workspaceId, viewer.workspaceId),
+          eq(timeEntry.projectId, projectId),
+          isNull(timeEntry.deletedAt),
+          inSubmittedPeriodSql(["PENDING", "APPROVED"]),
+        ),
+      )
+      .limit(1);
+    if (submitted) {
+      throw new CatalogError("CONFLICT", "Archive it instead: it has time in submitted periods.");
+    }
     if (mode.mode === "reassign") {
       if (mode.projectId) {
         if (mode.projectId === projectId) {

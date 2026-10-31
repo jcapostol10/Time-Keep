@@ -3,6 +3,7 @@ import { getDb } from "@timekeep/db";
 
 import { authorize } from "@/server/authz";
 import { commitEntryImport, ImportError, planEntryImport } from "@/server/entry-import";
+import { TimeEntryError } from "@/server/time-entries";
 import {
   BadRequestError,
   requireWorkspaceAccess,
@@ -57,6 +58,13 @@ export async function POST(
   } catch (error) {
     if (error instanceof ImportError) {
       return Response.json({ error: error.message }, { status: 400 });
+    }
+    // The entry service refused the batch (a locked or submitted period, a missing note).
+    if (error instanceof TimeEntryError && error.code !== "NOT_FOUND") {
+      return Response.json(
+        { error: error.message, ...(error.code === "NOTE_REQUIRED" ? { field: "note" } : {}) },
+        { status: 400 },
+      );
     }
     return routeErrorResponse(error, "import");
   }

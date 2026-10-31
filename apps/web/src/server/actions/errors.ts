@@ -26,9 +26,16 @@ export function userErrorMessage(error: unknown): string {
   return "Something went wrong.";
 }
 
-/** The failed result for an error; a required-field refusal names its field. */
+/**
+ * The failed result for an error; a required-field refusal names its field,
+ * and a write into submitted time without a note names `note`, so the client
+ * asks for one and retries (Phase 5a).
+ */
 export function actionFailure(error: unknown): ActionResult<never> {
   const message = userErrorMessage(error);
+  if (error instanceof TimeEntryError && error.code === "NOTE_REQUIRED") {
+    return fail(message, { note: [message] });
+  }
   if (error instanceof TimeEntryError && error.field)
     return fail(message, { [error.field]: [message] });
   return fail(message);

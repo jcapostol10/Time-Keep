@@ -20,6 +20,7 @@ import {
 
 import type { RateRecalcDTO } from "@/lib/rate-types";
 
+import { inSubmittedPeriodSql } from "./approval-sql";
 import { assertCan } from "./authz";
 import { CatalogError } from "./catalog/errors";
 import type { Viewer } from "./catalog/viewer";
@@ -173,12 +174,18 @@ async function claim(db: Database, jobId: string, now: Date, options: RunOptions
   });
 }
 
+/** An approved entry keeps its rate (Phase 4 design decision 3, Phase 5a). */
+function notInApprovedPeriod() {
+  return sql`not ${inSubmittedPeriodSql(["APPROVED"])}`;
+}
+
 function entriesFrom(workspaceId: string, from: Date) {
   return and(
     eq(timeEntry.workspaceId, workspaceId),
     isNull(timeEntry.deletedAt),
     eq(timeEntry.type, "work"),
     gte(timeEntry.start, from),
+    notInApprovedPeriod(),
   );
 }
 

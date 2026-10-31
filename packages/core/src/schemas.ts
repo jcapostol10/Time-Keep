@@ -258,7 +258,7 @@ export type EntryDetails = z.infer<typeof entryDetailsSchema>;
 /** A favourite pins work details (Phase 4b); breaks are not pinned. */
 export const pinFavoriteSchema = entryDetailsSchema.omit({ type: true });
 
-export const startTimerSchema = entryDetailsSchema;
+export const startTimerSchema = entryDetailsSchema.extend({ note: entryNoteSchema.optional() });
 export type StartTimerInput = z.infer<typeof startTimerSchema>;
 
 export const stopTimerSchema = z.object({
@@ -328,6 +328,8 @@ export const importOptionsSchema = z.object({
   newTaskGroupIds: z.array(z.string().min(1)).max(100).default([]),
   /** The dry run's fingerprint, for a commit. */
   fingerprint: z.string().length(64).optional(),
+  /** Why an owner or admin imports into submitted periods (Phase 5a). */
+  note: entryNoteSchema.optional(),
 });
 export type ImportOptionsInput = z.infer<typeof importOptionsSchema>;
 
@@ -511,6 +513,7 @@ export type TimesheetTemplateInput = z.infer<typeof timesheetTemplateInputSchema
 export const copyWeekSchema = z.object({
   fromWeekStart: isoInstantSchema,
   toWeekStart: isoInstantSchema,
+  note: entryNoteSchema.optional(),
 });
 export type CopyWeekInput = z.infer<typeof copyWeekSchema>;
 
