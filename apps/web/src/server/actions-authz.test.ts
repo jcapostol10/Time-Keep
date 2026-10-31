@@ -138,7 +138,7 @@ describe("server actions ask the permission matrix", () => {
     const refused = await updateWorkspaceSettingsAction(slug, settings);
     expect(refused).toMatchObject({
       ok: false,
-      fieldErrors: { currency: [expect.stringMatching(/not converted/)] },
+      fieldErrors: { confirmCurrencyChange: [expect.stringMatching(/not converted/)] },
     });
     const done = await updateWorkspaceSettingsAction(slug, {
       ...settings,

@@ -63,6 +63,8 @@ export interface VisibleTask {
  */
 function taskVisibilityFilter(viewer: Viewer): SQL | undefined {
   // Whoever may track on a task with no group (owners, admins, everyone mode) sees all.
+  // The probe is a task with no group on no project (an empty id matches no managed
+  // project), so it answers yes only for roles and settings that see every task.
   const unfiltered = can(viewer.actor, "task.trackTime", {
     kind: "task",
     projectId: "",
@@ -391,6 +393,12 @@ export async function listTasksAvailableTo(
   userId: string,
 ): Promise<TaskAccessDTO> {
   assertCan(viewer.actor, "group.manage", { kind: "none" });
+  const [member] = await db
+    .select({ status: membership.status })
+    .from(membership)
+    .where(and(eq(membership.workspaceId, viewer.workspaceId), eq(membership.userId, userId)));
+  // Deactivated: the workspace is closed to them, so no task is available (rule 4).
+  if (member?.status === "DEACTIVATED") return { byProject: [] };
   const target = await loadViewer(db, viewer.workspaceId, userId);
   return toAccessDTO(db, viewer.workspaceId, await visibleTasksFor(db, target));
 }
@@ -455,7 +463,11 @@ export async function updateTask(
   // Assignees, groups and the rename land together: a refused name must not leave new ones behind.
   await db.transaction(async (tx) => {
     if (assigneeIds) await replaceAssignees(tx, taskId, assigneeIds);
-    if (groupIds) {
+    const current = row.groups.map((g) => g.groupId).sort();
+    const changed =
+      groupIds !== undefined &&
+      (groupIds.length !== current.length || [...groupIds].sort().some((g, i) => g !== current[i]));
+    if (groupIds && changed) {
       await tx.delete(taskGroup).where(eq(taskGroup.taskId, taskId));
       if (groupIds.length > 0) {
         await tx

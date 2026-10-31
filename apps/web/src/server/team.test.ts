@@ -5,6 +5,7 @@ import {
   and,
   eq,
   invitation,
+  isNull,
   managedGroup,
   managedUser,
   membership,
@@ -228,6 +229,41 @@ describe("team service", () => {
     expect(byUser[ids.ada!]).toBe("owner");
     expect(byUser[ids.olga!]).toBe("admin");
     expect(roles.filter((r) => r.role === "owner")).toHaveLength(1);
+  });
+
+  it("a second transfer from a stale owner view is refused: never two owners", async () => {
+    // Two transfers started together both pass the owner check; the second must find
+    // that the owner row already changed hands.
+    const owner = await viewer("olga");
+    await transferOwnership(db, owner, ids.ada!, wsName);
+    expect(await status(transferOwnership(db, owner, ids.ann!, wsName))).toMatch(/owner/i);
+    const owners = await db
+      .select({ userId: membership.userId })
+      .from(membership)
+      .where(and(eq(membership.workspaceId, wsId), eq(membership.role, "owner")));
+    expect(owners.map((o) => o.userId)).toEqual([ids.ada]);
+  });
+
+  it("a timer cannot start for someone deactivated after their request was let in", async () => {
+    // The start passed the access check before the deactivation committed.
+    const bob = await viewer("bob");
+    await setMemberStatus(db, await viewer("olga"), ids.bob!, "DEACTIVATED");
+    expect(
+      await status(
+        startTimer(db, bob, {
+          description: "late",
+          projectId: null,
+          taskId: null,
+          tagIds: [],
+          billable: false,
+        }),
+      ),
+    ).toBe(404);
+    const running = await db
+      .select({ id: timeEntry.id })
+      .from(timeEntry)
+      .where(and(eq(timeEntry.userId, ids.bob!), isNull(timeEntry.end)));
+    expect(running).toHaveLength(0);
   });
 
   it("drops a manager's scope when they stop being a manager", async () => {

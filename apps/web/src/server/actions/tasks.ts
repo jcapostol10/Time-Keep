@@ -83,14 +83,15 @@ export async function setTaskGroupsAction(
       .from(task)
       .where(and(eq(task.workspaceId, ctx.workspace.id), inArray(task.id, parsed.data.taskIds)));
     if (rows.length === 0) throw new CatalogError("NOT_FOUND", "Task not found.");
-    const projectIds = [...new Set(rows.map((r) => r.projectId))];
-    let viewer: Viewer | undefined;
-    for (const projectId of projectIds) {
-      viewer = await authorize(ctx, "task.assignGroups", { kind: "task", projectId });
+    const [first, ...others] = [...new Set(rows.map((r) => r.projectId))];
+    const viewer = await authorize(ctx, "task.assignGroups", { kind: "task", projectId: first! });
+    for (const projectId of others) {
+      await authorize(ctx, "task.assignGroups", { kind: "task", projectId });
     }
+    const projectIds = [first!, ...others];
     await setTaskGroups(
       getDb(),
-      viewer!,
+      viewer,
       parsed.data.taskIds,
       parsed.data.groupIds,
       parsed.data.mode,

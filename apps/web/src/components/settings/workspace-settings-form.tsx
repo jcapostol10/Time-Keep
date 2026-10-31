@@ -85,11 +85,18 @@ export function WorkspaceSettingsForm({
       confirmTaskVisibility: confirmed.includes("taskVisibility"),
     });
     if (!result.ok) {
+      // The server asks by naming the confirmation it needs, never the setting itself,
+      // so a validation error on a field is shown as an error, not as a prompt.
       const field = CONFIRM_FIELDS.find(
-        (f) => result.fieldErrors?.[f]?.[0] !== undefined && !confirmed.includes(f),
+        (f) => result.fieldErrors?.[CONFIRM_KEY[f]]?.[0] !== undefined && !confirmed.includes(f),
       );
       if (field) {
-        setConfirm({ field, values, confirmed, message: result.fieldErrors![field]![0]! });
+        setConfirm({
+          field,
+          values,
+          confirmed,
+          message: result.fieldErrors![CONFIRM_KEY[field]]![0]!,
+        });
       } else toast.error(result.error);
       return;
     }
@@ -249,7 +256,10 @@ export function WorkspaceSettingsForm({
           </Button>
         )}
       </form>
-      <AlertDialog open={confirm !== null} onOpenChange={(open) => (open ? null : setConfirm(null))}>
+      <AlertDialog
+        open={confirm !== null}
+        onOpenChange={(open) => (open ? null : setConfirm(null))}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{dialog?.title}</AlertDialogTitle>
@@ -277,6 +287,10 @@ export function WorkspaceSettingsForm({
 
 type ConfirmField = "currency" | "taskVisibility";
 const CONFIRM_FIELDS: ConfirmField[] = ["currency", "taskVisibility"];
+const CONFIRM_KEY: Record<ConfirmField, "confirmCurrencyChange" | "confirmTaskVisibility"> = {
+  currency: "confirmCurrencyChange",
+  taskVisibility: "confirmTaskVisibility",
+};
 const CONFIRM_COPY: Record<ConfirmField, { title: string; cancel: string; action: string }> = {
   currency: { title: "Change the workspace currency?", cancel: "Keep", action: "Change currency" },
   taskVisibility: {

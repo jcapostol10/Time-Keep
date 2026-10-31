@@ -24,6 +24,20 @@ async function slowFilterNavigations(page: Page) {
 }
 
 test.describe("team", { tag: "@nightly" }, () => {
+  test("cancel a pending invitation", async ({ page, freshUser }) => {
+    const pending = uniqueEmail("cancel");
+    const dialog = await inviteViaUi(page, freshUser.slug, [pending], "Member");
+    await dialog.getByRole("button", { name: "Done" }).click();
+    await openTeam(page, freshUser.slug, "status=INVITED");
+    await expect(memberRow(page, pending)).toBeVisible();
+    await memberAction(page, pending, "Cancel invitation");
+    await expect(page.getByText("Invitation cancelled")).toBeVisible();
+    await expect(memberRow(page, pending)).toHaveCount(0);
+    await page.reload();
+    await waitForApp(page);
+    await expect(memberRow(page, pending)).toHaveCount(0);
+  });
+
   test("bulk invite reports each address", async ({ page, freshUser }) => {
     const newcomer = uniqueEmail("newcomer");
     const dialog = await inviteViaUi(

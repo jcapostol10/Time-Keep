@@ -77,7 +77,7 @@ export async function updateWorkspaceSettingsAction(
     const newCurrency = settings.currency !== ctx.settings.currency;
     if (newCurrency && !confirmCurrencyChange && (await workspaceHasRates(db, ctx.workspace.id))) {
       const message = `Rates and amounts will show in ${settings.currency}; they are not converted.`;
-      return fail(message, { currency: [message] });
+      return fail(message, { confirmCurrencyChange: [message] });
     }
     // Decision 11, rule 1: switching tasks to "By group" says how many tasks nobody will see yet.
     const toByGroup =
@@ -88,7 +88,7 @@ export async function updateWorkspaceSettingsAction(
         n === 0
           ? "Every active task already has a group."
           : `${n} active ${n === 1 ? "task has" : "tasks have"} no group yet. Members will not see ${n === 1 ? "it" : "them"} until a group is assigned.`;
-      return fail(message, { taskVisibility: [message] });
+      return fail(message, { confirmTaskVisibility: [message] });
     }
     await db.transaction(async (tx) => {
       await tx.update(workspace).set({ name }).where(eq(workspace.id, ctx.workspace.id));

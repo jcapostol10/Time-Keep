@@ -35,7 +35,6 @@ import {
   createManualEntries,
   createManualEntry,
   duplicateEntry,
-  type EntryScope,
   getRunningEntry,
   scopesForEntries,
   splitEntry,
@@ -417,11 +416,5 @@ describe("tasks by group: writes", () => {
       .innerJoin(timeEntry, eq(timeEntry.taskId, taskGroup.taskId))
       .where(eq(timeEntry.description, "Work"));
     expect(created.map((r) => r.groupId)).toEqual([ids.finance]);
-  });
-
-  it("a split never re-checks the task (rule 10): the scope type is the owner's", () => {
-    // Documented in splitEntry; the behaviour is asserted above. The type is what callers pass.
-    const scope: EntryScope = { workspaceId: "w", userId: "u", role: "member" } as EntryScope;
-    expect(scope.actedBy).toBeUndefined();
   });
 });

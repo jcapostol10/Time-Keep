@@ -10,8 +10,9 @@ import {
 } from "../../../test/db";
 import { randomUUID } from "node:crypto";
 
-import { eq, projectGroup, taskGroup, userGroup, userGroupMember } from "@timekeep/db";
+import { eq, membership, projectGroup, taskGroup, userGroup, userGroupMember } from "@timekeep/db";
 
+import { loadViewer } from "../authz";
 import { deleteGroup } from "../groups";
 import { createManualEntry, type EntryScope, listEntriesInRange } from "../time-entries";
 import { createProject, listPickerProjects } from "./projects";
@@ -20,6 +21,7 @@ import {
   createTask,
   deleteTask,
   listTasks,
+  listTasksAvailableTo,
   setTaskGroups,
   updateTask,
 } from "./tasks";
@@ -231,6 +233,40 @@ describe("tasks service", () => {
       await expect(
         createTask(db, manager, web.id, { name: "Nope", assigneeIds: [] }),
       ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it("a rename that keeps the groups leaves their rows as they were", async () => {
+      const finance = await group("Finance", []);
+      const web = await createProject(db, owner, { name: "Web" });
+      const t = await createTask(db, owner, web.id, {
+        name: "Books",
+        assigneeIds: [],
+        groupIds: [finance],
+      });
+      const before = (await db.select().from(taskGroup).where(eq(taskGroup.taskId, t.id)))[0]!;
+      const admin = asViewer({
+        workspaceId: owner.workspaceId,
+        userId: member.userId,
+        role: "admin",
+      });
+      await updateTask(db, admin, t.id, { name: "Ledger", groupIds: [finance] });
+      const after = (await db.select().from(taskGroup).where(eq(taskGroup.taskId, t.id)))[0]!;
+      expect(after).toEqual(before);
+    });
+
+    it("lists no tasks, rather than not found, for a deactivated member", async () => {
+      const finance = await group("Finance", [member.userId]);
+      const web = await createProject(db, owner, { name: "Web" });
+      await createTask(db, owner, web.id, { name: "Books", assigneeIds: [], groupIds: [finance] });
+      await db
+        .update(membership)
+        .set({ status: "DEACTIVATED" })
+        .where(eq(membership.userId, member.userId));
+      const real = await loadViewer(db, owner.workspaceId, owner.userId);
+      expect(await listTasksAvailableTo(db, real, member.userId)).toEqual({ byProject: [] });
+      await expect(listTasksAvailableTo(db, real, randomUUID())).rejects.toMatchObject({
+        status: 404,
+      });
     });
 
     it("refuses an unknown group", async () => {

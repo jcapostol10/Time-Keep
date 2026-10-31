@@ -36,6 +36,11 @@ test.describe("add time for others", () => {
     await openTracker(page, freshUser.slug);
     await pickPerson(page, "Mia Member");
     await addManualEntry(page, { description: "Done for Mia", start: "00:05", duration: "1" });
+    // Favourites are the viewer's own: another person's row offers no "Pin as favourite".
+    await entryOrGroup(page, "Done for Mia").getByRole("button", { name: "More actions" }).click();
+    await expect(page.getByRole("menuitem", { name: "Duplicate" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Pin as favourite" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
     await openTracker(mia.page, freshUser.slug);
     await expect(entryOrGroup(mia.page, "Done for Mia")).toBeVisible();

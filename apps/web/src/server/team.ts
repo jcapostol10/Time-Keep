@@ -30,7 +30,7 @@ import { CatalogError } from "./catalog/errors";
 import type { AssignableRole, TeamFilters, TeamRow } from "@/lib/team-types";
 
 import type { Viewer } from "./catalog/viewer";
-import { getRunningEntry, stopTimer } from "./time-entries";
+import { getRunningEntry, stopTimer, timerLock } from "./time-entries";
 import { WorkspaceAccessError } from "./access-error";
 
 /**
@@ -130,13 +130,19 @@ export async function setMemberStatus(
   const current = await target(db, viewer, userId);
   assertCan(viewer.actor, "member.deactivate", { kind: "member", userId, role: current.role });
   if (current.status === status) return;
+  // The status changes under the person's timer lock, and the running timer is stopped
+  // after it: a start already past the access check either finished before (and is
+  // stopped here) or waits for the lock and then finds the person deactivated.
+  await db.transaction(async (tx) => {
+    await tx.execute(timerLock(viewer.workspaceId, userId));
+    await tx
+      .update(membership)
+      .set({ status })
+      .where(and(eq(membership.workspaceId, viewer.workspaceId), eq(membership.userId, userId)));
+  });
   if (status === "DEACTIVATED") {
     await stopRunning(db, viewer.workspaceId, userId, current.role, now);
   }
-  await db
-    .update(membership)
-    .set({ status })
-    .where(and(eq(membership.workspaceId, viewer.workspaceId), eq(membership.userId, userId)));
 }
 
 /**
@@ -148,10 +154,11 @@ export async function removeMember(db: Database, viewer: Viewer, userId: string)
   const current = await target(db, viewer, userId);
   assertCan(viewer.actor, "member.remove", { kind: "member", userId, role: current.role });
   const ws = viewer.workspaceId;
-  if (current.status === "ACTIVE") await stopRunning(db, ws, userId, current.role, new Date());
   const groupsHere = sql`(select ${userGroup.id} from ${userGroup} where ${userGroup.workspaceId} = ${ws})`;
   const projectsHere = sql`(select ${project.id} from ${project} where ${project.workspaceId} = ${ws})`;
   await db.transaction(async (tx) => {
+    // Under the timer lock, as deactivation: a start waiting on it finds no membership.
+    await tx.execute(timerLock(ws, userId));
     await tx
       .delete(userGroupMember)
       .where(and(eq(userGroupMember.userId, userId), inArray(userGroupMember.groupId, groupsHere)));
@@ -173,6 +180,7 @@ export async function removeMember(db: Database, viewer: Viewer, userId: string)
       .delete(membership)
       .where(and(eq(membership.workspaceId, ws), eq(membership.userId, userId)));
   });
+  if (current.status === "ACTIVE") await stopRunning(db, ws, userId, current.role, new Date());
 }
 
 /** Hands the workspace to an active admin; the old owner becomes an admin. */
@@ -195,17 +203,38 @@ export async function transferOwnership(
   if (next.role !== "admin" || next.status !== "ACTIVE") {
     throw new CatalogError("INVALID", "Ownership can only go to an active admin.");
   }
+  // Both rows are guarded in the transaction: two transfers started together both pass
+  // the checks above, and only the first may find the actor still the owner.
   await db.transaction(async (tx) => {
-    await tx
+    const demoted = await tx
       .update(membership)
       .set({ role: "admin" })
       .where(
-        and(eq(membership.workspaceId, viewer.workspaceId), eq(membership.userId, viewer.userId)),
-      );
-    await tx
+        and(
+          eq(membership.workspaceId, viewer.workspaceId),
+          eq(membership.userId, viewer.userId),
+          eq(membership.role, "owner"),
+        ),
+      )
+      .returning({ id: membership.id });
+    if (demoted.length === 0) {
+      throw new CatalogError("INVALID", "You are no longer the owner of this workspace.");
+    }
+    const promoted = await tx
       .update(membership)
       .set({ role: "owner" })
-      .where(and(eq(membership.workspaceId, viewer.workspaceId), eq(membership.userId, toUserId)));
+      .where(
+        and(
+          eq(membership.workspaceId, viewer.workspaceId),
+          eq(membership.userId, toUserId),
+          eq(membership.role, "admin"),
+          eq(membership.status, "ACTIVE"),
+        ),
+      )
+      .returning({ id: membership.id });
+    if (promoted.length === 0) {
+      throw new CatalogError("INVALID", "Ownership can only go to an active admin.");
+    }
   });
 }
 

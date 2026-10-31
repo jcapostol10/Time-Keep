@@ -104,10 +104,13 @@ export async function listFavorites(db: Executor, viewer: Viewer): Promise<Favor
   for (const p of projects) {
     visible.set(p.id, can(viewer.actor, "project.view", await projectResource(db, viewer, p.id)));
   }
-  const taskGroups = await groupsOfTasks(
-    db,
-    tasks.map((t) => t.id),
-  );
+  const taskGroups =
+    viewer.actor.settings.taskVisibility === "BY_GROUP"
+      ? await groupsOfTasks(
+          db,
+          tasks.map((t) => t.id),
+        )
+      : new Map<string, string[]>();
 
   return rows.map((r) => {
     const p = r.projectId ? projects.find((x) => x.id === r.projectId) : undefined;

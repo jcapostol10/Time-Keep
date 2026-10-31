@@ -24,14 +24,24 @@ export async function POST(
     const { workspaceSlug } = await ctx.params;
     const access = await requireWorkspaceAccess(workspaceSlug);
     const viewer = await authorize(access, "import.entries");
+    // Refuse an oversized upload before reading it: the file's limit plus room for the
+    // multipart framing and the options.
+    const length = Number(request.headers.get("content-length") ?? 0);
+    if (length > MAX_IMPORT_BYTES + 64 * 1024) {
+      return Response.json({ error: "The file is over 4 MB." }, { status: 413 });
+    }
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) throw new BadRequestError("Choose a CSV file.");
     if (file.size > MAX_IMPORT_BYTES) throw new BadRequestError("The file is over 4 MB.");
     const rawOptions = form.get("options");
-    const parsed = importOptionsSchema.safeParse(
-      typeof rawOptions === "string" ? JSON.parse(rawOptions) : null,
-    );
+    let rawJson: unknown = null;
+    try {
+      rawJson = typeof rawOptions === "string" ? JSON.parse(rawOptions) : null;
+    } catch {
+      throw new BadRequestError("Invalid import options.");
+    }
+    const parsed = importOptionsSchema.safeParse(rawJson);
     if (!parsed.success) throw new BadRequestError("Invalid import options.");
     const text = await file.text();
     const dryRun = new URL(request.url).searchParams.get("dryRun") === "1";

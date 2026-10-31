@@ -45,6 +45,7 @@ import { CommitInput } from "./manual-entry-fields";
 import { ColorDot, ProjectPicker } from "./project-picker";
 import { SplitDialog } from "./split-dialog";
 import { TagPicker } from "./tag-picker";
+import { useTarget } from "./target-context";
 import { useFavorites } from "./use-favorites";
 import { useCanWriteTimes, useTracker } from "./tracker-provider";
 import { useEntryMutations } from "./use-entry-mutations";
@@ -72,52 +73,56 @@ function RowActions({ entry }: { entry: TimeEntryDTO }) {
   const { duplicate, remove, split } = useEntryMutations();
   const { pin } = useFavorites();
   const canWriteTimes = useCanWriteTimes();
+  // Favourites are the viewer's own: not offered on someone else's entries.
+  const ownEntries = useTarget() === null;
   const [splitting, setSplitting] = useState(false);
   return (
     <>
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="More actions">
-          <EllipsisVerticalIcon />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => void duplicate(entry.id)}>
-          <CopyIcon /> Duplicate
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={entry.type === "break"}
-          onSelect={() =>
-            void pin({
-              description: entry.description,
-              projectId: entry.projectId,
-              taskId: entry.taskId,
-              tagIds: entry.tagIds,
-              billable: entry.billable,
-            })
-          }
-        >
-          <StarIcon /> Pin as favourite
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={!entry.end || !canWriteTimes}
-          onSelect={() => setSplitting(true)}
-        >
-          <ScissorsIcon /> Split…
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onSelect={() => void remove([entry.id])}>
-          <Trash2Icon /> Delete
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-    {splitting ? (
-      <SplitDialog
-        entry={entry}
-        open
-        onOpenChange={setSplitting}
-        onSplit={(at) => split(entry, at)}
-      />
-    ) : null}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label="More actions">
+            <EllipsisVerticalIcon />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => void duplicate(entry.id)}>
+            <CopyIcon /> Duplicate
+          </DropdownMenuItem>
+          {ownEntries ? (
+            <DropdownMenuItem
+              disabled={entry.type === "break"}
+              onSelect={() =>
+                void pin({
+                  description: entry.description,
+                  projectId: entry.projectId,
+                  taskId: entry.taskId,
+                  tagIds: entry.tagIds,
+                  billable: entry.billable,
+                })
+              }
+            >
+              <StarIcon /> Pin as favourite
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem
+            disabled={!entry.end || !canWriteTimes}
+            onSelect={() => setSplitting(true)}
+          >
+            <ScissorsIcon /> Split…
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onSelect={() => void remove([entry.id])}>
+            <Trash2Icon /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {splitting ? (
+        <SplitDialog
+          entry={entry}
+          open
+          onOpenChange={setSplitting}
+          onSplit={(at) => split(entry, at)}
+        />
+      ) : null}
     </>
   );
 }
@@ -205,22 +210,22 @@ export function EntryRow({
         </Badge>
       ) : (
         <>
-      <ProjectPicker
-        slug={slug}
-        value={{ projectId: entry.projectId, taskId: entry.taskId }}
-        current={{ project: entry.project, task: entry.task }}
-        compact
-        canCreate={canCreate.project}
-        onChange={(sel) => save({ projectId: sel.projectId, taskId: sel.taskId })}
-      />
-      <TagPicker
-        slug={slug}
-        value={entry.tagIds}
-        current={entry.tags}
-        canCreate={canCreate.tag}
-        onChange={(tagIds) => save({ tagIds })}
-      />
-      <BillableToggle value={entry.billable} onChange={(billable) => save({ billable })} />
+          <ProjectPicker
+            slug={slug}
+            value={{ projectId: entry.projectId, taskId: entry.taskId }}
+            current={{ project: entry.project, task: entry.task }}
+            compact
+            canCreate={canCreate.project}
+            onChange={(sel) => save({ projectId: sel.projectId, taskId: sel.taskId })}
+          />
+          <TagPicker
+            slug={slug}
+            value={entry.tagIds}
+            current={entry.tags}
+            canCreate={canCreate.tag}
+            onChange={(tagIds) => save({ tagIds })}
+          />
+          <BillableToggle value={entry.billable} onChange={(billable) => save({ billable })} />
         </>
       )}
       <div className="ml-auto flex flex-wrap items-center justify-end gap-0.5 md:shrink-0 md:flex-nowrap">

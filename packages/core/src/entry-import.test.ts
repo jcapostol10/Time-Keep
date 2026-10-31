@@ -99,6 +99,12 @@ describe("parseImportRows", () => {
     expect(both!.end?.toISOString()).toBe("2026-03-09T02:00:00.000Z");
   });
 
+  it("refuses an end equal to the start instead of reading it as 24 hours", () => {
+    const [same] = parse([row({ start: "09:00", end: "09:00" })]);
+    expect(same!.error).toBe("Line 2: the end time equals the start time");
+    expect(same!.end).toBeNull();
+  });
+
   it("reads the chosen date format and splits tags on commas too", () => {
     const [r] = parse([row({ date: "09/03/2026", tags: "a, b,a" })], "dd/MM/yyyy");
     expect(r!.error).toBeNull();

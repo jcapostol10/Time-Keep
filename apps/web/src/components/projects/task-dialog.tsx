@@ -67,7 +67,8 @@ export function TaskDialog({
   });
 
   async function onSubmit(values: TaskInput) {
-    if (byGroup && values.groupIds.length === 0) {
+    // A new task needs a group; renaming one that has none does not force a choice.
+    if (byGroup && !task && values.groupIds.length === 0) {
       form.setError("groupIds", { message: PICK_A_GROUP });
       return;
     }

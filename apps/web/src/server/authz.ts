@@ -104,11 +104,11 @@ export async function loadActor(
   settings?: PermissionSettings,
 ): Promise<Actor> {
   settings ??= await loadPermissionSettings(db, workspaceId);
-  const groupIds =
-    settings.taskVisibility === "BY_GROUP"
-      ? await loadGroupIds(db, workspaceId, userId)
-      : new Set<string>();
+  // Groups decide only managers' and members' tasks (owners and admins see every task).
+  const needsGroups =
+    settings.taskVisibility === "BY_GROUP" && (role === "manager" || role === "member");
   if (role !== "manager") {
+    const groupIds = needsGroups ? await loadGroupIds(db, workspaceId, userId) : new Set<string>();
     return {
       userId,
       role,
@@ -118,7 +118,7 @@ export async function loadActor(
       settings,
     };
   }
-  const [direct, viaGroups, projects] = await Promise.all([
+  const [direct, viaGroups, projects, groupIds] = await Promise.all([
     db
       .select({ userId: managedUser.userId })
       .from(managedUser)
@@ -139,6 +139,7 @@ export async function loadActor(
           eq(projectMember.isManager, true),
         ),
       ),
+    needsGroups ? loadGroupIds(db, workspaceId, userId) : Promise.resolve(new Set<string>()),
   ]);
   const managedUserIds = new Set([...direct, ...viaGroups].map((r) => r.userId));
   managedUserIds.delete(userId);

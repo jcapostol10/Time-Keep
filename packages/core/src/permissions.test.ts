@@ -272,18 +272,58 @@ describe("tasks by group", () => {
 
   type Case = [title: string, actor: Actor, resource: Resource, allowed: boolean];
   const CASES: Case[] = [
-    ["a member on a task of their group", actor("member", byGroup), taskOn(OTHER_PROJECT, [MY_GROUP]), true],
-    ["a member in two groups on a task of the second", inTwoGroups("member"), taskOn(OTHER_PROJECT, ["g-two"]), true],
-    ["a member on a task of another group", actor("member", byGroup), taskOn(OTHER_PROJECT, [OTHER_GROUP]), false],
+    [
+      "a member on a task of their group",
+      actor("member", byGroup),
+      taskOn(OTHER_PROJECT, [MY_GROUP]),
+      true,
+    ],
+    [
+      "a member in two groups on a task of the second",
+      inTwoGroups("member"),
+      taskOn(OTHER_PROJECT, ["g-two"]),
+      true,
+    ],
+    [
+      "a member on a task of another group",
+      actor("member", byGroup),
+      taskOn(OTHER_PROJECT, [OTHER_GROUP]),
+      false,
+    ],
     ["a member who left the group", inNoGroup("member"), taskOn(OTHER_PROJECT, [MY_GROUP]), false],
     ["a member on a task with no group", actor("member", byGroup), taskOn(OTHER_PROJECT), false],
-    ["a manager on a managed project's task of another group", actor("manager", byGroup), taskOn(MANAGED_PROJECT, [OTHER_GROUP]), true],
-    ["a manager on another project's task of another group", actor("manager", byGroup), taskOn(OTHER_PROJECT, [OTHER_GROUP]), false],
-    ["a manager on another project's task of their own group", actor("manager", byGroup), taskOn(OTHER_PROJECT, [MY_GROUP]), true],
-    ["a manager on a managed project's task with no group", actor("manager", byGroup), taskOn(MANAGED_PROJECT), true],
+    [
+      "a manager on a managed project's task of another group",
+      actor("manager", byGroup),
+      taskOn(MANAGED_PROJECT, [OTHER_GROUP]),
+      true,
+    ],
+    [
+      "a manager on another project's task of another group",
+      actor("manager", byGroup),
+      taskOn(OTHER_PROJECT, [OTHER_GROUP]),
+      false,
+    ],
+    [
+      "a manager on another project's task of their own group",
+      actor("manager", byGroup),
+      taskOn(OTHER_PROJECT, [MY_GROUP]),
+      true,
+    ],
+    [
+      "a manager on a managed project's task with no group",
+      actor("manager", byGroup),
+      taskOn(MANAGED_PROJECT),
+      true,
+    ],
     ["an owner on a task with no group", actor("owner", byGroup), taskOn(OTHER_PROJECT), true],
     ["an admin on a task with no group", actor("admin", byGroup), taskOn(OTHER_PROJECT), true],
-    ["a member in no group with everyone mode", inNoGroup("member"), { ...taskOn(OTHER_PROJECT, [OTHER_GROUP]) }, false],
+    [
+      "a member in no group at all",
+      inNoGroup("member"),
+      taskOn(OTHER_PROJECT, [OTHER_GROUP]),
+      false,
+    ],
   ];
 
   it.each(CASES)("%s", (_title, who, resource, allowed) => {

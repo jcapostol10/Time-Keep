@@ -171,7 +171,9 @@ export function parseImportRows(
       const endTime = parseTimeOfDay(endText);
       if (!endTime) return fail("invalid end time");
       end = zonedDateTimeToInstant({ date, ...endTime }, options.timezone);
-      if (end.getTime() <= start.getTime()) end = addDaysInZone(end, 1, options.timezone);
+      // An end equal to the start is a slip, not a 24-hour entry.
+      if (end.getTime() === start.getTime()) return fail("the end time equals the start time");
+      if (end.getTime() < start.getTime()) end = addDaysInZone(end, 1, options.timezone);
     } else if (durationText) {
       const seconds = parseDuration(durationText);
       if (!seconds || seconds <= 0) return fail("invalid duration");

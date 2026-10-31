@@ -40,6 +40,8 @@ export function AuditFilter() {
             <Checkbox
               id={`${id}-${c}`}
               checked={chosen.has(c)}
+              // One criterion stays chosen: an empty list would match every entry.
+              disabled={chosen.has(c) && chosen.size === 1}
               onCheckedChange={(on) => toggle(c, on === true)}
             />
             <Label htmlFor={`${id}-${c}`} className="font-normal">

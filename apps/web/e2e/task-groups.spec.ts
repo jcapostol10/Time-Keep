@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { waitForApp } from "./helpers/app";
 import { openCalendar } from "./helpers/calendar";
-import { addTaskViaUi, createProjectViaUi, projectRow } from "./helpers/catalog";
+import { addTaskViaUi, createProjectViaUi, projectRow, rowAction } from "./helpers/catalog";
 import { openSettings } from "./helpers/settings";
 import { addTeammate, memberAction, openTeam } from "./helpers/team";
 import {
@@ -110,6 +110,14 @@ test.describe("tasks by group", () => {
     await openTasksTab(page, slug, "Web");
     await expect(page.getByRole("status")).toContainText("3 active tasks have no group.");
     await expect(page.getByText("No group", { exact: true })).toHaveCount(3);
+
+    // A task with no group can still be renamed without picking one.
+    await rowAction(page, page.getByRole("row", { name: /^Select Admin/ }), "Rename");
+    const rename = page.getByRole("dialog", { name: "Rename task" });
+    await rename.getByLabel("Name").fill("Admin work");
+    await rename.getByRole("button", { name: "Save changes" }).click();
+    await expect(rename).toBeHidden();
+    await expect(page.getByRole("row", { name: /^Select Admin work/ })).toBeVisible();
 
     await page.getByRole("checkbox", { name: "Select Design" }).check();
     await page.getByRole("checkbox", { name: "Select Dev" }).check();

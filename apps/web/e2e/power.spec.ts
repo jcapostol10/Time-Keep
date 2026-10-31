@@ -209,6 +209,12 @@ test.describe("power features", () => {
     await expect(dialog).toBeHidden();
     await expect(detailedRow(page, "Lost")).toHaveCount(0);
     await expect(detailedRow(page, "Long")).toBeVisible();
+
+    // At least one criterion stays chosen: an empty list would show every entry.
+    await page.getByRole("button", { name: /^Audit: \d+ criteria$/ }).click();
+    await page.getByRole("checkbox", { name: "Without project" }).uncheck();
+    await expect(page.getByRole("checkbox", { name: "Longer than" })).toBeChecked();
+    await expect(page.getByRole("checkbox", { name: "Longer than" })).toBeDisabled();
   });
 
   test("the tracker fits a 375px screen with favourites and the person picker", async ({

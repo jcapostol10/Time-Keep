@@ -21,6 +21,7 @@ import type { AuthSession } from "./auth";
 import { getSession } from "./session";
 
 import { WorkspaceAccessError } from "./access-error";
+import { CatalogError } from "./catalog/errors";
 
 export { WorkspaceAccessError };
 
@@ -136,6 +137,11 @@ export function routeErrorResponse(error: unknown, scope: string): Response {
   if (access) return access;
   if (error instanceof BadRequestError) {
     return Response.json({ error: error.message }, { status: 400 });
+  }
+  // A catalog service's refusal is the caller's: an unknown id is a 404, a refused change a 400.
+  if (error instanceof CatalogError) {
+    const status = error.code === "NOT_FOUND" ? 404 : error.code === "CONFLICT" ? 409 : 400;
+    return Response.json({ error: error.message }, { status });
   }
   console.error(`[${scope}] request failed`, error);
   return Response.json({ error: "Something went wrong." }, { status: 500 });

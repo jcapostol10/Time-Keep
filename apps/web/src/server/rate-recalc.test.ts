@@ -111,6 +111,45 @@ describe("the apply-to-past-entries job", () => {
     expect(batches).toBe(3);
   });
 
+  it("does not skip entries when the cursor's entry is moved later between batches", async () => {
+    await entries();
+    await addRate(5000, new Date(0));
+    const { jobId } = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0));
+    await runRateRecalcJob(db, jobId, {
+      batchSize: 5,
+      afterBatch: async (done) => {
+        if (done !== 1) return;
+        // The first batch's last entry (day 5) is edited to start on day 10.
+        const [job] = await db.select().from(rateRecalcJob).where(eq(rateRecalcJob.id, jobId));
+        const moved = new Date(BASE.getTime() + 9.5 * 24 * H);
+        await db
+          .update(timeEntry)
+          .set({ start: moved, end: new Date(moved.getTime() + H) })
+          .where(eq(timeEntry.id, job!.cursorId!));
+      },
+    });
+    expect((await amounts()).filter((a) => a === null)).toEqual([]);
+  });
+
+  it("counts a job's total from the date a request merged in while it was being claimed", async () => {
+    await entries();
+    await addRate(5000, new Date(0));
+    const late = new Date(BASE.getTime() + 8 * 24 * H);
+    const { jobId } = await requestRateRecalc(db, me.workspaceId, me.userId, late);
+    await runRateRecalcJob(db, jobId, {
+      batchSize: 50,
+      // Between the claim's first read and its lock, a request lowers the date to the start.
+      beforeClaimLock: async () => {
+        await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0));
+      },
+    });
+    expect(await latestRateRecalc(db, me.workspaceId)).toMatchObject({
+      status: "done",
+      processed: 12,
+      total: 12,
+    });
+  });
+
   it("only touches entries from the job's date", async () => {
     await entries();
     await addRate(5000, new Date(0));

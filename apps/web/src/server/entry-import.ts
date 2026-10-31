@@ -17,7 +17,7 @@ import {
   requiredFieldMessage,
   tagInputSchema,
 } from "@timekeep/core";
-import { type Database, eq, workspaceSettings } from "@timekeep/db";
+import { and, type Database, eq, or, project, sql, workspaceSettings } from "@timekeep/db";
 
 import type { ImportCreates, ImportPlan, ImportRowResult } from "@/lib/import-types";
 import type { PickerProject } from "@/lib/tracker-types";
@@ -28,7 +28,7 @@ import { createClient, listClientOptions } from "./catalog/clients";
 import { createProject, listPickerProjects } from "./catalog/projects";
 import { createTag, listTags } from "./catalog/tags";
 import { createTask, visibleTasksFor } from "./catalog/tasks";
-import type { Viewer } from "./catalog/viewer";
+import { type Viewer, visibleProjectFilter } from "./catalog/viewer";
 import { listMembers } from "./queries/team";
 import { createManualEntries, type EntryScope } from "./time-entries";
 
@@ -141,6 +141,28 @@ class Lookup {
     return names;
   }
 
+  /**
+   * Why a name the person's picker does not list cannot take time, when a
+   * project of that name exists for them but is archived or a template; null
+   * when no such project exists (then it is unknown, or one to create).
+   */
+  async unusableProject(scope: EntryScope, name: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ archived: project.archived, isTemplate: project.isTemplate })
+      .from(project)
+      .where(
+        and(
+          eq(project.workspaceId, this.workspaceId),
+          sql`lower(${project.name}) = ${lower(name)}`,
+          or(eq(project.archived, true), eq(project.isTemplate, true)),
+          visibleProjectFilter(scope),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    return row.isTemplate ? `project "${name}" is a template` : `project "${name}" is archived`;
+  }
+
   /** A project by name, preferring the given client's. */
   project(list: PickerProject[], name: string, client: string | null): PickerProject | undefined {
     const matches = list.filter((p) => lower(p.name) === lower(name));
@@ -164,7 +186,9 @@ async function resolve(
   const table = parseCsv(text);
   const data = table.slice(1);
   if (data.length > MAX_IMPORT_ROWS) {
-    throw new ImportError(`The file has more than ${MAX_IMPORT_ROWS.toLocaleString("en-US")} rows.`);
+    throw new ImportError(
+      `The file has more than ${MAX_IMPORT_ROWS.toLocaleString("en-US")} rows.`,
+    );
   }
   const parsed = parseImportRows(data, options.mapping, options);
 
@@ -219,7 +243,14 @@ async function resolve(
     // Whose time: the file's email, else the importer's own.
     const member = row.email ? byEmail.get(row.email) : me;
     if (!member) {
-      fail("", `unknown email ${row.email}`);
+      // A member is told the same as for someone they may not add time for, so the
+      // check does not reveal who is in the workspace.
+      fail(
+        "",
+        viewer.role === "member"
+          ? `you cannot add time for ${row.email}`
+          : `unknown email ${row.email}`,
+      );
       continue;
     }
     let scope = scopes.get(member.userId);
@@ -237,9 +268,7 @@ async function resolve(
       continue;
     }
     const actor = scope.actedBy ?? scope.actor;
-    if (
-      !can(actor, "entry.writeTimes", { kind: "entry", userId: scope.userId, projectId: null })
-    ) {
+    if (!can(actor, "entry.writeTimes", { kind: "entry", userId: scope.userId, projectId: null })) {
       fail(member.name, "force timer is on: time is added with the timer");
       continue;
     }
@@ -252,7 +281,10 @@ async function resolve(
         creates.clients.add(row.client);
         clientName = row.client;
       } else {
-        fail(member.name, mayCreate.client ? `unknown client "${row.client}"` : "you cannot create clients here");
+        fail(
+          member.name,
+          mayCreate.client ? `unknown client "${row.client}"` : "you cannot create clients here",
+        );
         continue;
       }
     }
@@ -266,11 +298,21 @@ async function resolve(
         projectHasTasks =
           existing.tasks.length > 0 ||
           (await lookup.hiddenTaskNames(scope, existing.id)).length > 0;
+      } else if (await lookup.unusableProject(scope, row.project)) {
+        // Named but archived or a template: say so rather than plan a create the
+        // commit cannot make (the name is taken).
+        fail(member.name, (await lookup.unusableProject(scope, row.project))!);
+        continue;
       } else if (options.createMissing && mayCreate.project) {
         creates.projects.add(clientName ? `${row.project} (${clientName})` : row.project);
         projectName = row.project;
       } else {
-        fail(member.name, mayCreate.project ? `unknown project "${row.project}"` : "you cannot create projects here");
+        fail(
+          member.name,
+          mayCreate.project
+            ? `unknown project "${row.project}"`
+            : "you cannot create projects here",
+        );
         continue;
       }
     }
@@ -481,7 +523,9 @@ export async function commitEntryImport(
       const list = await lookup.projectsFor(scope);
       const inputs = rows.map((r) => {
         const project = r.project ? lookup.project(list, r.project, r.client) : undefined;
-        const task = r.task ? project?.tasks.find((t) => lower(t.name) === lower(r.task!)) : undefined;
+        const task = r.task
+          ? project?.tasks.find((t) => lower(t.name) === lower(r.task!))
+          : undefined;
         return {
           description: r.row.description,
           projectId: project?.id ?? null,

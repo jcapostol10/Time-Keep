@@ -48,7 +48,7 @@ import { fetchJson } from "@/lib/fetch-json";
 import type { ImportPlan } from "@/lib/import-types";
 
 import { useTracker } from "./tracker-provider";
-import { useTrackerCache } from "./use-tracker-cache";
+import { useTrackerCache, useTrackerOptions } from "./use-tracker-cache";
 
 const FIELD_LABELS: Record<ImportColumn, string> = {
   date: "Date",
@@ -92,6 +92,10 @@ async function post<T>(
 export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { slug, viewer, notifyEntriesChanged, rules } = useTracker();
   const byGroup = rules.taskVisibility === "BY_GROUP";
+  // Only someone who may add a task somewhere (owners, admins, a project's managers)
+  // is asked which groups new tasks get.
+  const { data: trackerOptions } = useTrackerOptions(slug);
+  const mayCreateTasks = trackerOptions?.projects.some((p) => p.canCreateTask) ?? false;
   const cache = useTrackerCache(slug);
   const id = useId();
   const [file, setFile] = useState<File | null>(null);
@@ -105,7 +109,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const groupsQuery = useQuery({
     queryKey: ["groups", slug],
     queryFn: () => fetchJson<{ groups: { id: string; name: string }[] }>(`/api/w/${slug}/groups`),
-    enabled: open && byGroup,
+    enabled: open && byGroup && mayCreateTasks,
   });
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -242,7 +246,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                   Create missing projects, clients, tasks and tags
                 </Label>
               </div>
-              {byGroup && createMissing ? (
+              {byGroup && createMissing && mayCreateTasks ? (
                 <fieldset className="space-y-2">
                   <legend className="text-sm font-medium">Groups for new tasks</legend>
                   {groupsQuery.data?.groups.length ? (

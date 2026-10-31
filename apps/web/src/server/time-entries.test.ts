@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { type EntryDetails, MAX_ENTRY_SECONDS } from "@timekeep/core";
-import { and, count, eq, isNull, project, projectMember, tag, task, timeEntry } from "@timekeep/db";
+import { and, count, eq, isNull, project, projectMember, sql, tag, task, timeEntry } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -1005,6 +1005,19 @@ describe("time entries service", () => {
       ]);
       expect(await reassignProjectEntries(db, scope.workspaceId, app.id, null)).toBe(3);
     });
+
+    it("reassignProjectEntries re-rates more entries than a statement can bind (over 65,535)", async () => {
+      const web = await createProject(db, scope, { name: "Web" });
+      const app = await createProject(db, scope, { name: "App" });
+      await db.execute(sql`
+        insert into time_entry (id, workspace_id, user_id, project_id, billable, start, "end", duration_seconds)
+        select 'bulk-' || g, ${scope.workspaceId}, ${scope.userId}, ${web.id}, true,
+               timestamptz '2026-03-02 01:00+00' + make_interval(secs => g),
+               timestamptz '2026-03-02 02:00+00' + make_interval(secs => g), 3600
+        from generate_series(1, 66000) g`);
+      expect(await reassignProjectEntries(db, scope.workspaceId, web.id, app.id)).toBe(66000);
+      expect(await countProjectEntries(db, scope.workspaceId, app.id)).toBe(66000);
+    }, 120_000);
 
     it("softDeleteProjectEntries hides them", async () => {
       const web = await createProject(db, scope, { name: "Web" });

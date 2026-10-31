@@ -44,6 +44,8 @@ export interface RunOptions {
   now?: Date;
   /** Test hook: called after each committed batch with the number of batches done. */
   afterBatch?: (batchesDone: number) => void | Promise<void>;
+  /** Test hook: called in a claim after the job's workspace is known, before its lock. */
+  beforeClaimLock?: () => void | Promise<void>;
 }
 
 const lockWorkspace = (workspaceId: string) =>
@@ -129,12 +131,22 @@ export async function refreshRateRecalc(
   return jobs[0]?.id ?? null;
 }
 
-/** Takes a queued job if no other job of its workspace is running. */
-async function claim(db: Database, jobId: string, now: Date) {
+/**
+ * Takes a queued job if no other job of its workspace is running. The job is
+ * read again after the workspace lock: a request merged into it meanwhile may
+ * have lowered its date, and the total must count from that one.
+ */
+async function claim(db: Database, jobId: string, now: Date, options: RunOptions) {
   return db.transaction(async (tx) => {
+    const [found] = await tx
+      .select({ workspaceId: rateRecalcJob.workspaceId })
+      .from(rateRecalcJob)
+      .where(eq(rateRecalcJob.id, jobId));
+    if (!found) return null;
+    await options.beforeClaimLock?.();
+    await tx.execute(lockWorkspace(found.workspaceId));
     const [job] = await tx.select().from(rateRecalcJob).where(eq(rateRecalcJob.id, jobId));
     if (!job || job.status !== "queued") return null;
-    await tx.execute(lockWorkspace(job.workspaceId));
     const [running] = await tx
       .select({ id: rateRecalcJob.id })
       .from(rateRecalcJob)
@@ -180,23 +192,28 @@ export async function runRateRecalcJob(
   await expireRateRecalcJobs(db, options.now ?? new Date());
   let nextId: string | null = jobId;
   while (nextId) {
-    const job = await claim(db, nextId, options.now ?? new Date());
+    const job = await claim(db, nextId, options.now ?? new Date(), options);
     if (!job) return;
     let batches = 0;
+    // The cursor keeps the last entry's start as Postgres text (microseconds; a
+    // JavaScript Date holds milliseconds), as the job row stored it, not the entry's
+    // live start: an entry edited later between batches must not move the cursor.
+    const [stored] = await db
+      .select({ start: sql<string | null>`${rateRecalcJob.cursorStart}::text` })
+      .from(rateRecalcJob)
+      .where(eq(rateRecalcJob.id, job.id));
     let cursor =
-      job.cursorStart && job.cursorId ? { start: job.cursorStart, id: job.cursorId } : null;
+      stored?.start && job.cursorId ? { start: stored.start, id: job.cursorId } : null;
     try {
       for (;;) {
-        const rows: { id: string; start: Date }[] = await db
-          .select({ id: timeEntry.id, start: timeEntry.start })
+        const rows: { id: string; start: string }[] = await db
+          .select({ id: timeEntry.id, start: sql<string>`${timeEntry.start}::text` })
           .from(timeEntry)
           .where(
             and(
               entriesFrom(job.workspaceId, job.from),
               cursor
-                ? // The cursor entry's own start, read in SQL: a JavaScript Date keeps
-                  // milliseconds only, and the column holds microseconds.
-                  sql`(${timeEntry.start}, ${timeEntry.id}) > (coalesce((select c."start" from "time_entry" c where c."id" = ${cursor.id}), ${cursor.start}), ${cursor.id})`
+                ? sql`(${timeEntry.start}, ${timeEntry.id}) > (${cursor.start}::timestamptz, ${cursor.id})`
                 : undefined,
             ),
           )
@@ -217,7 +234,7 @@ export async function runRateRecalcJob(
             .update(rateRecalcJob)
             .set({
               processed: sql`${rateRecalcJob.processed} + ${rows.length}`,
-              cursorStart: last.start,
+              cursorStart: sql`${last.start}::timestamptz`,
               cursorId: last.id,
             })
             .where(eq(rateRecalcJob.id, job.id));

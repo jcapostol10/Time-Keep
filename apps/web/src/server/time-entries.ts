@@ -32,6 +32,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  membership,
   ne,
   type Project,
   project,
@@ -57,6 +58,7 @@ import type {
   TimeEntryDTO,
 } from "@/lib/tracker-types";
 
+import { WorkspaceAccessError } from "./access-error";
 import { CatalogError } from "./catalog/errors";
 import { visibleTasksFor } from "./catalog/tasks";
 import type { Viewer } from "./catalog/viewer";
@@ -72,6 +74,15 @@ import { assertCan, projectResource, scopeForUser } from "./authz";
  * and edit their own entries until Phase 4. The role decides which projects
  * the user may put time on (private projects need membership).
  */
+
+/**
+ * The per-person timer lock: `startTimer` holds it while it stops the running
+ * entry and starts the next, and deactivation and removal hold it while they
+ * change the membership (invariant 4).
+ */
+export function timerLock(workspaceId: string, userId: string) {
+  return sql`SELECT pg_advisory_xact_lock(hashtext(${`${workspaceId}:${userId}`}))`;
+}
 
 /**
  * The person whose entries are read and written, with their role and scope.
@@ -251,7 +262,7 @@ async function assertDetailsUsable(
   // Decision 11: a task is taken through one of its groups, judged for the
   // entry's owner (`scope.actor`, never `actedBy`: rule 11). Only a task being
   // assigned is checked; an entry that keeps its task keeps it (rule 10).
-  if (taskRow && taskId) {
+  if (taskRow && taskId && scope.actor.settings.taskVisibility === "BY_GROUP") {
     const groups = await db
       .select({ groupId: taskGroup.groupId })
       .from(taskGroup)
@@ -505,9 +516,16 @@ export async function startTimer(
   now: Date = new Date(),
 ): Promise<{ started: TimeEntryDTO; stopped: TimeEntryDTO | null }> {
   return db.transaction(async (tx) => {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${`${scope.workspaceId}:${scope.userId}`}))`,
-    );
+    await tx.execute(timerLock(scope.workspaceId, scope.userId));
+    // Deactivation and removal change the membership under the same lock: a start let in
+    // before them must not leave a running timer behind.
+    const [member] = await tx
+      .select({ status: membership.status })
+      .from(membership)
+      .where(
+        and(eq(membership.workspaceId, scope.workspaceId), eq(membership.userId, scope.userId)),
+      );
+    if (member?.status !== "ACTIVE") throw new WorkspaceAccessError(404, "Not found");
     const details = await breakAware(tx, scope, input);
     await assertDetailsUsable(tx, scope, details);
 
@@ -929,7 +947,6 @@ export async function splitEntry(
   });
 }
 
-
 /**
  * "Continue": start a new timer with the entry's description, project, task,
  * tags and billable flag. The timer is `startFor`'s (the caller's own, decision
@@ -1159,14 +1176,11 @@ export async function reassignProjectEntries(
     .where(projectEntriesWhere(workspaceId, fromProjectId))
     .returning({ id: timeEntry.id });
   // A new project decides a new rate.
+  // The ids go as one array parameter: a project can hold more entries than a
+  // statement can bind parameters (65,535).
   if (rows.length > 0) {
     await db.execute(
-      rateEntriesSql(
-        inArray(
-          timeEntry.id,
-          rows.map((r) => r.id),
-        ),
-      ),
+      rateEntriesSql(sql`${timeEntry.id} = any(${sql.param(rows.map((r) => r.id))}::text[])`),
     );
   }
   return rows.length;
