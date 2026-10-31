@@ -18,12 +18,14 @@ import {
   truncateAll,
 } from "../../test/db";
 import {
+  checkApprovalSettings,
   listApprovals,
   myPeriods,
   periodView,
   reopenRequest,
   reviewRequests,
   submitPeriod,
+  withdrawPendingRequests,
   withdrawRequest,
 } from "./approvals";
 import { loadViewer } from "./authz";
@@ -408,5 +410,51 @@ describe("a submit racing an edit", () => {
     } finally {
       await other.close();
     }
+  });
+});
+
+describe("approval settings", () => {
+  it("refuses a new period type while a request is pending", async () => {
+    await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
+    const current = { approvalEnabled: true, approvalPeriod: "WEEKLY" };
+    expect(
+      await checkApprovalSettings(
+        db,
+        wsId,
+        current,
+        { approvalEnabled: true, approvalPeriod: "MONTHLY" },
+        false,
+      ),
+    ).toEqual({ field: "approvalPeriod", message: "Approve or reject the pending periods first." });
+    expect(await checkApprovalSettings(db, wsId, current, current, false)).toBeNull();
+  });
+
+  it("asks before turning approval off, then withdraws the pending periods and keeps approved ones", async () => {
+    const bobs = await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
+    const carols = await submitPeriod(db, await viewer("carol"), LAST_WEEK, NOW);
+    await reviewRequests(db, await viewer("ann"), { ids: [carols.id], decision: "APPROVE" }, NOW);
+    const current = { approvalEnabled: true, approvalPeriod: "WEEKLY" };
+    const off = { approvalEnabled: false, approvalPeriod: "WEEKLY" };
+    expect(await checkApprovalSettings(db, wsId, current, off, false)).toEqual({
+      field: "confirmApprovalOff",
+      message: "1 pending period will be withdrawn.",
+    });
+    expect(await checkApprovalSettings(db, wsId, current, off, true)).toBeNull();
+
+    await db.transaction((tx) => withdrawPendingRequests(tx, wsId, ids.olga!));
+    await setRules({ approvalEnabled: false });
+    const rows = await db.select().from(approvalRequest);
+    expect(rows.map((r) => [r.id, r.status])).toEqual([[carols.id, "APPROVED"]]);
+    const [auto] = await events("AUTO_WITHDRAW");
+    expect(auto).toMatchObject({ userId: ids.bob, actorId: ids.olga, requestId: null });
+    expect(bobs.id).toBeDefined();
+
+    // Approved time stays read-only after approval is off.
+    const [carolsEntry] = await db.query.timeEntry.findMany({
+      where: (t, { eq: e }) => e(t.userId, ids.carol!),
+    });
+    await expect(
+      updateEntry(db, await viewer("carol"), carolsEntry!.id, { description: "Later" }, NOW),
+    ).rejects.toThrow("This period is approved.");
   });
 });

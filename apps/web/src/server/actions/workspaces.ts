@@ -3,6 +3,7 @@
 import {
   createWorkspaceSchema,
   workspaceNameSchema,
+  lockSettingsCheck,
   workspaceSettingsSchema,
 } from "@timekeep/core";
 import { eq, getDb, workspace, workspaceSettings } from "@timekeep/db";
@@ -17,6 +18,7 @@ import { getAuth } from "@/server/auth";
 import { requireSession } from "@/server/session";
 import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace-access";
 import { createWorkspace } from "@/server/workspaces";
+import { checkApprovalSettings, withdrawPendingRequests } from "@/server/approvals";
 import { authorize } from "@/server/authz";
 import { countTasksWithoutGroup } from "@/server/catalog/tasks";
 import { relabelWorkspaceCurrency, workspaceHasRates } from "@/server/rates";
@@ -53,13 +55,17 @@ export async function switchWorkspaceAction(slug: string): Promise<never> {
   redirect(workspaceRoutes.tracker(slug));
 }
 
-const updateSettingsSchema = workspaceSettingsSchema.extend({
-  name: workspaceNameSchema,
-  /** The person saw that a new currency relabels rates without converting them. */
-  confirmCurrencyChange: z.boolean().optional(),
-  /** The person saw how many active tasks have no group before switching to "By group". */
-  confirmTaskVisibility: z.boolean().optional(),
-});
+const updateSettingsSchema = workspaceSettingsSchema
+  .extend({
+    name: workspaceNameSchema,
+    /** The person saw that a new currency relabels rates without converting them. */
+    confirmCurrencyChange: z.boolean().optional(),
+    /** The person saw how many active tasks have no group before switching to "By group". */
+    confirmTaskVisibility: z.boolean().optional(),
+    /** The person saw how many pending periods turning approval off withdraws (Phase 5a). */
+    confirmApprovalOff: z.boolean().optional(),
+  })
+  .superRefine(lockSettingsCheck);
 export type UpdateWorkspaceSettingsInput = z.infer<typeof updateSettingsSchema>;
 
 export async function updateWorkspaceSettingsAction(
@@ -71,7 +77,8 @@ export async function updateWorkspaceSettingsAction(
     await authorize(ctx, "workspace.update");
     const parsed = updateSettingsSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const { name, confirmCurrencyChange, confirmTaskVisibility, ...settings } = parsed.data;
+    const { name, confirmCurrencyChange, confirmTaskVisibility, confirmApprovalOff, ...settings } =
+      parsed.data;
 
     const db = getDb();
     const newCurrency = settings.currency !== ctx.settings.currency;
@@ -90,7 +97,21 @@ export async function updateWorkspaceSettingsAction(
           : `${n} active ${n === 1 ? "task has" : "tasks have"} no group yet. Members will not see ${n === 1 ? "it" : "them"} until a group is assigned.`;
       return fail(message, { confirmTaskVisibility: [message] });
     }
+    // Phase 5a, decision 2: no new period type while periods are pending; turning
+    // approval off asks first, then withdraws them.
+    const approvalProblem = await checkApprovalSettings(
+      db,
+      ctx.workspace.id,
+      ctx.settings,
+      settings,
+      confirmApprovalOff === true,
+    );
+    if (approvalProblem) {
+      return fail(approvalProblem.message, { [approvalProblem.field]: [approvalProblem.message] });
+    }
+    const turningOff = ctx.settings.approvalEnabled && !settings.approvalEnabled;
     await db.transaction(async (tx) => {
+      if (turningOff) await withdrawPendingRequests(tx, ctx.workspace.id, ctx.user.id);
       await tx.update(workspace).set({ name }).where(eq(workspace.id, ctx.workspace.id));
       await tx
         .update(workspaceSettings)

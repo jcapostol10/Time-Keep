@@ -857,3 +857,64 @@ export async function myPeriods(
   }
   return out;
 }
+
+// --- Settings ----------------------------------------------------------------------
+
+async function pendingCount(db: Executor, workspaceId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(approvalRequest)
+    .where(
+      and(eq(approvalRequest.workspaceId, workspaceId), eq(approvalRequest.status, "PENDING")),
+    );
+  return row?.n ?? 0;
+}
+
+/**
+ * What the settings change needs first (decision 2): a new period type waits
+ * until nothing is pending; turning approval off asks before it withdraws the
+ * pending periods. Null when the change may go ahead.
+ */
+export async function checkApprovalSettings(
+  db: Executor,
+  workspaceId: string,
+  current: { approvalEnabled: boolean; approvalPeriod: string },
+  next: { approvalEnabled: boolean; approvalPeriod: string },
+  confirmedOff: boolean,
+): Promise<{ field: "approvalPeriod" | "confirmApprovalOff"; message: string } | null> {
+  const periodChanged = next.approvalPeriod !== current.approvalPeriod;
+  const turningOff = current.approvalEnabled && !next.approvalEnabled;
+  if (!periodChanged && !turningOff) return null;
+  const n = await pendingCount(db, workspaceId);
+  if (n === 0) return null;
+  if (turningOff) {
+    if (confirmedOff) return null;
+    return {
+      field: "confirmApprovalOff",
+      message: `${n} pending ${n === 1 ? "period" : "periods"} will be withdrawn.`,
+    };
+  }
+  return { field: "approvalPeriod", message: "Approve or reject the pending periods first." };
+}
+
+/** Turning approval off: every pending request is withdrawn, logged as AUTO_WITHDRAW. */
+export async function withdrawPendingRequests(
+  tx: Executor,
+  workspaceId: string,
+  actorId: string,
+): Promise<number> {
+  const removed = await tx
+    .delete(approvalRequest)
+    .where(and(eq(approvalRequest.workspaceId, workspaceId), eq(approvalRequest.status, "PENDING")))
+    .returning({ userId: approvalRequest.userId });
+  for (const r of removed) {
+    await logEvent(tx, {
+      workspaceId,
+      requestId: null,
+      userId: r.userId,
+      actorId,
+      action: "AUTO_WITHDRAW",
+    });
+  }
+  return removed.length;
+}
