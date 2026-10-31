@@ -9,6 +9,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## App
 
+- [ ] `time-entries.test.ts` › "reassignProjectEntries moves entries and clears their task" failed once in the 5a gate (the moved entry's `updated_at` read 156 ms earlier than its creation's) and passed on two reruns; both stamps come from Postgres `now()`, so look at the Docker clock or the test's ordering.
 - [ ] Phase 5a: auth (verification, reset, magic link) and invitation emails are still sent inside the request; move them to the outbox (`enqueueEmail` + `drainSoon`) so a slow SMTP never holds a response and a failure retries.
 - [ ] Phase 5a: an empty timesheet cell in a locked day or a submitted period stays typeable (the server refuses the write with its message); mark those days read-only from the period list and the lock boundary.
 - [ ] Phase 5a: a locked row's Duplicate, Split and Delete stay enabled in its menu (the server refuses them); disable them with the reason.

@@ -502,6 +502,14 @@ Measured on the perf tenant (`pnpm db:seed:perf` now adds three groups over peop
 - The member's picker with tasks by group (`listPickerProjects`, 12 projects, 20 visible tasks: one `visibleTasksFor` read with the group `EXISTS` per task): median 11 ms, against a 200 ms budget.
 - "Apply to past entries" over every entry: 117 s (the earlier runs: 76 s and 91 s; same code path, a loaded machine), inside the 300 s budget.
 
+## Approvals at scale (Phase 5a, 2026-11-01)
+
+Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf` after migration 0013, with no approval requests in the tenant:
+
+- "Apply to past entries" over every entry: 115.4 s for 1,000,000 entries (the rated set now excludes entries in approved periods through an `EXISTS` on `approval_request`; earlier runs 76–117 s), inside the 300 s budget.
+- One-year Summary with amounts: owner median 435 ms, manager 206 ms, member 31 ms; rounded to 15 minutes, owner 456 ms. The report engine does not read approvals.
+- The write guard adds two indexed reads per entry write (the workspace's settings row and the person's covering requests, `approval_request_cover_idx`) and the person's advisory lock.
+
 ## Planned (later phases)
 
 Phase 5b: `time_off_policy`, `time_off_request`, `holiday`, targets. Phase 5c: `kiosk`, `kiosk_pin`. (Lock dates are `workspace_settings` columns, not a `lock_period` table.)
