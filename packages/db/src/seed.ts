@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   addDaysInZone,
+  addDaysToKey,
   computeDurationSeconds,
   localDateKey,
   localWeekday,
@@ -12,8 +13,10 @@ import {
   previousPeriod,
   slugify,
   uniqueSlug,
+  weekdayOfKey,
   zonedDateTimeToInstant,
 } from "@timekeep/core";
+import { datasetHolidays } from "@timekeep/core/holiday-import";
 import { hashPassword } from "better-auth/crypto";
 import { and, eq, inArray, like, sql } from "drizzle-orm";
 
@@ -26,6 +29,7 @@ import {
   approvalEvent,
   approvalRequest,
   client,
+  holiday,
   managedUser,
   membership,
   project,
@@ -34,10 +38,13 @@ import {
   rate,
   tag,
   task,
+  targetRule,
   taskGroup,
   timeEntry,
   favoriteEntry,
   timeEntryTag,
+  timeOffPolicy,
+  timeOffRequest,
   user,
   userGroup,
   userGroupMember,
@@ -189,6 +196,7 @@ export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}
     const catalog = await seedTrackerData(tx, demo.id, ids);
     await seedTeamAndRates(tx, demo.id, ids, catalog);
     await seedApprovals(tx, demo.id, ids);
+    await seedTimeOff(tx, demo.id, ids);
 
     return { workspaceSlug: demo.slug };
   });
@@ -270,6 +278,110 @@ async function seedApprovals(db: DbExecutor, workspaceId: string, ids: Map<strin
       createdAt: decidedAt,
     },
   ]);
+}
+
+/**
+ * Time off, holidays, capacity and targets (Phase 5b): two policies for
+ * everyone, the Philippines' public holidays this year and next (imported from
+ * the bundled dataset, as an admin would), member1's approved vacation day
+ * three weeks ago and a pending one next month, an inactive under-target rule,
+ * and member2 working Sunday to Thursday.
+ */
+async function seedTimeOff(db: DbExecutor, workspaceId: string, ids: Map<string, string>) {
+  const member1 = ids.get("member1@demo.test");
+  const member2 = ids.get("member2@demo.test");
+  const manager = ids.get("manager@demo.test");
+  if (!member1 || !member2 || !manager) throw new Error("seed: demo users missing");
+  const tz = DEMO_WORKSPACE.timezone;
+  const today = localDateKey(new Date(), tz);
+  const year = Number(today.slice(0, 4));
+
+  const holidayDates = new Set<string>();
+  for (const y of [year, year + 1]) {
+    const rows = datasetHolidays("PH", null, y, { includeOptional: false });
+    for (const r of rows) holidayDates.add(r.date);
+    await db.insert(holiday).values(
+      rows.map((r) => ({
+        id: randomUUID(),
+        workspaceId,
+        date: r.date,
+        name: r.name,
+        source: `imported: PH ${y}`,
+        country: "PH",
+        estimated: r.estimated,
+      })),
+    );
+  }
+
+  const vacation = randomUUID();
+  // Policies count from the start of the year, so balances do not depend on the seed's date.
+  const yearStart = zonedDateTimeToInstant({ date: `${year}-01-01`, hours: 0, minutes: 0 }, tz);
+  await db.insert(timeOffPolicy).values([
+    {
+      id: vacation,
+      workspaceId,
+      name: "Vacation leave",
+      unit: "DAYS",
+      accrual: "YEARLY",
+      allowanceCenti: 1500,
+      requiresApproval: true,
+      createdAt: yearStart,
+    },
+    {
+      id: randomUUID(),
+      workspaceId,
+      name: "Sick leave",
+      unit: "DAYS",
+      accrual: "YEARLY",
+      allowanceCenti: 1500,
+      requiresApproval: false,
+      createdAt: yearStart,
+    },
+  ]);
+
+  /** The first Monday-to-Friday on or after `from` that is not a holiday. */
+  const workday = (from: string) => {
+    let d = from;
+    while ([0, 6].includes(weekdayOfKey(d)) || holidayDates.has(d)) d = addDaysToKey(d, 1);
+    return d;
+  };
+  const approvedDay = workday(addDaysToKey(today, -21));
+  const pendingDay = workday(addDaysToKey(today, 30));
+  // Both inside this year, or the demo balance would not show them.
+  const requests = [
+    { day: approvedDay, status: "APPROVED" as const, note: "Family trip" },
+    { day: pendingDay, status: "PENDING" as const, note: "Dentist" },
+  ].filter((r) => r.day.startsWith(String(year)));
+  if (requests.length) {
+    await db.insert(timeOffRequest).values(
+      requests.map((r) => ({
+        id: randomUUID(),
+        workspaceId,
+        userId: member1,
+        policyId: vacation,
+        startDate: r.day,
+        endDate: r.day,
+        amountCenti: 100,
+        note: r.note,
+        status: r.status,
+        decidedBy: r.status === "APPROVED" ? manager : null,
+        decidedAt: r.status === "APPROVED" ? new Date() : null,
+      })),
+    );
+  }
+
+  await db.insert(targetRule).values({
+    id: randomUUID(),
+    workspaceId,
+    kind: "UNDER",
+    period: "DAY",
+    thresholdMinutes: 240,
+    active: false,
+  });
+  await db
+    .update(membership)
+    .set({ workingDays: [0, 1, 2, 3, 4] })
+    .where(and(eq(membership.workspaceId, workspaceId), eq(membership.userId, member2)));
 }
 
 /** Deterministic PRNG so every seed run produces the same demo entries. */
