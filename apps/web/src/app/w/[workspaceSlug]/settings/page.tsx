@@ -10,9 +10,12 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { RateCell } from "@/components/rates/rate-cell";
 import { RecalcBanner } from "@/components/rates/recalc-banner";
+import { TargetsCard } from "@/components/settings/targets-card";
 import { WorkspaceSettingsForm } from "@/components/settings/workspace-settings-form";
 import { viewerFor } from "@/server/authz";
 import { currentRate } from "@/server/rates";
+import { listTargetRules } from "@/server/targets";
+import { assigneeOptions } from "@/server/time-off/people";
 import { requireWorkspacePage } from "@/server/workspace-access";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -43,6 +46,13 @@ export default async function SettingsPage({ params }: PageProps<"/w/[workspaceS
   const workspaceRate = showRates
     ? await currentRate(getDb(), viewer, { level: "workspace" })
     : null;
+  const manageTargets = can(viewer.actor, "target.manage", { kind: "none" });
+  const [targets, options] = manageTargets
+    ? await Promise.all([
+        listTargetRules(getDb(), viewer),
+        assigneeOptions(getDb(), ctx.workspace.id),
+      ])
+    : [[], { people: [], groups: [] }];
 
   return (
     <>
@@ -73,6 +83,14 @@ export default async function SettingsPage({ params }: PageProps<"/w/[workspaceS
             current={workspaceRate?.amountMinor ?? null}
           />
         </section>
+      ) : null}
+      {manageTargets ? (
+        <TargetsCard
+          slug={workspaceSlug}
+          rules={targets}
+          people={options.people}
+          groups={options.groups}
+        />
       ) : null}
     </>
   );

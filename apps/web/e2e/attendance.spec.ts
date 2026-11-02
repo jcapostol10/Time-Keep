@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import type { Page } from "@playwright/test";
 
-import { zonedDateTimeToInstant } from "@timekeep/core";
+import { addDaysToKey, formatDateKey, zonedDateTimeToInstant } from "@timekeep/core";
 
 import { expect, test } from "./fixtures";
 import { openTimesheetWeek, runDailyJob } from "./helpers/approvals";
@@ -23,8 +23,25 @@ async function openTracker(page: Page, slug: string) {
   await expect(page.locator('section[aria-label="Timer"][data-hydrated="true"]')).toBeVisible();
 }
 
-async function openAttendance(page: Page, slug: string) {
-  await page.goto(`/w/${slug}/reports/attendance?preset=last-week`);
+/**
+ * The Attendance tab for last week, or for one day: e2e servers turn an export
+ * of more than five rows into a job, and a week of one person is nine rows.
+ */
+async function openAttendance(page: Page, slug: string, oneDay?: { date: string; tz: string }) {
+  const range = oneDay
+    ? new URLSearchParams({
+        preset: "custom",
+        from: zonedDateTimeToInstant(
+          { date: oneDay.date, hours: 0, minutes: 0 },
+          oneDay.tz,
+        ).toISOString(),
+        to: zonedDateTimeToInstant(
+          { date: addDaysToKey(oneDay.date, 1), hours: 0, minutes: 0 },
+          oneDay.tz,
+        ).toISOString(),
+      }).toString()
+    : "preset=last-week";
+  await page.goto(`/w/${slug}/reports/attendance?${range}`);
   await waitForApp(page);
   await expect(page.getByTestId("report-total")).toBeVisible();
 }
@@ -94,8 +111,10 @@ test.describe("attendance", { tag: "@nightly" }, () => {
       start: "08:00",
       duration: "9",
     });
-    await openAttendance(page, slug);
-    const day = personTable(page, name).getByRole("row").filter({ hasText: "9:00:00" });
+    await openAttendance(page, slug, { date: week.wednesday, tz: timezone });
+    const day = personTable(page, name)
+      .locator('tr[data-kind="day"]')
+      .filter({ hasText: formatDateKey(week.wednesday) });
     await expect(day).toContainText("1:00:00");
 
     await page.getByRole("button", { name: "Export" }).click();
@@ -132,7 +151,9 @@ test.describe("attendance", { tag: "@nightly" }, () => {
 
     await openAttendance(page, slug);
     const row = () =>
-      personTable(page, "Mia Member").getByRole("row").filter({ hasText: "6:00:00" });
+      personTable(page, "Mia Member")
+        .locator('tr[data-kind="day"]')
+        .filter({ hasText: formatDateKey(week.wednesday) });
     await expect(row()).toContainText("2:00:00");
 
     await openTeam(page, slug);
@@ -145,7 +166,7 @@ test.describe("attendance", { tag: "@nightly" }, () => {
 
     await openAttendance(page, slug);
     await expect(row()).not.toContainText("2:00:00");
-    await expect(row().getByRole("cell", { name: "Undertime" })).toHaveText("0:00:00");
+    await expect(row().locator('[data-col="undertime"]')).toHaveText("0:00:00");
   });
 
   test("a target reminder email after the daily job", async ({ page, freshUser }) => {

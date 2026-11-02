@@ -25,6 +25,7 @@ import { PersonPicker } from "../tracker/person-picker";
 import { useTarget } from "../tracker/target-context";
 import { useCanWriteTimes, useTracker } from "../tracker/tracker-provider";
 import { useEntryWrites } from "../tracker/use-entry-writes";
+import { useTimeOffBands } from "../time-off/use-time-off-bands";
 import { CalendarGrid } from "./calendar-grid";
 import { EntryDialog, type EntryDialogMode } from "./entry-dialog";
 
@@ -67,6 +68,7 @@ export function CalendarPageClient({
   );
 
   const { data: entries = [] } = useRangeEntries(slug, from, to, true, targetKey);
+  const bands = useTimeOffBands(slug, days[0] ?? null, days[days.length - 1] ?? null, targetKey);
   const writes = useEntryWrites();
   const [dialog, setDialog] = useState<EntryDialogMode | null>(null);
 
@@ -130,6 +132,7 @@ export function CalendarPageClient({
       <CalendarGrid
         days={days}
         entries={entries}
+        bands={bands}
         today={today}
         hydrated={hydrated}
         onCreate={(dayKey, a, b) => {

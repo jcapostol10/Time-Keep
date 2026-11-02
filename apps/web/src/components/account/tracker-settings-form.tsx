@@ -301,6 +301,27 @@ export function TrackerSettingsForm({ defaultValues }: { defaultValues: TrackerS
           ) : null}
         </fieldset>
 
+        <fieldset className="flex items-start justify-between gap-4 rounded-lg border p-4">
+          <div>
+            <legend className="text-sm font-medium">Reminder emails</legend>
+            <p className="text-muted-foreground text-sm">
+              No emails about time I have not submitted or tracked too little of. Alerts to managers
+              about too much time are never muted.
+            </p>
+          </div>
+          <FormField
+            control={form.control}
+            name="muteTargetReminders"
+            render={({ field }) => (
+              <Switch
+                aria-label="Mute target reminders"
+                checked={field.value}
+                onCheckedChange={field.onChange}
+              />
+            )}
+          />
+        </fieldset>
+
         <Button type="submit" disabled={form.formState.isSubmitting || !form.formState.isDirty}>
           {form.formState.isSubmitting ? <Loader2Icon className="animate-spin" /> : null}
           Save timer settings

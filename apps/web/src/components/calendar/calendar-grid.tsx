@@ -13,6 +13,8 @@ import { useEffect, useRef } from "react";
 
 import type { TimeEntryDTO } from "@/lib/tracker-types";
 
+import type { TimeOffBand } from "../time-off/use-time-off-bands";
+
 import { useTracker, useTrackerClock } from "../tracker/tracker-provider";
 import { CalendarBlock, minutesToPx } from "./calendar-block";
 import { NowLine } from "./now-line";
@@ -32,6 +34,7 @@ export function CalendarGrid({
   onMove,
   onResize,
   onEdit,
+  bands = [],
 }: {
   days: string[];
   entries: TimeEntryDTO[];
@@ -41,6 +44,8 @@ export function CalendarGrid({
   onMove: (entry: TimeEntryDTO, dayKey: string, startMinutes: number) => void;
   onResize: (entry: TimeEntryDTO, edge: "start" | "end", dayKey: string, minutes: number) => void;
   onEdit: (entry: TimeEntryDTO) => void;
+  /** Approved time off and holidays, as an all-day band (never blocks). */
+  bands?: TimeOffBand[];
 }) {
   const { viewer, running } = useTracker();
   const tz = viewer.timezone;
@@ -79,6 +84,31 @@ export function CalendarGrid({
           </div>
         ))}
       </div>
+      {bands.length > 0 ? (
+        <div className="flex border-b">
+          <div className="text-muted-foreground w-14 shrink-0 px-1 py-1 text-right text-[11px]">
+            All day
+          </div>
+          <ul aria-label="All-day" className="flex flex-1">
+            {days.map((day) => (
+              <li key={day} data-day={day} className="min-w-0 flex-1 space-y-0.5 border-l p-1">
+                {bands
+                  .filter((b) => b.days[day])
+                  .map((b) => (
+                    <div
+                      key={b.key}
+                      className="bg-accent text-accent-foreground truncate rounded px-1.5 py-0.5 text-xs"
+                      title={b.label}
+                    >
+                      {b.label}
+                      {b.days[day] !== "Holiday" ? ` · ${b.days[day]}` : ""}
+                    </div>
+                  ))}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div ref={scrollRef} data-scroll className="max-h-[70vh] overflow-auto">
         <div className="flex" style={{ height: DAY_PX }}>
           <div className="relative w-14 shrink-0 select-none">

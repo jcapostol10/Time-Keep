@@ -53,7 +53,8 @@ export type Bucket = (typeof BUCKETS)[number];
 export const REPORT_KINDS = ["summary", "detailed", "weekly"] as const;
 export type ReportKind = (typeof REPORT_KINDS)[number];
 /** The report pages: the kinds, plus the Audit tab (the Detailed report with audit criteria). */
-export type ReportView = ReportKind | "audit";
+/** The report tabs; Attendance (Phase 5b) reads its own engine, not the entry groupings. */
+export type ReportView = ReportKind | "audit" | "attendance";
 
 /** Audit criteria (Phase 4b): an entry matching any chosen one is a problem entry. */
 export const AUDIT_CRITERIA = ["noProject", "noTask", "short", "long"] as const;

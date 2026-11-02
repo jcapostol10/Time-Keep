@@ -29,6 +29,7 @@ import { CopyLastWeekDialog } from "./copy-last-week-dialog";
 import { buildNameLookup, compareRows, rowLabel, toTimesheetEntries } from "./model";
 import { TemplatesMenu } from "./templates-menu";
 import { TimesheetGrid } from "./timesheet-grid";
+import { useTimeOffBands } from "../time-off/use-time-off-bands";
 import { useRangeEntries } from "./use-timesheet";
 
 /** The weekly grid page: week navigation, rows the user added this visit, and the toolbar. */
@@ -47,6 +48,12 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
 
   const { data: entries = [] } = useRangeEntries(slug, from, to, true, targetKey);
   const { data: options } = useTrackerOptions(slug, targetKey);
+  const bands = useTimeOffBands(
+    slug,
+    weekKey,
+    localDateKey(addDaysInZone(weekStart, 6, tz), tz),
+    targetKey,
+  );
   // Rows added this visit, per week; they vanish on a full reload (templates persist).
   const [extraRowsByWeek, setExtraRowsByWeek] = useState<Record<string, TimesheetRowKey[]>>({});
   const extraRows = useMemo(() => extraRowsByWeek[weekKey] ?? [], [extraRowsByWeek, weekKey]);
@@ -149,6 +156,7 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
         hydrated={hydrated}
         labelOf={(row) => rowLabel(row, names)}
         onKeepRow={keepRow}
+        bands={bands}
       />
 
       {adding ? (

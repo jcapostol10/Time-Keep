@@ -85,6 +85,11 @@ export default async function TeamPage({
           import: can_("import.users"),
           rates: can_("rate.view"),
           transfer: can(viewer.actor, "workspace.transferOwnership", { kind: "workspace" }),
+          capacity: can(viewer.actor, "member.setCapacity", {
+            kind: "member",
+            userId: "",
+            role: "member",
+          }),
         }}
         currency={ctx.settings.currency}
         timezone={ctx.settings.timezone}

@@ -12,6 +12,7 @@ import type { KeyboardEvent } from "react";
 
 import type { TimeEntryDTO } from "@/lib/tracker-types";
 
+import type { TimeOffBand } from "../time-off/use-time-off-bands";
 import { ColorDot } from "../tracker/project-picker";
 import { useTracker } from "../tracker/tracker-provider";
 import { dayHeading, type NameLookup, projectPart } from "./model";
@@ -50,6 +51,7 @@ export function TimesheetGrid({
   hydrated,
   labelOf,
   onKeepRow,
+  bands = [],
 }: {
   sheet: Timesheet;
   entries: TimeEntryDTO[];
@@ -59,6 +61,8 @@ export function TimesheetGrid({
   hydrated: boolean;
   labelOf: (row: TimesheetRow) => string;
   onKeepRow?: (key: TimesheetRowKey) => void;
+  /** Approved time off and holidays: read-only, never in the totals (decision 8). */
+  bands?: TimeOffBand[];
 }) {
   const { viewer } = useTracker();
   const tz = viewer.timezone;
@@ -153,6 +157,25 @@ export function TimesheetGrid({
               );
             })
           )}
+          {bands.map((band) => (
+            <tr key={band.key} className="bg-muted/20 border-t">
+              <th
+                scope="row"
+                className="bg-muted/20 sticky left-0 z-10 w-56 min-w-56 truncate px-3 py-1.5 text-left font-medium"
+              >
+                {band.label}
+              </th>
+              {sheet.days.map((day) => (
+                <td
+                  key={day}
+                  className="text-muted-foreground px-2 py-1.5 text-center tabular-nums"
+                >
+                  {band.days[day] ?? ""}
+                </td>
+              ))}
+              <td />
+            </tr>
+          ))}
         </tbody>
         <tfoot className="bg-muted/40 border-t">
           <tr>

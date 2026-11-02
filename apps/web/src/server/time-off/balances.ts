@@ -40,49 +40,47 @@ async function yearTotals(
   if (userIds.length === 0) return out;
   const from = `${year}-01-01`;
   const to = `${year}-12-31`;
-  const [requests, adjustments] = await Promise.all([
-    db
-      .select({
-        userId: timeOffRequest.userId,
-        policyId: timeOffRequest.policyId,
-        approved:
-          sql<number>`coalesce(sum(${timeOffRequest.amountCenti}) filter (where ${timeOffRequest.status} = 'APPROVED'), 0)::bigint`.mapWith(
-            Number,
-          ),
-        pending:
-          sql<number>`coalesce(sum(${timeOffRequest.amountCenti}) filter (where ${timeOffRequest.status} = 'PENDING'), 0)::bigint`.mapWith(
-            Number,
-          ),
-      })
-      .from(timeOffRequest)
-      .where(
-        and(
-          eq(timeOffRequest.workspaceId, workspaceId),
-          inArray(timeOffRequest.userId, [...userIds]),
-          gte(timeOffRequest.startDate, from),
-          lte(timeOffRequest.startDate, to),
-        ),
-      )
-      .groupBy(sql.raw("1"), sql.raw("2")),
-    db
-      .select({
-        userId: timeOffAdjustment.userId,
-        policyId: timeOffAdjustment.policyId,
-        total: sql<number>`coalesce(sum(${timeOffAdjustment.amountCenti}), 0)::bigint`.mapWith(
+  const requests = await db
+    .select({
+      userId: timeOffRequest.userId,
+      policyId: timeOffRequest.policyId,
+      approved:
+        sql<number>`coalesce(sum(${timeOffRequest.amountCenti}) filter (where ${timeOffRequest.status} = 'APPROVED'), 0)::bigint`.mapWith(
           Number,
         ),
-      })
-      .from(timeOffAdjustment)
-      .where(
-        and(
-          eq(timeOffAdjustment.workspaceId, workspaceId),
-          inArray(timeOffAdjustment.userId, [...userIds]),
-          gte(timeOffAdjustment.effectiveOn, from),
-          lte(timeOffAdjustment.effectiveOn, to),
+      pending:
+        sql<number>`coalesce(sum(${timeOffRequest.amountCenti}) filter (where ${timeOffRequest.status} = 'PENDING'), 0)::bigint`.mapWith(
+          Number,
         ),
-      )
-      .groupBy(sql.raw("1"), sql.raw("2")),
-  ]);
+    })
+    .from(timeOffRequest)
+    .where(
+      and(
+        eq(timeOffRequest.workspaceId, workspaceId),
+        inArray(timeOffRequest.userId, [...userIds]),
+        gte(timeOffRequest.startDate, from),
+        lte(timeOffRequest.startDate, to),
+      ),
+    )
+    .groupBy(sql.raw("1"), sql.raw("2"));
+  const adjustments = await db
+    .select({
+      userId: timeOffAdjustment.userId,
+      policyId: timeOffAdjustment.policyId,
+      total: sql<number>`coalesce(sum(${timeOffAdjustment.amountCenti}), 0)::bigint`.mapWith(
+        Number,
+      ),
+    })
+    .from(timeOffAdjustment)
+    .where(
+      and(
+        eq(timeOffAdjustment.workspaceId, workspaceId),
+        inArray(timeOffAdjustment.userId, [...userIds]),
+        gte(timeOffAdjustment.effectiveOn, from),
+        lte(timeOffAdjustment.effectiveOn, to),
+      ),
+    )
+    .groupBy(sql.raw("1"), sql.raw("2"));
   const at = (k: string) => {
     let t = out.get(k);
     if (!t) out.set(k, (t = { approved: 0, pending: 0, adjustments: 0 }));
@@ -110,15 +108,14 @@ export async function balancesFor(
   year: number,
   today: string,
 ): Promise<Map<string, PersonBalance[]>> {
-  const [assigned, totals] = await Promise.all([
-    policiesFor(db, zone, people),
-    yearTotals(
-      db,
-      zone.id,
-      people.map((p) => p.userId),
-      year,
-    ),
-  ]);
+  // One after the other: `db` may be a transaction, whose one connection runs one query at a time.
+  const assigned = await policiesFor(db, zone, people);
+  const totals = await yearTotals(
+    db,
+    zone.id,
+    people.map((p) => p.userId),
+    year,
+  );
   const out = new Map<string, PersonBalance[]>();
   for (const person of people) {
     out.set(

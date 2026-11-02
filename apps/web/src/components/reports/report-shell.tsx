@@ -21,6 +21,7 @@ const VIEWS: { kind: ReportView; label: string }[] = [
   { kind: "detailed", label: "Detailed" },
   { kind: "weekly", label: "Weekly" },
   { kind: "audit", label: "Audit" },
+  { kind: "attendance", label: "Attendance" },
 ];
 
 /** The query another view opens with: the Audit tab adds its default criteria; the others drop them. */
@@ -48,6 +49,8 @@ export function ReportShell({
 }) {
   // The Audit tab is the Detailed report with criteria: it exports and shares as Detailed.
   const kind = view === "audit" ? "detailed" : view;
+  // Attendance is raw time per person: no share link, no rounding, only the people filters.
+  const attendance = view === "attendance";
   const { slug } = useTracker();
   const { params } = useReportQuery();
 
@@ -58,8 +61,8 @@ export function ReportShell({
         actions={
           <>
             {actions}
-            <RoundingToggle />
-            <ShareDialog kind={kind} />
+            {attendance ? null : <RoundingToggle />}
+            {kind === "attendance" ? null : <ShareDialog kind={kind} />}
             <ExportMenu kind={kind} />
           </>
         }
@@ -96,7 +99,7 @@ export function ReportShell({
           Shared
         </Link>
       </nav>
-      <FilterBar extra={view === "audit" ? <AuditFilter /> : null} />
+      <FilterBar extra={view === "audit" ? <AuditFilter /> : null} peopleOnly={attendance} />
       {children}
     </div>
   );
