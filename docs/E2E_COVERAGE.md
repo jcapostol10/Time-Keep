@@ -309,6 +309,21 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A rolling lock blocks a member's entry in the locked days, not an admin's — `approvals.spec.ts` › "a rolling lock blocks a member, not an admin"
 - [x] The daily job emails a reminder for a closed period with time and no submission — `approvals.spec.ts` › "the daily job reminds an unsubmitted period"
 
+## Time off and holidays
+
+- [ ] Approved time off reduces the balance and shows on the calendar and the timesheet ("Time off: <policy>") — `time-off.spec.ts` › "time off reduces the balance and shows on the calendar"
+- [ ] A time off request needing approval is approved by the person's manager under the approvers setting — `time-off.spec.ts` › "a time off request needing approval is approved by a manager"
+- [ ] A rejected request shows its note to the requester — `time-off.spec.ts` › "a rejected request shows its note"
+- [ ] A policy without approval approves a request on submit — `time-off.spec.ts` › "a policy without approval is approved on submit"
+- [ ] Import public holidays: pick a country and year, review the list, untick a day, import the rest — `attendance.spec.ts` › "importing public holidays: review, untick one, import"
+- [ ] A holiday assigned to a group shows for its members only — `attendance.spec.ts` › "a holiday assigned to a group"
+
+## Attendance and targets
+
+- [ ] The Attendance tab shows a day's overtime and exports CSV with weekly subtotals — `attendance.spec.ts` › "the Attendance tab shows overtime and exports CSV"
+- [ ] Capacity set on the Team page changes a day's undertime — `attendance.spec.ts` › "capacity on the Team page changes undertime"
+- [ ] An under-target rule emails a reminder after the daily job — `attendance.spec.ts` › "a target reminder email after the daily job"
+
 ## Small screens (375px)
 
 - [x] The tracker page fits a 375px screen without horizontal scrolling — `power.spec.ts` › "the tracker fits a 375px screen with favourites and the person picker"
