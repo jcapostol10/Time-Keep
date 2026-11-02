@@ -167,6 +167,7 @@ async function defaultBuild(
   if (job.report === "project-status") {
     throw new Error("Project status exports stream; they never become jobs");
   }
+  if (job.report === "attendance") throw new Error("Attendance exports are not queued yet");
   const query = reportQuerySchema.parse(request.query);
   if (job.format === "pdf") {
     const ws = await db.query.workspace.findFirst({

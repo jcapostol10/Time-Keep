@@ -54,6 +54,14 @@ export const membership = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     role: workspaceRoleEnum("role").notNull().default("member"),
     status: membershipStatusEnum("status").notNull().default("ACTIVE"),
+    /** Capacity (Phase 5b): the attendance report and target rules measure against it. */
+    dailyCapacityMinutes: smallint("daily_capacity_minutes").notNull().default(480),
+    weeklyCapacityMinutes: smallint("weekly_capacity_minutes").notNull().default(2400),
+    /** 0 = Sunday … 6 = Saturday */
+    workingDays: smallint("working_days")
+      .array()
+      .notNull()
+      .default(sql`'{1,2,3,4,5}'::smallint[]`),
     ...timestamps,
   },
   (t) => [

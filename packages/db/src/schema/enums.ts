@@ -20,8 +20,13 @@ import {
   ROLES,
   ROUNDING_MODES,
   TASK_STATUSES,
+  TARGET_KINDS,
+  TARGET_PERIODS,
   TASK_VISIBILITY,
   TIME_FORMATS,
+  TIME_OFF_ACCRUALS,
+  TIME_OFF_STATUSES,
+  TIME_OFF_UNITS,
 } from "@timekeep/core";
 import { pgEnum } from "drizzle-orm/pg-core";
 
@@ -48,3 +53,8 @@ export const lockModeEnum = pgEnum("lock_mode", LOCK_MODES);
 export const approvalStatusEnum = pgEnum("approval_status", APPROVAL_STATUSES);
 export const approvalActionEnum = pgEnum("approval_action", APPROVAL_ACTIONS);
 export const outboxStatusEnum = pgEnum("outbox_status", OUTBOX_STATUSES);
+export const timeOffUnitEnum = pgEnum("time_off_unit", TIME_OFF_UNITS);
+export const timeOffAccrualEnum = pgEnum("time_off_accrual", TIME_OFF_ACCRUALS);
+export const timeOffStatusEnum = pgEnum("time_off_status", TIME_OFF_STATUSES);
+export const targetKindEnum = pgEnum("target_kind", TARGET_KINDS);
+export const targetPeriodEnum = pgEnum("target_period", TARGET_PERIODS);

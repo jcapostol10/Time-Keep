@@ -62,7 +62,13 @@ export type AuditCriterion = (typeof AUDIT_CRITERIA)[number];
 export const AUDIT_DEFAULT_PARAMS = "audit=noProject&audit=long";
 export const EXPORT_FORMATS = ["csv", "xlsx", "pdf"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
-export const EXPORT_REPORTS = ["summary", "detailed", "weekly", "project-status"] as const;
+export const EXPORT_REPORTS = [
+  "summary",
+  "detailed",
+  "weekly",
+  "project-status",
+  "attendance",
+] as const;
 export type ExportReport = (typeof EXPORT_REPORTS)[number];
 export const EXPORT_STATUSES = ["queued", "running", "done", "failed"] as const;
 export type ExportStatus = (typeof EXPORT_STATUSES)[number];
