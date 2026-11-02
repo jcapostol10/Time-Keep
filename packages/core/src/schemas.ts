@@ -533,6 +533,8 @@ export const trackerSettingsSchema = z
     /** Minutes since local midnight. */
     reminderStartMinutes: z.number().int().min(0).max(1439),
     reminderEndMinutes: z.number().int().min(1).max(1440),
+    /** No unsubmitted-period (5a) or under-target (5b) reminder emails. */
+    muteTargetReminders: z.boolean(),
   })
   .refine((s) => s.reminderEndMinutes > s.reminderStartMinutes, {
     path: ["reminderEndMinutes"],
@@ -551,6 +553,7 @@ export const DEFAULT_TRACKER_SETTINGS: TrackerSettingsInput = {
   reminderDays: [1, 2, 3, 4, 5],
   reminderStartMinutes: 9 * 60,
   reminderEndMinutes: 17 * 60,
+  muteTargetReminders: false,
 };
 
 /** A rate change from the rate dialog; the server parses the amount with the currency. */

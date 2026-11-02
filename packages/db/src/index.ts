@@ -11,6 +11,7 @@ export {
   gt,
   gte,
   ilike,
+  like,
   inArray,
   isNotNull,
   isNull,

@@ -65,7 +65,7 @@ function peopleFor(viewer: Viewer, query: ReportQuery, all: PersonContext[]): Pe
 }
 
 /** One row per (person, their local day): first start, last end, work and break seconds. */
-async function dayWork(
+export async function workByPersonDay(
   db: DbExecutor,
   workspaceId: string,
   workspaceTz: string,
@@ -124,7 +124,7 @@ export async function attendanceReport(
     to: addDaysInZone(range.to, 1, prefs.timezone),
   };
   const [work, approved] = await Promise.all([
-    dayWork(db, viewer.workspaceId, zone.timezone, userIds, bounds),
+    workByPersonDay(db, viewer.workspaceId, zone.timezone, userIds, bounds),
     db
       .select({
         userId: timeOffRequest.userId,
