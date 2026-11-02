@@ -127,7 +127,8 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 | Action | Owner | Admin | Manager | Member |
 | --- | --- | --- | --- | --- |
 | `timeOff.request` | their own | their own | their own | their own |
-| `timeOff.view` | yes | yes | themselves and people they manage | their own (everyone's if the workspace allows) |
+| `timeOff.view` | yes | yes | themselves and people they manage (everyone's if the workspace shows the team's time) | their own (everyone's if the workspace allows) |
+| `timeOff.viewBalances` | yes | yes | themselves and people they manage | their own |
 | `timeOff.review` | yes | yes | per the approvers setting: their people, or periods all on their projects | — |
 | `timeOff.manage` | yes | yes | — | — |
 

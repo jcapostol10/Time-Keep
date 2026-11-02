@@ -395,3 +395,35 @@ describe("previewTimeOff", () => {
     ).rejects.toThrow("A half day is for a one-day request.");
   });
 });
+
+describe("booking ahead (review fix)", () => {
+  it("books next year's time off against next year's allowance", async () => {
+    const december = new Date("2026-12-10T04:00:00.000Z");
+    const r = await requestTimeOff(
+      db,
+      await cast.viewer("bob"),
+      ask("2027-01-04", "2027-01-08"),
+      december,
+    );
+    expect(r).toMatchObject({ status: "PENDING", amountCenti: 500 });
+  });
+
+  it("counts a monthly policy's grants up to the time off itself", async () => {
+    const ann = await cast.viewer("ann");
+    const monthly = await savePolicy(
+      db,
+      ann,
+      policy({ name: "Monthly", accrual: "MONTHLY", allowance: "12" }),
+    );
+    await db.update(timeOffPolicy).set({ createdAt: new Date("2025-01-01T00:00:00Z") });
+    // In March three months are granted (3 days); by October ten (10 days).
+    const march = new Date("2026-03-02T04:00:00.000Z");
+    const r = await requestTimeOff(
+      db,
+      await cast.viewer("bob"),
+      { ...ask("2026-10-05", "2026-10-09"), policyId: monthly.id },
+      march,
+    );
+    expect(r.amountCenti).toBe(500);
+  });
+});

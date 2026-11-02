@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   addDaysToKey,
+  dateKeysBetween,
   isUndeliverable,
   localDateKey,
   type TargetRule,
@@ -295,25 +296,54 @@ export async function evaluateTargets(
     ).map((r) => `${r.kind}|${r.to.toLowerCase()}`),
   );
 
-  /** The person's working day: not a non-working weekday, a holiday or a full day off. */
-  const counts = (person: PersonContext, dateKey: string) => {
-    if (!person.capacity.workingDays.includes(weekdayOfKey(dateKey))) return false;
-    if (holidayKeysFor(holidays, person, dateKey, dateKey).has(dateKey)) return false;
-    const off = approved
-      .filter((r) => r.userId === person.userId && r.start <= dateKey && r.end >= dateKey)
-      .reduce((n, r) => {
-        const keys = holidayKeysFor(holidays, person, r.start, r.end);
-        return n + (timeOffMinutesByDay(r.unit, r, person.capacity, keys).get(dateKey) ?? 0);
-      }, 0);
-    return off < person.capacity.dailyMinutes;
+  /**
+   * The minutes of `[from, to]` the person was not expected to work: a holiday's
+   * daily capacity on a working day, and approved time off (a half day counts half).
+   */
+  const excusedMinutes = (person: PersonContext, from: string, to: string) => {
+    let minutes = 0;
+    for (const day of dateKeysBetween(from, to)) {
+      if (!person.capacity.workingDays.includes(weekdayOfKey(day))) continue;
+      if (holidayKeysFor(holidays, person, day, day).has(day)) {
+        minutes += person.capacity.dailyMinutes;
+        continue;
+      }
+      minutes += approved
+        .filter((r) => r.userId === person.userId && r.start <= day && r.end >= day)
+        .reduce((n, r) => {
+          const keys = holidayKeysFor(holidays, person, r.start, r.end);
+          return n + (timeOffMinutesByDay(r.unit, r, person.capacity, keys).get(day) ?? 0);
+        }, 0);
+    }
+    return minutes;
+  };
+
+  /**
+   * The rule as it applies to the person in the window, or null to skip it.
+   * UNDER asks for less by the holidays and time off in the window, and skips a
+   * non-working day, a holiday, a full day off or a week with nothing left to
+   * work; OVER is never lowered and counts any day (overwork on a weekend is
+   * still overwork).
+   */
+  const effective = (rule: TargetRule, person: PersonContext, window: Window) => {
+    if (rule.kind === "OVER") return rule;
+    if (
+      window.period === "DAY" &&
+      !person.capacity.workingDays.includes(weekdayOfKey(window.from))
+    ) {
+      return null;
+    }
+    const threshold = rule.thresholdMinutes - excusedMinutes(person, window.from, window.to);
+    return threshold > 0 ? { ...rule, thresholdMinutes: threshold } : null;
   };
 
   let sent = 0;
   for (const window of windows) {
     for (const person of people) {
-      for (const rule of rules.filter((r) => r.period === window.period)) {
-        if (!targetApplies(rule, person)) continue;
-        if (window.period === "DAY" && !counts(person, window.from)) continue;
+      for (const assigned of rules.filter((r) => r.period === window.period)) {
+        if (!targetApplies(assigned, person)) continue;
+        const rule = effective(assigned, person, window);
+        if (!rule) continue;
         const seconds = work
           .filter(
             (w) => w.userId === person.userId && w.dateKey >= window.from && w.dateKey <= window.to,

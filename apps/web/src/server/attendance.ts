@@ -114,17 +114,20 @@ export async function attendanceReport(
   const from = localDateKey(range.from, prefs.timezone);
   const to = localDateKey(new Date(range.to.getTime() - 1), prefs.timezone);
   const zone = await workspaceZone(db, viewer.workspaceId);
-  const people = peopleFor(viewer, query, [...(await peopleContext(db, zone)).values()]);
-  if (people.length === 0) return { from, to, label: range.label, people: [] };
-  const userIds = people.map((p) => p.userId);
+  // Deactivated members stay in the scope here: the time they tracked still counts (payroll).
+  const candidates = peopleFor(viewer, query, [
+    ...(await peopleContext(db, zone, undefined, { includeDeactivated: true })).values(),
+  ]);
+  if (candidates.length === 0) return { from, to, label: range.label, people: [] };
+  const candidateIds = candidates.map((p) => p.userId);
 
   // Everyone's days lie within a day of the viewer's range, whatever their timezone.
   const bounds = {
     from: addDaysInZone(range.from, -1, prefs.timezone),
     to: addDaysInZone(range.to, 1, prefs.timezone),
   };
-  const [work, approved] = await Promise.all([
-    workByPersonDay(db, viewer.workspaceId, zone.timezone, userIds, bounds),
+  const [work, approvedAll] = await Promise.all([
+    workByPersonDay(db, viewer.workspaceId, zone.timezone, candidateIds, bounds),
     db
       .select({
         userId: timeOffRequest.userId,
@@ -139,13 +142,19 @@ export async function attendanceReport(
       .where(
         and(
           eq(timeOffRequest.workspaceId, viewer.workspaceId),
-          inArray(timeOffRequest.userId, userIds),
+          inArray(timeOffRequest.userId, candidateIds),
           eq(timeOffRequest.status, "APPROVED"),
           lte(timeOffRequest.startDate, to),
           gte(timeOffRequest.endDate, from),
         ),
       ),
   ]);
+  // A deactivated member is listed only for the days they tracked.
+  const people = candidates.filter(
+    (p) =>
+      p.active || work.some((w) => w.userId === p.userId && w.dateKey >= from && w.dateKey <= to),
+  );
+  const approved = approvedAll.filter((r) => people.some((p) => p.userId === r.userId));
   // A request is counted over its whole span, so its holidays are needed beyond the range.
   const rulesFrom = approved.reduce((m, r) => (r.start < m ? r.start : m), from);
   const rulesTo = approved.reduce((m, r) => (r.end > m ? r.end : m), to);

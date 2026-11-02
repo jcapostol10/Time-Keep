@@ -149,13 +149,13 @@ export async function listBalances(
   opts: { userId?: string; today: string },
 ): Promise<BalanceDTO[]> {
   if (opts.userId) {
-    assertCan(viewer.actor, "timeOff.view", { kind: "person", userId: opts.userId });
+    assertCan(viewer.actor, "timeOff.viewBalances", { kind: "person", userId: opts.userId });
   }
   const zone = await workspaceZone(db, viewer.workspaceId);
   const people = [
     ...(await peopleContext(db, zone, opts.userId ? [opts.userId] : undefined)).values(),
   ]
-    .filter((p) => can(viewer.actor, "timeOff.view", { kind: "person", userId: p.userId }))
+    .filter((p) => can(viewer.actor, "timeOff.viewBalances", { kind: "person", userId: p.userId }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const year = Number(opts.today.slice(0, 4));
   const balances = await balancesFor(db, zone, people, year, opts.today);

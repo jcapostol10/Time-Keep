@@ -14,7 +14,7 @@ export async function GET(
     const { workspaceSlug } = await ctx.params;
     const access = await requireWorkspaceAccess(workspaceSlug);
     const userId = new URL(request.url).searchParams.get("userId") || undefined;
-    const viewer = await authorize(access, "timeOff.view", {
+    const viewer = await authorize(access, "timeOff.viewBalances", {
       kind: "person",
       userId: userId ?? access.user.id,
     });

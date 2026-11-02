@@ -1,5 +1,5 @@
 import type { TargetRuleInput } from "@timekeep/core";
-import { and, emailOutbox, eq, like, userSettings } from "@timekeep/db";
+import { and, emailOutbox, eq, like, timeOffPolicy, userSettings } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb } from "../../test/db";
@@ -8,6 +8,8 @@ import { runDailyJobs } from "./daily-jobs";
 import { deleteTargetRule, listTargetRules, saveTargetRule } from "./targets";
 import { createManualEntry } from "./time-entries";
 import { saveHoliday } from "./time-off/holidays";
+import { savePolicy } from "./time-off/policies";
+import { requestTimeOff, reviewTimeOff } from "./time-off/requests";
 
 const handle = connectTestDb();
 const db = handle.db;
@@ -196,5 +198,79 @@ describe("the daily job's targets", () => {
       reminders: 0,
       targets: 0,
     });
+  });
+});
+
+describe("targets around time off and days off (review fixes)", () => {
+  async function vacation(start: string, end: string, halfDay = false) {
+    const ann = await cast.viewer("ann");
+    const policy = await savePolicy(db, ann, {
+      name: "Vacation",
+      unit: "DAYS",
+      accrual: "YEARLY",
+      allowance: "15",
+      allowNegative: false,
+      requiresApproval: true,
+      everyone: true,
+      userIds: [],
+      groupIds: [],
+    });
+    await db.update(timeOffPolicy).set({ createdAt: new Date("2025-01-01T00:00:00Z") });
+    const r = await requestTimeOff(
+      db,
+      await cast.viewer("bob"),
+      { policyId: policy.id, start, end, halfDay, note: "" },
+      TUESDAY_MANILA,
+    );
+    await reviewTimeOff(db, ann, { ids: [r.id], decision: "APPROVE" });
+  }
+
+  it("lowers a weekly target by the week's holidays and time off", async () => {
+    const ann = await cast.viewer("ann");
+    await saveTargetRule(
+      db,
+      ann,
+      rule({ period: "WEEK", threshold: "40", everyone: false, userIds: [cast.ids.bob] }),
+    );
+    await saveHoliday(db, ann, {
+      date: "2026-11-02",
+      name: "All Souls",
+      repeatsYearly: false,
+      userIds: [],
+      groupIds: [cast.cebuId],
+    });
+    await vacation("2026-11-03", "2026-11-03");
+    for (const day of ["2026-11-04", "2026-11-05", "2026-11-06"]) {
+      await work("bob", `${day}T01:00:00.000Z`, 8);
+    }
+    await runDailyJobs(db, { now: NEXT_MONDAY_MANILA, workspaceIds: [cast.wsId] });
+    expect(await targetMail()).toEqual([]);
+  });
+
+  it("lowers a daily target by a half day off", async () => {
+    await saveTargetRule(
+      db,
+      await cast.viewer("ann"),
+      rule({ everyone: false, userIds: [cast.ids.bob] }),
+    );
+    await vacation("2026-11-02", "2026-11-02", true);
+    await work("bob", "2026-11-02T01:00:00.000Z", 4);
+    await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    expect(await targetMail()).toEqual([]);
+  });
+
+  it("alerts about too much time on a weekend", async () => {
+    await saveTargetRule(
+      db,
+      await cast.viewer("ann"),
+      rule({ kind: "OVER", threshold: "10", everyone: false, userIds: [cast.ids.bob] }),
+    );
+    // Sunday 1 Nov, 08:00 in Manila; the job runs Monday 06:00.
+    await work("bob", "2026-11-01T00:00:00.000Z", 11);
+    await runDailyJobs(db, {
+      now: new Date("2026-11-01T22:00:00.000Z"),
+      workspaceIds: [cast.wsId],
+    });
+    expect((await targetMail()).length).toBe(3);
   });
 });

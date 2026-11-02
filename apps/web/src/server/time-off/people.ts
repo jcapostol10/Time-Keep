@@ -53,13 +53,16 @@ export interface PersonContext {
   joinedOn: string;
   /** `user.timezone`, else the workspace's (decision 13: each person's own days). */
   timezone: string;
+  /** False for a deactivated member (Attendance keeps those who tracked time). */
+  active: boolean;
 }
 
-/** Active members only; anyone else is simply absent from the map. */
+/** Active members, and deactivated ones when asked; anyone else is absent from the map. */
 export async function peopleContext(
   db: DbExecutor,
   zone: WorkspaceZone,
   userIds?: readonly string[],
+  opts: { includeDeactivated?: boolean } = {},
 ): Promise<Map<string, PersonContext>> {
   if (userIds && userIds.length === 0) return new Map();
   const rows = await db
@@ -72,13 +75,16 @@ export async function peopleContext(
       dailyMinutes: membership.dailyCapacityMinutes,
       weeklyMinutes: membership.weeklyCapacityMinutes,
       workingDays: membership.workingDays,
+      status: membership.status,
     })
     .from(membership)
     .innerJoin(user, eq(user.id, membership.userId))
     .where(
       and(
         eq(membership.workspaceId, zone.id),
-        eq(membership.status, "ACTIVE"),
+        opts.includeDeactivated
+          ? inArray(membership.status, ["ACTIVE", "DEACTIVATED"])
+          : eq(membership.status, "ACTIVE"),
         userIds ? inArray(membership.userId, [...userIds]) : undefined,
       ),
     );
@@ -107,6 +113,7 @@ export async function peopleContext(
       groupIds: new Set(groups.filter((g) => g.userId === r.userId).map((g) => g.groupId)),
       joinedOn: localDateKey(r.createdAt, zone.timezone),
       timezone: r.timezone ?? zone.timezone,
+      active: r.status === "ACTIVE",
     });
   }
   return out;

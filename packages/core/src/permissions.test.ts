@@ -160,6 +160,9 @@ const TABLE: Row[] = [
   ["timeOff.view", person(ME), true, true, true, true],
   ["timeOff.view", person(MANAGED), true, true, true, false],
   ["timeOff.view", person(OTHER), true, true, false, false],
+  ["timeOff.viewBalances", person(ME), true, true, true, true],
+  ["timeOff.viewBalances", person(MANAGED), true, true, true, false],
+  ["timeOff.viewBalances", person(OTHER), true, true, false, false],
   ["timeOff.review", approval(MANAGED), true, true, false, false],
   ["timeOff.manage", NONE, true, true, false, false],
   ["attendance.read", person(ME), true, true, true, true],
@@ -439,6 +442,15 @@ describe("time off and attendance (Phase 5b)", () => {
     expect(denial(actor("manager"), "timeOff.view", person(OTHER))).toBe(404);
     expect(can(actor("manager"), "attendance.read", person(ME))).toBe(true);
     expect(can(actor("manager"), "attendance.read", person(MANAGED))).toBe(true);
+  });
+
+  it("lets a manager see the whole team's time off when members see it too", () => {
+    const team = actor("manager", { membersSeeTeamTime: true });
+    expect(can(team, "timeOff.view", person(OTHER))).toBe(true);
+    expect(can(team, "timeOff.viewBalances", person(OTHER))).toBe(false);
+    expect(
+      can(actor("member", { membersSeeTeamTime: true }), "timeOff.viewBalances", person(OTHER)),
+    ).toBe(false);
   });
 
   it("lets members see the team's time off when the workspace allows", () => {

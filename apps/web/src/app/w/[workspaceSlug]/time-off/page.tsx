@@ -57,7 +57,7 @@ export default async function TimeOffPage({
         year={year}
         manages={manages}
         reviewer={mayReviewAny(viewer.actor)}
-        seesTeam={viewer.role !== "member" || viewer.actor.settings.membersSeeTeamTime}
+        seesTeam={viewer.role !== "member"}
         people={options.people}
         groups={options.groups}
       />

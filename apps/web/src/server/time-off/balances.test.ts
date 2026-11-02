@@ -92,3 +92,14 @@ describe("listBalances", () => {
     expect((await vacationOf("bob"))?.balance.balanceCenti).toBe(1500);
   });
 });
+
+describe("balances stay private (review fix)", () => {
+  it("never shows a member a colleague's balances, even when the team's time is shared", async () => {
+    await cast.setRules({ membersSeeTeamTime: true });
+    await expect(
+      listBalances(db, await cast.viewer("bob"), { userId: cast.ids.max, today: TODAY }),
+    ).rejects.toMatchObject({ status: 404 });
+    const mine = await listBalances(db, await cast.viewer("bob"), { today: TODAY });
+    expect(new Set(mine.map((b) => b.userId))).toEqual(new Set([cast.ids.bob]));
+  });
+});

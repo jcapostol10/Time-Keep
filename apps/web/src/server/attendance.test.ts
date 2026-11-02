@@ -4,7 +4,7 @@ import {
   type ViewerPrefs,
   zonedDateTimeToInstant,
 } from "@timekeep/core";
-import { eq, timeOffPolicy, user } from "@timekeep/db";
+import { and, eq, membership, timeOffPolicy, user } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb } from "../../test/db";
@@ -230,6 +230,25 @@ describe("attendanceReport", () => {
     });
     expect(await dayOf("bob", "2026-11-06")).toBeUndefined();
     expect(await dayOf("bob", "2026-11-08")).toMatchObject({ undertimeSeconds: 8 * H });
+  });
+});
+
+describe("deactivated people (review fix)", () => {
+  it("keeps a deactivated person who tracked time in the range", async () => {
+    await work("bob", "2026-11-02", 9);
+    await db
+      .update(membership)
+      .set({ status: "DEACTIVATED" })
+      .where(and(eq(membership.workspaceId, cast.wsId), eq(membership.userId, cast.ids.bob)));
+    const report = await attendanceReport(db, await cast.viewer("olga"), week(), PREFS, NOW);
+    const bob = report.people.find((p) => p.userId === cast.ids.bob);
+    expect(bob?.totals.workSeconds).toBe(9 * H);
+    await db
+      .update(membership)
+      .set({ status: "DEACTIVATED" })
+      .where(and(eq(membership.workspaceId, cast.wsId), eq(membership.userId, cast.ids.ann)));
+    const again = await attendanceReport(db, await cast.viewer("olga"), week(), PREFS, NOW);
+    expect(again.people.some((p) => p.userId === cast.ids.ann)).toBe(false);
   });
 });
 

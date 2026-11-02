@@ -212,7 +212,10 @@ async function planRequest(
     );
   }
   const year = Number(span.start.slice(0, 4));
-  const balance = (await balancesFor(tx, zone, [person], year, today))
+  // Projected to the time off itself: next year's leave counts next year's allowance,
+  // and a MONTHLY policy counts the grants made by then.
+  const asOf = span.start > today ? span.start : today;
+  const balance = (await balancesFor(tx, zone, [person], year, asOf))
     .get(person.userId)
     ?.find((b) => b.assigned.policy.id === policy.id)?.balance;
   if (balance && wouldGoNegative(balance, amountCenti, policy.allowNegative)) {

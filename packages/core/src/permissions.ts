@@ -61,8 +61,10 @@ export const ACTIONS = [
   "lock.manage",
   /** ask for time off (Phase 5b) */
   "timeOff.request",
-  /** see someone's time off and balances */
+  /** see someone's time off on the calendar, timesheet and Time off page */
   "timeOff.view",
+  /** see someone's balances: never a colleague's for a member (spec Part 3) */
+  "timeOff.viewBalances",
   /** approve or reject time off, per the approvers setting with no projects (ruling R3) */
   "timeOff.review",
   /** policies, holidays and balance adjustments */
@@ -161,6 +163,8 @@ export type Rule =
   | "scope"
   /** own time and the people they manage */
   | "managedPeople"
+  /** managedPeople, or everyone when the workspace lets members see team time */
+  | "managedPeopleOrTeam"
   /** the projects they manage */
   | "managedProjects"
   /** public, on the project's members, or managed */
@@ -183,6 +187,7 @@ const SCOPED: ReadonlySet<Rule> = new Set([
   "ownOrTeam",
   "scope",
   "managedPeople",
+  "managedPeopleOrTeam",
   "managedProjects",
   "visible",
   "taskGroups",
@@ -243,7 +248,18 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
   "approval.editLocked": ADMINS,
   "lock.manage": ADMINS,
   "timeOff.request": { owner: "own", admin: "own", manager: "own", member: "own" },
-  "timeOff.view": { owner: "yes", admin: "yes", manager: "managedPeople", member: "ownOrTeam" },
+  "timeOff.view": {
+    owner: "yes",
+    admin: "yes",
+    manager: "managedPeopleOrTeam",
+    member: "ownOrTeam",
+  },
+  "timeOff.viewBalances": {
+    owner: "yes",
+    admin: "yes",
+    manager: "managedPeople",
+    member: "own",
+  },
   "timeOff.review": { owner: "yes", admin: "yes", manager: "approvers", member: "no" },
   "timeOff.manage": ADMINS,
   "attendance.read": { owner: "yes", admin: "yes", manager: "managedPeople", member: "own" },
@@ -320,6 +336,11 @@ function check(actor: Actor, action: Action, rule: Rule, resource: Resource): bo
       const owner = ownerOf(resource);
       return owner !== null && (owner === actor.userId || actor.managedUserIds.has(owner));
     }
+    case "managedPeopleOrTeam": {
+      if (actor.settings.membersSeeTeamTime) return true;
+      const owner = ownerOf(resource);
+      return owner !== null && (owner === actor.userId || actor.managedUserIds.has(owner));
+    }
     case "managedProjects":
       return projectId !== null && actor.managedProjectIds.has(projectId);
     case "visible":
@@ -386,6 +407,8 @@ const RULE_WORDS: Record<Rule, string> = {
   ownOrTeam: "their own (everyone's if the workspace allows)",
   scope: "their scope",
   managedPeople: "themselves and people they manage",
+  managedPeopleOrTeam:
+    "themselves and people they manage (everyone's if the workspace shows the team's time)",
   managedProjects: "projects they manage",
   visible: "public, private ones they are on, or manage",
   creator: "if the workspace allows",
