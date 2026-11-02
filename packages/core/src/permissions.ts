@@ -59,6 +59,18 @@ export const ACTIONS = [
   /** change time in a submitted or locked period (with a note when submitted) */
   "approval.editLocked",
   "lock.manage",
+  /** ask for time off (Phase 5b) */
+  "timeOff.request",
+  /** see someone's time off and balances */
+  "timeOff.view",
+  /** approve or reject time off, per the approvers setting with no projects (ruling R3) */
+  "timeOff.review",
+  /** policies, holidays and balance adjustments */
+  "timeOff.manage",
+  /** someone's Attendance report rows (ruling R4: not people seen only through projects) */
+  "attendance.read",
+  "member.setCapacity",
+  "target.manage",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -123,6 +135,8 @@ export type Resource =
     }
   | { kind: "entry"; userId: string; projectId: string | null }
   | { kind: "shareLink"; createdBy: string }
+  /** a person, for their time off and attendance (Phase 5b) */
+  | { kind: "person"; userId: string }
   | {
       kind: "approval";
       /** whose period it is */
@@ -228,6 +242,13 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
   "approval.review": { owner: "yes", admin: "yes", manager: "approvers", member: "no" },
   "approval.editLocked": ADMINS,
   "lock.manage": ADMINS,
+  "timeOff.request": { owner: "own", admin: "own", manager: "own", member: "own" },
+  "timeOff.view": { owner: "yes", admin: "yes", manager: "managedPeople", member: "ownOrTeam" },
+  "timeOff.review": { owner: "yes", admin: "yes", manager: "approvers", member: "no" },
+  "timeOff.manage": ADMINS,
+  "attendance.read": { owner: "yes", admin: "yes", manager: "managedPeople", member: "own" },
+  "member.setCapacity": ADMINS,
+  "target.manage": ADMINS,
 };
 
 const CREATED: Partial<Record<Action, CatalogType>> = {
@@ -260,6 +281,7 @@ function ownerOf(resource: Resource): string | null {
     case "entry":
     case "member":
     case "approval":
+    case "person":
       return resource.userId;
     case "shareLink":
       return resource.createdBy;
@@ -391,6 +413,9 @@ const SECTION_TITLES: Record<string, string> = {
   import: "Import",
   approval: "Approvals",
   lock: "Lock dates",
+  timeOff: "Time off",
+  attendance: "Attendance",
+  target: "Targets",
 };
 
 /** The matrix as markdown, for docs/PERMISSIONS.md. */

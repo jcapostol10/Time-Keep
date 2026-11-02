@@ -200,3 +200,11 @@ export function formatCenti(centi: number, unit: TimeOffUnit): string {
   const word = unit === "DAYS" ? "day" : "hour";
   return `${number} ${word}${abs === 100 ? "" : "s"}`;
 }
+
+/** "1.5" → 150, "-2" → -200: digits with at most two decimals (never parseFloat). */
+export function parseCenti(text: string): number | null {
+  const m = /^(-)?(\d{1,6})(?:\.(\d{1,2}))?$/.exec(text.trim());
+  if (!m) return null;
+  const centi = Number(m[2]) * 100 + Number((m[3] ?? "").padEnd(2, "0"));
+  return m[1] && centi !== 0 ? -centi : centi;
+}

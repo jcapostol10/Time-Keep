@@ -24,6 +24,8 @@ export * from "./time";
 export * from "./time-entry";
 export * from "./time-off";
 export * from "./holidays";
+export * from "./attendance";
+export * from "./targets";
 export * from "./timesheet";
 export * from "./tracker-rules";
 export * from "./team-import";
