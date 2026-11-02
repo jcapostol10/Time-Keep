@@ -43,6 +43,7 @@ export async function createPolicyViaUi(
     accrual?: "No allowance" | "Yearly" | "Monthly";
     allowance?: string;
     requiresApproval?: boolean;
+    allowNegative?: boolean;
   },
 ) {
   await openTimeOff(page, slug, "policies");
@@ -58,6 +59,8 @@ export async function createPolicyViaUi(
   if ((await approval.getAttribute("aria-checked")) !== String(opts.requiresApproval ?? true)) {
     await approval.click();
   }
+  if (opts.allowNegative)
+    await dialog.getByRole("switch", { name: "Allow negative balance" }).click();
   await dialog.getByRole("button", { name: "Save policy" }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("row", { name: new RegExp(opts.name) })).toBeVisible();

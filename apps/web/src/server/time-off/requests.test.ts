@@ -11,6 +11,7 @@ import { savePolicy } from "./policies";
 import {
   cancelTimeOff,
   listTimeOffRequests,
+  previewTimeOff,
   requestTimeOff,
   reviewTimeOff,
   timeOffRange,
@@ -365,5 +366,32 @@ describe("timeOffCalendar", () => {
     expect(forBob.days.find((d) => d.dateKey === "2026-11-11")!.holidays).toEqual(["Cebu Day"]);
     const forMax = await timeOffCalendar(db, await cast.viewer("max"), "2026-11");
     expect(forMax.days.find((d) => d.dateKey === "2026-11-11")!.holidays).toEqual([]);
+  });
+});
+
+describe("previewTimeOff", () => {
+  it("counts the request and the balance after it, writing nothing", async () => {
+    const bob = await cast.viewer("bob");
+    await requestTimeOff(db, bob, ask("2026-11-16", "2026-11-16"), NOW);
+    const preview = await previewTimeOff(db, bob, ask("2026-11-09", "2026-11-13"), NOW);
+    expect(preview).toEqual({
+      amountCenti: 400,
+      unit: "DAYS",
+      balanceCenti: 1400,
+      afterCenti: 1000,
+      unlimited: false,
+    });
+    expect(await listTimeOffRequests(db, bob, { tab: "mine" })).toHaveLength(1);
+  });
+
+  it("refuses what the request would refuse", async () => {
+    await expect(
+      previewTimeOff(
+        db,
+        await cast.viewer("bob"),
+        ask("2026-11-03", "2026-11-04", { halfDay: true }),
+        NOW,
+      ),
+    ).rejects.toThrow("A half day is for a one-day request.");
   });
 });

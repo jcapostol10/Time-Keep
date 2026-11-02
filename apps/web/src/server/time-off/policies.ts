@@ -119,13 +119,16 @@ export async function policiesFor(
   return out;
 }
 
-/** Admins see every policy; everyone else the active ones assigned to them. */
+/**
+ * Admins see every policy; everyone else the active ones assigned to them.
+ * `mine` asks for the viewer's own, whoever they are (the request dialog).
+ */
 export async function listPolicies(
   db: Database,
   viewer: Viewer,
-  opts: { includeArchived?: boolean } = {},
+  opts: { includeArchived?: boolean; mine?: boolean } = {},
 ): Promise<PolicyDTO[]> {
-  const manages = can(viewer.actor, "timeOff.manage", { kind: "none" });
+  const manages = !opts.mine && can(viewer.actor, "timeOff.manage", { kind: "none" });
   const rows = await db
     .select()
     .from(timeOffPolicy)

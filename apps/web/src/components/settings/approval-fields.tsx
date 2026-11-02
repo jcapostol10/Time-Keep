@@ -44,7 +44,6 @@ const LOCK_LABELS: Record<LockMode, string> = {
 
 export function ApprovalFields() {
   const form = useFormContext<WorkspaceSettingsInput>();
-  const enabled = useWatch({ control: form.control, name: "approvalEnabled" });
   const lockMode = useWatch({ control: form.control, name: "lockMode" });
 
   return (
@@ -73,7 +72,8 @@ export function ApprovalFields() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Approval period</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange} disabled={!enabled}>
+                {/* Also decides who reviews time off (Phase 5b), so it stays editable. */}
+                <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger aria-label="Approval period" className="w-full">
                       <SelectValue />
@@ -100,7 +100,8 @@ export function ApprovalFields() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Who approves</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange} disabled={!enabled}>
+                {/* Also decides who reviews time off (Phase 5b), so it stays editable. */}
+                <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger aria-label="Who approves" className="w-full">
                       <SelectValue />
@@ -114,7 +115,9 @@ export function ApprovalFields() {
                     ))}
                   </SelectContent>
                 </Select>
-                <FormDescription>Managers never approve their own time.</FormDescription>
+                <FormDescription>
+                  Also decides who approves time off. Managers never approve their own.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}

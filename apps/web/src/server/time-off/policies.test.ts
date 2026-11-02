@@ -78,6 +78,8 @@ describe("listPolicies", () => {
     expect(await listPolicies(db, await cast.viewer("max"))).toEqual([]);
     const all = await listPolicies(db, await cast.viewer("olga"));
     expect(all[0]).toMatchObject({ everyone: false, groupIds: [cast.cebuId] });
+    // An admin asking for their own (the request dialog) gets only what is assigned to them.
+    expect(await listPolicies(db, await cast.viewer("olga"), { mine: true })).toEqual([]);
   });
 
   it("hides an archived policy from members but not from admins who ask", async () => {

@@ -3,11 +3,13 @@ import "server-only";
 import { type Capacity, localDateKey } from "@timekeep/core";
 import {
   and,
+  asc,
   type DbExecutor,
   eq,
   inArray,
   membership,
   user,
+  userGroup,
   userGroupMember,
   workspace,
   workspaceSettings,
@@ -118,4 +120,25 @@ export async function personContext(
   const person = (await peopleContext(db, zone, [userId])).get(userId);
   if (!person) throw new WorkspaceAccessError(404, "Not found");
   return person;
+}
+
+/** The active members and the groups a policy, holiday or target can be assigned to. */
+export async function assigneeOptions(
+  db: DbExecutor,
+  workspaceId: string,
+): Promise<{ people: { id: string; name: string }[]; groups: { id: string; name: string }[] }> {
+  const [people, groups] = await Promise.all([
+    db
+      .select({ id: user.id, name: user.name })
+      .from(membership)
+      .innerJoin(user, eq(user.id, membership.userId))
+      .where(and(eq(membership.workspaceId, workspaceId), eq(membership.status, "ACTIVE")))
+      .orderBy(asc(user.name)),
+    db
+      .select({ id: userGroup.id, name: userGroup.name })
+      .from(userGroup)
+      .where(eq(userGroup.workspaceId, workspaceId))
+      .orderBy(asc(userGroup.name)),
+  ]);
+  return { people, groups };
 }

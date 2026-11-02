@@ -112,6 +112,7 @@ test.describe("time off", () => {
     await createPolicyViaUi(page, slug, {
       name: "Sick",
       accrual: "No allowance",
+      allowNegative: true,
       requiresApproval: false,
     });
     await requestTimeOffViaUi(page, slug, { policy: "Sick", start: monday, end: monday });

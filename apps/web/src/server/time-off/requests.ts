@@ -38,6 +38,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import type {
   TimeOffDayDTO,
+  TimeOffPreviewDTO,
   TimeOffRangeDTO,
   TimeOffRequestDTO,
   TimeOffTab,
@@ -157,6 +158,89 @@ function emailBase(
 
 // --- Writes ------------------------------------------------------------------------
 
+/**
+ * What a request would take and leave, with every refusal it would meet: an
+ * unassigned or archived policy (404), dates the core counting refuses, no
+ * working days, an overlap with the person's own time off, and a balance that
+ * would go below zero (pending counts). Run inside the person's lock to write.
+ */
+async function planRequest(
+  tx: DbExecutor,
+  zone: WorkspaceZone,
+  viewer: Viewer,
+  input: TimeOffRequestInput,
+  today: string,
+) {
+  const person = await personContext(tx, zone, viewer.userId);
+  const assigned = (await policiesFor(tx, zone, [person])).get(person.userId) ?? [];
+  const mine = assigned.find((a) => a.policy.id === input.policyId);
+  if (!mine) throw new WorkspaceAccessError(404, "Not found");
+  const policy = mine.policy;
+  const span: TimeOffSpan = {
+    start: input.start,
+    end: input.end,
+    halfDay: policy.unit === "DAYS" && input.halfDay,
+    minutes: policy.unit === "HOURS" ? requestMinutes(input) : null,
+  };
+  let amountCenti: number;
+  try {
+    const keys = await holidayKeys(tx, zone, person, span.start, span.end);
+    amountCenti = countRequestCenti(policy.unit, span, person.capacity, keys);
+  } catch (error) {
+    throw new CatalogError("INVALID", (error as Error).message);
+  }
+  if (amountCenti === 0) {
+    throw new CatalogError("INVALID", "These dates have no working days.");
+  }
+  const [overlap] = await tx
+    .select({ start: timeOffRequest.startDate, end: timeOffRequest.endDate })
+    .from(timeOffRequest)
+    .where(
+      and(
+        eq(timeOffRequest.workspaceId, viewer.workspaceId),
+        eq(timeOffRequest.userId, viewer.userId),
+        inArray(timeOffRequest.status, LIVE),
+        lte(timeOffRequest.startDate, span.end),
+        gte(timeOffRequest.endDate, span.start),
+      ),
+    )
+    .limit(1);
+  if (overlap) {
+    throw new CatalogError(
+      "INVALID",
+      `This overlaps your time off on ${formatTimeOffDates(overlap.start, overlap.end)}.`,
+    );
+  }
+  const year = Number(span.start.slice(0, 4));
+  const balance = (await balancesFor(tx, zone, [person], year, today))
+    .get(person.userId)
+    ?.find((b) => b.assigned.policy.id === policy.id)?.balance;
+  if (balance && wouldGoNegative(balance, amountCenti, policy.allowNegative)) {
+    throw new CatalogError("INVALID", `This would take ${policy.name} below zero.`);
+  }
+  return { person, policy, span, amountCenti, balance };
+}
+
+/** The dialog's preview: what the request takes and the balance before and after. */
+export async function previewTimeOff(
+  db: Database,
+  viewer: Viewer,
+  input: TimeOffRequestInput,
+  now: Date = new Date(),
+): Promise<TimeOffPreviewDTO> {
+  assertCan(viewer.actor, "timeOff.request", { kind: "person", userId: viewer.userId });
+  const zone = await workspaceZone(db, viewer.workspaceId);
+  const plan = await planRequest(db, zone, viewer, input, localDateKey(now, zone.timezone));
+  const available = plan.balance ? plan.balance.balanceCenti - plan.balance.pendingCenti : 0;
+  return {
+    amountCenti: plan.amountCenti,
+    unit: plan.policy.unit,
+    balanceCenti: available,
+    afterCenti: available - plan.amountCenti,
+    unlimited: plan.balance?.unlimited ?? false,
+  };
+}
+
 export async function requestTimeOff(
   db: Database,
   viewer: Viewer,
@@ -169,53 +253,7 @@ export async function requestTimeOff(
   const id = await db.transaction(async (tx) => {
     // The person's lock: two requests at once cannot both spend the last days.
     await tx.execute(timerLock(viewer.workspaceId, viewer.userId));
-    const person = await personContext(tx, zone, viewer.userId);
-    const assigned = (await policiesFor(tx, zone, [person])).get(person.userId) ?? [];
-    const mine = assigned.find((a) => a.policy.id === input.policyId);
-    if (!mine) throw new WorkspaceAccessError(404, "Not found");
-    const policy = mine.policy;
-    const span: TimeOffSpan = {
-      start: input.start,
-      end: input.end,
-      halfDay: policy.unit === "DAYS" && input.halfDay,
-      minutes: policy.unit === "HOURS" ? requestMinutes(input) : null,
-    };
-    let amountCenti: number;
-    try {
-      const keys = await holidayKeys(tx, zone, person, span.start, span.end);
-      amountCenti = countRequestCenti(policy.unit, span, person.capacity, keys);
-    } catch (error) {
-      throw new CatalogError("INVALID", (error as Error).message);
-    }
-    if (amountCenti === 0) {
-      throw new CatalogError("INVALID", "These dates have no working days.");
-    }
-    const [overlap] = await tx
-      .select({ start: timeOffRequest.startDate, end: timeOffRequest.endDate })
-      .from(timeOffRequest)
-      .where(
-        and(
-          eq(timeOffRequest.workspaceId, viewer.workspaceId),
-          eq(timeOffRequest.userId, viewer.userId),
-          inArray(timeOffRequest.status, LIVE),
-          lte(timeOffRequest.startDate, span.end),
-          gte(timeOffRequest.endDate, span.start),
-        ),
-      )
-      .limit(1);
-    if (overlap) {
-      throw new CatalogError(
-        "INVALID",
-        `This overlaps your time off on ${formatTimeOffDates(overlap.start, overlap.end)}.`,
-      );
-    }
-    const year = Number(span.start.slice(0, 4));
-    const balance = (await balancesFor(tx, zone, [person], year, today))
-      .get(person.userId)
-      ?.find((b) => b.assigned.policy.id === policy.id)?.balance;
-    if (balance && wouldGoNegative(balance, amountCenti, policy.allowNegative)) {
-      throw new CatalogError("INVALID", `This would take ${policy.name} below zero.`);
-    }
+    const { person, policy, span, amountCenti } = await planRequest(tx, zone, viewer, input, today);
     const id = randomUUID();
     const approved = !policy.requiresApproval;
     await tx.insert(timeOffRequest).values({

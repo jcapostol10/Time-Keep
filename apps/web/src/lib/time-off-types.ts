@@ -64,6 +64,16 @@ export interface TimeOffRequestDTO {
   canReview: boolean;
 }
 
+/** The request dialog's preview (amounts in hundredths of the unit). */
+export interface TimeOffPreviewDTO {
+  amountCenti: number;
+  unit: TimeOffUnit;
+  /** Available now: the balance less pending requests. */
+  balanceCenti: number;
+  afterCenti: number;
+  unlimited: boolean;
+}
+
 export interface BalanceDTO {
   userId: string;
   userName: string;

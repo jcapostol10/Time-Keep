@@ -3,6 +3,7 @@ import {
   CheckCheckIcon,
   Building2Icon,
   CalendarDaysIcon,
+  CalendarOffIcon,
   FolderKanbanIcon,
   LayoutDashboardIcon,
   type LucideIcon,
@@ -50,6 +51,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Time Tracker", href: workspaceRoutes.tracker, icon: TimerIcon },
       { label: "Timesheet", href: workspaceRoutes.timesheet, icon: TableIcon },
       { label: "Calendar", href: workspaceRoutes.calendar, icon: CalendarDaysIcon },
+      // Everyone: their own requests and balances; reviewers and admins see more inside.
+      { label: "Time off", href: (slug) => workspaceRoutes.timeOff(slug), icon: CalendarOffIcon },
     ],
   },
   {

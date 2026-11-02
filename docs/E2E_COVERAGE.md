@@ -312,10 +312,10 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Time off and holidays
 
 - [ ] Approved time off reduces the balance and shows on the calendar and the timesheet ("Time off: <policy>") — `time-off.spec.ts` › "time off reduces the balance and shows on the calendar"
-- [ ] A time off request needing approval is approved by the person's manager under the approvers setting — `time-off.spec.ts` › "a time off request needing approval is approved by a manager"
-- [ ] A rejected request shows its note to the requester — `time-off.spec.ts` › "a rejected request shows its note"
-- [ ] A policy without approval approves a request on submit — `time-off.spec.ts` › "a policy without approval is approved on submit"
-- [ ] Import public holidays: pick a country and year, review the list, untick a day, import the rest — `attendance.spec.ts` › "importing public holidays: review, untick one, import"
+- [x] A time off request needing approval is approved by the person's manager under the approvers setting — `time-off.spec.ts` › "a time off request needing approval is approved by a manager"
+- [x] A rejected request shows its note to the requester — `time-off.spec.ts` › "a rejected request shows its note"
+- [x] A policy without approval approves a request on submit — `time-off.spec.ts` › "a policy without approval is approved on submit"
+- [x] Import public holidays: pick a country and year, review the list, untick a day, import the rest — `attendance.spec.ts` › "importing public holidays: review, untick one, import"
 - [ ] A holiday assigned to a group shows for its members only — `attendance.spec.ts` › "a holiday assigned to a group"
 
 ## Attendance and targets
