@@ -2,6 +2,7 @@ import {
   type Database,
   eq,
   managedUser,
+  membership,
   userGroup,
   userGroupMember,
   workspaceSettings,
@@ -42,6 +43,11 @@ export async function setUpTimeOffCast(db: Database): Promise<TimeOffCast> {
     await db.update(workspaceSettings).set(patch).where(eq(workspaceSettings.workspaceId, ws.id));
   };
   await setRules({ timezone: "Asia/Manila", weekStart: 1 });
+  // Joined long ago, so balances do not depend on the day the tests run.
+  await db
+    .update(membership)
+    .set({ createdAt: new Date("2025-01-01T00:00:00Z") })
+    .where(eq(membership.workspaceId, ws.id));
   const ids = { olga: olga.id, ann: ann.id, max: max.id, bob: bob.id };
   return { wsId: ws.id, ids, cebuId, viewer: (who) => loadViewer(db, ws.id, ids[who]), setRules };
 }

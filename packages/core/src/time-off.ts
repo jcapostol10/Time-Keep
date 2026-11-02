@@ -1,4 +1,4 @@
-import { addDaysToKey } from "./approvals";
+import { addDaysToKey, formatDateKey, formatPeriod } from "./approvals";
 
 /**
  * Time off (Phase 5b). Amounts are integer hundredths of the policy's unit
@@ -207,4 +207,9 @@ export function parseCenti(text: string): number | null {
   if (!m) return null;
   const centi = Number(m[2]) * 100 + Number((m[3] ?? "").padEnd(2, "0"));
   return m[1] && centi !== 0 ? -centi : centi;
+}
+
+/** "3 Mar 2026" for one day, "3 – 5 Mar 2026" for a range. */
+export function formatTimeOffDates(start: string, end: string): string {
+  return start === end ? formatDateKey(start) : formatPeriod({ start, end });
 }

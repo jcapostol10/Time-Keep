@@ -3,6 +3,7 @@ import {
   countRequestCenti,
   DEFAULT_CAPACITY,
   formatCenti,
+  formatTimeOffDates,
   policyBalance,
   timeOffMinutesByDay,
   wouldGoNegative,
@@ -224,5 +225,12 @@ describe("formatCenti", () => {
     expect(formatCenti(750, "HOURS")).toBe("7.5 hours");
     expect(formatCenti(125, "DAYS")).toBe("1.25 days");
     expect(formatCenti(-200, "DAYS")).toBe("-2 days");
+  });
+});
+
+describe("formatTimeOffDates", () => {
+  it("names one day once and a range by its ends", () => {
+    expect(formatTimeOffDates("2026-03-03", "2026-03-03")).toBe("3 Mar 2026");
+    expect(formatTimeOffDates("2026-03-03", "2026-03-05")).toBe("3 – 5 Mar 2026");
   });
 });
