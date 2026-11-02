@@ -11,7 +11,9 @@ const db = h.db;
 afterAll(() => h.close());
 beforeEach(() => truncateAll(db));
 
-const T0 = new Date("2026-11-02T00:00:00Z");
+// Rows are stamped with the database's now(), so the test clock starts from the
+// real time (the next whole minute), never a fixed date that the calendar passes.
+const T0 = new Date(Math.ceil(Date.now() / 60_000) * 60_000);
 const minutes = (n: number) => new Date(T0.getTime() + n * 60_000);
 
 function mail(to: string) {
