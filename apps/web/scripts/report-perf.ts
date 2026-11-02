@@ -1,10 +1,10 @@
 /**
  * Times the one-year Summary over the perf tenant (pnpm db:seed:perf), for the
  * owner, a scoped manager and a member, plus the member's picker read with
- * tasks by group, and prints the plans of the Summary's queries; then rates
- * all 1,000,000 entries with the "apply to past entries" job. Fails over the
- * one-second Summary budget, the 200 ms picker budget or the 300-second
- * function budget.
+ * tasks by group, the one-year Attendance report (Phase 5b), and prints the
+ * plans of the Summary's queries; then rates all 1,000,000 entries with the
+ * "apply to past entries" job. Fails over the one-second Summary or Attendance
+ * budget, the 200 ms picker budget or the 300-second function budget.
  *
  *   pnpm --filter @timekeep/web report:perf
  *
@@ -13,6 +13,7 @@
 import { DEFAULT_REPORT_QUERY, resolveViewerPrefs, type ReportQuery } from "@timekeep/core";
 import { createDb, sql } from "@timekeep/db";
 
+import { attendanceReport } from "../src/server/attendance";
 import { loadViewer } from "../src/server/authz";
 import { listPickerProjects } from "../src/server/catalog/projects";
 import type { Viewer } from "../src/server/catalog/viewer";
@@ -100,6 +101,32 @@ async function main() {
     console.info(
       `[perf] member picker (tasks by group): median ${pickerMs.toFixed(0)} ms (runs ${pickerRuns.map((r) => r.toFixed(0)).join(", ")})`,
     );
+    // The Attendance report: every person's own days over the year.
+    async function timeAttendance(label: string, who: Viewer): Promise<number> {
+      await attendanceReport(db, who, query, prefs);
+      const runs: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        const t0 = performance.now();
+        const report = await attendanceReport(db, who, query, prefs);
+        runs.push(performance.now() - t0);
+        if (i === 0) {
+          const days = report.people.reduce((n, p) => n + p.days.length, 0);
+          console.info(
+            `[perf] attendance (${label}): ${report.people.length} people, ${days} days`,
+          );
+        }
+      }
+      runs.sort((a, b) => a - b);
+      const mid = runs[2]!;
+      console.info(
+        `[perf] one-year Attendance (${label}): median ${mid.toFixed(0)} ms (runs ${runs.map((r) => r.toFixed(0)).join(", ")})`,
+      );
+      return mid;
+    }
+    const attendanceMs = Math.max(
+      await timeAttendance("owner", viewer),
+      await timeAttendance("manager", manager),
+    );
     // With a rounding rule every entry is rounded and re-amounted in the scan.
     await db.execute(
       sql`update workspace_settings set rounding_mode = 'nearest', rounding_minutes = 15 where workspace_id = 'perf-ws'`,
@@ -137,6 +164,12 @@ async function main() {
     }
     if (median > BUDGET_MS) {
       console.error(`[perf] over budget: ${median.toFixed(0)} ms > ${BUDGET_MS} ms`);
+      process.exitCode = 1;
+    }
+    if (attendanceMs > BUDGET_MS) {
+      console.error(
+        `[perf] attendance over budget: ${attendanceMs.toFixed(0)} ms > ${BUDGET_MS} ms`,
+      );
       process.exitCode = 1;
     }
     if (pickerMs > PICKER_BUDGET_MS) {

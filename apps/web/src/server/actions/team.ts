@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  capacitySchema,
   changeRoleSchema,
   inviteMembersSchema,
   managerScopeSchema,
@@ -27,6 +28,7 @@ import { invitationEmail, sendEmailOrExplain } from "@/server/mail";
 import {
   changeRole,
   removeMember,
+  setCapacity,
   setManagerScope,
   setMemberStatus,
   transferOwnership,
@@ -171,6 +173,24 @@ export async function setManagerScopeAction(slug: string, input: unknown): Promi
     if (!parsed.success) return fromZodError(parsed.error);
     const { managerId, ...scope } = parsed.data;
     await setManagerScope(getDb(), viewer, managerId, scope);
+    revalidatePath(`/w/${slug}/team`);
+    return ok(undefined);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+/** Daily and weekly hours and working days (Phase 5b): owners and admins, checked in setCapacity. */
+export async function setCapacityAction(
+  slug: string,
+  userId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  try {
+    const viewer = await teamViewer(slug);
+    const parsed = capacitySchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    await setCapacity(getDb(), viewer, userId, parsed.data);
     revalidatePath(`/w/${slug}/team`);
     return ok(undefined);
   } catch (error) {

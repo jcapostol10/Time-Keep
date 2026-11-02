@@ -2,9 +2,11 @@ import "server-only";
 
 import {
   addDaysInZone,
+  attendanceColumns,
   detailedColumns,
   type ExportColumn,
   type ExportFormat,
+  flattenAttendance,
   flattenGroups,
   localDateKey,
   type ReportKind,
@@ -20,6 +22,7 @@ import ExcelJS from "exceljs";
 
 import type { DetailedCursor, DetailedEntryDTO, ReportMoney } from "@/lib/report-types";
 
+import { attendanceReport } from "./attendance";
 import type { Viewer } from "./catalog/viewer";
 import { detailedReport, summaryReport, weeklyReport } from "./reports";
 
@@ -32,8 +35,11 @@ export interface ExportFile {
   rowCount: number;
 }
 
+/** The reports that export to a file: the three report tabs and Attendance (Phase 5b). */
+export type FileReport = ReportKind | "attendance";
+
 export interface ExportRequest {
-  report: ReportKind;
+  report: FileReport;
   query: ReportQuery;
   prefs: ViewerPrefs;
   now?: Date;
@@ -110,7 +116,15 @@ export async function countExportRows(
       const report = await weeklyReport(db, viewer, req.query, req.prefs, req.now);
       return report.rows.length;
     }
+    case "attendance":
+      return (await attendanceRows(db, viewer, req)).length;
   }
+}
+
+/** The Attendance report's export rows: days, weekly subtotals and each person's total. */
+export async function attendanceRows(db: Executor, viewer: Viewer, req: ExportRequest) {
+  const report = await attendanceReport(db, viewer, req.query, req.prefs, req.now);
+  return flattenAttendance(report.people);
 }
 
 /** The rows and columns of an export: one record, every format. */
@@ -149,6 +163,11 @@ async function exportTable(
         ) as ExportColumn<unknown>[],
       };
     }
+    case "attendance":
+      return {
+        rows: await attendanceRows(db, viewer, req),
+        columns: attendanceColumns(req.prefs) as ExportColumn<unknown>[],
+      };
   }
 }
 
