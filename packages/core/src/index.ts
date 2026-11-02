@@ -22,6 +22,8 @@ export * from "./workspace-rules";
 export * from "./slug";
 export * from "./time";
 export * from "./time-entry";
+export * from "./time-off";
+export * from "./holidays";
 export * from "./timesheet";
 export * from "./tracker-rules";
 export * from "./team-import";
