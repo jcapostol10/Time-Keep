@@ -1,6 +1,12 @@
 import "server-only";
 
-import { can, type Role } from "@timekeep/core";
+import {
+  can,
+  type Capacity,
+  capacityFromInput,
+  type CapacityInput,
+  type Role,
+} from "@timekeep/core";
 import {
   and,
   asc,
@@ -310,6 +316,27 @@ export async function setManagerScope(
   });
 }
 
+/** A member's daily and weekly capacity and working days (Phase 5b; owners and admins). */
+export async function setCapacity(
+  db: Database,
+  viewer: Viewer,
+  userId: string,
+  input: CapacityInput,
+): Promise<Capacity> {
+  const current = await target(db, viewer, userId);
+  assertCan(viewer.actor, "member.setCapacity", { kind: "member", userId, role: current.role });
+  const capacity = capacityFromInput(input);
+  await db
+    .update(membership)
+    .set({
+      dailyCapacityMinutes: capacity.dailyMinutes,
+      weeklyCapacityMinutes: capacity.weeklyMinutes,
+      workingDays: [...capacity.workingDays],
+    })
+    .where(and(eq(membership.workspaceId, viewer.workspaceId), eq(membership.userId, userId)));
+  return capacity;
+}
+
 /** Everyone in the workspace, plus pending invites for those who may invite. */
 export async function listTeam(
   db: Database,
@@ -345,6 +372,9 @@ export async function listTeam(
         image: user.image,
         role: membership.role,
         status: membership.status,
+        dailyMinutes: membership.dailyCapacityMinutes,
+        weeklyMinutes: membership.weeklyCapacityMinutes,
+        workingDays: membership.workingDays,
       })
       .from(membership)
       .innerJoin(user, eq(user.id, membership.userId))
@@ -446,6 +476,11 @@ export async function listTeam(
               projectIds: ids(scopeProjects, m.userId),
             }
           : null,
+      capacity: {
+        dailyMinutes: m.dailyMinutes,
+        weeklyMinutes: m.weeklyMinutes,
+        workingDays: m.workingDays,
+      },
     })),
     ...invites.map((i): TeamRow => ({
       kind: "invite",
@@ -459,6 +494,7 @@ export async function listTeam(
       groups: (groupsOfInvite.get(i.id) ?? []).map((g) => ({ id: g.id, name: g.name! })),
       billableRateMinor: null,
       scope: null,
+      capacity: null,
     })),
   ];
 

@@ -1,4 +1,4 @@
-import type { Role } from "@timekeep/core";
+import type { Capacity, Role } from "@timekeep/core";
 
 /** What the Team page reads: JSON-safe, shared by the server and the client. */
 
@@ -20,6 +20,8 @@ export interface TeamRow {
   billableRateMinor: number | null;
   /** A manager's people, groups and projects; null for other roles or without permission. */
   scope: { userIds: string[]; groupIds: string[]; projectIds: string[] } | null;
+  /** Daily and weekly minutes and working days (Phase 5b); null for an invite. */
+  capacity: Capacity | null;
 }
 
 export interface TeamFilters {

@@ -11,7 +11,7 @@ import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-a
 import { authorize } from "@/server/authz";
 
 const requestSchema = z.object({
-  report: z.enum(REPORT_KINDS),
+  report: z.enum([...REPORT_KINDS, "attendance"]),
   format: z.enum(["csv", "xlsx", "pdf"]),
 });
 
@@ -43,7 +43,11 @@ export async function GET(
     if (!parsed.success) return Response.json({ error: "Invalid export" }, { status: 400 });
 
     const db = getDb();
-    const viewer = await authorize(access, "page.view", { kind: "page", page: "reports" });
+    // Attendance is every member's own (decision 13): it asks attendance.read, not the Reports page.
+    const viewer =
+      parsed.data.report === "attendance"
+        ? await authorize(access, "attendance.read", { kind: "person", userId: access.user.id })
+        : await authorize(access, "page.view", { kind: "page", page: "reports" });
     const req = {
       ...parsed.data,
       query: parseReportQuery(params),

@@ -19,7 +19,8 @@
     "./time-entry": "./src/time-entry.ts",
     "./timesheet": "./src/timesheet.ts",
     "./entry-edit": "./src/entry-edit.ts",
-    "./tracker-rules": "./src/tracker-rules.ts"
+    "./tracker-rules": "./src/tracker-rules.ts",
+    "./holiday-import": "./src/holiday-import.ts"
   },
   "scripts": {
     "lint": "eslint .",
@@ -29,6 +30,7 @@
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
     "date-fns": "^4.4.0",
+    "date-holidays": "3.38.0",
     "zod": "^4.1.0"
   },
   "devDependencies": {

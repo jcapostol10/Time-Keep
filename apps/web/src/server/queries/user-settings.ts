@@ -21,6 +21,7 @@ function toSettings(row: UserSettings): TrackerSettingsInput {
     ),
     reminderStartMinutes: row.reminderStartMinutes,
     reminderEndMinutes: row.reminderEndMinutes,
+    muteTargetReminders: row.muteTargetReminders,
   };
 }
 
@@ -49,6 +50,7 @@ export async function upsertTrackerSettings(
     reminderDays: [...input.reminderDays],
     reminderStartMinutes: input.reminderStartMinutes,
     reminderEndMinutes: input.reminderEndMinutes,
+    muteTargetReminders: input.muteTargetReminders,
   };
   const [row] = await db
     .insert(userSettings)

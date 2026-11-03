@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { ViewerPrefs } from "./prefs";
+import { attendanceDays, attendanceWeeks, sumAttendanceWeeks } from "./attendance";
 import {
+  attendanceColumns,
   type DetailedEntry,
   detailedColumns,
+  flattenAttendance,
   type ExportColumn,
   flattenGroups,
   summaryColumns,
@@ -12,6 +15,7 @@ import {
 } from "./report-export";
 import { type GroupKey, groupRows, type ReportRow, type ReportTotals } from "./reports";
 import { formatDateInZone } from "./time";
+import { DEFAULT_CAPACITY } from "./time-off";
 
 const PREFS: ViewerPrefs = {
   timezone: "Asia/Manila",
@@ -267,5 +271,54 @@ describe("amounts in exports", () => {
     expect(
       toCsv([{ id: "web", label: "Web", days: [3600], total: 3600, amountMinor: 5000 }], columns),
     ).toContain("Web,1:00:00,1:00:00,5000");
+  });
+});
+
+describe("attendance export", () => {
+  it("lists days, then a weekly subtotal and the person's total", () => {
+    const range = { from: "2026-11-02", to: "2026-11-08" };
+    const days = attendanceDays({
+      ...range,
+      work: new Map([
+        [
+          "2026-11-02",
+          {
+            dateKey: "2026-11-02",
+            firstStart: "2026-11-02T01:00:00.000Z",
+            lastEnd: "2026-11-02T10:00:00.000Z",
+            workSeconds: 9 * 3600,
+            breakSeconds: 0,
+          },
+        ],
+      ]),
+      capacity: DEFAULT_CAPACITY,
+      holidays: new Map([["2026-11-03", "All Souls"]]),
+      timeOffMinutes: new Map(),
+    });
+    const weeks = attendanceWeeks(days, DEFAULT_CAPACITY, 1, range);
+    const rows = flattenAttendance([
+      {
+        userName: "Bob",
+        timezone: "Asia/Manila",
+        days,
+        weeks,
+        totals: sumAttendanceWeeks(weeks, range.from),
+      },
+    ]);
+    const csv = toCsv(rows, attendanceColumns(PREFS));
+    const lines = csv.slice(1).trimEnd().split("\r\n");
+    expect(lines[0]).toBe(
+      "Person,Date,First in,Last out,Work,Breaks,Time off,Capacity,Overtime,Undertime,Holiday",
+    );
+    expect(lines[1]).toBe(
+      "Bob,2026-11-02,09:00,18:00,9:00:00,0:00:00,0:00:00,8:00:00,1:00:00,0:00:00,",
+    );
+    expect(lines[2]).toBe(
+      "Bob,2026-11-03,,,0:00:00,0:00:00,0:00:00,0:00:00,0:00:00,0:00:00,All Souls",
+    );
+    expect(lines.at(-2)).toBe(
+      "Bob,Week of 2026-11-02,,,9:00:00,0:00:00,0:00:00,32:00:00,0:00:00,23:00:00,",
+    );
+    expect(lines.at(-1)).toBe("Bob,Total,,,9:00:00,0:00:00,0:00:00,32:00:00,0:00:00,23:00:00,");
   });
 });

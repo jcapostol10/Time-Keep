@@ -1,3 +1,4 @@
+import type { AttendanceDay, AttendanceWeek } from "./attendance";
 import type { EntryType } from "./schemas";
 import { formatDuration } from "./duration";
 import { minorToDecimal } from "./money";
@@ -197,6 +198,105 @@ export function weeklyColumns(
           },
         ]
       : []),
+  ];
+}
+
+/** One line of the attendance export: a day, a person's week, or their total. */
+export interface AttendanceExportRow {
+  userName: string;
+  /** The person's own timezone: first in and last out are their local times. */
+  timezone: string;
+  label: { kind: "day"; dateKey: string } | { kind: "week"; weekStart: string } | { kind: "total" };
+  firstStart: string | null;
+  lastEnd: string | null;
+  holiday: string | null;
+  measures: Omit<AttendanceWeek, "weekStart">;
+}
+
+/** Each person's days, then each week's subtotal after its last day, then their total. */
+export function flattenAttendance(
+  people: readonly {
+    userName: string;
+    timezone: string;
+    days: readonly AttendanceDay[];
+    weeks: readonly AttendanceWeek[];
+    totals: AttendanceWeek;
+  }[],
+): AttendanceExportRow[] {
+  const rows: AttendanceExportRow[] = [];
+  for (const p of people) {
+    const base = { userName: p.userName, timezone: p.timezone };
+    p.weeks.forEach((week, i) => {
+      const next = p.weeks[i + 1]?.weekStart;
+      for (const d of p.days) {
+        if (d.dateKey < week.weekStart || (next && d.dateKey >= next)) continue;
+        rows.push({
+          ...base,
+          label: { kind: "day", dateKey: d.dateKey },
+          firstStart: d.firstStart,
+          lastEnd: d.lastEnd,
+          holiday: d.holiday,
+          measures: d,
+        });
+      }
+      rows.push({
+        ...base,
+        label: { kind: "week", weekStart: week.weekStart },
+        firstStart: null,
+        lastEnd: null,
+        holiday: null,
+        measures: week,
+      });
+    });
+    rows.push({
+      ...base,
+      label: { kind: "total" },
+      firstStart: null,
+      lastEnd: null,
+      holiday: null,
+      measures: p.totals,
+    });
+  }
+  return rows;
+}
+
+export function attendanceColumns(
+  prefs: Pick<ViewerPrefs, "dateFormat" | "timeFormat" | "durationFormat">,
+): ExportColumn<AttendanceExportRow>[] {
+  const date = (key: string) =>
+    formatDateInZone(
+      zonedDateTimeToInstant({ date: key, hours: 12, minutes: 0 }, "UTC"),
+      "UTC",
+      prefs.dateFormat,
+    );
+  const time = (iso: string | null, tz: string) =>
+    iso === null ? null : formatTimeOfDay(new Date(iso), tz, prefs.timeFormat);
+  const span = (key: keyof AttendanceExportRow["measures"], header: string) => ({
+    key,
+    header,
+    value: (r: AttendanceExportRow) => formatDuration(r.measures[key], prefs.durationFormat),
+  });
+  return [
+    { key: "person", header: "Person", value: (r) => r.userName },
+    {
+      key: "date",
+      header: "Date",
+      value: (r) =>
+        r.label.kind === "day"
+          ? date(r.label.dateKey)
+          : r.label.kind === "week"
+            ? `Week of ${date(r.label.weekStart)}`
+            : "Total",
+    },
+    { key: "firstIn", header: "First in", value: (r) => time(r.firstStart, r.timezone) },
+    { key: "lastOut", header: "Last out", value: (r) => time(r.lastEnd, r.timezone) },
+    span("workSeconds", "Work"),
+    span("breakSeconds", "Breaks"),
+    span("timeOffSeconds", "Time off"),
+    span("capacitySeconds", "Capacity"),
+    span("overtimeSeconds", "Overtime"),
+    span("undertimeSeconds", "Undertime"),
+    { key: "holiday", header: "Holiday", value: (r) => r.holiday },
   ];
 }
 

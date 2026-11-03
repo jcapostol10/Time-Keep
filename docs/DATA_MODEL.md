@@ -2,7 +2,7 @@
 
 PostgreSQL (16 locally, Supabase in production) via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
 
-## Entity overview (Phases 0–5a)
+## Entity overview (Phases 0–5b)
 
 ```
 user ──< session            (activeWorkspaceId → workspace)
@@ -35,6 +35,11 @@ workspace ──< favorite_entry >── user      (pinned entry details; Phase 
 workspace ──< approval_request >── user    (a period submitted for approval; Phase 5a)
 approval_request ──< approval_event        (its history and admins' edit notes)
 workspace ──< email_outbox                 (every email, sent after the request)
+workspace ──< time_off_policy ──< time_off_policy_assignee >── user | user_group   (Phase 5b)
+workspace ──< time_off_request >── user;  time_off_request >── time_off_policy (RESTRICT)
+workspace ──< time_off_adjustment >── user;  time_off_adjustment >── time_off_policy
+workspace ──< holiday ──< holiday_assignee >── user | user_group
+workspace ──< target_rule ──< target_rule_assignee >── user | user_group
 ```
 
 ## Tables
@@ -109,6 +114,9 @@ The Phase 4b rule columns (from `rounding_mode` down) default to the behaviour b
 | user_id | text → user (cascade), indexed | |
 | role | enum `workspace_role` (`owner`, `admin`, `manager`, `member`) | |
 | status | enum `membership_status` (`ACTIVE`, `INVITED`, `DEACTIVATED`) | `ACTIVE`. `INVITED` is reserved; pending invites live in `invitation` |
+| daily_capacity_minutes | smallint | 480. Capacity (Phase 5b): attendance and target rules measure against it |
+| weekly_capacity_minutes | smallint | 2400 |
+| working_days | smallint[] | `{1,2,3,4,5}` (0 = Sunday) |
 | created_at, updated_at | timestamptz | |
 
 Unique `(workspace_id, user_id)`.
@@ -382,7 +390,7 @@ An export too large to stream back (over `EXPORT_JOB_THRESHOLD` rows or 4 MB): b
 | workspace_id | text → workspace (cascade) | |
 | user_id | text → user (cascade) | only this person can download it |
 | format | enum export_format | csv, xlsx, pdf |
-| report | enum export_report | summary, detailed, weekly, project-status |
+| report | enum export_report | summary, detailed, weekly, project-status, attendance (5b) |
 | query | jsonb | the report query |
 | status | enum export_status | queued → running → done / failed |
 | row_count | integer? | |
@@ -487,6 +495,71 @@ Every email the app sends. A row is written in the same transaction as its cause
 | last_error | text? | |
 | created_at, sent_at | timestamptz | |
 
+### time_off_policy (Phase 5b)
+
+What people can take time off against. Amounts are integer hundredths of the unit (`allowance_centi` 1500 = 15 days; 750 of an HOURS policy = 7.5 hours). Balances are computed, never stored (core `policyBalance`): per calendar year in the workspace timezone, YEARLY grants the allowance on 1 January, MONTHLY grants `round_half_up(allowance × m / 12)` after *m* monthly grants (from the later of the join date and the assignment date), nothing carries over; NONE grants nothing, and is "Unlimited" when it allows a negative balance.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | unique `(workspace_id, name)` |
+| name | text | |
+| unit | enum `time_off_unit` (`DAYS`, `HOURS`) | |
+| accrual | enum `time_off_accrual` (`NONE`, `YEARLY`, `MONTHLY`) | |
+| allowance_centi | integer | 0 |
+| allow_negative | boolean | false |
+| requires_approval | boolean | true; false approves on submit |
+| everyone | boolean | true; otherwise the assignee rows |
+| archived_at | timestamptz? | archived policies take no new requests |
+| created_at, updated_at | timestamptz | |
+
+`time_off_policy_assignee`, `holiday_assignee`, `target_rule_assignee`: `id`, the parent id (cascade), `user_id` → user or `group_id` → user_group (cascade; a check keeps exactly one), `created_at`; unique `(parent, user_id)` and `(parent, group_id)`.
+
+### time_off_request (Phase 5b)
+
+Time off is never a `time_entry`: it never reaches Summary, Detailed, Weekly or the dashboard and is never rated. A person's PENDING and APPROVED requests never overlap; one request stays inside one calendar year.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| user_id | text → user (cascade) | |
+| policy_id | text → time_off_policy (restrict) | |
+| start_date, end_date | date | inclusive local dates |
+| half_day | boolean | DAYS, one-day requests only |
+| minutes | integer? | HOURS: per day for one day, the total for a range |
+| amount_centi | integer | what it takes from the balance, counted at request time (working days less holidays) |
+| note | text | the requester's note |
+| status | enum `time_off_status` (`PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`) | |
+| decided_by, decided_at, decision_note | text? → user (set null), timestamptz?, text? | |
+| created_at, updated_at | timestamptz | |
+
+Indexes: `(workspace_id, user_id, start_date, end_date)` (overlaps, balances, the timesheet band), `(workspace_id, status, start_date)` (the review tab).
+
+### time_off_adjustment (Phase 5b)
+
+A signed manual change to a balance (`amount_centi`), counted in the year of `effective_on`; `note` is required; `created_by` → user (set null). Index `(workspace_id, user_id, policy_id)`.
+
+### holiday (Phase 5b)
+
+Holidays for any country (decision 11), added by hand or imported from the bundled `date-holidays` dataset (`docs/THIRD_PARTY.md`). A holiday with no assignee rows applies to everyone.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | unique `(workspace_id, date, name)`: an import never doubles a row |
+| date | date | |
+| name | text | |
+| repeats_yearly | boolean | false; repeats on its month and day from its own year (29 February in leap years) |
+| source | text? | `imported: PH 2027`; null when added by hand |
+| country | text? | the imported country code |
+| estimated | boolean | an Islamic-calendar date computed by the dataset |
+| created_at, updated_at | timestamptz | |
+
+### target_rule (Phase 5b)
+
+`kind` enum `target_kind` (`UNDER`, `OVER`), `period` enum `target_period` (`DAY`, `WEEK`), `threshold_minutes` smallint, `active` and `everyone` booleans (true), timestamps; index `(workspace_id)`. The daily job emails each breach once, deduplicated by the outbox row's `kind` (`target:<ruleId>:<userId>:<dateKey>`).
+
 ## Rules at scale (Phase 4b)
 
 Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf`, 2026-10-28, after the rule columns, `time_entry.type` and the work-only rating:
@@ -512,7 +585,7 @@ Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf` after
 
 ## Planned (later phases)
 
-Phase 5b: `time_off_policy`, `time_off_request`, `holiday`, targets. Phase 5c: `kiosk`, `kiosk_pin`. (Lock dates are `workspace_settings` columns, not a `lock_period` table.)
+Phase 5c: `kiosk`, `kiosk_pin`. (Lock dates are `workspace_settings` columns, not a `lock_period` table.)
 Phase 6: `expense`, `expense_category`, `invoice`, `invoice_item`, `payment`, `budget`, `custom_field`.
 Phase 7: `assignment`, `milestone`.
 Phase 8: `subscription`, `api_key`, `webhook`, `webhook_delivery`, `audit_log`, `sso_config`.

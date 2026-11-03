@@ -100,7 +100,8 @@ export function ApprovalFields() {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Who approves</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange} disabled={!enabled}>
+                {/* Also decides who reviews time off (Phase 5b), so it stays editable. */}
+                <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger aria-label="Who approves" className="w-full">
                       <SelectValue />
@@ -114,7 +115,9 @@ export function ApprovalFields() {
                     ))}
                   </SelectContent>
                 </Select>
-                <FormDescription>Managers never approve their own time.</FormDescription>
+                <FormDescription>
+                  Also decides who approves time off. Managers never approve their own.
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}

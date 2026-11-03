@@ -19,7 +19,9 @@ import {
   isNull,
   lt,
   membership,
+  or,
   sql,
+  targetRule,
   timeEntry,
   user,
   userSettings,
@@ -32,18 +34,21 @@ import { e2eOnlyWorkspaceIds } from "@timekeep/db/e2e-tenant";
 import { unsubmittedReminderEmail } from "./approval-emails";
 import { env } from "./env";
 import { enqueueEmail } from "./outbox";
+import { evaluateTargets } from "./targets";
 
 /**
  * The once-a-day jobs (Vercel Cron at 22:00 UTC, 06:00 in Manila; the e2e
  * hook for one workspace). Each workspace is evaluated in its own timezone:
  * on the first local day after one of its periods ends, everyone with
  * stopped work in that period and no submission gets one reminder (unless
- * they muted reminders). Idempotent: the outbox row's kind names the period.
+ * they muted reminders). Then the target rules (Phase 5b): yesterday for DAY
+ * rules, last week on the week's first day. Idempotent: each outbox row's kind
+ * names its period, or its rule, person and day.
  */
 export async function runDailyJobs(
   db: Database,
   opts: { now?: Date; workspaceIds?: string[] } = {},
-): Promise<{ reminders: number }> {
+): Promise<{ reminders: number; targets: number }> {
   const now = opts.now ?? new Date();
   const workspaces = await db
     .select({
@@ -62,20 +67,30 @@ export async function runDailyJobs(
     .innerJoin(workspaceSettings, eq(workspaceSettings.workspaceId, workspace.id))
     .where(
       and(
-        eq(workspaceSettings.approvalEnabled, true),
+        or(
+          eq(workspaceSettings.approvalEnabled, true),
+          sql`exists (select 1 from ${targetRule} where ${targetRule.workspaceId} = ${workspace.id} and ${targetRule.active})`,
+        ),
         opts.workspaceIds ? inArray(workspace.id, opts.workspaceIds) : undefined,
       ),
     );
 
   let reminders = 0;
+  let targets = 0;
   for (const ws of workspaces) {
-    const { period: rule } = approvalRulesOf(ws, ws);
+    const { enabled, period: rule } = approvalRulesOf(ws, ws);
     const today = localDateKey(now, rule.timezone);
-    if (periodContaining(today, rule).start !== today) continue;
-    const ended = previousPeriod(periodContaining(today, rule), rule);
-    reminders += await remindUnsubmitted(db, ws, ended);
+    if (enabled && periodContaining(today, rule).start === today) {
+      const ended = previousPeriod(periodContaining(today, rule), rule);
+      reminders += await remindUnsubmitted(db, ws, ended);
+    }
+    targets += await evaluateTargets(
+      db,
+      { id: ws.id, slug: ws.slug, name: ws.name, timezone: rule.timezone, weekStart: ws.weekStart },
+      now,
+    );
   }
-  return { reminders };
+  return { reminders, targets };
 }
 
 async function remindUnsubmitted(

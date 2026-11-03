@@ -29,6 +29,39 @@ export const trackerKeys = {
   rateRecalc: (slug: string) => ["tracker", slug, "rate-recalc"] as const,
 };
 
+/**
+ * Time off (Phase 5b): its own prefix, outside `entries`: time entries never change
+ * it. Every time off write invalidates `timeOffKeys.all`, which includes the
+ * timesheet's and calendar's bands (`range`).
+ */
+export const timeOffKeys = {
+  all: (slug: string) => ["time-off", slug] as const,
+  requests: (slug: string, tab: string) => ["time-off", slug, "requests", tab] as const,
+  balances: (slug: string) => ["time-off", slug, "balances"] as const,
+  range: (slug: string, from: string, to: string, userId = "me") =>
+    ["time-off", slug, "range", userId, from, to] as const,
+  calendar: (slug: string, month: string) => ["time-off", slug, "calendar", month] as const,
+  policies: (slug: string) => ["time-off", slug, "policies"] as const,
+  holidays: (slug: string, year: number) => ["time-off", slug, "holidays", year] as const,
+  preview: (slug: string, params: string) => ["time-off", slug, "preview", params] as const,
+};
+
+export const timeOffUrls = {
+  requests: (slug: string, tab: string) => `/api/w/${slug}/time-off/requests?tab=${tab}`,
+  balances: (slug: string) => `/api/w/${slug}/time-off/balances`,
+  range: (slug: string, from: string, to: string, userId = "me") =>
+    `/api/w/${slug}/time-off/range?from=${from}&to=${to}${userId === "me" ? "" : `&userId=${encodeURIComponent(userId)}`}`,
+  calendar: (slug: string, month: string) => `/api/w/${slug}/time-off/calendar?month=${month}`,
+  policies: (slug: string, archived = false) =>
+    `/api/w/${slug}/time-off/policies${archived ? "?archived=1" : ""}`,
+  holidays: (slug: string, year: number) => `/api/w/${slug}/time-off/holidays?year=${year}`,
+  preview: (slug: string, params: string) => `/api/w/${slug}/time-off/preview?${params}`,
+  countries: (slug: string, country?: string) =>
+    `/api/w/${slug}/time-off/countries${country ? `?country=${country}` : ""}`,
+  importPreview: (slug: string, params: string) =>
+    `/api/w/${slug}/time-off/holidays/import?${params}`,
+};
+
 export interface TrackerOptions {
   projects: PickerProject[];
   tags: EntryTag[];

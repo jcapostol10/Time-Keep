@@ -43,18 +43,29 @@ import {
   changeRoleAction,
   removeMemberAction,
   resendInvitationAction,
+  setCapacityAction,
   setManagerScopeAction,
   setMemberStatusAction,
   transferOwnershipAction,
 } from "@/server/actions/team";
 
 import { RateDialog } from "../rates/rate-dialog";
+import { CapacityDialog } from "./capacity-dialog";
 import { Checklist, ChecklistDialog } from "../shared/checklist-dialog";
 import { TaskAccessDialog } from "./task-access-dialog";
 import type { TeamContext } from "./team-view";
 
 type Open =
-  "role" | "groups" | "tasks" | "rate" | "scope" | "deactivate" | "remove" | "transfer" | null;
+  | "role"
+  | "groups"
+  | "tasks"
+  | "rate"
+  | "capacity"
+  | "scope"
+  | "deactivate"
+  | "remove"
+  | "transfer"
+  | null;
 
 /** The row menu on the Team page and the dialogs it opens. */
 export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) {
@@ -112,6 +123,7 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
     permissions.groups ? "groups" : null,
     permissions.groups ? "tasks" : null,
     permissions.rates ? "rate" : null,
+    permissions.capacity && row.capacity ? "capacity" : null,
     row.role === "manager" ? "scope" : null,
     permissions.transfer && row.role === "admin" && row.status === "ACTIVE" ? "transfer" : null,
   ].filter(Boolean);
@@ -137,6 +149,9 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
           ) : null}
           {permissions.rates ? (
             <DropdownMenuItem onSelect={() => setOpen("rate")}>Billable rate</DropdownMenuItem>
+          ) : null}
+          {permissions.capacity && row.capacity ? (
+            <DropdownMenuItem onSelect={() => setOpen("capacity")}>Capacity</DropdownMenuItem>
           ) : null}
           {row.role === "manager" ? (
             <DropdownMenuItem onSelect={() => setOpen("scope")}>
@@ -213,6 +228,16 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
           timezone={ctx.timezone}
           open
           onOpenChange={(o) => (o ? null : setOpen(null))}
+        />
+      ) : null}
+      {open === "capacity" && row.capacity ? (
+        <CapacityDialog
+          name={row.name}
+          capacity={row.capacity}
+          onClose={() => setOpen(null)}
+          onSave={(input) =>
+            run(() => setCapacityAction(ctx.slug, userId, input), "Capacity saved")
+          }
         />
       ) : null}
       {open === "scope" && row.scope ? (

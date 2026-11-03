@@ -5,7 +5,7 @@ export const workspaceRoutes = {
   timesheet: (slug: string) => `/w/${slug}/timesheet`,
   calendar: (slug: string) => `/w/${slug}/calendar`,
   dashboard: (slug: string) => `/w/${slug}/dashboard`,
-  reports: (slug: string, kind?: "summary" | "detailed" | "weekly" | "audit") =>
+  reports: (slug: string, kind?: "summary" | "detailed" | "weekly" | "audit" | "attendance") =>
     `/w/${slug}/reports${kind ? `/${kind}` : ""}`,
   projects: (slug: string) => `/w/${slug}/projects`,
   project: (
@@ -20,6 +20,8 @@ export const workspaceRoutes = {
   approvals: (slug: string, tab?: "pending" | "unsubmitted" | "archive" | "mine") =>
     `/w/${slug}/approvals${tab ? `?tab=${tab}` : ""}`,
   approval: (slug: string, requestId: string) => `/w/${slug}/approvals/${requestId}`,
+  timeOff: (slug: string, tab?: "requests" | "calendar" | "balances" | "policies" | "holidays") =>
+    `/w/${slug}/time-off${tab ? `?tab=${tab}` : ""}`,
 } as const;
 
 /**

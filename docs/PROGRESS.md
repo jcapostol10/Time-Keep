@@ -244,11 +244,24 @@ Design: `docs/superpowers/specs/2026-10-31-phase-5-design.md` (approved 2026-11-
 - [x] Settings: Approval and Lock entries sections; no period change while pending; turning approval off withdraws pending periods after a confirmation
 - [x] Daily job: the "submit your time" reminder for a closed period with time and no submission
 - [x] Seed, e2e (`approvals.spec.ts`), integration tests (`entry-guard`, `approvals`, `outbox`, `daily-jobs`, `cron-auth`, `writable-coverage`), docs
-- [ ] Time off policies, holidays, requests, balances (5b)
-- [ ] Attendance/overtime report; targets and reminders (5b)
+- [x] Time off policies, holidays, requests, balances (5b)
+- [x] Attendance/overtime report; targets and reminders (5b)
 - [ ] Kiosk with PIN/QR (5c)
 
 Rulings made while building 5a are in the plan's ledger and listed in the branch's hand-off; the notable ones: the lookup of submitted periods ignores `approval_enabled` (approved time stays read-only after approval is turned off); every guarded write and a submission take the person's advisory lock, so a submission's totals never miss an edit the guard let through; empty timesheet cells in locked or submitted days stay typeable and the server refuses the write; the Unsubmitted tab lists, for a manager, the people they manage; members reviewing get a 403 and managers outside the setting a 404.
+
+### 5b — Time off, holidays, attendance and targets (plan `docs/superpowers/plans/2026-11-02-phase-5b.md`)
+
+- [x] Core: request counting (working days less the person's holidays, half days, hours), per-year balances (YEARLY on 1 January, MONTHLY in twelfths that sum to the allowance, no carry-over, NONE plus a negative balance is Unlimited), country-neutral holiday rules (assignees, yearly repeats, 29 February), attendance days and weeks, target rules; the matrix's `timeOff.request`, `timeOff.view`, `timeOff.review` (the approvers setting with no projects), `timeOff.manage`, `attendance.read`, `member.setCapacity`, `target.manage` on a new `person` resource
+- [x] The public holiday import: `date-holidays` 3.38.0 (ISC code, CC BY 3.0 data, credited in the dialog and `docs/THIRD_PARTY.md`) as the server-only subpath `@timekeep/core/holiday-import`; the country is suggested from the workspace timezone; public days by default, optional ones on request, never school; Islamic-calendar days marked estimated; a renamed day offered unticked
+- [x] Data: migration 0014 (policies, requests, adjustments, holidays, target rules, their assignees; membership capacity; `export_report` gains `attendance`), applied to the shared database by the Migrate workflow
+- [x] Requests: under the person's advisory lock, refusing overlaps, two years and a negative balance (pending counts); review in bulk, rejection and cancellation with a note; emails through the outbox; the Time off page (Requests, Calendar, Balances, Policies, Holidays) with a server preview of the balance
+- [x] Approved time off and holidays on the timesheet (read-only rows) and the calendar (an all-day band), never in tracked totals or reports
+- [x] Capacity per member (Team page) and the Attendance report tab (each person's own days, first in, last out, raw work and breaks, time off, overtime, undertime, weekly subtotals) with CSV, Excel and PDF exports; one-year Attendance 506 ms for 25 people (perf tenant)
+- [x] Target rules (Settings) evaluated by the daily job: under-target reminders the person can mute (Profile), over-target alerts to owners, admins and managers, each sent once
+- [x] Seed (PH holidays this year and next, Vacation and Sick leave, member1's time off, an inactive target, member2 Sunday to Thursday), e2e (`time-off.spec.ts` on previews; `attendance.spec.ts` nightly), integration tests, docs
+
+Rulings made while planning 5b: balances reckon per calendar year in the workspace timezone (R1); a request stays within one year (R2); time off review follows the approvers setting with no projects, so a project manager reviews only the people they manage (R3); Attendance covers, for a manager, themselves and the people they manage, each person in their own timezone, on raw time (R4). Rulings made while building are in the plan's ledger and the branch's hand-off; notable ones: "Who approves" stays editable with period approval off, since it also decides time off; the request dialog offers only the viewer's assigned policies and previews the balance from the server; a week the Attendance range cuts is measured against its days' capacity, not the weekly hours; requests are counted when made.
 
 ## Phase 6 — Expenses, invoicing, budgets and profit
 

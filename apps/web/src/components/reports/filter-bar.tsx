@@ -28,7 +28,11 @@ import { useReportQuery } from "./report-url";
 import { useReportOptions } from "./use-report";
 
 /** Every filter writes to the URL; below md they sit in a sheet behind a "Filters" button. */
-export function FilterBar({ extra }: { extra?: React.ReactNode } = {}) {
+/** `peopleOnly`: the range and Users / Groups (the Attendance tab has no entry filters). */
+export function FilterBar({
+  extra,
+  peopleOnly = false,
+}: { extra?: React.ReactNode; peopleOnly?: boolean } = {}) {
   const { slug, viewer } = useTracker();
   const { query, set } = useReportQuery();
   const { data: options } = useReportOptions(slug);
@@ -78,83 +82,91 @@ export function FilterBar({ extra }: { extra?: React.ReactNode } = {}) {
           onChange={(groupIds) => set({ groupIds })}
         />
       ) : null}
-      <MultiSelectFilter
-        label="Clients"
-        options={options?.clients ?? []}
-        value={query.clientIds}
-        onChange={(clientIds) => set({ clientIds })}
-        none={{ id: NONE_ID, name: "Without client" }}
-      />
-      <MultiSelectFilter
-        label="Projects"
-        options={(options?.projects ?? []).map((p) => ({ id: p.id, name: p.name }))}
-        value={query.projectIds}
-        onChange={(projectIds) => set({ projectIds })}
-        none={{ id: NONE_ID, name: "Without project" }}
-      />
-      <MultiSelectFilter
-        label="Tasks"
-        options={options?.tasks ?? []}
-        value={query.taskIds}
-        onChange={(taskIds) => set({ taskIds })}
-        none={{ id: NONE_ID, name: "Without task" }}
-      />
-      <MultiSelectFilter
-        label="Tags"
-        options={options?.tags ?? []}
-        value={query.tagIds}
-        onChange={(tagIds) => set({ tagIds })}
-        none={{ id: NONE_ID, name: "Without tag" }}
-      />
-      {query.tagIds.filter((id) => id !== NONE_ID).length > 1 ? (
-        <Select
-          value={query.tagMode}
-          onValueChange={(v) => set({ tagMode: v === "and" ? "and" : "or" })}
-        >
-          <SelectTrigger size="sm" aria-label="Tag mode" className="w-28">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="or">Any tag</SelectItem>
-            <SelectItem value="and">All tags</SelectItem>
-          </SelectContent>
-        </Select>
-      ) : null}
-      <Select
-        value={query.billable}
-        onValueChange={(v) => set({ billable: v === "yes" ? "yes" : v === "no" ? "no" : "all" })}
-      >
-        <SelectTrigger size="sm" aria-label="Billable" className="w-36">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Billable: all</SelectItem>
-          <SelectItem value="yes">Billable only</SelectItem>
-          <SelectItem value="no">Non-billable only</SelectItem>
-        </SelectContent>
-      </Select>
-      <Select
-        value={query.type}
-        onValueChange={(v) => set({ type: v === "break" ? "break" : v === "all" ? "all" : "work" })}
-      >
-        <SelectTrigger size="sm" aria-label="Type" className="w-32">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="work">Work</SelectItem>
-          <SelectItem value="break">Breaks</SelectItem>
-          <SelectItem value="all">All</SelectItem>
-        </SelectContent>
-      </Select>
-      {extra}
-      <Input
-        type="search"
-        aria-label="Description contains"
-        placeholder="Description contains…"
-        className="h-8 w-48"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-      />
+      {peopleOnly ? null : (
+        <>
+          <MultiSelectFilter
+            label="Clients"
+            options={options?.clients ?? []}
+            value={query.clientIds}
+            onChange={(clientIds) => set({ clientIds })}
+            none={{ id: NONE_ID, name: "Without client" }}
+          />
+          <MultiSelectFilter
+            label="Projects"
+            options={(options?.projects ?? []).map((p) => ({ id: p.id, name: p.name }))}
+            value={query.projectIds}
+            onChange={(projectIds) => set({ projectIds })}
+            none={{ id: NONE_ID, name: "Without project" }}
+          />
+          <MultiSelectFilter
+            label="Tasks"
+            options={options?.tasks ?? []}
+            value={query.taskIds}
+            onChange={(taskIds) => set({ taskIds })}
+            none={{ id: NONE_ID, name: "Without task" }}
+          />
+          <MultiSelectFilter
+            label="Tags"
+            options={options?.tags ?? []}
+            value={query.tagIds}
+            onChange={(tagIds) => set({ tagIds })}
+            none={{ id: NONE_ID, name: "Without tag" }}
+          />
+          {query.tagIds.filter((id) => id !== NONE_ID).length > 1 ? (
+            <Select
+              value={query.tagMode}
+              onValueChange={(v) => set({ tagMode: v === "and" ? "and" : "or" })}
+            >
+              <SelectTrigger size="sm" aria-label="Tag mode" className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="or">Any tag</SelectItem>
+                <SelectItem value="and">All tags</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : null}
+          <Select
+            value={query.billable}
+            onValueChange={(v) =>
+              set({ billable: v === "yes" ? "yes" : v === "no" ? "no" : "all" })
+            }
+          >
+            <SelectTrigger size="sm" aria-label="Billable" className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Billable: all</SelectItem>
+              <SelectItem value="yes">Billable only</SelectItem>
+              <SelectItem value="no">Non-billable only</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={query.type}
+            onValueChange={(v) =>
+              set({ type: v === "break" ? "break" : v === "all" ? "all" : "work" })
+            }
+          >
+            <SelectTrigger size="sm" aria-label="Type" className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="work">Work</SelectItem>
+              <SelectItem value="break">Breaks</SelectItem>
+              <SelectItem value="all">All</SelectItem>
+            </SelectContent>
+          </Select>
+          {extra}
+          <Input
+            type="search"
+            aria-label="Description contains"
+            placeholder="Description contains…"
+            className="h-8 w-48"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </>
+      )}
     </>
   );
 

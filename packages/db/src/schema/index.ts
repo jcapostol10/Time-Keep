@@ -8,4 +8,5 @@ export * from "./reports";
 export * from "./team";
 export * from "./rates";
 export * from "./approvals";
+export * from "./time-off";
 export * from "./relations";

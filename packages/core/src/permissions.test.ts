@@ -53,6 +53,7 @@ const member = (userId: string, role: Role = "member"): Resource => ({
 });
 const project = (projectId: string | null): Resource => ({ kind: "project", projectId });
 const NONE: Resource = { kind: "none" };
+const person = (userId: string): Resource => ({ kind: "person", userId });
 const approval = (userId: string, projectIds: string[] = []): Resource => ({
   kind: "approval",
   userId,
@@ -153,6 +154,22 @@ const TABLE: Row[] = [
   ["approval.review", approval(ME), true, true, false, false],
   ["approval.editLocked", NONE, true, true, false, false],
   ["lock.manage", NONE, true, true, false, false],
+  // Phase 5b: time off, attendance, capacity and targets.
+  ["timeOff.request", person(ME), true, true, true, true],
+  ["timeOff.request", person(OTHER), false, false, false, false],
+  ["timeOff.view", person(ME), true, true, true, true],
+  ["timeOff.view", person(MANAGED), true, true, true, false],
+  ["timeOff.view", person(OTHER), true, true, false, false],
+  ["timeOff.viewBalances", person(ME), true, true, true, true],
+  ["timeOff.viewBalances", person(MANAGED), true, true, true, false],
+  ["timeOff.viewBalances", person(OTHER), true, true, false, false],
+  ["timeOff.review", approval(MANAGED), true, true, false, false],
+  ["timeOff.manage", NONE, true, true, false, false],
+  ["attendance.read", person(ME), true, true, true, true],
+  ["attendance.read", person(MANAGED), true, true, true, false],
+  ["attendance.read", person(OTHER), true, true, false, false],
+  ["member.setCapacity", member(OTHER), true, true, false, false],
+  ["target.manage", NONE, true, true, false, false],
 ];
 
 describe("can", () => {
@@ -399,5 +416,49 @@ describe("approvers", () => {
   it("never lets a member review", () => {
     const m = actor("member", { approvalReviewers: "PROJECT_MANAGERS" });
     expect(denial(m, "approval.review", approval(OTHER))).toBe(403);
+  });
+});
+
+describe("time off and attendance (Phase 5b)", () => {
+  const at = (approvalReviewers: PermissionSettings["approvalReviewers"]) =>
+    actor("manager", { approvalReviewers });
+  const timeOff = (userId: string): Resource => ({ kind: "approval", userId, projectIds: [] });
+
+  it.each([
+    ["ADMINS", MANAGED, false],
+    ["TEAM_MANAGERS", MANAGED, true],
+    ["PROJECT_MANAGERS", MANAGED, true],
+    // Ruling R3: time off has no projects, so a project-only manager never reviews it.
+    ["ADMINS", OTHER, false],
+    ["TEAM_MANAGERS", OTHER, false],
+    ["PROJECT_MANAGERS", OTHER, false],
+    ["PROJECT_MANAGERS", ME, false],
+  ] as const)("a manager at %s reviews time off of %s: %s", (setting, userId, allowed) => {
+    expect(can(at(setting), "timeOff.review", timeOff(userId))).toBe(allowed);
+  });
+
+  it("hides people outside a manager's scope with 404", () => {
+    expect(denial(actor("manager"), "attendance.read", person(OTHER))).toBe(404);
+    expect(denial(actor("manager"), "timeOff.view", person(OTHER))).toBe(404);
+    expect(can(actor("manager"), "attendance.read", person(ME))).toBe(true);
+    expect(can(actor("manager"), "attendance.read", person(MANAGED))).toBe(true);
+  });
+
+  it("lets a manager see the whole team's time off when members see it too", () => {
+    const team = actor("manager", { membersSeeTeamTime: true });
+    expect(can(team, "timeOff.view", person(OTHER))).toBe(true);
+    expect(can(team, "timeOff.viewBalances", person(OTHER))).toBe(false);
+    expect(
+      can(actor("member", { membersSeeTeamTime: true }), "timeOff.viewBalances", person(OTHER)),
+    ).toBe(false);
+  });
+
+  it("lets members see the team's time off when the workspace allows", () => {
+    expect(can(actor("member", { membersSeeTeamTime: true }), "timeOff.view", person(OTHER))).toBe(
+      true,
+    );
+    expect(
+      can(actor("member", { membersSeeTeamTime: true }), "attendance.read", person(OTHER)),
+    ).toBe(false);
   });
 });

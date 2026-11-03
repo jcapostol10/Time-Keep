@@ -41,6 +41,16 @@ describe("tracker settings", () => {
     expect(await getTrackerSettings(db, user.id)).toEqual(second);
   });
 
+  it("keeps the mute for target reminders", async () => {
+    const user = await createTestUser(db, "Mia");
+    expect((await getTrackerSettings(db, user.id)).muteTargetReminders).toBe(false);
+    await upsertTrackerSettings(db, user.id, {
+      ...DEFAULT_TRACKER_SETTINGS,
+      muteTargetReminders: true,
+    });
+    expect((await getTrackerSettings(db, user.id)).muteTargetReminders).toBe(true);
+  });
+
   it("limits test emails: a minute apart, five a day, remembered per person", async () => {
     const tess = await createTestUser(db, "Tess T");
     const t0 = new Date("2026-10-22T10:00:00.000Z");

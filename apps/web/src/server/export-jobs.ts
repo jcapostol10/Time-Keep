@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 
 import {
   type ExportFormat,
-  type ReportKind,
   type ReportQuery,
   reportQuerySchema,
   type ViewerPrefs,
@@ -30,7 +29,7 @@ import { loadViewer } from "./authz";
 import type { Viewer } from "./catalog/viewer";
 import { env } from "./env";
 import { sendEmail } from "./mail";
-import { buildExport, type ExportFile } from "./report-files";
+import { buildExport, type ExportFile, type FileReport } from "./report-files";
 import { buildPdfExport } from "./report-pdf";
 import { deleteExport, presignedExportUrl, sweepExports, uploadExport } from "./storage";
 
@@ -46,7 +45,7 @@ const STUCK_MINUTES = 15;
 const DOWNLOAD_TTL_SECONDS = 15 * 60;
 
 export interface ExportJobInput {
-  report: ReportKind;
+  report: FileReport;
   format: ExportFormat;
   query: ReportQuery;
   prefs: ViewerPrefs;

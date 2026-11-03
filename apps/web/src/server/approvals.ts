@@ -7,7 +7,6 @@ import {
   type ApprovalStatus,
   can,
   formatPeriod,
-  isUndeliverable,
   localDateKey,
   nextPeriod,
   type Period,
@@ -34,7 +33,6 @@ import {
   lt,
   lte,
   membership,
-  ne,
   sql,
   timeEntry,
   user,
@@ -55,7 +53,8 @@ import type {
 
 import { WorkspaceAccessError } from "./access-error";
 import { approvedEmail, rejectedEmail, reopenedEmail, submittedEmail } from "./approval-emails";
-import { assertCan, loadViewer } from "./authz";
+import { approversFor } from "./approvers";
+import { assertCan } from "./authz";
 import { CatalogError } from "./catalog/errors";
 import type { Viewer } from "./catalog/viewer";
 import { env } from "./env";
@@ -224,41 +223,6 @@ async function projectIdsOf(db: Executor, requestIds: string[]): Promise<Map<str
 
 function reviewResource(request: { userId: string }, projectIds: string[]): Resource {
   return { kind: "approval", userId: request.userId, projectIds };
-}
-
-/** Active owners, admins and managers the approvers setting lets review the request. */
-async function approversFor(
-  db: Database,
-  workspaceId: string,
-  request: { userId: string; projectIds: string[] },
-): Promise<{ userId: string; email: string; name: string }[]> {
-  const candidates = await db
-    .select({
-      userId: membership.userId,
-      role: membership.role,
-      email: user.email,
-      name: user.name,
-    })
-    .from(membership)
-    .innerJoin(user, eq(user.id, membership.userId))
-    .where(
-      and(
-        eq(membership.workspaceId, workspaceId),
-        eq(membership.status, "ACTIVE"),
-        inArray(membership.role, ["owner", "admin", "manager"]),
-        ne(membership.userId, request.userId),
-      ),
-    );
-  const out: { userId: string; email: string; name: string }[] = [];
-  for (const c of candidates) {
-    if (isUndeliverable(c.email)) continue;
-    if (c.role !== "owner" && c.role !== "admin") {
-      const { actor } = await loadViewer(db, workspaceId, c.userId);
-      if (!can(actor, "approval.review", reviewResource(request, request.projectIds))) continue;
-    }
-    out.push({ userId: c.userId, email: c.email, name: c.name });
-  }
-  return out;
 }
 
 async function emailOf(db: Executor, userId: string) {

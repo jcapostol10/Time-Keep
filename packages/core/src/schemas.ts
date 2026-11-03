@@ -6,11 +6,14 @@ import { APPROVAL_PERIODS, APPROVAL_REVIEWERS, LOCK_MODES } from "./approvals";
 
 import { PROJECT_VISIBILITIES, TASK_STATUSES } from "./catalog";
 import { hexColorSchema } from "./colors";
+import { parseDuration } from "./duration";
 import { IMPORT_COLUMNS } from "./entry-import";
 import { CREATOR_SETTINGS, PAGES, TASK_VISIBILITY } from "./permissions";
 import { REQUIRED_FIELDS } from "./required-fields";
 import { ROLES } from "./roles";
 import { ROUNDING_MODES, ROUNDING_STEPS } from "./rounding";
+import { TARGET_KINDS, TARGET_PERIODS } from "./targets";
+import { parseCenti, TIME_OFF_ACCRUALS, TIME_OFF_UNITS, type Capacity } from "./time-off";
 
 // --- Enumerations shared by DB, server and UI ---------------------------------
 
@@ -530,6 +533,8 @@ export const trackerSettingsSchema = z
     /** Minutes since local midnight. */
     reminderStartMinutes: z.number().int().min(0).max(1439),
     reminderEndMinutes: z.number().int().min(1).max(1440),
+    /** No unsubmitted-period (5a) or under-target (5b) reminder emails. */
+    muteTargetReminders: z.boolean(),
   })
   .refine((s) => s.reminderEndMinutes > s.reminderStartMinutes, {
     path: ["reminderEndMinutes"],
@@ -548,6 +553,7 @@ export const DEFAULT_TRACKER_SETTINGS: TrackerSettingsInput = {
   reminderDays: [1, 2, 3, 4, 5],
   reminderStartMinutes: 9 * 60,
   reminderEndMinutes: 17 * 60,
+  muteTargetReminders: false,
 };
 
 /** A rate change from the rate dialog; the server parses the amount with the currency. */
@@ -568,3 +574,159 @@ export const rateTargetSchema = z.object({
   projectId: z.string().min(1).max(64).nullish(),
   taskId: z.string().min(1).max(64).nullish(),
 });
+
+// --- Time off, holidays, capacity and targets (Phase 5b) ----------------------
+
+const idListSchema = z.array(z.string().min(1).max(64)).max(500).default([]);
+const minutesOf = (text: string) => {
+  if (text.trim() === "0") return 0;
+  const seconds = parseDuration(text);
+  return seconds === null ? null : Math.round(seconds / 60);
+};
+
+export const timeOffPolicySchema = z
+  .object({
+    name: z.string().trim().min(1, "Name is required").max(80),
+    unit: z.enum(TIME_OFF_UNITS),
+    accrual: z.enum(TIME_OFF_ACCRUALS),
+    /** Days or hours a year, as typed ("15", "7.5"); read by `parseCenti`. */
+    allowance: z.string().trim().max(16),
+    allowNegative: z.boolean(),
+    requiresApproval: z.boolean(),
+    everyone: z.boolean(),
+    userIds: idListSchema,
+    groupIds: idListSchema,
+  })
+  .superRefine((v, ctx) => {
+    if (v.accrual === "NONE" && v.allowance === "") return;
+    const centi = parseCenti(v.allowance);
+    if (centi === null || centi < 0) {
+      ctx.addIssue({ code: "custom", path: ["allowance"], message: "Enter an amount, like 15" });
+    }
+  });
+export type TimeOffPolicyInput = z.infer<typeof timeOffPolicySchema>;
+
+export const timeOffRequestSchema = z.object({
+  policyId: z.string().min(1).max(64),
+  start: z.iso.date(),
+  end: z.iso.date(),
+  halfDay: z.boolean().default(false),
+  /** HOURS policies: per day for one day, the total for a range ("7.5", "4:30"). */
+  hours: z
+    .string()
+    .trim()
+    .max(16)
+    .refine((t) => t === "" || (minutesOf(t) ?? 0) > 0, "Enter hours, like 4 or 4:30")
+    .optional(),
+  note: z.string().trim().max(500).default(""),
+});
+export type TimeOffRequestInput = z.infer<typeof timeOffRequestSchema>;
+
+/** The minutes of an HOURS request, or null. */
+export function requestMinutes(input: Pick<TimeOffRequestInput, "hours">): number | null {
+  return input.hours ? minutesOf(input.hours) : null;
+}
+
+export const reviewTimeOffSchema = z
+  .object({
+    ids: z.array(z.string().min(1)).min(1).max(200),
+    decision: z.enum(["APPROVE", "REJECT"]),
+    note: entryNoteSchema.optional(),
+  })
+  .refine((v) => v.decision === "APPROVE" || v.note !== undefined, {
+    path: ["note"],
+    message: "Say why",
+  });
+export type ReviewTimeOffInput = z.infer<typeof reviewTimeOffSchema>;
+
+export const cancelTimeOffSchema = z.object({ note: entryNoteSchema });
+
+export const adjustmentSchema = z.object({
+  policyId: z.string().min(1).max(64),
+  userId: z.string().min(1).max(64),
+  /** Signed days or hours ("-2", "1.5"). */
+  amount: z
+    .string()
+    .trim()
+    .refine((t) => {
+      const c = parseCenti(t);
+      return c !== null && c !== 0;
+    }, "Enter an amount, like 2 or -1.5"),
+  note: z.string().trim().min(3, "Say why").max(500),
+});
+export type AdjustmentInput = z.infer<typeof adjustmentSchema>;
+
+export const holidaySchema = z.object({
+  date: z.iso.date(),
+  name: z.string().trim().min(1, "Name is required").max(100),
+  repeatsYearly: z.boolean().default(false),
+  userIds: idListSchema,
+  groupIds: idListSchema,
+});
+export type HolidayInput = z.infer<typeof holidaySchema>;
+
+export const holidayImportSchema = z.object({
+  country: z.string().regex(/^[A-Z]{2}$/),
+  region: z.string().trim().min(1).max(10).nullable(),
+  year: z.number().int().min(2000).max(2100),
+  rows: z
+    .array(
+      z.object({
+        date: z.iso.date(),
+        name: z.string().trim().min(1).max(100),
+        estimated: z.boolean(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+export type HolidayImportInput = z.infer<typeof holidayImportSchema>;
+
+const hoursUpTo = (max: number) =>
+  z
+    .string()
+    .trim()
+    .refine((t) => {
+      const m = minutesOf(t);
+      return m !== null && m <= max * 60;
+    }, `Enter hours from 0 to ${max}`);
+
+export const capacitySchema = z.object({
+  dailyHours: hoursUpTo(24),
+  weeklyHours: hoursUpTo(168),
+  workingDays: z
+    .array(z.number().int().min(0).max(6))
+    .max(7)
+    .refine((days) => new Set(days).size === days.length, "Pick each day once"),
+});
+export type CapacityInput = z.infer<typeof capacitySchema>;
+
+export function capacityFromInput(input: CapacityInput): Capacity {
+  return {
+    dailyMinutes: minutesOf(input.dailyHours) ?? 0,
+    weeklyMinutes: minutesOf(input.weeklyHours) ?? 0,
+    workingDays: [...input.workingDays].sort((a, b) => a - b),
+  };
+}
+
+export const targetRuleSchema = z.object({
+  kind: z.enum(TARGET_KINDS),
+  period: z.enum(TARGET_PERIODS),
+  /** Hours, as typed ("8", "7:30"). */
+  threshold: z
+    .string()
+    .trim()
+    .refine((t) => {
+      const m = minutesOf(t);
+      return m !== null && m > 0 && m <= 168 * 60;
+    }, "Enter hours, like 8"),
+  active: z.boolean().default(true),
+  everyone: z.boolean(),
+  userIds: idListSchema,
+  groupIds: idListSchema,
+});
+export type TargetRuleInput = z.infer<typeof targetRuleSchema>;
+
+export function thresholdMinutes(input: Pick<TargetRuleInput, "threshold">): number {
+  return minutesOf(input.threshold) ?? 0;
+}

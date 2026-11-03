@@ -4,13 +4,13 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 
 import {
+  attendanceColumns,
   detailedColumns,
   type ExportColumn,
   flattenGroups,
   formatDuration,
   formatRangeLabel,
   NONE_ID,
-  type ReportKind,
   type ReportQuery,
   resolveReportRange,
   summaryColumns,
@@ -23,7 +23,7 @@ import type { SeriesPoint, SummaryReport } from "@/lib/report-types";
 
 import type { Viewer } from "./catalog/viewer";
 import { env } from "./env";
-import { type ExportFile, exportFilename } from "./report-files";
+import { attendanceRows, type ExportFile, exportFilename, type FileReport } from "./report-files";
 import { detailedReport, summaryReport, weeklyReport } from "./reports";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
@@ -175,7 +175,7 @@ function slicesOf(report: SummaryReport) {
 }
 
 export interface PdfRequest {
-  report: ReportKind;
+  report: FileReport;
   query: ReportQuery;
   prefs: ViewerPrefs;
   workspaceName: string;
@@ -183,10 +183,11 @@ export interface PdfRequest {
   now?: Date;
 }
 
-const TITLES: Record<ReportKind, string> = {
+const TITLES: Record<FileReport, string> = {
   summary: "Summary report",
   detailed: "Detailed report",
   weekly: "Weekly report",
+  attendance: "Attendance report",
 };
 
 /** The report as one self-contained HTML page, and how many rows its table has. */
@@ -213,6 +214,21 @@ export async function renderReportHtml(
       filters,
       total: fmt(report.totals.durationSeconds),
       body,
+    });
+    return { html, rowCount: rows.length };
+  }
+  if (req.report === "attendance") {
+    const rows = await attendanceRows(db, viewer, { ...req, now });
+    const work = rows
+      .filter((r) => r.label.kind === "total")
+      .reduce((n, r) => n + r.measures.workSeconds, 0);
+    const html = page({
+      title,
+      workspaceName: req.workspaceName,
+      rangeLabel,
+      filters,
+      total: fmt(work),
+      body: table(rows, attendanceColumns(req.prefs)),
     });
     return { html, rowCount: rows.length };
   }

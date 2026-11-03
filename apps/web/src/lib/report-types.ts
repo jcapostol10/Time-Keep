@@ -1,5 +1,8 @@
 import type {
+  AttendanceDay,
+  AttendanceWeek,
   Bucket,
+  Capacity,
   DetailedEntry,
   GroupKey,
   ReportGroup,
@@ -99,4 +102,24 @@ export interface DetailedPaging {
 /** The key part that identifies a Detailed listing: the query and how it is paged. */
 export function detailedKey(params: string, paging: DetailedPaging): string {
   return `${params}|${paging.sort}|${paging.dir}|${paging.limit}`;
+}
+
+/** The Attendance tab (Phase 5b): each person's own days, weekly subtotals and a total. */
+export interface AttendancePerson {
+  userId: string;
+  userName: string;
+  /** Their own timezone: their days and first-in, last-out times are local to it. */
+  timezone: string;
+  capacity: Capacity;
+  days: AttendanceDay[];
+  weeks: AttendanceWeek[];
+  totals: AttendanceWeek;
+}
+
+export interface AttendanceReport {
+  /** Inclusive date keys in the viewer's timezone. */
+  from: string;
+  to: string;
+  label: string;
+  people: AttendancePerson[];
 }

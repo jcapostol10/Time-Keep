@@ -38,6 +38,8 @@ export interface TeamPermissions {
   import: boolean;
   rates: boolean;
   transfer: boolean;
+  /** Daily and weekly hours and working days (Phase 5b). */
+  capacity: boolean;
 }
 
 export interface TeamContext {
