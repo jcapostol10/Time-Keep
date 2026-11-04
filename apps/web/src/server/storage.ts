@@ -81,11 +81,12 @@ export async function uploadExport(args: {
   );
 }
 
-/** A short-lived download link that saves the file under `filename`. */
+/** A short-lived download link that saves the file under `filename` (or shows it, `inline`). */
 export async function presignedExportUrl(
   key: string,
   ttlSeconds: number,
   filename: string,
+  opts: { inline?: boolean } = {},
 ): Promise<string> {
   const safe = filename.replace(/[^\w.\- ]+/g, "_");
   return getSignedUrl(
@@ -93,7 +94,7 @@ export async function presignedExportUrl(
     new GetObjectCommand({
       Bucket: env().S3_EXPORT_BUCKET,
       Key: key,
-      ResponseContentDisposition: `attachment; filename="${safe}"`,
+      ResponseContentDisposition: `${opts.inline ? "inline" : "attachment"}; filename="${safe}"`,
     }),
     { expiresIn: ttlSeconds },
   );

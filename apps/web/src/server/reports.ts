@@ -33,6 +33,7 @@ import {
   gte,
   ilike,
   inArray,
+  kioskPhoto,
   isNotNull,
   isNull,
   lt,
@@ -593,6 +594,16 @@ export async function detailedReport(
           .innerJoin(tag, eq(tag.id, timeEntryTag.tagId))
           .where(inArray(timeEntryTag.timeEntryId, ids))
       : [];
+  const withPhoto = new Set(
+    ids.length > 0 && can(viewer.actor, "kiosk.manage", { kind: "none" })
+      ? (
+          await db
+            .select({ entryId: kioskPhoto.entryId })
+            .from(kioskPhoto)
+            .where(inArray(kioskPhoto.entryId, ids))
+        ).map((p) => p.entryId)
+      : [],
+  );
   const tagsByEntry = new Map<string, { id: string; name: string }[]>();
   for (const t of tagRows) {
     const list = tagsByEntry.get(t.entryId) ?? [];
@@ -634,6 +645,7 @@ export async function detailedReport(
           userId: r.userId,
           projectId: r.projectId,
         }),
+      photo: withPhoto.has(r.id),
     };
   });
   const last = pageRows[pageRows.length - 1];
