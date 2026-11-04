@@ -45,9 +45,9 @@ describe("kioskIdentifySchema", () => {
   it("takes a PIN for a person, or a QR payload, not both", () => {
     expect(kioskIdentifySchema.safeParse({ userId: "u1", pin: "0042" }).success).toBe(true);
     expect(kioskIdentifySchema.safeParse({ qr: "tkq1.x" }).success).toBe(true);
-    expect(
-      kioskIdentifySchema.safeParse({ userId: "u1", pin: "0042", qr: "tkq1.x" }).success,
-    ).toBe(false);
+    expect(kioskIdentifySchema.safeParse({ userId: "u1", pin: "0042", qr: "tkq1.x" }).success).toBe(
+      false,
+    );
     expect(kioskIdentifySchema.safeParse({}).success).toBe(false);
   });
 });

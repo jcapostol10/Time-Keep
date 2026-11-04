@@ -100,5 +100,4 @@ export const PIN_STRENGTH_NOTE =
   "Five wrong tries lock your PIN for 15 minutes. A 6-digit PIN is harder to guess.";
 export const LIMITED_EMAIL_TAKEN = "This address already has an account; invite it instead.";
 export const KIOSK_PHOTO_NOTICE = "This kiosk takes a photo when you clock in.";
-export const QR_REISSUE_NOTE =
-  "Showing a new code: printed copies of the old one stop working.";
+export const QR_REISSUE_NOTE = "Showing a new code: printed copies of the old one stop working.";
