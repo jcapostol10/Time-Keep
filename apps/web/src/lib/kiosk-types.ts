@@ -43,6 +43,7 @@ export interface KioskScreenDTO {
   people: KioskPerson[];
   /** The server's time: the device's clock is not trusted. */
   now: string;
+  timezone: string;
 }
 
 export interface KioskPerson {

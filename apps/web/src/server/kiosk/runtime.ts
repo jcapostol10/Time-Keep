@@ -45,7 +45,7 @@ import {
 } from "@timekeep/db";
 import { verifyPassword } from "better-auth/crypto";
 
-import type { KioskPerson, KioskPunchDTO, KioskVisitDTO } from "@/lib/kiosk-types";
+import type { KioskPerson, KioskPunchDTO, KioskScreenDTO, KioskVisitDTO } from "@/lib/kiosk-types";
 
 import { WorkspaceAccessError } from "../access-error";
 import { loadViewer } from "../authz";
@@ -166,6 +166,24 @@ export async function kioskPeople(db: Database, k: ResolvedKiosk): Promise<Kiosk
     image: r.image,
     hasPin: r.pinHash !== null,
   }));
+}
+
+/** What the kiosk screen shows before anyone identifies. */
+export async function kioskScreen(
+  db: Database,
+  k: ResolvedKiosk,
+  now = new Date(),
+): Promise<KioskScreenDTO> {
+  return {
+    name: k.name,
+    workspaceName: k.workspaceName,
+    logo: k.showLogo ? k.logo : null,
+    sessionTimeoutSeconds: k.sessionTimeoutSeconds,
+    photo: k.photo,
+    people: await kioskPeople(db, k),
+    now: now.toISOString(),
+    timezone: k.timezone,
+  };
 }
 
 /** The allowed person's name and timezone, or the 404 for anyone else. */

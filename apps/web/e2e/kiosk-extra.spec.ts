@@ -70,11 +70,11 @@ test.describe("kiosk extras", { tag: "@nightly" }, () => {
     await openKiosk(kiosk, url);
     for (let i = 0; i < 5; i++) {
       await kioskEnterPin(kiosk, name, "1111");
-      await expect(kiosk.getByRole("alert")).toHaveText("Wrong PIN.");
+      await expect(kiosk.getByRole("main").getByRole("alert")).toHaveText("Wrong PIN.");
       await kiosk.getByRole("button", { name: "Back" }).click();
     }
     await kioskEnterPin(kiosk, name, "8642");
-    await expect(kiosk.getByRole("alert")).toHaveText(
+    await expect(kiosk.getByRole("main").getByRole("alert")).toHaveText(
       "Too many wrong PINs. Try again in 15 minutes.",
     );
     await expect(kiosk.getByRole("button", { name: "Clock in", exact: true })).toHaveCount(0);
