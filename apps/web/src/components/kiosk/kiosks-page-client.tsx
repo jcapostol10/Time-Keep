@@ -1,5 +1,6 @@
 "use client";
 
+import { kioskRequiredGaps, type RequiredField } from "@timekeep/core";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,6 +66,12 @@ interface ProjectOption extends Option {
   color: string;
 }
 
+const GAP_WARNINGS: Partial<Record<RequiredField, string>> = {
+  project: "This workspace requires a project: pick one, or people cannot clock out here.",
+  task: "This project has tasks: pick a default task, or members cannot clock out here.",
+  tag: "This workspace requires a tag, which a kiosk cannot add: people could clock in here but not out.",
+};
+
 /**
  * The Kiosks page: a list with Edit, Rotate URL and Disable, and the dialog
  * that shows the device URL. The URL exists only in that dialog: the server
@@ -78,6 +85,7 @@ export function KiosksPageClient({
   projects,
   tasks,
   photoAllowed,
+  requiredFields,
 }: {
   slug: string;
   kiosks: KioskDTO[];
@@ -86,6 +94,7 @@ export function KiosksPageClient({
   projects: ProjectOption[];
   tasks: Option[];
   photoAllowed: boolean;
+  requiredFields: RequiredField[];
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<KioskDTO | "new" | null>(null);
@@ -190,6 +199,7 @@ export function KiosksPageClient({
           people={people}
           groups={groups}
           photoAllowed={photoAllowed}
+          requiredFields={requiredFields}
           onClose={() => setEditing(null)}
           onCreated={setDeviceUrl}
         />
@@ -262,6 +272,7 @@ function KioskDialog({
   people,
   groups,
   photoAllowed,
+  requiredFields,
   onClose,
   onCreated,
 }: {
@@ -270,6 +281,7 @@ function KioskDialog({
   people: Option[];
   groups: Option[];
   photoAllowed: boolean;
+  requiredFields: RequiredField[];
   onClose: () => void;
   onCreated: (url: string) => void;
 }) {
@@ -290,10 +302,11 @@ function KioskDialog({
   const [photo, setPhoto] = useState(kiosk?.photo ?? false);
   const [saving, setSaving] = useState(false);
 
-  // Decision 11 rule 8: a member must pick a task on Stop when the project has tasks.
-  const needsTask =
-    selection.taskId === null &&
-    (options?.projects.find((p) => p.id === selection.projectId)?.tasks.length ?? 0) > 0;
+  const gaps = kioskRequiredGaps(requiredFields, {
+    ...selection,
+    projectHasTasks:
+      (options?.projects.find((p) => p.id === selection.projectId)?.tasks.length ?? 0) > 0,
+  });
 
   async function save() {
     setSaving(true);
@@ -343,11 +356,11 @@ function KioskDialog({
             <div>
               <ProjectPicker slug={slug} value={selection} onChange={setSelection} />
             </div>
-            {needsTask ? (
-              <p className="text-muted-foreground text-sm">
-                This project has tasks: pick a default task, or members cannot clock out here.
+            {gaps.map((gap) => (
+              <p key={gap} className="text-muted-foreground text-sm">
+                {GAP_WARNINGS[gap]}
               </p>
-            ) : null}
+            ))}
           </div>
           <AssigneesField
             legend="Who can use it"

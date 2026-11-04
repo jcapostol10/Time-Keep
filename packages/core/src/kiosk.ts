@@ -1,3 +1,5 @@
+import type { RequiredField } from "./required-fields";
+
 /**
  * Kiosk rules (Phase 5c): the PIN throttles, the punch state machine, the
  * personal QR payload and the kiosk's copy. Pure; the server reads attempts
@@ -76,6 +78,22 @@ export function kioskActions(state: KioskState, breaksAllowed: boolean): KioskAc
   }
 }
 
+/**
+ * What a kiosk's defaults leave unmet, so people could clock in but not out:
+ * a required project, a task on a project with tasks (rule 8 of decision 11,
+ * whatever the setting), and a required tag, which a kiosk cannot add.
+ */
+export function kioskRequiredGaps(
+  required: readonly RequiredField[],
+  defaults: { projectId: string | null; taskId: string | null; projectHasTasks: boolean },
+): RequiredField[] {
+  const gaps: RequiredField[] = [];
+  if (required.includes("project") && defaults.projectId === null) gaps.push("project");
+  if (defaults.projectHasTasks && defaults.taskId === null) gaps.push("task");
+  if (required.includes("tag")) gaps.push("tag");
+  return gaps;
+}
+
 const QR_TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
 /** The text a personal QR code carries. */
@@ -99,5 +117,7 @@ export const KIOSK_UNAVAILABLE = "This kiosk is not available.";
 export const PIN_STRENGTH_NOTE =
   "Five wrong tries lock your PIN for 15 minutes. A 6-digit PIN is harder to guess.";
 export const LIMITED_EMAIL_TAKEN = "This address already has an account; invite it instead.";
+export const KIOSK_NEEDS_NOTE =
+  "This time is submitted or locked. Make the change in the app, where you can add a note.";
 export const KIOSK_PHOTO_NOTICE = "This kiosk takes a photo when you clock in.";
 export const QR_REISSUE_NOTE = "Showing a new code: printed copies of the old one stop working.";

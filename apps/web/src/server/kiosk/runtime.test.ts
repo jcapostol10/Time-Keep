@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { DEFAULT_REPORT_QUERY, type ReportQuery, type ViewerPrefs } from "@timekeep/core";
+import {
+  DEFAULT_REPORT_QUERY,
+  KIOSK_NEEDS_NOTE,
+  type ReportQuery,
+  type ViewerPrefs,
+} from "@timekeep/core";
 import { and, eq, isNull, kioskAttempt, membership, timeEntry, user } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -11,7 +16,7 @@ import { loadViewer } from "../authz";
 import { PENDING_MESSAGE } from "../entry-guard";
 import { detailedReport } from "../reports";
 import { qrToken, setPin } from "./credentials";
-import { createKiosk, rotateKioskToken, updateKiosk } from "./kiosks";
+import { createKiosk, rotateKioskToken, setKioskDisabled, updateKiosk } from "./kiosks";
 import { identify, kioskPeople, punch, type ResolvedKiosk, resolveKiosk } from "./runtime";
 
 const handle = connectTestDb();
@@ -64,6 +69,14 @@ const bobEntries = () =>
 describe("resolveKiosk and kioskPeople", () => {
   it("refuse an unknown token with the one 404", async () => {
     await expect(resolveKiosk(db, "nope")).rejects.toMatchObject({
+      status: 404,
+      message: "This kiosk is not available.",
+    });
+  });
+
+  it("refuse a disabled kiosk with the same 404", async () => {
+    await setKioskDisabled(db, await cast.viewer("ann"), kioskId, true);
+    await expect(resolveKiosk(db, token)).rejects.toMatchObject({
       status: 404,
       message: "This kiosk is not available.",
     });
@@ -170,6 +183,20 @@ describe("punches", () => {
     expect(await bobEntries()).toEqual([]);
   });
 
+  it("sends an admin to the app for submitted time, since a kiosk cannot take a note", async () => {
+    const ann = await cast.viewer("ann");
+    await submitPeriod(db, ann, "2026-10-26", NOW);
+    await setPin(db, ann, cast.ids.ann, "7777");
+    const visit = await identify(db, k, { userId: cast.ids.ann, pin: "7777" }, NOW);
+    await expect(
+      punch(db, k, { ticket: visit.ticket, action: "CLOCK_IN" }, null, NOW),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: KIOSK_NEEDS_NOTE,
+      extra: { visit: { state: "OUT" } },
+    });
+  });
+
   it("still clocks in under force timer", async () => {
     await cast.setRules({ forceTimer: true });
     expect(await act("CLOCK_IN", 0)).toMatchObject({ state: "IN" });
@@ -263,7 +290,9 @@ describe("PIN throttles", () => {
         identify(i % 2 ? second.db : db, k, { userId: cast.ids.bob, pin: "9999" }, at(0)),
       ),
     );
-    expect(results.every((r) => r.status === "rejected")).toBe(true);
+    const codes = results.map((r) => (r.status === "rejected" ? r.reason.code : "PASSED"));
+    expect(codes.filter((c) => c === "WRONG_PIN")).toHaveLength(5);
+    expect(codes.filter((c) => c === "PERSON_LOCKED")).toHaveLength(5);
     const failures = await db
       .select()
       .from(kioskAttempt)

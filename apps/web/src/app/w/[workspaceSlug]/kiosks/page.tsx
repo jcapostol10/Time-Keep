@@ -1,4 +1,4 @@
-import { planAllows } from "@timekeep/core";
+import { entryRulesOf, planAllows } from "@timekeep/core";
 import { eq, getDb, project, task } from "@timekeep/db";
 import type { Metadata } from "next";
 
@@ -52,6 +52,7 @@ export default async function KiosksPage({ params }: PageProps<"/w/[workspaceSlu
         projects={projects}
         tasks={tasks}
         photoAllowed={planAllows(ctx.workspace, "kioskPhoto")}
+        requiredFields={entryRulesOf(ctx.settings).requiredFields}
       />
     </>
   );

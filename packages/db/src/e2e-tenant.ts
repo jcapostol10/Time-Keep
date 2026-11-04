@@ -1,4 +1,4 @@
-import { and, inArray, like, lt, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, like, lt, notInArray, sql } from "drizzle-orm";
 
 import type { Database } from "./client";
 import { capturedEmail, membership, user, workspace } from "./schema";
@@ -81,6 +81,19 @@ export async function cleanupE2eData(
     const blocked = await e2eUsersInCustomerWorkspaces(tx, "@e2e.test");
     const blockedEmails = [...new Set(blocked.map((b) => b.email.toLowerCase()))];
     const workspaceIds = await e2eOnlyWorkspaceIds(tx, { withMemberDomain: "@e2e.test" });
+    // Only the limited members of these workspaces: one removed from a customer
+    // workspace also has no membership, and deleting them would take their entries.
+    const limitedIds =
+      workspaceIds.length > 0
+        ? (
+            await tx
+              .select({ userId: membership.userId })
+              .from(membership)
+              .where(
+                and(inArray(membership.workspaceId, workspaceIds), eq(membership.limited, true)),
+              )
+          ).map((m) => m.userId)
+        : [];
     if (workspaceIds.length > 0) {
       await tx.delete(workspace).where(inArray(workspace.id, workspaceIds));
     }
@@ -93,16 +106,19 @@ export async function cleanupE2eData(
           : isE2eUser,
       )
       .returning({ id: user.id });
-    // Limited users whose workspace went above (they have no other membership).
-    const limited = await tx
-      .delete(user)
-      .where(
-        and(
-          like(sql`lower(${user.email})`, "%@kiosk.invalid"),
-          sql`not exists (select 1 from ${membership} where ${membership.userId} = ${user.id})`,
-        ),
-      )
-      .returning({ id: user.id });
+    const limited =
+      limitedIds.length > 0
+        ? await tx
+            .delete(user)
+            .where(
+              and(
+                inArray(user.id, limitedIds),
+                like(sql`lower(${user.email})`, "%@kiosk.invalid"),
+                sql`not exists (select 1 from ${membership} where ${membership.userId} = ${user.id})`,
+              ),
+            )
+            .returning({ id: user.id })
+        : [];
     const emails = await tx
       .delete(capturedEmail)
       .where(lt(capturedEmail.createdAt, new Date(now.getTime() - ONE_DAY_MS)))

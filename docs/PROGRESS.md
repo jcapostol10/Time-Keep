@@ -276,7 +276,7 @@ Rulings made while planning 5b: balances reckon per calendar year in the workspa
 - [x] Clock-in photos: an optional kiosk setting with a notice, one JPEG in the private bucket, a camera link on the Detailed row for admins, deleted after 90 days
 - [x] Seed (the demo kiosk "Front desk", PIN 1234 for the two members; the URL is printed locally, never in CI), e2e (`kiosk.spec.ts` on previews; `kiosk-extra.spec.ts` nightly), integration tests, docs
 
-Rulings made while building 5c, beyond those in the plan: the person lock covers PIN entry only, so a valid QR code still identifies a PIN-locked person; a failed photo upload never undoes a punch, while an invalid photo refuses it; the daily cron route runs the kiosk purge, leaving `runDailyJobs` as it was; a kiosk on a project with tasks needs a default task, and the kiosk dialog says so; replacing a QR code asks first, because a printed copy stops working.
+Rulings made while building 5c, beyond those in the plan: the person lock covers PIN entry only, so a valid QR code still identifies a PIN-locked person; a failed photo upload never undoes a punch, while an invalid photo refuses it; the daily cron route runs the kiosk purge, leaving `runDailyJobs` as it was; a kiosk on a project with tasks needs a default task, and the kiosk dialog says so; replacing a QR code asks first, because a printed copy stops working; an owner's or admin's punch into submitted time is refused, because a kiosk cannot ask for the note; the kiosk dialog warns about required fields its defaults leave unmet.
 
 ## Phase 6 — Expenses, invoicing, budgets and profit
 

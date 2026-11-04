@@ -4,6 +4,7 @@ import {
   KIOSK_LOCK_MS,
   KIOSK_MAX_FAILURES,
   kioskActions,
+  kioskRequiredGaps,
   kioskState,
   parseQrPayload,
   PERSON_MAX_FAILURES,
@@ -57,6 +58,31 @@ describe("kioskState and kioskActions", () => {
     expect(kioskActions("IN", false)).toEqual(["CLOCK_OUT"]);
     expect(kioskActions("IN", true)).toEqual(["START_BREAK", "CLOCK_OUT"]);
     expect(kioskActions("BREAK", true)).toEqual(["END_BREAK", "CLOCK_OUT"]);
+  });
+});
+
+describe("kioskRequiredGaps", () => {
+  const defaults = { projectId: "p", taskId: "t", projectHasTasks: true };
+
+  it("is empty when the defaults satisfy the workspace", () => {
+    expect(kioskRequiredGaps(["project", "task", "description"], defaults)).toEqual([]);
+  });
+
+  it("finds a required project with no default", () => {
+    expect(
+      kioskRequiredGaps(["project"], { projectId: null, taskId: null, projectHasTasks: false }),
+    ).toEqual(["project"]);
+  });
+
+  it("wants a default task on a project with tasks, whatever the setting (rule 8)", () => {
+    expect(kioskRequiredGaps([], { ...defaults, taskId: null })).toEqual(["task"]);
+    expect(
+      kioskRequiredGaps(["task"], { projectId: "p", taskId: null, projectHasTasks: false }),
+    ).toEqual([]);
+  });
+
+  it("always reports a required tag: a kiosk cannot add one", () => {
+    expect(kioskRequiredGaps(["tag"], defaults)).toEqual(["tag"]);
   });
 });
 

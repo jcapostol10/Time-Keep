@@ -158,6 +158,27 @@ describe("e2e tenant boundaries", () => {
     expect(await exists(user, limited)).toBe(true);
   });
 
+  it("keeps a limited member removed from a customer workspace, with their entries", async () => {
+    const customer = await createUser("boss@customer.com");
+    const customerWs = await createTestWorkspace(db, "Customer Co", customer);
+    const limited = await addLimitedMember(customerWs.id);
+    await db.insert(timeEntry).values({
+      id: randomUUID(),
+      workspaceId: customerWs.id,
+      userId: limited,
+      start: new Date("2026-10-01T01:00:00Z"),
+      end: new Date("2026-10-01T02:00:00Z"),
+      durationSeconds: 3600,
+    });
+    // removeMember keeps the user row: their entries read "(former member)".
+    await db.delete(membership).where(eq(membership.userId, limited));
+
+    await cleanupE2eData(db);
+
+    expect(await exists(user, limited)).toBe(true);
+    expect(await db.select().from(timeEntry)).toHaveLength(1);
+  });
+
   it("cleanup keeps the demo users and the demo workspace", async () => {
     const owner = await createUser("owner@demo.test");
     const demo = await createTestWorkspace(db, "Demo Workspace", owner);

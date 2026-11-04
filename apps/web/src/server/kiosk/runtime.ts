@@ -6,6 +6,7 @@ import {
   addDaysInZone,
   KIOSK_LOCK_MS,
   KIOSK_MAX_FAILURES,
+  KIOSK_NEEDS_NOTE,
   KIOSK_PIN_LOCKED,
   KIOSK_UNAVAILABLE,
   type KioskAction,
@@ -447,40 +448,48 @@ export async function punch(
   const takePhoto = input.action === "CLOCK_IN" && k.photo && photo !== null;
   if (takePhoto) assertKioskPhoto(photo);
 
-  switch (input.action) {
-    case "CLOCK_IN":
-    case "END_BREAK": {
-      const { started } = await startTimer(db, scope, await workDetails(db, k), now);
-      if (takePhoto) {
-        // Ruling R5: the photo is optional; a storage failure never undoes the punch.
-        await savePunchPhoto(
-          db,
-          { workspaceId: k.workspaceId, entryId: started.id, bytes: photo },
-          now,
-        ).catch((error: unknown) => console.error("[kiosk] photo upload failed", error));
+  try {
+    switch (input.action) {
+      case "CLOCK_IN":
+      case "END_BREAK": {
+        const { started } = await startTimer(db, scope, await workDetails(db, k), now);
+        if (takePhoto) {
+          // Ruling R5: the photo is optional; a storage failure never undoes the punch.
+          await savePunchPhoto(
+            db,
+            { workspaceId: k.workspaceId, entryId: started.id, bytes: photo },
+            now,
+          ).catch((error: unknown) => console.error("[kiosk] photo upload failed", error));
+        }
+        break;
       }
-      break;
+      case "START_BREAK":
+        await startTimer(
+          db,
+          scope,
+          {
+            description: "",
+            projectId: null,
+            taskId: null,
+            tagIds: [],
+            billable: false,
+            type: "break",
+          },
+          now,
+        );
+        break;
+      case "CLOCK_OUT": {
+        const current = await running(db, k.workspaceId, person.userId);
+        if (current) await stopTimer(db, scope, { entryId: current.id }, now);
+        break;
+      }
     }
-    case "START_BREAK":
-      await startTimer(
-        db,
-        scope,
-        {
-          description: "",
-          projectId: null,
-          taskId: null,
-          tagIds: [],
-          billable: false,
-          type: "break",
-        },
-        now,
-      );
-      break;
-    case "CLOCK_OUT": {
-      const current = await running(db, k.workspaceId, person.userId);
-      if (current) await stopTimer(db, scope, { entryId: current.id }, now);
-      break;
+  } catch (error) {
+    // Owners and admins may change submitted time with a note; a kiosk has no way to ask.
+    if (error instanceof TimeEntryError && error.code === "NOTE_REQUIRED") {
+      throw new KioskError("WRONG_STATE", KIOSK_NEEDS_NOTE, { visit: before });
     }
+    throw error;
   }
   return visitOf(db, k, person, now);
 }

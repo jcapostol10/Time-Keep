@@ -9,6 +9,16 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## App
 
+- [ ] **Decide: a default tag for kiosks.** With a required tag, nobody can clock out on a kiosk, because a kiosk adds no tags (spec decision 15 has none); the person stays clocked in until an admin edits the entry. The Kiosks dialog warns about it. A fix is a `kiosk.tag_id` column (an additive migration) and a picker.
+- [ ] Phase 5c review minors:
+  - The QR path of `identify` treats any error from `allowedPerson` as "not allowed", so a database error counts as a QR failure; catch only `WorkspaceAccessError`.
+  - An unknown QR payload costs nothing to send and counts toward the kiosk's 30-failure pause, so whoever has the URL can pause PIN entry; consider not counting failures with no person, or a per-kiosk rate limit on identify.
+  - `savePunchPhoto` uploads before it inserts the row, so an insert failure leaves an object the purge never finds.
+  - `photo: true` reaches a public share page's payload when the link's creator manages kiosks (not rendered, existence only); strip it on the share path.
+  - `removeMember` keeps `kiosk_assignee` rows, so re-inviting someone silently re-allows them on that kiosk.
+  - The device URL's Copy has no failure toast (insecure contexts), and an emptied timeout field shows a raw validation message.
+  - The session timeout can fire while a punch is in flight (the photo capture waits for the camera); clear it while busy.
+  - `credentialStatuses` returns `pinSetAt`, which no UI reads.
 - [ ] `time-entries.test.ts` › "reassignProjectEntries moves entries and clears their task" failed once in the 5a gate (the moved entry's `updated_at` read 156 ms earlier than its creation's) and passed on two reruns; both stamps come from Postgres `now()`, so look at the Docker clock or the test's ordering.
 - [ ] Phase 5a review minors: `approversFor` uses the root pool inside the submit transaction (pass `tx`); the guard runs three statements per write (load the rules once per bulk edit or import); an owner's or admin's timer started with a note in a pending period can still be running when the period is approved; the settings check counts pending requests outside the update transaction; `deleteProject`'s submitted-time check takes no person lock; the daily reminder fires only on the first local day after a period (a missed run, or a DST-skipped day, loses it) and its dedupe is read-then-insert; `email_outbox` keeps full HTML forever (add retention, keep the reminder rows); `lock.manage` and core `transition()` are unused; the note prompt cancels an open prompt when a second write asks, Undo after a delete asks again, and a cancelled multi-owner delete restores rows already deleted; decision emails link to the timesheet, not the period; the Approvals tables lack billable totals; no web-level test with the viewer's zone different from the workspace's; Detailed report rows are not marked read-only for locked time.
 - [ ] Phase 5a: a workspace timezone change while periods are APPROVED is allowed (only PENDING refuses it), so an approved period's edge moves by the zone difference; store request bounds as instants if that bites.
