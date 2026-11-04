@@ -4,7 +4,6 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## Needs the owner
 
-- [ ] **Rotate the Vercel automation bypass secret.** The first version of the kiosk acceptance test asserted on whole cookie objects, so its failure on preview run 41773136961 (2026-11-04) wrote the `_vercel_jwt` cookie, unmasked, into the public `playwright-report-preview` artifact. The token has no expiry and its `bypass` claim has the shape of the project's secret. Delete the artifact (id 13295269463), regenerate the secret in Vercel (Deployment Protection → Protection Bypass for Automation), and update `VERCEL_AUTOMATION_BYPASS_SECRET` in the repo's Actions secrets. The test now reads cookie names only.
 - [ ] **Production email:** verify a sending domain in Resend and set `MAIL_FROM` to an address on it (Vercel → Production env, then redeploy). Until then, production can only email the Resend account owner, so sign-up verification, password reset and invites fail for everyone else. On our side (2026-10-22): production refuses to boot with a placeholder sender, a failed send tells the person what happened instead of a bare 500, and Profile settings has "Send me a test email" to check the sender.
 - [ ] **Production is behind Vercel Authentication.** Deployment protection covers every deployment, production included, so anyone not signed in to the Vercel team gets a Vercel login page instead of TimeKeep. Fine while it is private; before real customers use it, switch protection to "Standard" (previews only) or add a custom domain outside protection. The e2e workflow only targets previews, so it is unaffected.
 
@@ -83,6 +82,7 @@ Nothing open.
 
 ## Done
 
+- [x] Vercel automation bypass secret rotated, done 2026-11-04: the first kiosk acceptance test asserted on whole cookie objects, so its failure on preview run 41773136961 wrote `_vercel_jwt` unmasked into the public `playwright-report-preview` artifact. The owner deleted the artifact, regenerated the secret and updated `VERCEL_AUTOMATION_BYPASS_SECRET` in the Actions secrets; the test reads cookie names only since a25512f, and CLAUDE.md forbids asserting on whole cookies or headers.
 - [x] Phase 5a operations: `CRON_SECRET` set in Vercel production and the 0013 migration applied to the shared database; done 2026-11-02 (4853308, "deploy: rebuild production to pick up CRON_SECRET").
 - [x] Phase 5a review minor "the reminder email names a mute setting that has no UI yet": Profile → Timer settings has "Mute target reminders" (Phase 5b, 2026-11-03).
 
