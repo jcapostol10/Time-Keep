@@ -73,6 +73,12 @@ export const ACTIONS = [
   "attendance.read",
   "member.setCapacity",
   "target.manage",
+  /** kiosks: create, edit, rotate, disable, and see clock-in photos (Phase 5c) */
+  "kiosk.manage",
+  /** set one's own kiosk PIN and QR code */
+  "pin.setOwn",
+  /** add, convert and set the PIN or QR code of kiosk-only (limited) members */
+  "member.manageLimited",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -265,6 +271,9 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
   "attendance.read": { owner: "yes", admin: "yes", manager: "managedPeople", member: "own" },
   "member.setCapacity": ADMINS,
   "target.manage": ADMINS,
+  "kiosk.manage": ADMINS,
+  "pin.setOwn": { owner: "own", admin: "own", manager: "own", member: "own" },
+  "member.manageLimited": ADMINS,
 };
 
 const CREATED: Partial<Record<Action, CatalogType>> = {
@@ -439,6 +448,8 @@ const SECTION_TITLES: Record<string, string> = {
   timeOff: "Time off",
   attendance: "Attendance",
   target: "Targets",
+  kiosk: "Kiosks",
+  pin: "Kiosk PINs",
 };
 
 /** The matrix as markdown, for docs/PERMISSIONS.md. */

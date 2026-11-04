@@ -26,6 +26,7 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 | `member.remove` | yes | yes | — | — |
 | `member.assignScope` | yes | yes | — | — |
 | `member.setCapacity` | yes | yes | — | — |
+| `member.manageLimited` | yes | yes | — | — |
 
 ## Groups
 
@@ -143,3 +144,15 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 | Action | Owner | Admin | Manager | Member |
 | --- | --- | --- | --- | --- |
 | `target.manage` | yes | yes | — | — |
+
+## Kiosks
+
+| Action | Owner | Admin | Manager | Member |
+| --- | --- | --- | --- | --- |
+| `kiosk.manage` | yes | yes | — | — |
+
+## Kiosk PINs
+
+| Action | Owner | Admin | Manager | Member |
+| --- | --- | --- | --- | --- |
+| `pin.setOwn` | their own | their own | their own | their own |
