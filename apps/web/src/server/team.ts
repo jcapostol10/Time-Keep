@@ -16,6 +16,7 @@ import {
   inArray,
   invitation,
   invitationGroup,
+  kioskCredential,
   lte,
   managedGroup,
   managedUser,
@@ -183,6 +184,9 @@ export async function removeMember(db: Database, viewer: Viewer, userId: string)
     await tx
       .delete(managedGroup)
       .where(and(eq(managedGroup.workspaceId, ws), eq(managedGroup.managerId, userId)));
+    await tx
+      .delete(kioskCredential)
+      .where(and(eq(kioskCredential.workspaceId, ws), eq(kioskCredential.userId, userId)));
     await tx
       .delete(membership)
       .where(and(eq(membership.workspaceId, ws), eq(membership.userId, userId)));
@@ -375,6 +379,7 @@ export async function listTeam(
         dailyMinutes: membership.dailyCapacityMinutes,
         weeklyMinutes: membership.weeklyCapacityMinutes,
         workingDays: membership.workingDays,
+        limited: membership.limited,
       })
       .from(membership)
       .innerJoin(user, eq(user.id, membership.userId))
@@ -476,6 +481,7 @@ export async function listTeam(
               projectIds: ids(scopeProjects, m.userId),
             }
           : null,
+      limited: m.limited,
       capacity: {
         dailyMinutes: m.dailyMinutes,
         weeklyMinutes: m.weeklyMinutes,
@@ -494,6 +500,7 @@ export async function listTeam(
       groups: (groupsOfInvite.get(i.id) ?? []).map((g) => ({ id: g.id, name: g.name! })),
       billableRateMinor: null,
       scope: null,
+      limited: false,
       capacity: null,
     })),
   ];

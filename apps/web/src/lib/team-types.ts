@@ -20,6 +20,8 @@ export interface TeamRow {
   billableRateMinor: number | null;
   /** A manager's people, groups and projects; null for other roles or without permission. */
   scope: { userIds: string[]; groupIds: string[]; projectIds: string[] } | null;
+  /** Kiosk only (Phase 5c): no login; an admin sets their PIN and can convert them. */
+  limited: boolean;
   /** Daily and weekly minutes and working days (Phase 5b); null for an invite. */
   capacity: Capacity | null;
 }
