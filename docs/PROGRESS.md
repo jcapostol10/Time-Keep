@@ -246,7 +246,7 @@ Design: `docs/superpowers/specs/2026-10-31-phase-5-design.md` (approved 2026-11-
 - [x] Seed, e2e (`approvals.spec.ts`), integration tests (`entry-guard`, `approvals`, `outbox`, `daily-jobs`, `cron-auth`, `writable-coverage`), docs
 - [x] Time off policies, holidays, requests, balances (5b)
 - [x] Attendance/overtime report; targets and reminders (5b)
-- [ ] Kiosk with PIN/QR (5c)
+- [x] Kiosk with PIN/QR (5c)
 
 Rulings made while building 5a are in the plan's ledger and listed in the branch's hand-off; the notable ones: the lookup of submitted periods ignores `approval_enabled` (approved time stays read-only after approval is turned off); every guarded write and a submission take the person's advisory lock, so a submission's totals never miss an edit the guard let through; empty timesheet cells in locked or submitted days stay typeable and the server refuses the write; the Unsubmitted tab lists, for a manager, the people they manage; members reviewing get a 403 and managers outside the setting a 404.
 
@@ -262,6 +262,21 @@ Rulings made while building 5a are in the plan's ledger and listed in the branch
 - [x] Seed (PH holidays this year and next, Vacation and Sick leave, member1's time off, an inactive target, member2 Sunday to Thursday), e2e (`time-off.spec.ts` on previews; `attendance.spec.ts` nightly), integration tests, docs
 
 Rulings made while planning 5b: balances reckon per calendar year in the workspace timezone (R1); a request stays within one year (R2); time off review follows the approvers setting with no projects, so a project manager reviews only the people they manage (R3); Attendance covers, for a manager, themselves and the people they manage, each person in their own timezone, on raw time (R4). Rulings made while building are in the plan's ledger and the branch's hand-off; notable ones: "Who approves" stays editable with period approval off, since it also decides time off; the request dialog offers only the viewer's assigned policies and previews the balance from the server; a week the Attendance range cuts is measured against its days' capacity, not the weekly hours; requests are counted when made.
+
+### 5c — Kiosk and limited users (plan `docs/superpowers/plans/2026-11-04-phase-5c.md`)
+
+- [x] Core: the throttle maths (`throttleUntil`), the punch state machine, the `tkq1.` QR payload and the kiosk copy; the matrix's `kiosk.manage`, `pin.setOwn`, `member.manageLimited`; `planAllows` gains `kioskPhoto`
+- [x] Data: migration 0015 (`kiosk`, `kiosk_assignee`, `kiosk_credential`, `kiosk_attempt`, `kiosk_photo`, `membership.limited`), applied to the shared database by the Migrate workflow
+- [x] The Kiosks page: list, create and edit, the device URL shown once with Copy, Rotate URL, Disable
+- [x] The kiosk screen `/kiosk/<token>`: no session, the allowed people, PIN pad or QR scan, the actions that fit the person's state, today's work, back to the list after the timeout; works at 375 px and on a tablet
+- [x] Punches through the entry service under the person's own viewer at the server's time, so locks, approvals, force timer and required fields apply; a signed 120-second ticket, so the PIN is checked once per visit
+- [x] Both PIN throttles, every attempt counted, verification under a per-person advisory lock
+- [x] Profile → Kiosk: set or change a PIN, show, print and replace a QR code, per workspace
+- [x] Team: Add limited user ("Kiosk only"), set their PIN, show their QR code, Convert to member with a set-password email
+- [x] Clock-in photos: an optional kiosk setting with a notice, one JPEG in the private bucket, a camera link on the Detailed row for admins, deleted after 90 days
+- [x] Seed (the demo kiosk "Front desk", PIN 1234 for the two members; the URL is printed locally, never in CI), e2e (`kiosk.spec.ts` on previews; `kiosk-extra.spec.ts` nightly), integration tests, docs
+
+Rulings made while building 5c, beyond those in the plan: the person lock covers PIN entry only, so a valid QR code still identifies a PIN-locked person; a failed photo upload never undoes a punch, while an invalid photo refuses it; the daily cron route runs the kiosk purge, leaving `runDailyJobs` as it was; a kiosk on a project with tasks needs a default task, and the kiosk dialog says so; replacing a QR code asks first, because a printed copy stops working.
 
 ## Phase 6 — Expenses, invoicing, budgets and profit
 

@@ -18,6 +18,7 @@ const ALLOWED: Record<string, string> = {
     "copyProject copies a project's tasks; listPickerProjects builds its tasks from visibleTasksFor",
   "time-entries.ts": "loads one task by id to validate an entry's details",
   "favorites.ts": "loads pinned tasks by id",
+  "kiosk/kiosks.ts": "checks a kiosk's default task by id; the Kiosks page is admin-only",
   "rates.ts": "resolves a rate target by id; the Rates page is admin-only",
   "reports.ts":
     "joins task for names and the Audit noTask criterion; its options come from listPickerProjects",

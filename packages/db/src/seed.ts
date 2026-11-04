@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import {
   addDaysInZone,
@@ -30,6 +30,8 @@ import {
   approvalRequest,
   client,
   holiday,
+  kiosk,
+  kioskCredential,
   managedUser,
   membership,
   project,
@@ -197,9 +199,49 @@ export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}
     await seedTeamAndRates(tx, demo.id, ids, catalog);
     await seedApprovals(tx, demo.id, ids);
     await seedTimeOff(tx, demo.id, ids);
+    const kioskToken = await seedKiosk(tx, demo.id, ids, catalog.taskIds);
 
-    return { workspaceSlug: demo.slug };
+    return { workspaceSlug: demo.slug, kioskToken };
   });
+}
+
+/**
+ * Kiosk (Phase 5c): "Front desk" for everyone on Internal › Meetings, a task
+ * the demo members' group can see, with PIN 1234 for member1 and member2. No
+ * limited user: e2e cleanup keeps this tenant's members to `@demo.test`.
+ */
+async function seedKiosk(
+  db: DbExecutor,
+  workspaceId: string,
+  ids: Map<string, string>,
+  taskIds: Map<string, string>,
+): Promise<string> {
+  const taskId = taskIds.get("Internal/Meetings");
+  if (!taskId) throw new Error("Internal/Meetings task missing");
+  const [internal] = await db
+    .select({ projectId: task.projectId })
+    .from(task)
+    .where(eq(task.id, taskId));
+  const token = randomBytes(32).toString("base64url");
+  await db.insert(kiosk).values({
+    id: randomUUID(),
+    workspaceId,
+    name: "Front desk",
+    tokenHash: createHash("sha256").update(token).digest("hex"),
+    projectId: internal?.projectId,
+    taskId,
+    createdBy: ids.get("owner@demo.test"),
+  });
+  const pinHash = await hashPassword("1234");
+  await db.insert(kioskCredential).values(
+    ["member1@demo.test", "member2@demo.test"].flatMap((email) => {
+      const userId = ids.get(email);
+      return userId
+        ? [{ id: randomUUID(), workspaceId, userId, pinHash, pinSetAt: new Date() }]
+        : [];
+    }),
+  );
+  return token;
 }
 
 /**
@@ -766,10 +808,12 @@ if (isDirectRun) {
   }
   const handle = createDb(url, { max: 2 });
   seed(handle.db)
-    .then(({ workspaceSlug }) => {
+    .then(({ workspaceSlug, kioskToken }) => {
       console.info(`[seed] demo workspace ready at /w/${workspaceSlug}`);
       for (const u of DEMO_USERS)
         console.info(`[seed]   ${u.role.padEnd(7)} ${u.email} / ${DEMO_PASSWORD}`);
+      // A bearer token: the repo's Actions logs are public.
+      if (!process.env.CI) console.info(`[seed] demo kiosk at /kiosk/${kioskToken} (PIN 1234)`);
     })
     .catch((error) => {
       console.error("[seed] failed", error);
