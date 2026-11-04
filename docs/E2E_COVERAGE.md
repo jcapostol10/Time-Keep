@@ -324,8 +324,20 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Capacity set on the Team page changes a day's undertime — `attendance.spec.ts` › "capacity on the Team page changes undertime"
 - [x] An under-target rule emails a reminder after the daily job — `attendance.spec.ts` › "a target reminder email after the daily job"
 
+## Kiosk and limited users
+
+- [x] A kiosk PIN punch creates a normal entry visible in the Detailed report, and the kiosk sets no cookie — `kiosk.spec.ts` › "a kiosk PIN punch creates a normal entry visible in the Detailed report"
+- [x] Clock in, start and end a break, and clock out on a kiosk — `kiosk-extra.spec.ts` › "clock in, break and clock out on a kiosk"
+- [x] Five wrong PINs lock the person on the kiosk, even with the right PIN — `kiosk-extra.spec.ts` › "five wrong PINs lock the person for 15 minutes"
+- [x] A personal QR code scanned by the kiosk camera identifies the person — `kiosk-extra.spec.ts` › "a QR code punch through the camera"
+- [x] A limited user is added on the Team page ("Kiosk only"), gets a PIN and punches on a kiosk — `kiosk-extra.spec.ts` › "a limited user punches on a kiosk and shows on the Team page"
+- [x] Converting a limited user emails a set-password link, and they then sign in — `kiosk-extra.spec.ts` › "a limited user is converted to a member and sets a password"
+- [x] Rotating a kiosk's URL retires the old one — `kiosk-extra.spec.ts` › "rotating a kiosk retires the old device URL"
+- [x] A clock-in photo is taken on a photo kiosk and admins open it from the Detailed report — `kiosk-extra.spec.ts` › "a clock-in photo is visible to admins in the Detailed report"
+
 ## Small screens (375px)
 
 - [x] The tracker page fits a 375px screen without horizontal scrolling — `power.spec.ts` › "the tracker fits a 375px screen with favourites and the person picker"
 - [x] At 375px the report filters fold into a sheet (Escape closes it after a picker) and the page does not scroll sideways — `reports.spec.ts` › "at 375px the filters fold into a sheet and the page does not scroll sideways"
 - [x] The account and settings pages fit a 375px screen without horizontal scrolling — `settings.spec.ts` › "the account and settings pages fit a 375px screen"
+- [x] The kiosk screen (people, PIN pad, actions) fits a 375px screen — `kiosk.spec.ts` › "the kiosk screen works at 375 px"

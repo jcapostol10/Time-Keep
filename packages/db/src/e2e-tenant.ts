@@ -1,4 +1,4 @@
-import { and, inArray, like, lt, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, like, lt, notInArray, sql } from "drizzle-orm";
 
 import type { Database } from "./client";
 import { capturedEmail, membership, user, workspace } from "./schema";
@@ -8,7 +8,9 @@ import { capturedEmail, membership, user, workspace } from "./schema";
  * fenced off by email domain: seeded demo users are `@demo.test`, throwaway
  * test users are `@e2e.test`. A workspace belongs to e2e only when every one
  * of its members is such a user; anything with a real member is a customer
- * workspace and is never deleted by seeding or cleanup.
+ * workspace and is never deleted by seeding or cleanup. A kiosk-only member
+ * (`membership.limited`, a synthetic `@kiosk.invalid` user) counts as e2e in
+ * that rule: it only exists inside its workspace.
  */
 
 const E2E_DOMAINS = ["@demo.test", "@e2e.test"] as const;
@@ -18,7 +20,7 @@ export function isE2eEmail(email: string): boolean {
   return E2E_DOMAINS.some((d) => e.endsWith(d));
 }
 
-const isE2eMember = sql`(lower(${user.email}) like '%@demo.test' or lower(${user.email}) like '%@e2e.test')`;
+const isE2eMember = sql`(lower(${user.email}) like '%@demo.test' or lower(${user.email}) like '%@e2e.test' or ${membership.limited})`;
 
 /**
  * Workspaces whose members are all e2e users. With `withMemberDomain`, only
@@ -79,6 +81,19 @@ export async function cleanupE2eData(
     const blocked = await e2eUsersInCustomerWorkspaces(tx, "@e2e.test");
     const blockedEmails = [...new Set(blocked.map((b) => b.email.toLowerCase()))];
     const workspaceIds = await e2eOnlyWorkspaceIds(tx, { withMemberDomain: "@e2e.test" });
+    // Only the limited members of these workspaces: one removed from a customer
+    // workspace also has no membership, and deleting them would take their entries.
+    const limitedIds =
+      workspaceIds.length > 0
+        ? (
+            await tx
+              .select({ userId: membership.userId })
+              .from(membership)
+              .where(
+                and(inArray(membership.workspaceId, workspaceIds), eq(membership.limited, true)),
+              )
+          ).map((m) => m.userId)
+        : [];
     if (workspaceIds.length > 0) {
       await tx.delete(workspace).where(inArray(workspace.id, workspaceIds));
     }
@@ -91,12 +106,25 @@ export async function cleanupE2eData(
           : isE2eUser,
       )
       .returning({ id: user.id });
+    const limited =
+      limitedIds.length > 0
+        ? await tx
+            .delete(user)
+            .where(
+              and(
+                inArray(user.id, limitedIds),
+                like(sql`lower(${user.email})`, "%@kiosk.invalid"),
+                sql`not exists (select 1 from ${membership} where ${membership.userId} = ${user.id})`,
+              ),
+            )
+            .returning({ id: user.id })
+        : [];
     const emails = await tx
       .delete(capturedEmail)
       .where(lt(capturedEmail.createdAt, new Date(now.getTime() - ONE_DAY_MS)))
       .returning({ id: capturedEmail.id });
     return {
-      users: users.length,
+      users: users.length + limited.length,
       workspaces: workspaceIds.length,
       emails: emails.length,
       skipped: blockedEmails.length,

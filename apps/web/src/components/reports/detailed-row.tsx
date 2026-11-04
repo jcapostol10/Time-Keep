@@ -15,7 +15,7 @@ import {
 import { Checkbox } from "@timekeep/ui/components/checkbox";
 import { TableCell, TableRow } from "@timekeep/ui/components/table";
 import { Badge } from "@timekeep/ui/components/badge";
-import { DollarSignIcon } from "lucide-react";
+import { CameraIcon, DollarSignIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import type { DetailedEntryDTO } from "@/lib/report-types";
@@ -96,19 +96,32 @@ export function DetailedRow({
         ) : null}
       </TableCell>
       <TableCell className="min-w-48">
-        {entry.editable ? (
-          <CommitInput
-            label="Description"
-            value={entry.description}
-            placeholder="Add description"
-            onCommit={(description) => save({ description })}
-            className={`${INPUT} w-full`}
-          />
-        ) : (
-          <span className={entry.description ? "" : "text-muted-foreground"}>
-            {entryName(entry)}
-          </span>
-        )}
+        <div className="flex items-center gap-1">
+          {entry.editable ? (
+            <CommitInput
+              label="Description"
+              value={entry.description}
+              placeholder="Add description"
+              onCommit={(description) => save({ description })}
+              className={`${INPUT} w-full`}
+            />
+          ) : (
+            <span className={entry.description ? "" : "text-muted-foreground"}>
+              {entryName(entry)}
+            </span>
+          )}
+          {entry.photo ? (
+            <a
+              href={`/api/w/${slug}/kiosk-photos/${entry.id}`}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Clock-in photo"
+              className="text-muted-foreground hover:text-foreground shrink-0"
+            >
+              <CameraIcon className="size-4" />
+            </a>
+          ) : null}
+        </div>
       </TableCell>
       {show("project") ? (
         <TableCell>

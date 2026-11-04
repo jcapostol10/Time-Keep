@@ -62,6 +62,8 @@ export const membership = pgTable(
       .array()
       .notNull()
       .default(sql`'{1,2,3,4,5}'::smallint[]`),
+    /** Kiosk only (Phase 5c): a synthetic `@kiosk.invalid` user with no login. */
+    limited: boolean("limited").notNull().default(false),
     ...timestamps,
   },
   (t) => [

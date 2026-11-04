@@ -9,4 +9,5 @@ export * from "./team";
 export * from "./rates";
 export * from "./approvals";
 export * from "./time-off";
+export * from "./kiosk";
 export * from "./relations";

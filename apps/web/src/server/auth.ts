@@ -1,7 +1,7 @@
 import "server-only";
 
-import { isValidTimeZone, personalWorkspaceName } from "@timekeep/core";
-import { getDb, schema } from "@timekeep/db";
+import { isUndeliverable, isValidTimeZone, personalWorkspaceName } from "@timekeep/core";
+import { eq, getDb, schema } from "@timekeep/db";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
@@ -104,6 +104,8 @@ function buildAuth() {
       minPasswordLength: 8,
       requireEmailVerification: true,
       sendResetPassword: async ({ user, url }) => {
+        // A limited user's synthetic address (decision 18) is never emailed.
+        if (isUndeliverable(user.email)) return;
         await sendEmailOrExplain("password reset email", {
           to: user.email,
           subject: "Reset your TimeKeep password",
@@ -113,6 +115,15 @@ function buildAuth() {
           outro:
             "If you did not ask for this, you can safely ignore this email. The link expires in 1 hour.",
         });
+      },
+      // The link reached the address, which proves it: a converted limited user
+      // (ruling R4) can sign in once they have chosen a password.
+      onPasswordReset: async ({ user }) => {
+        if (user.emailVerified) return;
+        await db
+          .update(schema.user)
+          .set({ emailVerified: true })
+          .where(eq(schema.user.id, user.id));
       },
     },
 
@@ -164,6 +175,7 @@ function buildAuth() {
       magicLink({
         expiresIn: 60 * 15,
         sendMagicLink: async ({ email, url }) => {
+          if (isUndeliverable(email)) return;
           await sendEmailOrExplain("sign-in link", {
             to: email,
             subject: "Your TimeKeep sign-in link",

@@ -3,10 +3,13 @@
 import {
   capacitySchema,
   changeRoleSchema,
+  convertLimitedSchema,
   inviteMembersSchema,
+  limitedUserSchema,
   managerScopeSchema,
   memberStatusSchema,
   parseEmailList,
+  pinSchema,
   transferOwnershipSchema,
 } from "@timekeep/core";
 import { and, eq, getDb, invitation } from "@timekeep/db";
@@ -24,6 +27,8 @@ import {
   previewUserImport,
   type SendInvite,
 } from "@/server/invites";
+import { qrToken, setPin } from "@/server/kiosk/credentials";
+import { convertLimitedUser, createLimitedUser } from "@/server/limited-users";
 import { invitationEmail, sendEmailOrExplain } from "@/server/mail";
 import {
   changeRole,
@@ -279,6 +284,74 @@ export async function importUsersAction(
     if (result.error) return fail(result.error);
     revalidatePath(`/w/${slug}/team`);
     return ok({ invited: result.invited, results: result.results });
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+/** Kiosk-only members (Phase 5c, decision 18); `member.manageLimited` is checked in the services. */
+export async function addLimitedUserAction(
+  slug: string,
+  input: unknown,
+): Promise<ActionResult<{ userId: string }>> {
+  try {
+    const viewer = await teamViewer(slug);
+    const parsed = limitedUserSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    const created = await createLimitedUser(getDb(), viewer, parsed.data);
+    revalidatePath(`/w/${slug}/team`);
+    return ok(created);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+/**
+ * A real address for a limited user, then Better Auth's reset-password email
+ * to it (ruling R4): setting the password proves the address.
+ */
+export async function convertLimitedUserAction(
+  slug: string,
+  userId: string,
+  input: unknown,
+): Promise<ActionResult<{ email: string }>> {
+  try {
+    const viewer = await teamViewer(slug);
+    const parsed = convertLimitedSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    const { email } = await convertLimitedUser(getDb(), viewer, userId, parsed.data);
+    await getAuth().api.requestPasswordReset({ body: { email, redirectTo: "/reset-password" } });
+    revalidatePath(`/w/${slug}/team`);
+    return ok({ email });
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+export async function setMemberPinAction(
+  slug: string,
+  userId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  try {
+    const viewer = await teamViewer(slug);
+    const parsed = pinSchema.safeParse(input);
+    if (!parsed.success) return fromZodError(parsed.error);
+    await setPin(getDb(), viewer, userId, parsed.data.pin);
+    return ok(undefined);
+  } catch (error) {
+    return fail(userErrorMessage(error));
+  }
+}
+
+/** A new QR code for a limited user (only its hash is kept). */
+export async function memberQrAction(
+  slug: string,
+  userId: string,
+): Promise<ActionResult<{ payload: string }>> {
+  try {
+    const viewer = await teamViewer(slug);
+    return ok(await qrToken(getDb(), viewer, userId));
   } catch (error) {
     return fail(userErrorMessage(error));
   }

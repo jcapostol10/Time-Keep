@@ -24,6 +24,7 @@ export * from "./time";
 export * from "./time-entry";
 export * from "./time-off";
 export * from "./holidays";
+export * from "./kiosk";
 export * from "./attendance";
 export * from "./targets";
 export * from "./timesheet";

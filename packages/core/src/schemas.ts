@@ -8,6 +8,7 @@ import { PROJECT_VISIBILITIES, TASK_STATUSES } from "./catalog";
 import { hexColorSchema } from "./colors";
 import { parseDuration } from "./duration";
 import { IMPORT_COLUMNS } from "./entry-import";
+import { KIOSK_ACTIONS } from "./kiosk";
 import { CREATOR_SETTINGS, PAGES, TASK_VISIBILITY } from "./permissions";
 import { REQUIRED_FIELDS } from "./required-fields";
 import { ROLES } from "./roles";
@@ -730,3 +731,45 @@ export type TargetRuleInput = z.infer<typeof targetRuleSchema>;
 export function thresholdMinutes(input: Pick<TargetRuleInput, "threshold">): number {
   return minutesOf(input.threshold) ?? 0;
 }
+
+// --- Kiosks, PINs and limited users (Phase 5c) -------------------------------
+
+export const kioskSchema = z
+  .object({
+    name: z.string().trim().min(1, "Name is required").max(80),
+    projectId: z.string().min(1).max(64).nullable(),
+    taskId: z.string().min(1).max(64).nullable(),
+    everyone: z.boolean(),
+    userIds: idListSchema,
+    groupIds: idListSchema,
+    sessionTimeoutSeconds: z.number().int().min(5).max(300).default(15),
+    showLogo: z.boolean().default(true),
+    photo: z.boolean().default(false),
+  })
+  .refine((v) => v.taskId === null || v.projectId !== null, {
+    path: ["taskId"],
+    message: "Pick the task's project",
+  });
+export type KioskInput = z.infer<typeof kioskSchema>;
+
+export const pinSchema = z.object({
+  pin: z.string().regex(/^\d{4,6}$/, "A PIN is 4 to 6 digits."),
+});
+
+export const limitedUserSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(100),
+});
+
+export const convertLimitedSchema = z.object({ email: emailSchema });
+
+export const kioskIdentifySchema = z.union([
+  z.strictObject({ userId: z.string().min(1).max(64), pin: z.string().max(6) }),
+  z.strictObject({ qr: z.string().min(1).max(200) }),
+]);
+export type KioskIdentifyInput = z.infer<typeof kioskIdentifySchema>;
+
+export const kioskPunchSchema = z.object({
+  ticket: z.string().min(1).max(1000),
+  action: z.enum(KIOSK_ACTIONS),
+});
+export type KioskPunchInput = z.infer<typeof kioskPunchSchema>;

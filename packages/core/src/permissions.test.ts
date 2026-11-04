@@ -170,6 +170,11 @@ const TABLE: Row[] = [
   ["attendance.read", person(OTHER), true, true, false, false],
   ["member.setCapacity", member(OTHER), true, true, false, false],
   ["target.manage", NONE, true, true, false, false],
+  // Phase 5c: kiosks, PINs and limited users.
+  ["kiosk.manage", NONE, true, true, false, false],
+  ["pin.setOwn", person(ME), true, true, true, true],
+  ["pin.setOwn", person(OTHER), false, false, false, false],
+  ["member.manageLimited", NONE, true, true, false, false],
 ];
 
 describe("can", () => {
@@ -435,6 +440,14 @@ describe("time off and attendance (Phase 5b)", () => {
     ["PROJECT_MANAGERS", ME, false],
   ] as const)("a manager at %s reviews time off of %s: %s", (setting, userId, allowed) => {
     expect(can(at(setting), "timeOff.review", timeOff(userId))).toBe(allowed);
+  });
+
+  it("lets nobody set someone else's kiosk PIN, with 404", () => {
+    for (const role of ROLES) {
+      expect(denial(actor(role), "pin.setOwn", person(OTHER))).toBe(404);
+    }
+    expect(denial(actor("manager"), "kiosk.manage", NONE)).toBe(403);
+    expect(denial(actor("member"), "member.manageLimited", NONE)).toBe(403);
   });
 
   it("hides people outside a manager's scope with 404", () => {

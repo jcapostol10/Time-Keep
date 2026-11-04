@@ -47,6 +47,8 @@ export interface DetailedEntryDTO extends DetailedEntry {
   editable: boolean;
   /** `editable` and the times too: force timer keeps the owner's own times to the timer. */
   timesEditable: boolean;
+  /** A kiosk clock-in photo exists; only for viewers who manage kiosks (ruling R6). */
+  photo: boolean;
 }
 
 export type DetailedSort = "start" | "duration";

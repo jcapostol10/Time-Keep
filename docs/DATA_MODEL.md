@@ -2,7 +2,7 @@
 
 PostgreSQL (16 locally, Supabase in production) via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
 
-## Entity overview (Phases 0–5b)
+## Entity overview (Phases 0–5c)
 
 ```
 user ──< session            (activeWorkspaceId → workspace)
@@ -40,6 +40,10 @@ workspace ──< time_off_request >── user;  time_off_request >── time_
 workspace ──< time_off_adjustment >── user;  time_off_adjustment >── time_off_policy
 workspace ──< holiday ──< holiday_assignee >── user | user_group
 workspace ──< target_rule ──< target_rule_assignee >── user | user_group
+workspace ──< kiosk ──< kiosk_assignee >── user | user_group   (Phase 5c)
+kiosk ──< kiosk_attempt >── user           (PIN and QR checks, for the throttles)
+workspace ──< kiosk_credential >── user    (a person's PIN and QR token)
+workspace ──< kiosk_photo >── time_entry   (clock-in photos, private bucket)
 ```
 
 ## Tables
@@ -117,6 +121,7 @@ The Phase 4b rule columns (from `rounding_mode` down) default to the behaviour b
 | daily_capacity_minutes | smallint | 480. Capacity (Phase 5b): attendance and target rules measure against it |
 | weekly_capacity_minutes | smallint | 2400 |
 | working_days | smallint[] | `{1,2,3,4,5}` (0 = Sunday) |
+| limited | boolean | false. Kiosk only (Phase 5c): the user is `limited+<id>@kiosk.invalid` with no `account` row, so nobody can sign in as them; converting sets a real email and false |
 | created_at, updated_at | timestamptz | |
 
 Unique `(workspace_id, user_id)`.
@@ -560,6 +565,39 @@ Holidays for any country (decision 11), added by hand or imported from the bundl
 
 `kind` enum `target_kind` (`UNDER`, `OVER`), `period` enum `target_period` (`DAY`, `WEEK`), `threshold_minutes` smallint, `active` and `everyone` booleans (true), timestamps; index `(workspace_id)`. The daily job emails each breach once, deduplicated by the outbox row's `kind` (`target:<ruleId>:<userId>:<dateKey>`).
 
+### kiosk (Phase 5c)
+
+A shared device at `/kiosk/<token>`, needing no login.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade), indexed | |
+| name | text | the punch description is `Kiosk: <name>` |
+| token_hash | text, unique | sha256 hex of the 32-byte base64url device token; the token is shown only at create and rotate |
+| token_rotated_at | timestamptz | now; a punch ticket carries it, so rotating retires tickets already issued |
+| project_id | text? → project (set null) | the default project of a punch |
+| task_id | text? → task (set null) | the default task (in that project) |
+| everyone | boolean | true; otherwise the rows of `kiosk_assignee` (users or groups, exactly one per row) |
+| session_timeout_seconds | smallint | 15 (5–300): back to the name list after a punch |
+| show_logo | boolean | true |
+| photo | boolean | false; take a photo at clock in (`planAllows(…, "kioskPhoto")`) |
+| disabled_at | timestamptz? | a disabled kiosk is the same 404 as an unknown token |
+| created_by | text? → user (set null) | |
+| created_at, updated_at | timestamptz | |
+
+### kiosk_credential (Phase 5c)
+
+One row per (workspace, user), unique: `pin_hash` (Better Auth's scrypt, 4–6 digits), `pin_set_at`, `qr_token_hash` (sha256 of a 32-byte token, unique; the code carries `tkq1.<token>`), `qr_rotated_at`, timestamps. Deleted when the member is removed.
+
+### kiosk_attempt (Phase 5c)
+
+Every PIN or QR check: `kiosk_id` (cascade), `user_id?` (cascade; null for an unknown QR code), `method` enum `kiosk_attempt_method` (`PIN`, `QR`), `success`, `created_at`. Indexes `(kiosk_id, created_at)` and `(kiosk_id, user_id, created_at)`. Five failures for a person since their last success within 15 minutes lock them on that kiosk; 30 on the kiosk pause its PIN entry. Rows older than a day are deleted by the daily job.
+
+### kiosk_photo (Phase 5c)
+
+`entry_id` → time_entry (cascade, unique), `workspace_id`, `object_key` (`kiosk-photos/<workspace>/<entry>.jpg` in the private `S3_EXPORT_BUCKET`), `taken_at` (indexed). Deleted, with the object, after 90 days by the daily job.
+
 ## Rules at scale (Phase 4b)
 
 Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf`, 2026-10-28, after the rule columns, `time_entry.type` and the work-only rating:
@@ -585,7 +623,6 @@ Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf` after
 
 ## Planned (later phases)
 
-Phase 5c: `kiosk`, `kiosk_pin`. (Lock dates are `workspace_settings` columns, not a `lock_period` table.)
 Phase 6: `expense`, `expense_category`, `invoice`, `invoice_item`, `payment`, `budget`, `custom_field`.
 Phase 7: `assignment`, `milestone`.
 Phase 8: `subscription`, `api_key`, `webhook`, `webhook_delivery`, `audit_log`, `sso_config`.
