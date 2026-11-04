@@ -15,3 +15,10 @@ The holiday import (`packages/core/src/holiday-import.ts`, the Time off page's
 TimeKeep copies the chosen rows into the workspace's own `holiday` table after an
 admin reviews them; admins can rename or delete any imported day. Islamic-calendar
 dates are computed and marked "Estimated: confirm the proclaimed date".
+
+## QR codes: qrcode and jsQR (Phase 5c)
+
+- [qrcode](https://github.com/soldair/node-qrcode) 1.5.4 (MIT): draws the personal kiosk QR
+  code on the account page, and the fake camera stream of the QR e2e test.
+- [jsQR](https://github.com/cozmo/jsQR) 1.4.0 (Apache-2.0): reads QR codes from the kiosk
+  camera's frames in the browser.
