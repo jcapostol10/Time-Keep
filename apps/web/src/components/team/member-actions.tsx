@@ -35,16 +35,21 @@ import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 
+import { PinDialog } from "@/components/kiosk/pin-dialog";
+import { QrDialog } from "@/components/kiosk/qr-dialog";
 import type { ActionResult } from "@/lib/action-result";
 import type { AssignableRole, TeamRow } from "@/lib/team-types";
 import { setMemberGroupsAction } from "@/server/actions/groups";
 import {
   cancelInvitationAction,
   changeRoleAction,
+  convertLimitedUserAction,
+  memberQrAction,
   removeMemberAction,
   resendInvitationAction,
   setCapacityAction,
   setManagerScopeAction,
+  setMemberPinAction,
   setMemberStatusAction,
   transferOwnershipAction,
 } from "@/server/actions/team";
@@ -65,6 +70,9 @@ type Open =
   | "deactivate"
   | "remove"
   | "transfer"
+  | "pin"
+  | "qr"
+  | "convert"
   | null;
 
 /** The row menu on the Team page and the dialogs it opens. */
@@ -73,7 +81,7 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
   const [open, setOpen] = useState<Open>(null);
   const { permissions } = ctx;
 
-  async function run(action: () => Promise<ActionResult>, done: string) {
+  async function run(action: () => Promise<ActionResult<unknown>>, done: string) {
     const result = await action();
     if (!result.ok) {
       toast.error(result.error);
@@ -118,7 +126,9 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
   const isOwner = row.role === "owner";
   const isMe = userId === ctx.meId;
   const changeable = !isOwner && !isMe;
+  const limited = row.limited && permissions.limited;
   const items = [
+    limited ? "pin" : null,
     changeable ? "role" : null,
     permissions.groups ? "groups" : null,
     permissions.groups ? "tasks" : null,
@@ -138,7 +148,17 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {changeable ? (
+          {limited ? (
+            <>
+              <DropdownMenuItem onSelect={() => setOpen("pin")}>Set PIN</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setOpen("qr")}>QR code</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setOpen("convert")}>
+                Convert to member
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
+          {changeable && !row.limited ? (
             <DropdownMenuItem onSelect={() => setOpen("role")}>Change role</DropdownMenuItem>
           ) : null}
           {permissions.groups ? (
@@ -190,6 +210,31 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {open === "pin" ? (
+        <PinDialog
+          onSave={(input) => setMemberPinAction(ctx.slug, userId, input)}
+          onClose={() => setOpen(null)}
+        />
+      ) : null}
+      {open === "qr" ? (
+        <QrDialog
+          alt={`Kiosk QR code for ${row.name}`}
+          issue={() => memberQrAction(ctx.slug, userId)}
+          onClose={() => setOpen(null)}
+        />
+      ) : null}
+      {open === "convert" ? (
+        <ConvertDialog
+          name={row.name}
+          onClose={() => setOpen(null)}
+          onSave={(email) =>
+            run(
+              () => convertLimitedUserAction(ctx.slug, userId, { email }),
+              `Set-password email sent to ${email}`,
+            )
+          }
+        />
+      ) : null}
       {open === "role" ? (
         <RoleDialog
           row={row}
@@ -313,6 +358,52 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
         />
       ) : null}
     </>
+  );
+}
+
+/** A real address for a limited user; the same person keeps their entries, rates and PIN. */
+function ConvertDialog({
+  name,
+  onClose,
+  onSave,
+}: {
+  name: string;
+  onClose: () => void;
+  onSave: (email: string) => Promise<boolean>;
+}) {
+  const id = useId();
+  const [email, setEmail] = useState("");
+  const [saving, setSaving] = useState(false);
+  return (
+    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Convert to member</DialogTitle>
+          <DialogDescription>
+            {name} keeps their time and PIN, and gets an email to set a password.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1.5">
+          <Label htmlFor={id}>Email</Label>
+          <Input id={id} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            disabled={saving || email.trim() === ""}
+            onClick={async () => {
+              setSaving(true);
+              await onSave(email);
+              setSaving(false);
+            }}
+          >
+            Convert
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

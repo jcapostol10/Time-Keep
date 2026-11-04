@@ -6,7 +6,7 @@ import { chromium } from "@playwright/test";
 import { personalWorkspaceName } from "@timekeep/core";
 
 import { expect, test } from "./fixtures";
-import { signIn, uniqueEmail, waitForApp } from "./helpers/app";
+import { signIn, uniqueEmail } from "./helpers/app";
 import { createProjectViaUi } from "./helpers/catalog";
 import {
   addLimitedUserViaUi,
@@ -15,6 +15,7 @@ import {
   kioskEnterPin,
   kioskPinPunch,
   openKiosk,
+  openKioskCredentials,
   rotateKioskViaUi,
   setMemberPinViaUi,
   setOwnPinViaUi,
@@ -84,12 +85,7 @@ test.describe("kiosk extras", { tag: "@nightly" }, () => {
   test("a QR code punch through the camera", async ({ page, freshUser }) => {
     const { slug, name } = freshUser;
     const url = await createKioskViaUi(page, slug, { name: "Front desk" });
-    await page.goto("/account");
-    await waitForApp(page);
-    const row = page
-      .getByRole("region", { name: "Kiosk" })
-      .getByRole("listitem")
-      .filter({ hasText: personalWorkspaceName(name) });
+    const row = await openKioskCredentials(page, personalWorkspaceName(name));
     await row.getByRole("button", { name: "Show QR code" }).click();
     const dialog = page.getByRole("dialog", { name: "QR code" });
     const code = dialog.getByRole("img", { name: "Your kiosk QR code" });

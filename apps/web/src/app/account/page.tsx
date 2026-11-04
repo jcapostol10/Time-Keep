@@ -3,9 +3,11 @@ import type { Metadata } from "next";
 
 import { PageHeader } from "@/components/page-header";
 import { AvatarUploader } from "@/components/account/avatar-uploader";
+import { KioskCredentials } from "@/components/account/kiosk-credentials";
 import { ProfileForm } from "@/components/account/profile-form";
 import { TestEmailButton } from "@/components/account/test-email-button";
 import { TrackerSettingsForm } from "@/components/account/tracker-settings-form";
+import { credentialStatuses } from "@/server/kiosk/credentials";
 import { getTrackerSettings } from "@/server/queries/user-settings";
 import { requireSession } from "@/server/session";
 
@@ -13,7 +15,11 @@ export const metadata: Metadata = { title: "Profile settings" };
 
 export default async function AccountPage() {
   const { user } = await requireSession("/account");
-  const trackerSettings = await getTrackerSettings(getDb(), user.id);
+  const db = getDb();
+  const [trackerSettings, kioskStatuses] = await Promise.all([
+    getTrackerSettings(db, user.id),
+    credentialStatuses(db, user.id),
+  ]);
   const prefs = user as typeof user & {
     timezone?: string | null;
     dateFormat?: string | null;
@@ -49,6 +55,14 @@ export default async function AccountPage() {
           <h2 className="mb-3 text-base font-semibold">Timer</h2>
           <TrackerSettingsForm defaultValues={trackerSettings} />
         </section>
+        {kioskStatuses.length > 0 ? (
+          <section aria-labelledby="kiosk-heading">
+            <h2 id="kiosk-heading" className="mb-3 text-base font-semibold">
+              Kiosk
+            </h2>
+            <KioskCredentials statuses={kioskStatuses} />
+          </section>
+        ) : null}
         <section>
           <h2 className="mb-3 text-base font-semibold">Email</h2>
           <TestEmailButton email={user.email} />

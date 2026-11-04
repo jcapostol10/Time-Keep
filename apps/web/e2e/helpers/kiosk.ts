@@ -66,12 +66,17 @@ export async function rotateKioskViaUi(page: Page, slug: string, name: string): 
   return takeDeviceUrl(page);
 }
 
+/** Opens the account page's Kiosk section and returns the row for `workspaceName`. */
+export async function openKioskCredentials(page: Page, workspaceName: string) {
+  await page.goto("/account");
+  const section = page.getByRole("region", { name: "Kiosk" });
+  await expect(section.locator('[data-hydrated="true"]')).toBeVisible();
+  return section.getByRole("listitem").filter({ hasText: workspaceName });
+}
+
 /** Sets the signed-in person's kiosk PIN for `workspaceName` on the account page. */
 export async function setOwnPinViaUi(page: Page, workspaceName: string, pin: string) {
-  await page.goto("/account");
-  await waitForApp(page);
-  const section = page.getByRole("region", { name: "Kiosk" });
-  const row = section.getByRole("listitem").filter({ hasText: workspaceName });
+  const row = await openKioskCredentials(page, workspaceName);
   await row.getByRole("button", { name: /^(Set|Change) PIN$/ }).click();
   await savePinDialog(page, pin);
 }

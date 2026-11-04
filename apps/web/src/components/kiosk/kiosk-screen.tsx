@@ -117,7 +117,8 @@ export function KioskScreen({ token, initial }: { token: string; initial: KioskS
     setBusy(false);
     setPin("");
     if (response.ok) setView({ kind: "actions", visit: body as unknown as KioskVisitDTO });
-    else if (response.status === 404) await backToPeople(body.error ?? null);
+    // The person is no longer allowed here, or the kiosk has gone.
+    else if (response.status === 404) await backToPeople(AGAIN);
     else setError(body.error ?? "Something went wrong.");
   }
 

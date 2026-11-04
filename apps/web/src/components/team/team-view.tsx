@@ -29,11 +29,13 @@ import type { GroupDTO, TeamRow } from "@/lib/team-types";
 import { GroupsTab } from "./groups-tab";
 import { ImportUsersDialog } from "./import-users-dialog";
 import { InviteDialog } from "./invite-dialog";
+import { LimitedUserDialog } from "./limited-user-dialog";
 import { MemberActions } from "./member-actions";
 
 export interface TeamPermissions {
   /** invite, change roles, deactivate, remove, assign scope */
   manage: boolean;
+  limited: boolean;
   groups: boolean;
   import: boolean;
   rates: boolean;
@@ -120,6 +122,7 @@ export function TeamView({
         {ctx.permissions.manage ? (
           <div className="flex flex-wrap gap-2">
             {ctx.permissions.import ? <ImportUsersDialog slug={ctx.slug} /> : null}
+            {ctx.permissions.limited ? <LimitedUserDialog slug={ctx.slug} /> : null}
             <InviteDialog slug={ctx.slug} groups={ctx.groups} />
           </div>
         ) : null}
@@ -233,8 +236,13 @@ function MembersTable({ rows, ctx }: { rows: TeamRow[]; ctx: TeamContext }) {
                       {r.userId === ctx.meId ? (
                         <span className="text-muted-foreground ml-1 text-xs">(you)</span>
                       ) : null}
+                      {r.limited ? (
+                        <Badge variant="outline" className="ml-2">
+                          Kiosk only
+                        </Badge>
+                      ) : null}
                     </p>
-                    {r.kind === "member" ? (
+                    {r.kind === "member" && !r.limited ? (
                       <p className="text-muted-foreground truncate text-xs md:hidden">{r.email}</p>
                     ) : null}
                     <p className="text-muted-foreground text-xs sm:hidden">
@@ -244,7 +252,7 @@ function MembersTable({ rows, ctx }: { rows: TeamRow[]; ctx: TeamContext }) {
                 </div>
               </TableCell>
               <TableCell className="text-muted-foreground hidden md:table-cell">
-                {r.kind === "member" ? r.email : "—"}
+                {r.kind === "member" && !r.limited ? r.email : "—"}
               </TableCell>
               <TableCell>
                 <Badge variant={r.role === "owner" ? "default" : "secondary"}>

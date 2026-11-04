@@ -83,6 +83,7 @@ export default async function TeamPage({
           manage: canManage,
           groups: can_("group.manage"),
           import: can_("import.users"),
+          limited: can_("member.manageLimited"),
           rates: can_("rate.view"),
           transfer: can(viewer.actor, "workspace.transferOwnership", { kind: "workspace" }),
           capacity: can(viewer.actor, "member.setCapacity", {
