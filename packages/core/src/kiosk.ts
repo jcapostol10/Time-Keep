@@ -17,6 +17,8 @@ export const KIOSK_PHOTO_DAYS = 90;
 /** Attempts are deleted after this many days. */
 export const KIOSK_ATTEMPT_DAYS = 1;
 export const QR_PREFIX = "tkq1.";
+export const KIOSK_ATTEMPT_METHODS = ["PIN", "QR"] as const;
+export type KioskAttemptMethod = (typeof KIOSK_ATTEMPT_METHODS)[number];
 
 export interface ThrottleRule {
   max: number;

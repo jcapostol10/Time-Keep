@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
-import { capturedEmail, eq, invitation, timeEntry, user, workspace } from "@timekeep/db";
-import { cleanupE2eData, isE2eEmail } from "@timekeep/db/e2e-tenant";
+import { capturedEmail, eq, invitation, membership, timeEntry, user, workspace } from "@timekeep/db";
+import { cleanupE2eData, e2eOnlyWorkspaceIds, isE2eEmail } from "@timekeep/db/e2e-tenant";
 import { resetDemoData } from "@timekeep/db/seed";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -15,6 +15,18 @@ async function createUser(email: string) {
   await db
     .insert(user)
     .values({ id, name: email.split("@")[0] ?? email, email, emailVerified: true });
+  return id;
+}
+
+/** A kiosk-only member (Phase 5c), as `createLimitedUser` makes them. */
+async function addLimitedMember(workspaceId: string) {
+  const id = randomUUID();
+  await db
+    .insert(user)
+    .values({ id, name: "Kiosk Kim", email: `limited+${id}@kiosk.invalid`, emailVerified: false });
+  await db
+    .insert(membership)
+    .values({ id: randomUUID(), workspaceId, userId: id, role: "member", limited: true });
   return id;
 }
 
@@ -113,6 +125,29 @@ describe("e2e tenant boundaries", () => {
     expect(await exists(user, customer)).toBe(true);
     expect(await exists(user, tester)).toBe(true);
     expect(await db.select().from(timeEntry)).toHaveLength(1);
+  });
+
+  it("counts a limited member as e2e, so cleanup removes the workspace and the limited user", async () => {
+    const tester = await createUser("lia.3@e2e.test");
+    const ws = await createTestWorkspace(db, "Lia's workspace", tester);
+    const limited = await addLimitedMember(ws.id);
+
+    expect(await e2eOnlyWorkspaceIds(db, { withMemberDomain: "@e2e.test" })).toEqual([ws.id]);
+    await cleanupE2eData(db);
+
+    expect(await exists(workspace, ws.id)).toBe(false);
+    expect(await exists(user, limited)).toBe(false);
+  });
+
+  it("keeps a limited member of a customer workspace, and the workspace", async () => {
+    const customer = await createUser("boss@customer.com");
+    const customerWs = await createTestWorkspace(db, "Customer Co", customer);
+    const limited = await addLimitedMember(customerWs.id);
+
+    await cleanupE2eData(db);
+
+    expect(await exists(workspace, customerWs.id)).toBe(true);
+    expect(await exists(user, limited)).toBe(true);
   });
 
   it("cleanup keeps the demo users and the demo workspace", async () => {

@@ -11,6 +11,7 @@ import {
   EXPORT_FORMATS,
   EXPORT_REPORTS,
   EXPORT_STATUSES,
+  KIOSK_ATTEMPT_METHODS,
   MEMBERSHIP_STATUSES,
   PROJECT_VISIBILITIES,
   RATE_KINDS,
@@ -58,3 +59,4 @@ export const timeOffAccrualEnum = pgEnum("time_off_accrual", TIME_OFF_ACCRUALS);
 export const timeOffStatusEnum = pgEnum("time_off_status", TIME_OFF_STATUSES);
 export const targetKindEnum = pgEnum("target_kind", TARGET_KINDS);
 export const targetPeriodEnum = pgEnum("target_period", TARGET_PERIODS);
+export const kioskAttemptMethodEnum = pgEnum("kiosk_attempt_method", KIOSK_ATTEMPT_METHODS);

@@ -24,8 +24,8 @@ import {
 import { userGroup } from "./team";
 import { workspace } from "./workspace";
 
-/** A user or a group a policy, holiday or target rule is assigned to (exactly one of the two). */
-function assigneeColumns() {
+/** A user or a group a policy, holiday, target rule or kiosk is assigned to (exactly one of the two). */
+export function assigneeColumns() {
   return {
     id: text("id").primaryKey(),
     userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
@@ -33,7 +33,7 @@ function assigneeColumns() {
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   };
 }
-const oneAssignee = sql`("user_id" IS NULL) <> ("group_id" IS NULL)`;
+export const oneAssignee = sql`("user_id" IS NULL) <> ("group_id" IS NULL)`;
 
 /**
  * Time off policies (Phase 5b). Amounts are hundredths of the unit

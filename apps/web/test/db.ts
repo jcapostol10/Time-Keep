@@ -18,7 +18,7 @@ export function connectTestDb(): DbHandle {
 /** Wipe every table between tests. Order does not matter thanks to CASCADE. */
 export async function truncateAll(db: Database) {
   await db.execute(
-    sql`TRUNCATE TABLE "target_rule_assignee", "target_rule", "holiday_assignee", "holiday", "time_off_adjustment", "time_off_request", "time_off_policy_assignee", "time_off_policy", "approval_event", "approval_request", "email_outbox", "favorite_entry", "rate_recalc_job", "rate", "invitation_group", "managed_group", "managed_user", "task_group", "project_group", "user_group_member", "user_group", "export_job", "report_share_link", "captured_email", "timesheet_template", "time_entry_tag", "time_entry", "task_assignee", "task", "project_favorite", "project_member", "project", "client", "tag", "user_settings", "workspace_settings", "invitation", "membership", "workspace", "verification", "account", "session", "user" CASCADE`,
+    sql`TRUNCATE TABLE "kiosk_photo", "kiosk_attempt", "kiosk_credential", "kiosk_assignee", "kiosk", "target_rule_assignee", "target_rule", "holiday_assignee", "holiday", "time_off_adjustment", "time_off_request", "time_off_policy_assignee", "time_off_policy", "approval_event", "approval_request", "email_outbox", "favorite_entry", "rate_recalc_job", "rate", "invitation_group", "managed_group", "managed_user", "task_group", "project_group", "user_group_member", "user_group", "export_job", "report_share_link", "captured_email", "timesheet_template", "time_entry_tag", "time_entry", "task_assignee", "task", "project_favorite", "project_member", "project", "client", "tag", "user_settings", "workspace_settings", "invitation", "membership", "workspace", "verification", "account", "session", "user" CASCADE`,
   );
 }
 
