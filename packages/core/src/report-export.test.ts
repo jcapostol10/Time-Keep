@@ -13,7 +13,13 @@ import {
   toCsv,
   weeklyColumns,
 } from "./report-export";
-import { type GroupKey, groupRows, type ReportRow, type ReportTotals } from "./reports";
+import {
+  EMPTY_TOTALS,
+  type GroupKey,
+  groupRows,
+  type ReportRow,
+  type ReportTotals,
+} from "./reports";
 import { formatDateInZone } from "./time";
 import { DEFAULT_CAPACITY } from "./time-off";
 
@@ -31,11 +37,11 @@ const t = (
   entryCount: number,
   amountMinor = 0,
 ): ReportTotals => ({
+  ...EMPTY_TOTALS,
   durationSeconds,
   billableSeconds,
   entryCount,
   amountMinor,
-  unratedCount: 0,
 });
 const row = (
   keys: Partial<Record<GroupKey, { id: string | null; label: string }>>,

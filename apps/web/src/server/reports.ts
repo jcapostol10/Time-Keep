@@ -351,7 +351,7 @@ async function aggregateTotals(db: Executor, where: SQL, m: Measures): Promise<R
     .leftJoin(task, eq(task.id, timeEntry.taskId))
     .innerJoin(user, eq(user.id, timeEntry.userId))
     .where(where);
-  return row ?? EMPTY_TOTALS;
+  return row ? { ...EMPTY_TOTALS, ...row } : EMPTY_TOTALS;
 }
 
 async function groupedRows(
@@ -395,6 +395,7 @@ async function groupedRows(
     const out: ReportRow = {
       keys: {},
       totals: {
+        ...EMPTY_TOTALS,
         durationSeconds: Number(rec.durationSeconds),
         billableSeconds: Number(rec.billableSeconds),
         entryCount: Number(rec.entryCount),
@@ -463,6 +464,7 @@ async function seriesRows(
   // report's totals and the summary needs no third scan.
   const totals = days.reduce<ReportTotals>(
     (acc, r) => ({
+      ...acc,
       durationSeconds: acc.durationSeconds + r.billableSeconds + r.nonBillableSeconds,
       billableSeconds: acc.billableSeconds + r.billableSeconds,
       entryCount: acc.entryCount + r.entryCount,

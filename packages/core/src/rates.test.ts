@@ -4,6 +4,7 @@ import { needsRerate, rateEffectiveFrom, type RateRow, resolveRate } from "./rat
 
 const FROM = new Date("2026-01-01T00:00:00Z");
 const row = (over: Partial<RateRow>): RateRow => ({
+  kind: "billable",
   level: "workspace",
   userId: null,
   projectId: null,
@@ -26,22 +27,35 @@ const at = new Date("2026-03-02T01:00:00Z");
 describe("resolveRate", () => {
   it("lets the most specific level win: task, project member, project, member, workspace", () => {
     const ana = (projectId: string | null, taskId: string | null) =>
-      resolveRate(ALL, { userId: "ana", projectId, taskId, start: at });
+      resolveRate(ALL, { userId: "ana", projectId, taskId, start: at, currency: "USD" });
     expect(ana("web", "design")).toEqual({ amountMinor: 5000, currency: "USD", level: "task" });
     expect(ana("web", null)?.level).toBe("project_member");
     expect(
-      resolveRate(ALL, { userId: "bob", projectId: "web", taskId: null, start: at })?.level,
+      resolveRate(ALL, {
+        userId: "bob",
+        projectId: "web",
+        taskId: null,
+        start: at,
+        currency: "USD",
+      })?.level,
     ).toBe("project");
     expect(ana("app", null)?.level).toBe("member");
     expect(
-      resolveRate(ALL, { userId: "bob", projectId: null, taskId: null, start: at })?.level,
+      resolveRate(ALL, { userId: "bob", projectId: null, taskId: null, start: at, currency: "USD" })
+        ?.level,
     ).toBe("workspace");
   });
 
   it("never applies a task rate to another project's entry", () => {
     const rates = [row({ level: "task", projectId: "web", taskId: "design", amountMinor: 5000 })];
     expect(
-      resolveRate(rates, { userId: "ana", projectId: "app", taskId: "design", start: at }),
+      resolveRate(rates, {
+        userId: "ana",
+        projectId: "app",
+        taskId: "design",
+        start: at,
+        currency: "USD",
+      }),
     ).toBeNull();
   });
 
@@ -56,7 +70,13 @@ describe("resolveRate", () => {
       }),
     ];
     expect(
-      resolveRate(rates, { userId: "ana", projectId: "web", taskId: null, start: at }),
+      resolveRate(rates, {
+        userId: "ana",
+        projectId: "web",
+        taskId: null,
+        start: at,
+        currency: "USD",
+      }),
     ).toMatchObject({ amountMinor: 2000, level: "member" });
   });
 
@@ -70,8 +90,8 @@ describe("resolveRate", () => {
         effectiveFrom: new Date("2026-04-01T00:00:00Z"),
       }),
     ];
-    const target = { userId: "ana", projectId: "web", taskId: null };
-    expect(resolveRate(rates, { ...target, start: at })?.amountMinor).toBe(3000);
+    const target = { userId: "ana", projectId: "web", taskId: null, currency: "USD" };
+    expect(resolveRate(rates, { ...target, start: at, currency: "USD" })?.amountMinor).toBe(3000);
     expect(
       resolveRate(rates, { ...target, start: new Date("2026-04-01T00:00:00Z") })?.amountMinor,
     ).toBe(8000);
@@ -89,7 +109,7 @@ describe("resolveRate", () => {
       row({ level: "workspace", amountMinor: 1000 }),
       row({ level: "workspace", amountMinor: 9000, effectiveFrom: from }),
     ];
-    const t = { userId: "ana", projectId: null, taskId: null };
+    const t = { userId: "ana", projectId: null, taskId: null, currency: "USD" };
     expect(resolveRate(rates, { ...t, start: new Date("2026-03-08T16:30:00Z") })?.amountMinor).toBe(
       9000,
     );
@@ -99,7 +119,9 @@ describe("resolveRate", () => {
   });
 
   it("returns null with no rate at all", () => {
-    expect(resolveRate([], { userId: "ana", projectId: null, taskId: null, start: at })).toBeNull();
+    expect(
+      resolveRate([], { userId: "ana", projectId: null, taskId: null, start: at, currency: "USD" }),
+    ).toBeNull();
   });
 });
 

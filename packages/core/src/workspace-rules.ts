@@ -45,6 +45,8 @@ export interface WorkspaceRuleColumns {
   lockMode: string;
   lockDate: string | null;
   lockDays: number | null;
+  // Phase 6a: managers see cost and profit. Optional: a row read before the column existed is off.
+  managersSeeCosts?: boolean;
 }
 
 function oneOf<T extends string | number>(allowed: readonly T[], value: unknown, fallback: T): T {
@@ -75,6 +77,7 @@ export function permissionSettingsOf(
     forceTimer: row.forceTimer && planAllows(workspace, "forceTimer"),
     taskVisibility: oneOf(TASK_VISIBILITY, row.taskVisibility, "EVERYONE"),
     approvalReviewers: oneOf(APPROVAL_REVIEWERS, row.approvalReviewers, "ADMINS"),
+    managersSeeCosts: row.managersSeeCosts === true && planAllows(workspace, "costProfit"),
   };
 }
 

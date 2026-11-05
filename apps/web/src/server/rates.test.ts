@@ -56,6 +56,7 @@ describe("rates", () => {
     const jan = new Date("2026-01-01T00:00:00Z");
     const rows: RateRow[] = [
       {
+        kind: "billable",
         level: "workspace",
         userId: null,
         projectId: null,
@@ -65,6 +66,7 @@ describe("rates", () => {
         effectiveFrom: jan,
       },
       {
+        kind: "billable",
         level: "workspace",
         userId: null,
         projectId: null,
@@ -74,6 +76,7 @@ describe("rates", () => {
         effectiveFrom: MANILA_MAR_9,
       },
       {
+        kind: "billable",
         level: "member",
         userId: ids.ana!,
         projectId: null,
@@ -83,6 +86,7 @@ describe("rates", () => {
         effectiveFrom: jan,
       },
       {
+        kind: "billable",
         level: "project",
         userId: null,
         projectId: ids.Web!,
@@ -93,6 +97,7 @@ describe("rates", () => {
       },
       // The App project's rate stops on Mar 9: from then on its entries fall through.
       {
+        kind: "billable",
         level: "project",
         userId: null,
         projectId: ids.App!,
@@ -102,6 +107,7 @@ describe("rates", () => {
         effectiveFrom: jan,
       },
       {
+        kind: "billable",
         level: "project",
         userId: null,
         projectId: ids.App!,
@@ -111,6 +117,7 @@ describe("rates", () => {
         effectiveFrom: MANILA_MAR_9,
       },
       {
+        kind: "billable",
         level: "project_member",
         userId: ids.ana!,
         projectId: ids.Web!,
@@ -120,6 +127,7 @@ describe("rates", () => {
         effectiveFrom: jan,
       },
       {
+        kind: "billable",
         level: "task",
         userId: null,
         projectId: ids.Web!,
@@ -130,6 +138,7 @@ describe("rates", () => {
       },
       // In the future: never applies to these entries.
       {
+        kind: "billable",
         level: "project",
         userId: null,
         projectId: ids.Ops!,
@@ -139,11 +148,7 @@ describe("rates", () => {
         effectiveFrom: new Date("2027-01-01T00:00:00Z"),
       },
     ];
-    await db
-      .insert(rate)
-      .values(
-        rows.map((r) => ({ id: randomUUID(), workspaceId: wsId, kind: "billable" as const, ...r })),
-      );
+    await db.insert(rate).values(rows.map((r) => ({ id: randomUUID(), workspaceId: wsId, ...r })));
 
     // 36 entries: two people, three projects (with and without the task), no project,
     // either side of Manila's midnight on Mar 9, one still running.
@@ -193,6 +198,7 @@ describe("rates", () => {
         projectId: e.projectId,
         taskId: e.taskId,
         start: e.start,
+        currency: "USD",
       });
       expect({
         rate: e.billableRateMinor,

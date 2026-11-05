@@ -47,6 +47,8 @@ export const ACTIONS = [
   "entry.write",
   "report.readTeam",
   "report.viewAmounts",
+  /** cost and profit in reports (Phase 6a): salary data */
+  "report.viewCosts",
   "shareLink.manage",
   "import.users",
   /** start, end or duration by hand: the force-timer gate */
@@ -100,6 +102,8 @@ export interface PermissionSettings {
   taskVisibility: TaskVisibility;
   /** who approves periods (Phase 5a decision 4) */
   approvalReviewers: ApprovalReviewers;
+  /** managers see cost and profit for their scope (Phase 6a decision 5) */
+  managersSeeCosts: boolean;
 }
 
 /** Today's behaviour: nothing hidden, members see their own time, admins create the catalog. */
@@ -110,6 +114,7 @@ export const DEFAULT_PERMISSION_SETTINGS: PermissionSettings = {
   forceTimer: false,
   taskVisibility: "EVERYONE",
   approvalReviewers: "ADMINS",
+  managersSeeCosts: false,
 };
 
 export interface Actor {
@@ -181,6 +186,8 @@ export type Rule =
   | "unlessHidden"
   /** allowed when the workspace lets members see team time */
   | "teamSetting"
+  /** allowed when the workspace lets managers see cost and profit */
+  | "costSetting"
   /** allowed unless force timer is on, and then only for someone else's time */
   | "unlessForced"
   /** every task, or when tasks are by group: the tasks of their groups and of projects they manage */
@@ -240,6 +247,7 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
   "entry.write": { owner: "yes", admin: "yes", manager: "managedPeople", member: "own" },
   "report.readTeam": { owner: "yes", admin: "yes", manager: "yes", member: "teamSetting" },
   "report.viewAmounts": { owner: "yes", admin: "yes", manager: "yes", member: "no" },
+  "report.viewCosts": { owner: "yes", admin: "yes", manager: "costSetting", member: "no" },
   "shareLink.manage": { owner: "yes", admin: "yes", manager: "own", member: "own" },
   "import.users": ADMINS,
   "entry.writeTimes": {
@@ -375,6 +383,8 @@ function check(actor: Actor, action: Action, rule: Rule, resource: Resource): bo
       return resource.kind === "page" && !actor.settings.hiddenPages.includes(resource.page);
     case "teamSetting":
       return actor.settings.membersSeeTeamTime;
+    case "costSetting":
+      return actor.settings.managersSeeCosts;
     case "unlessForced":
       // Decision 7: force timer binds a person's own time; time added for
       // someone else (an admin or manager for a managed person) is exempt.
@@ -423,6 +433,7 @@ const RULE_WORDS: Record<Rule, string> = {
   creator: "if the workspace allows",
   unlessHidden: "unless the workspace hides it",
   teamSetting: "if the workspace allows",
+  costSetting: "if the workspace shows managers cost and profit",
   unlessForced: "unless force timer is on (own time)",
   taskGroups:
     "every task, or when tasks are by group: their groups' tasks and projects they manage",

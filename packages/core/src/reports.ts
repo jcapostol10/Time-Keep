@@ -284,6 +284,12 @@ export function bucketFor(from: Date, to: Date, tz: string, override?: Bucket): 
   return "month";
 }
 
+/** An amount in one currency. Two currencies are never added (Phase 6: no conversion). */
+export interface MoneyAmount {
+  currency: string;
+  amountMinor: number;
+}
+
 /** Every total is a record of measures. */
 export interface ReportTotals {
   durationSeconds: number;
@@ -291,8 +297,18 @@ export interface ReportTotals {
   entryCount: number;
   /** Billable entries' amounts, in the workspace currency's minor units (0 when hidden). */
   amountMinor: number;
+  /** Billable amounts in every other currency (clients billed in their own), sorted by code. */
+  otherAmounts: MoneyAmount[];
   /** Billable entries without a rate, so their amount is missing. */
   unratedCount: number;
+  /** What the work cost, in the workspace currency (0 when hidden). */
+  costMinor: number;
+  /** Work entries without a cost rate: they count as zero cost. */
+  uncostedCount: number;
+  /** Amount less cost over entries in the workspace currency; the rest are left out. */
+  profitMinor: number;
+  /** Entries billed in another currency, which profit leaves out. */
+  profitExcludedCount: number;
 }
 
 export const EMPTY_TOTALS: ReportTotals = {
@@ -300,8 +316,24 @@ export const EMPTY_TOTALS: ReportTotals = {
   billableSeconds: 0,
   entryCount: 0,
   amountMinor: 0,
+  otherAmounts: [],
   unratedCount: 0,
+  costMinor: 0,
+  uncostedCount: 0,
+  profitMinor: 0,
+  profitExcludedCount: 0,
 };
+
+/** Two lists of amounts as one: summed per currency, sorted by code. */
+export function mergeAmounts(a: readonly MoneyAmount[], b: readonly MoneyAmount[]): MoneyAmount[] {
+  const byCurrency = new Map<string, number>();
+  for (const { currency, amountMinor } of [...a, ...b]) {
+    byCurrency.set(currency, (byCurrency.get(currency) ?? 0) + amountMinor);
+  }
+  return [...byCurrency.entries()]
+    .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+    .map(([currency, amountMinor]) => ({ currency, amountMinor }));
+}
 
 export function addTotals(a: ReportTotals, b: ReportTotals): ReportTotals {
   return {
@@ -309,8 +341,24 @@ export function addTotals(a: ReportTotals, b: ReportTotals): ReportTotals {
     billableSeconds: a.billableSeconds + b.billableSeconds,
     entryCount: a.entryCount + b.entryCount,
     amountMinor: a.amountMinor + b.amountMinor,
+    otherAmounts: mergeAmounts(a.otherAmounts, b.otherAmounts),
     unratedCount: a.unratedCount + b.unratedCount,
+    costMinor: a.costMinor + b.costMinor,
+    uncostedCount: a.uncostedCount + b.uncostedCount,
+    profitMinor: a.profitMinor + b.profitMinor,
+    profitExcludedCount: a.profitExcludedCount + b.profitExcludedCount,
   };
+}
+
+/** Profit as a percent of the amount, to one decimal; null when nothing was billed. */
+export function marginPercent(t: Pick<ReportTotals, "amountMinor" | "profitMinor">): number | null {
+  if (t.amountMinor === 0) return null;
+  return Math.round((t.profitMinor * 1000) / t.amountMinor) / 10;
+}
+
+/** Totals for a viewer who may not see cost and profit: they read 0, like hidden amounts. */
+export function hideCosts<T extends ReportTotals>(t: T): T {
+  return { ...t, costMinor: 0, uncostedCount: 0, profitMinor: 0, profitExcludedCount: 0 };
 }
 
 export interface GroupValue {

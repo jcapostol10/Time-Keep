@@ -95,6 +95,7 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 | --- | --- | --- | --- | --- |
 | `report.readTeam` | yes | yes | yes | if the workspace allows |
 | `report.viewAmounts` | yes | yes | yes | — |
+| `report.viewCosts` | yes | yes | if the workspace shows managers cost and profit | — |
 
 ## Share links
 

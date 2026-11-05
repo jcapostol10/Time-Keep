@@ -176,11 +176,10 @@ describe("bucketFor", () => {
 });
 
 const t = (durationSeconds: number, billableSeconds: number, entryCount: number): ReportTotals => ({
+  ...EMPTY_TOTALS,
   durationSeconds,
   billableSeconds,
   entryCount,
-  amountMinor: 0,
-  unratedCount: 0,
 });
 const row = (
   keys: Partial<Record<GroupKey, { id: string | null; label: string }>>,
@@ -468,6 +467,7 @@ describe("totals with amounts", () => {
     expect(
       addTotals(
         {
+          ...EMPTY_TOTALS,
           durationSeconds: 3600,
           billableSeconds: 3600,
           entryCount: 1,
@@ -475,6 +475,7 @@ describe("totals with amounts", () => {
           unratedCount: 0,
         },
         {
+          ...EMPTY_TOTALS,
           durationSeconds: 1800,
           billableSeconds: 1800,
           entryCount: 2,
@@ -483,6 +484,7 @@ describe("totals with amounts", () => {
         },
       ),
     ).toEqual({
+      ...EMPTY_TOTALS,
       durationSeconds: 5400,
       billableSeconds: 5400,
       entryCount: 3,
