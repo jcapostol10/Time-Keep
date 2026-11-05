@@ -3,6 +3,7 @@ import { personalWorkspaceName } from "@timekeep/core";
 import { expect, test } from "./fixtures";
 import { overflowingElements } from "./helpers/app";
 import { createProjectViaUi } from "./helpers/catalog";
+import { appCookieNames } from "./helpers/cookies";
 import {
   createKioskViaUi,
   kioskEnterPin,
@@ -38,10 +39,8 @@ test.describe("kiosk", () => {
     // A punch takes the server's time; a second is enough for a non-zero entry.
     await kiosk.waitForTimeout(1_100);
     await kioskPinPunch(kiosk, { name, pin: "4321", action: "CLOCK_OUT" });
-    // The kiosk never signs anyone in. Names only: a failed assertion's diff lands in the
-    // public report, and on a preview the cookies include Vercel's protection bypass.
-    const cookies = (await device.cookies()).map((c) => c.name);
-    expect(cookies.filter((n) => !n.startsWith("_vercel") && !n.startsWith("vercel-"))).toEqual([]);
+    // The kiosk never signs anyone in (names only: a failed assertion's diff is public).
+    expect(await appCookieNames(device)).toEqual([]);
     await device.close();
 
     await openReport(page, slug, "detailed");

@@ -83,6 +83,7 @@ Nothing open.
 ## Done
 
 - [x] Vercel automation bypass secret rotated, done 2026-11-04: the first kiosk acceptance test asserted on whole cookie objects, so its failure on preview run 41773136961 wrote `_vercel_jwt` unmasked into the public `playwright-report-preview` artifact. The owner deleted the artifact, regenerated the secret and updated `VERCEL_AUTOMATION_BYPASS_SECRET` in the Actions secrets; the test reads cookie names only since a25512f, and CLAUDE.md forbids asserting on whole cookies or headers.
+- [x] Report leak guard, done 2026-11-05 ("e2e: keep secrets out of the public report"): lint refuses cookie and header dumps in `e2e/` (`cookieNames()` is the one reader), and `e2e:report-guard` deletes a report that carries a job secret or a JWT, inside zips too, before the preview and nightly workflows upload it.
 - [x] Phase 5a operations: `CRON_SECRET` set in Vercel production and the 0013 migration applied to the shared database; done 2026-11-02 (4853308, "deploy: rebuild production to pick up CRON_SECRET").
 - [x] Phase 5a review minor "the reminder email names a mute setting that has no UI yet": Profile → Timer settings has "Mute target reminders" (Phase 5b, 2026-11-03).
 

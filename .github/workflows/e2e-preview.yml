@@ -71,8 +71,20 @@ jobs:
 
       # Screenshots and the HTML summary only: remote runs record no traces,
       # because traces would capture the bypass header (artifacts are public).
-      - name: Upload Playwright report
+      # A failed assertion's diff is in the report too, so the guard deletes a
+      # report that carries one of this job's secrets or a JWT (the bypass
+      # cookie), and the upload then finds nothing.
+      - name: Check the report for secrets
+        id: report-guard
         if: failure()
+        continue-on-error: true
+        run: pnpm --filter @timekeep/web e2e:report-guard
+        env:
+          E2E_SECRET: ${{ secrets.E2E_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+
+      - name: Upload Playwright report
+        if: failure() && steps.report-guard.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-preview

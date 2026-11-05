@@ -84,8 +84,16 @@ jobs:
       - name: End-to-end tests (@nightly)
         run: pnpm --filter @timekeep/web e2e
 
-      - name: Upload Playwright report
+      # The report is public; the guard deletes one that carries a secret or a
+      # JWT before the upload (see e2e-preview.yml).
+      - name: Check the report for secrets
+        id: report-guard
         if: failure()
+        continue-on-error: true
+        run: pnpm --filter @timekeep/web e2e:report-guard
+
+      - name: Upload Playwright report
+        if: failure() && steps.report-guard.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-nightly
