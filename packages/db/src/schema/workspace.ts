@@ -151,6 +151,8 @@ export const workspaceSettings = pgTable(
     lockDate: date("lock_date"),
     /** ROLLING: entries older than this many days are locked. */
     lockDays: smallint("lock_days"),
+    /** Phase 6a: managers see cost and profit for their scope (owners and admins always do). */
+    managersSeeCosts: boolean("managers_see_costs").notNull().default(false),
     ...timestamps,
   },
   (t) => [primaryKey({ columns: [t.workspaceId] })],
