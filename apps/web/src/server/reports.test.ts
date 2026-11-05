@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   DEFAULT_REPORT_QUERY,
+  EMPTY_TOTALS,
   type ReportQuery,
   type ViewerPrefs,
   zonedDateTimeToInstant,
@@ -232,11 +233,10 @@ describe("report engine", () => {
     expect(sum).toBe(3 * 3600);
     // Bob is a member: amounts (and their unrated count) are hidden from him.
     expect(report.totals).toEqual({
+      ...EMPTY_TOTALS,
       durationSeconds: sum,
       billableSeconds: 7200,
       entryCount: 3,
-      amountMinor: 0,
-      unratedCount: 0,
     });
   });
 
