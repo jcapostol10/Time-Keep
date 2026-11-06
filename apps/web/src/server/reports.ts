@@ -204,11 +204,14 @@ const UNRATED = sql<number>`(count(*) filter (where ${timeEntry.billable} and ${
 /** Work without a cost rate: it counts as zero cost, and is counted (Phase 6a). */
 const UNCOSTED = sql<number>`(count(*) filter (where ${timeEntry.type} = 'work' and ${timeEntry.costAmountMinor} is null))::int`;
 /**
- * The hidden grouping key every aggregate carries: the entry's currency, its
- * project's client's (null = the workspace's). Money in two currencies is
- * never added, so each currency is summed on its own row and folded here.
+ * The hidden grouping key every aggregate carries: the entry's currency
+ * (null = the workspace's). A rated entry's is the one its amount was
+ * computed in (`rate_currency`), so a number is never shown under another
+ * code, whatever its client says today; an entry without an amount follows
+ * its project's client. Money in two currencies is never added, so each
+ * currency is summed on its own row and folded here.
  */
-const CURRENCY = sql<string | null>`${client.currency}`;
+const CURRENCY = sql<string | null>`coalesce(${timeEntry.rateCurrency}, ${client.currency})`;
 
 /** A bigint/int column or expression that may be null: node-postgres returns it as text. */
 const nullableNumber = (v: unknown): number | null => (v === null ? null : Number(v));
@@ -683,6 +686,7 @@ export async function detailedReport(
       amountMinor: sql`${rule ? roundedAmountSql(rule) : timeEntry.amountMinor}`.mapWith(
         nullableNumber,
       ),
+      rateCurrency: timeEntry.rateCurrency,
       clientCurrency: client.currency,
       costMinor: sql`${rule ? roundedCostSql(rule) : timeEntry.costAmountMinor}`.mapWith(
         nullableNumber,
@@ -735,8 +739,8 @@ export async function detailedReport(
     const editable =
       r.ownerStatus === "ACTIVE" &&
       can(viewer.actor, "entry.write", { kind: "entry", userId: r.userId, projectId: r.projectId });
-    // The entry's currency is its project's client's, else the workspace's.
-    const currency = money ? (r.clientCurrency ?? money.currency) : null;
+    // The currency its amount was rated in; unrated, its project's client's, else the workspace's.
+    const currency = money ? (r.rateCurrency ?? r.clientCurrency ?? money.currency) : null;
     const amountMinor = money && r.billable ? (r.amountMinor ?? null) : null;
     const costs = money?.costs ?? false;
     return {

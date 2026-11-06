@@ -13,6 +13,7 @@ import {
 } from "../../test/db";
 import { loadViewer } from "./authz";
 import { createProject, getProjectStatus } from "./catalog/projects";
+import { createTag } from "./catalog/tags";
 import type { Viewer } from "./catalog/viewer";
 import { dashboardMe, dashboardTeam } from "./dashboard";
 import { buildExport } from "./report-files";
@@ -404,6 +405,17 @@ describe("cost, profit and currencies in reports", () => {
     await expect(profitReport(db, link.viewer, link.query, PREFS, NOW)).rejects.toMatchObject({
       status: 403,
     });
+    // The file a reader of the link downloads: amounts per currency, no cost.
+    const file = await buildExport(db, link.viewer, {
+      report: "summary",
+      query: link.query,
+      prefs: PREFS,
+      format: "csv",
+      now: NOW,
+    });
+    expect(csvHeader(file.body)).toBe(
+      "Project,Duration,Billable,Entries,Amount (PHP),Amount (USD)",
+    );
   });
 
   it("detailed rows carry currency, cost and profit", async () => {
@@ -430,6 +442,75 @@ describe("cost, profit and currencies in reports", () => {
       "bob web billable": ["PHP", 100_000, 100_000, 30_000, 70_000],
       "bob us billable": ["USD", 4000, 2000, 15_000, null],
       "carol web billable": ["PHP", 100_000, 100_000, null, 100_000],
+    });
+  });
+
+  it("reports a rated amount in the currency it was rated in, whatever the client says now", async () => {
+    // The client's currency moved without a relabel (data from before currencies
+    // mattered, or a write that raced a relabel): $40 must never read as €40.
+    await db.update(client).set({ currency: "EUR" }).where(eq(client.workspaceId, wsId));
+    const owner = await viewer("olga");
+    const summary = await summaryReport(db, owner, q({ groupBy: ["project"] }), PREFS, NOW);
+    expect(summary.totals).toEqual(ALL);
+    expect(summary.groups.find((g) => g.label === "Us")?.totals.otherAmounts).toEqual([
+      { currency: "USD", amountMinor: 6000 },
+    ]);
+    const page = await detailedReport(
+      db,
+      owner,
+      q({ description: "olga us" }),
+      PREFS,
+      { sort: "start", dir: "desc" },
+      NOW,
+    );
+    expect(page.entries[0]).toMatchObject({ currency: "USD", amountMinor: 4000 });
+    const weekly = await weeklyReport(db, owner, q({ preset: "this-week" }), PREFS, NOW);
+    expect(weekly.otherAmounts).toEqual([{ currency: "USD", amountMinor: 6000 }]);
+
+    // An hour with no amount has no currency of its own: it follows its project.
+    await db.delete(rate).where(eq(rate.projectId, ids.us!));
+    await entry("bob", "us", 1);
+    const after = await summaryReport(db, owner, q(), PREFS, NOW);
+    expect(after.totals).toMatchObject({ unratedCount: 1, profitExcludedCount: 3 });
+  });
+
+  it("keeps two currencies apart under a tag, and counts a two-tag entry once in the total", async () => {
+    const a = await createTag(db, wsId, { name: "alpha" });
+    const b = await createTag(db, wsId, { name: "beta" });
+    const start = new Date("2026-03-11T09:00:00Z");
+    await createManualEntry(db, await viewer("olga"), {
+      description: "tagged",
+      projectId: ids.us!,
+      taskId: null,
+      tagIds: [a.id, b.id],
+      billable: true,
+      start,
+      end: new Date(start.getTime() + H),
+    });
+    const report = await summaryReport(
+      db,
+      await viewer("olga"),
+      q({ groupBy: ["tag", "project"] }),
+      PREFS,
+      NOW,
+    );
+    const byTag = Object.fromEntries(report.groups.map((g) => [g.label, g.totals]));
+    for (const name of ["alpha", "beta"]) {
+      expect(byTag[name]).toMatchObject({
+        amountMinor: 0,
+        otherAmounts: [{ currency: "USD", amountMinor: 4000 }],
+        costMinor: 60_000,
+        profitExcludedCount: 1,
+      });
+    }
+    expect(byTag["No tag"]).toMatchObject({
+      amountMinor: 400_000,
+      otherAmounts: [{ currency: "USD", amountMinor: 6000 }],
+    });
+    expect(report.totals).toMatchObject({
+      amountMinor: 400_000,
+      otherAmounts: [{ currency: "USD", amountMinor: 10_000 }],
+      costMinor: 345_000,
     });
   });
 

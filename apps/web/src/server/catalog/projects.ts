@@ -316,6 +316,15 @@ export async function copyProject(
   const name = opts.name.trim();
   const clientId = opts.clientId ?? null;
   if (clientId) await requireClientName(db, viewer.workspaceId, clientId);
+  // What the copy will bill in: its client's currency, else the workspace's.
+  const base = await workspaceCurrency(db, viewer.workspaceId);
+  const [target] = clientId
+    ? await db
+        .select({ currency: client.currency })
+        .from(client)
+        .where(and(eq(client.id, clientId), eq(client.workspaceId, viewer.workspaceId)))
+    : [];
+  const currency = entryCurrency(target?.currency, base);
   const tasks = await db
     .select()
     .from(task)
@@ -396,8 +405,13 @@ export async function copyProject(
         .insert(projectGroup)
         .values(groups.map((g) => ({ projectId: id, groupId: g.groupId })));
     }
+    // A rate applies only in its own currency: a copy billed in another one starts
+    // without rates (its Rates tab asks for one) instead of with rates that never apply.
     const copied = [...inForce.values()].filter(
-      (r) => r.amountMinor !== null && (r.taskId === null || taskMap.has(r.taskId)),
+      (r) =>
+        r.amountMinor !== null &&
+        r.currency === currency &&
+        (r.taskId === null || taskMap.has(r.taskId)),
     );
     if (copied.length > 0) {
       await tx.insert(rate).values(

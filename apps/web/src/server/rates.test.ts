@@ -504,6 +504,67 @@ describe("rates", () => {
       expect(await currentRatesAt(db, owner, "member", { now })).toEqual(new Map([[ana, 250_000]]));
     });
 
+    it("a row in another currency is not a project's current rate", async () => {
+      const owner = await viewer("olga");
+      // Rows written in PHP before Ops was billed in USD (or copied from a PHP project).
+      const stale = (over: {
+        level: "project" | "project_member";
+        userId?: string;
+        amountMinor?: number;
+      }) => ({
+        id: randomUUID(),
+        workspaceId: wsId,
+        projectId: ids.Ops!,
+        amountMinor: 200_000,
+        currency: "PHP",
+        effectiveFrom: new Date(0),
+        ...over,
+      });
+      await db
+        .insert(rate)
+        .values([
+          stale({ level: "project" }),
+          stale({ level: "project_member", userId: ids.ana!, amountMinor: 210_000 }),
+        ]);
+      const ops = { level: "project" as const, projectId: ids.Ops! };
+      // It rates nothing on a USD project, so it is not shown as the rate in force.
+      expect(await currentRate(db, owner, ops, now)).toBeNull();
+      expect(
+        await currentRatesAt(db, owner, "project_member", { projectId: ids.Ops!, now }),
+      ).toEqual(new Map());
+      // The history still lists it, in its own currency.
+      expect((await rateHistory(db, owner, ops)).map((h) => [h.currency, h.amountMinor])).toEqual([
+        ["PHP", 200_000],
+      ]);
+
+      await setRate(db, owner, { ...ops, amount: "40", apply: "from", from: "2026-03-01" }, now);
+      expect(await currentRate(db, owner, ops, now)).toMatchObject({
+        currency: "USD",
+        amountMinor: 4000,
+      });
+      // Cost is the workspace's on any project.
+      await setRate(
+        db,
+        owner,
+        {
+          kind: "cost",
+          level: "project_member",
+          projectId: ids.Ops!,
+          userId: ids.ana!,
+          amount: "750",
+          apply: "new",
+        },
+        now,
+      );
+      expect(
+        await currentRatesAt(db, owner, "project_member", {
+          projectId: ids.Ops!,
+          kind: "cost",
+          now,
+        }),
+      ).toEqual(new Map([[ids.ana!, 75_000]]));
+    });
+
     it("a manager cannot read cost rate rows", async () => {
       const cost = { kind: "cost" as const, level: "member" as const, userId: ids.ana! };
       await setRate(db, await viewer("olga"), { ...cost, amount: "600", apply: "new" }, now);

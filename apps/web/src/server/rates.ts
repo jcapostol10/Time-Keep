@@ -273,7 +273,27 @@ export async function rateHistory(
   return rows.map(({ rate: r, createdByName }) => toDTO(r, createdByName ?? null));
 }
 
-/** The row in force now for one level and target (null amount = none at this level). */
+/**
+ * The currency a rate at this target is in: a billable rate on a project (or
+ * its task or member) the project's, anything else the workspace's.
+ */
+async function rateCurrencyFor(
+  db: Database,
+  workspaceId: string,
+  kind: RateKind,
+  projectId: string | null | undefined,
+): Promise<string> {
+  return kind === "billable" && projectId
+    ? projectCurrency(db, workspaceId, projectId)
+    : (await settingsOf(db, workspaceId)).currency;
+}
+
+/**
+ * The row in force now for one level and target (null amount = none at this
+ * level). As the rating SQL does, it reads only rows in the target's
+ * currency: a row left in another one (a project copied or billed before
+ * currencies mattered) rates nothing, so it is not the current rate.
+ */
 export async function currentRate(
   db: Database,
   viewer: Viewer,
@@ -281,7 +301,15 @@ export async function currentRate(
   now: Date = new Date(),
 ): Promise<RateDTO | null> {
   const history = await rateHistory(db, viewer, input);
-  return history.find((h) => new Date(h.effectiveFrom) <= now) ?? null;
+  if (history.length === 0) return null;
+  const target = await resolveTarget(db, viewer, input);
+  const currency = await rateCurrencyFor(
+    db,
+    viewer.workspaceId,
+    input.kind ?? "billable",
+    target.projectId,
+  );
+  return history.find((h) => h.currency === currency && new Date(h.effectiveFrom) <= now) ?? null;
 }
 
 /** Whether a currency change has anything to relabel. */
@@ -337,7 +365,10 @@ export async function relabelWorkspaceCurrency(
     );
 }
 
-/** Whether the projects have billable rates of their own, or entries with an amount. */
+/** The levels a project's own rates sit at: what a relabel of the project moves. */
+const PROJECT_RATE_LEVELS = ["task", "project_member", "project"] as const;
+
+/** Whether the projects have billable rates of their own, or entries those rates rated. */
 export async function projectsHaveRates(
   db: Pick<Database, "select">,
   workspaceId: string,
@@ -363,7 +394,7 @@ export async function projectsHaveRates(
       and(
         eq(timeEntry.workspaceId, workspaceId),
         inArray(timeEntry.projectId, projectIds),
-        isNotNull(timeEntry.rateCurrency),
+        inArray(timeEntry.rateSource, [...PROJECT_RATE_LEVELS]),
       ),
     )
     .limit(1);
@@ -372,8 +403,13 @@ export async function projectsHaveRates(
 
 /**
  * The projects now bill in `to` (their client's currency changed, or a project
- * moved to another client): their own billable rates and the saved amounts of
- * their entries take the new code, unconverted. Cost stays the workspace's.
+ * moved to another client): their own billable rates, and the amounts those
+ * rates produced, take the new code, unconverted. Cost stays the workspace's.
+ *
+ * Time rated by a member or workspace rate is left as it is: that amount is
+ * in the workspace currency, and relabelling it would read ₱2,500 as $2,500.
+ * It keeps its number and its currency until rates are applied to past
+ * entries, when it is rated by the project's own rate or not at all.
  */
 export async function relabelProjectsCurrency(
   tx: Pick<Database, "update">,
@@ -399,7 +435,7 @@ export async function relabelProjectsCurrency(
       and(
         eq(timeEntry.workspaceId, workspaceId),
         inArray(timeEntry.projectId, projectIds),
-        isNotNull(timeEntry.rateCurrency),
+        inArray(timeEntry.rateSource, [...PROJECT_RATE_LEVELS]),
       ),
     );
 }
@@ -419,6 +455,12 @@ export async function currentRatesAt(
     throw new CatalogError("INVALID", COST_LEVEL_MESSAGE);
   }
   assertCan(viewer.actor, "rate.view", { kind: "none" });
+  const kind = options.kind ?? "billable";
+  // Only rows in the target's currency are in force (see `currentRate`).
+  const currency =
+    level === "member" || options.projectId
+      ? await rateCurrencyFor(db, viewer.workspaceId, kind, options.projectId)
+      : null;
   const key = level === "task" ? rate.taskId : rate.userId;
   const rows = await db
     .selectDistinctOn([key], { key, amountMinor: rate.amountMinor })
@@ -426,8 +468,9 @@ export async function currentRatesAt(
     .where(
       and(
         eq(rate.workspaceId, viewer.workspaceId),
-        eq(rate.kind, options.kind ?? "billable"),
+        eq(rate.kind, kind),
         eq(rate.level, level),
+        currency ? eq(rate.currency, currency) : undefined,
         options.projectId ? eq(rate.projectId, options.projectId) : undefined,
         lte(rate.effectiveFrom, options.now ?? new Date()),
       ),

@@ -1091,6 +1091,9 @@ export async function splitEntry(
       billableRateMinor: row.billableRateMinor,
       rateCurrency: row.rateCurrency,
       rateSource: row.rateSource,
+      // Both snapshots stay with both parts: a split is an edit of times.
+      costRateMinor: row.costRateMinor,
+      costRateSource: row.costRateSource,
     });
     const tagIds = row.tags.map((t) => t.tag.id);
     if (tagIds.length > 0) await replaceTags(tx, id, tagIds);

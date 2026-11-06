@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  approvalRequest,
   client,
   eq,
   project,
@@ -22,7 +23,8 @@ import { loadViewer } from "./authz";
 import { createClient, updateClient } from "./catalog/clients";
 import { createProject, updateProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
-import { relabelWorkspaceCurrency } from "./rates";
+import { requestRateRecalc, runRateRecalcJob } from "./rate-recalc";
+import { relabelWorkspaceCurrency, setRate } from "./rates";
 import { createManualEntry } from "./time-entries";
 
 // Phase 6a, decision 8: a currency change relabels, after a confirmation, and
@@ -270,23 +272,73 @@ describe("currency relabels", () => {
     // The client's other project and everything else are untouched.
     expect(await entries()).toEqual({ ...BEFORE_ENTRIES, Us: ["EUR", 5000, 5000] });
 
-    // A project with no rates of its own, but time rated by the member's: the entries move.
-    await updateProject(
-      db,
-      owner,
-      ids.Home!,
-      { clientId: ids.Acme! },
-      { confirmCurrencyChange: true },
+    // A project with no rates of its own: nothing to relabel, so nothing to ask. Its time
+    // was rated by a member rate in PHP and stays what it was: ₱2,500 never reads as $2,500.
+    await updateProject(db, owner, ids.Home!, { clientId: ids.Acme! });
+    expect((await entries()).Home).toEqual(["PHP", 250_000, 250_000]);
+    expect(await rates()).toEqual(
+      BEFORE_RATES.map((r) => (r.includes(" Us ") ? r.replace("USD", "EUR") : r)).sort(),
     );
-    expect((await entries()).Home).toEqual(["USD", 250_000, 250_000]);
-    // Off a client altogether: back to the workspace's currency, asked again.
-    await expect(updateProject(db, owner, ids.Home!, { clientId: null })).rejects.toMatchObject({
-      code: "CONFIRM",
-    });
+    await updateProject(db, owner, ids.Home!, { clientId: null });
+    expect((await entries()).Home).toEqual(["PHP", 250_000, 250_000]);
 
     // The same currency on both sides: nothing to confirm.
     await updateProject(db, owner, ids.Ph!, { clientId: ids.Local! });
     expect((await entries()).Ph).toEqual(["PHP", 90_000, 90_000]);
+  });
+
+  it("a recalculation after a move rates by the project's new currency and keeps what was relabelled", async () => {
+    const recalc = async (jobId?: string | null) => {
+      const id = jobId ?? (await requestRateRecalc(db, wsId, owner.userId, new Date(0))).jobId;
+      await runRateRecalcJob(db, id);
+    };
+    await updateProject(
+      db,
+      owner,
+      ids.Us!,
+      { clientId: ids.Globex! },
+      { confirmCurrencyChange: true },
+    );
+    await updateProject(db, owner, ids.Home!, { clientId: ids.Acme! });
+    await recalc();
+    const after = await entries();
+    // Relabelled together with its rates: the job finds the same rate, now in EUR.
+    expect(after.Us).toEqual(["EUR", 5000, 5000]);
+    // A member rate in PHP does not apply to a project billed in USD: once the owner
+    // applies rates to past entries, the hour is unrated until the project has its own.
+    expect(after.Home).toEqual([null, null, null]);
+    expect({ ...after, Us: BEFORE_ENTRIES.Us, Home: BEFORE_ENTRIES.Home }).toEqual(BEFORE_ENTRIES);
+
+    const set = await setRate(db, owner, {
+      level: "project",
+      projectId: ids.Home!,
+      amount: "45",
+      apply: "all",
+    });
+    expect(set.rate.currency).toBe("USD");
+    await recalc(set.jobId);
+    expect((await entries()).Home).toEqual(["USD", 4500, 4500]);
+  });
+
+  it("keeps the numbers of approved time through a relabel and a recalculation", async () => {
+    // The week of the entries is approved for the owner.
+    await db.insert(approvalRequest).values({
+      id: randomUUID(),
+      workspaceId: wsId,
+      userId: owner.userId,
+      periodStart: "2026-03-02",
+      periodEnd: "2026-03-08",
+      status: "APPROVED",
+    });
+    await updateClient(db, wsId, ids.Acme!, { currency: "GBP" }, { confirmCurrencyChange: true });
+    await updateProject(db, owner, ids.Home!, { clientId: ids.Globex! });
+    const expected = { ...BEFORE_ENTRIES, Us: ["GBP", 5000, 5000] };
+    // The label follows the client; what was approved is the number, and it stays.
+    expect(await entries()).toEqual(expected);
+    const { jobId } = await requestRateRecalc(db, wsId, owner.userId, new Date(0));
+    await runRateRecalcJob(db, jobId);
+    // The job never re-rates approved time, so nothing moves, Home's PHP amount included.
+    expect(await entries()).toEqual(expected);
   });
 
   it("lets only owners and admins move a project when that relabels its rates", async () => {
