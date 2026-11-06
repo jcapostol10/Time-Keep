@@ -9,6 +9,9 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 
 ## App
 
+- [ ] **Review the Phase 6 decisions.** The design (`docs/superpowers/specs/2026-11-05-phase-6-design.md`) was written without an interview; its 28 decisions and the 6a rulings in `docs/PROGRESS.md` are the builder's. The two that shape 6a: no currency conversion anywhere, and a rate applies only in its own currency.
+- [ ] **A cost rate applied to past entries re-rates billable snapshots too.** One job re-rates both snapshots from the date (design decision 2). An entry whose billable rate was kept on purpose ("New entries only", then an edit) takes the rate its start resolves to today. A fix is a `kinds` column on `rate_recalc_job`.
+- [ ] **Client currencies come from the short list** (`COMMON_CURRENCIES`, about twenty codes), though the server accepts any ISO 4217 code the runtime knows. A searchable list of all of them is a UI change only.
 - [ ] **Decide: a default tag for kiosks.** With a required tag, nobody can clock out on a kiosk, because a kiosk adds no tags (spec decision 15 has none); the person stays clocked in until an admin edits the entry. The Kiosks dialog warns about it. A fix is a `kiosk.tag_id` column (an additive migration) and a picker.
 - [ ] Phase 5c review minors:
   - The QR path of `identify` treats any error from `allowedPerson` as "not allowed", so a database error counts as a QR failure; catch only `WorkspaceAccessError`.

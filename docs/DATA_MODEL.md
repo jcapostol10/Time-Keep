@@ -2,7 +2,7 @@
 
 PostgreSQL (16 locally, Supabase in production) via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
 
-## Entity overview (Phases 0–5c)
+## Entity overview (Phases 0–6a)
 
 ```
 user ──< session            (activeWorkspaceId → workspace)
@@ -106,6 +106,7 @@ One row per workspace, created in the same transaction as the workspace.
 | lock_mode | enum `lock_mode` (`OFF`, `FIXED`, `ROLLING`) | `OFF` |
 | lock_date | date? | FIXED: entries starting before this local date are locked |
 | lock_days | smallint? | ROLLING: entries starting before the local day this many days ago are locked |
+| managers_see_costs | boolean | `false`; managers see cost and profit in reports, for their scope (Phase 6a). Owners and admins always do; members never |
 
 The Phase 4b rule columns (from `rounding_mode` down) default to the behaviour before the rule existed; `packages/core/src/workspace-rules.ts` reads them and ignores an unknown stored value. Rounding applies to reports, exports and share links only (decision 13).
 
@@ -147,7 +148,7 @@ Unique `(workspace_id, user_id)`.
 | workspace_id | text → workspace (cascade) | indexed |
 | name | text | unique per workspace (`client_workspace_name_uq`) |
 | address, email, notes | text | default `''`; email is `''` or a valid address |
-| currency | char(3)? | ISO 4217; reserved for invoicing (Phase 6) |
+| currency | char(3)? | ISO 4217: what the client's projects are billed in; `NULL` follows the workspace currency (Phase 6a) |
 | archived | boolean | default false |
 | created_at, updated_at | timestamptz | |
 
@@ -225,9 +226,12 @@ A group a task belongs to (decision 11 of the Phase 4 design, "tasks by group", 
 | end | timestamptz? | `NULL` = running. Reserved word: always quote `"end"` in raw SQL |
 | duration_seconds | integer? | set on stop and on every edit; `NULL` while running |
 | billable_rate_minor | bigint? | the hourly rate the entry was saved with, in minor units (Phase 4) |
-| rate_currency | char(3)? | ISO 4217 code of that rate |
+| rate_currency | char(3)? | ISO 4217 code of that rate: the entry's currency, its project's client's or else the workspace's (Phase 6a) |
 | rate_source | `rate_level`? | which level answered: `task`, `project_member`, `project`, `member`, `workspace` |
 | amount_minor | bigint? | `round(rate × duration_seconds / 3600)` half up; `NULL` while running or without a rate |
+| cost_rate_minor | bigint? | what an hour of this entry costs the company, in the workspace currency's minor units (Phase 6a); `NULL` without a cost rate, and on breaks |
+| cost_rate_source | `rate_level`? | which level answered: `project_member` or `member` |
+| cost_amount_minor | bigint? | `round(cost rate × duration_seconds / 3600)` half up; `NULL` while running or without a cost rate |
 | deleted_at | timestamptz? | soft delete (Undo restores it) |
 | type | enum `entry_type` (`work`, `break`) | `work`; a break has no project, task, tags, billing or amount and is fixed at creation (decision 6) |
 | created_at, updated_at | timestamptz | |
@@ -247,6 +251,7 @@ Rules (enforced in `apps/web/src/server/time-entries.ts`, the only write path):
 - An entry that crosses midnight stays one row and is listed under its start date in the viewer's timezone.
 - Breaks (Phase 4b): `type = 'break'` rows are saved with no details and never rated (`rates-sql.ts` updates work entries only); reports count work entries unless the Type filter asks otherwise.
 - Rates (Phase 4, decision 3 of the Phase 4 design): a new entry is rated with the rate in force at its start; an edit keeps the rate and recomputes `amount_minor`; only a change of project, task, person or billable switched on re-rates it. A rate change re-rates saved entries only through the `rate_recalc_job` ("Entries from a date" / "All entries"). The rating SQL lives in `packages/db/src/rates-sql.ts`, shared by the entry service, the job and the seed.
+- Cost and currencies (Phase 6a): the same statement writes a second snapshot, the cost, on every work entry, billable or not, from the cost rate in force at its start (project member, then member). An edit keeps the cost rate and recomputes the amount; only a change of person or project re-rates it. Nothing is backfilled: entries saved before a cost rate existed have no cost until a rate is applied to past entries. A billable rate applies only to entries in its own currency, so a project billed in another currency is rated by its own rates or not at all; no amount is ever converted. A currency change relabels (`rate.currency`, `time_entry.rate_currency`) and never touches a number: the workspace's relabels what follows it, a client's relabels its projects, a project moved to a client in another currency is relabelled itself.
 
 ### time_entry_tag
 
@@ -337,13 +342,13 @@ A manager's scope is own time, the people in `managed_user` (`workspace_id`, `ma
 | --- | --- | --- |
 | id | text PK | UUID |
 | workspace_id | text → workspace (cascade) | |
-| kind | `rate_kind` | `billable` (`cost` is reserved for Phase 6) |
+| kind | `rate_kind` | `billable`, or `cost` (Phase 6a): what an hour costs the company, at the `project_member` and `member` levels only |
 | level | `rate_level` | `task`, `project_member`, `project`, `member`, `workspace` (most specific first) |
 | user_id | text? → user (cascade) | member and project_member levels |
 | project_id | text? → project (cascade) | project, project_member and task levels |
 | task_id | text? → task (cascade) | task level |
 | amount_minor | bigint? | minor units per hour; `NULL` = no rate at this level from this date (fall through) |
-| currency | char(3) | the workspace currency (one per workspace until Phase 6) |
+| currency | char(3) | the currency of what the row prices: the project's (its client's, else the workspace's) for project, task and project-member billable rates; the workspace's for member and workspace rates and for every cost rate |
 | effective_from | timestamptz | the row is in force for entries starting at or after it |
 | created_by | text? → user (set null) | |
 | created_at | timestamptz | |
@@ -623,6 +628,6 @@ Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf` after
 
 ## Planned (later phases)
 
-Phase 6: `expense`, `expense_category`, `invoice`, `invoice_item`, `payment`, `budget`, `custom_field`.
+Phase 6b–6d: project and task estimates and `workspace_settings.budget_thresholds` (6b); `expense`, `expense_category` (6c); `invoice_settings`, `invoice`, `invoice_item`, `payment`, `recurring_invoice` (6d). See `docs/superpowers/specs/2026-11-05-phase-6-design.md`.
 Phase 7: `assignment`, `milestone`.
 Phase 8: `subscription`, `api_key`, `webhook`, `webhook_delivery`, `audit_log`, `sso_config`.
