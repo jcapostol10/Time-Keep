@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
 
 import { DEFAULT_WORKSPACE_SETTINGS } from "@timekeep/core";
-import { eq, projectMember, rate, workspace } from "@timekeep/db";
+import {
+  client,
+  eq,
+  project,
+  projectMember,
+  rate,
+  workspace,
+  workspaceSettings,
+} from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -33,6 +41,7 @@ const { createProjectAction, updateProjectAction } = await import("./actions/pro
 const { createProject } = await import("./catalog/projects");
 const { inviteMembersAction } = await import("./actions/team");
 const { setRateAction } = await import("./actions/rates");
+const { createClientAction, updateClientAction } = await import("./actions/clients");
 const { updateWorkspaceSettingsAction } = await import("./actions/workspaces");
 const { createManualEntry } = await import("./time-entries");
 
@@ -147,6 +156,66 @@ describe("server actions ask the permission matrix", () => {
     expect(done.ok).toBe(true);
     const rates = await db.select().from(rate).where(eq(rate.workspaceId, ws!.id));
     expect(rates.map((r) => r.currency)).toEqual(["PHP"]);
+  });
+
+  it("asks before a client's currency change relabels its projects' rates", async () => {
+    signIn({ id: ids.olga! });
+    const made = await createClientAction(slug, { name: "Acme", currency: "USD" });
+    if (!made.ok) throw new Error(made.error);
+    await db.update(project).set({ clientId: made.data.id }).where(eq(project.id, ids.managed!));
+    const set = await setRateAction(slug, {
+      level: "project",
+      projectId: ids.managed,
+      amount: "40",
+      apply: "new",
+    });
+    expect(set).toMatchObject({ ok: true, data: { rate: { currency: "USD" } } });
+
+    const refused = await updateClientAction(slug, made.data.id, { currency: "EUR" });
+    expect(refused).toMatchObject({
+      ok: false,
+      fieldErrors: {
+        confirmCurrencyChange: [expect.stringMatching(/EUR; they are not converted/)],
+      },
+    });
+    const done = await updateClientAction(slug, made.data.id, {
+      currency: "EUR",
+      confirmCurrencyChange: true,
+    });
+    expect(done).toMatchObject({ ok: true, data: { currency: "EUR" } });
+    const rates = await db.select().from(rate).where(eq(rate.projectId, ids.managed!));
+    expect(rates.map((r) => [r.currency, r.amountMinor])).toEqual([["EUR", 4000]]);
+
+    // The same question when a project moves to a client billed in another currency.
+    const other = await createClientAction(slug, { name: "Globex", currency: "GBP" });
+    if (!other.ok) throw new Error(other.error);
+    const move = await updateProjectAction(slug, ids.managed!, { clientId: other.data.id });
+    expect(move).toMatchObject({
+      ok: false,
+      fieldErrors: {
+        confirmCurrencyChange: [expect.stringMatching(/GBP; they are not converted/)],
+      },
+    });
+    const moved = await updateProjectAction(slug, ids.managed!, {
+      clientId: other.data.id,
+      confirmCurrencyChange: true,
+    });
+    expect(moved.ok).toBe(true);
+    const after = await db.select().from(rate).where(eq(rate.projectId, ids.managed!));
+    expect(after.map((r) => r.currency)).toEqual(["GBP"]);
+  });
+
+  it("gives a new client a currency only for owners and admins", async () => {
+    const [ws] = await db.select().from(workspace).where(eq(workspace.slug, slug));
+    await db
+      .update(workspaceSettings)
+      .set({ clientCreators: "everyone" })
+      .where(eq(workspaceSettings.workspaceId, ws!.id));
+    signIn(users.max!);
+    const made = await createClientAction(slug, { name: "Initech", currency: "USD" });
+    expect(made).toMatchObject({ ok: true, data: { name: "Initech", currency: null } });
+    const [row] = await db.select().from(client).where(eq(client.name, "Initech"));
+    expect(row?.currency).toBeNull();
   });
 
   it("lets a manager edit a project they manage, and not one they don't", async () => {

@@ -1,7 +1,17 @@
 import { randomUUID } from "node:crypto";
 
-import { amountFor, type RateRow, resolveRate } from "@timekeep/core";
-import { eq, rate, rateEntriesSql, rateRecalcJob, task, timeEntry } from "@timekeep/db";
+import { amountFor, can, type RateRow, resolveRate } from "@timekeep/core";
+import {
+  client,
+  eq,
+  project,
+  rate,
+  rateEntriesSql,
+  rateRecalcJob,
+  task,
+  timeEntry,
+  workspaceSettings,
+} from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -14,7 +24,7 @@ import {
 import { loadViewer } from "./authz";
 import { createProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
-import { currentRate, rateHistory, setRate } from "./rates";
+import { currentRate, currentRatesAt, rateHistory, type RateTargetInput, setRate } from "./rates";
 import { createManualEntry } from "./time-entries";
 
 const handle = connectTestDb();
@@ -341,5 +351,183 @@ describe("rates", () => {
       .from(rateRecalcJob)
       .where(eq(rateRecalcJob.id, backdated.jobId!));
     expect(job).toMatchObject({ status: "queued" });
+  });
+
+  // Phase 6a: cost rates share the table (kind = 'cost'), and a rate is in the
+  // currency of what it prices: the workspace's, or the project's client's.
+  describe("cost rates and currencies", () => {
+    const now = new Date("2026-03-11T04:00:00Z");
+    const setCurrency = (currency: string) =>
+      db.update(workspaceSettings).set({ currency }).where(eq(workspaceSettings.workspaceId, wsId));
+
+    beforeEach(async () => {
+      await setCurrency("PHP");
+      // Ops is billed in USD; Web and App have no client.
+      const acme = randomUUID();
+      await db
+        .insert(client)
+        .values({ id: acme, workspaceId: wsId, name: "Acme", currency: "USD" });
+      await db.update(project).set({ clientId: acme }).where(eq(project.id, ids.Ops!));
+    });
+
+    it("a cost rate is stored in the workspace currency at member and project-member levels only", async () => {
+      const owner = await viewer("olga");
+      const member = await setRate(
+        db,
+        owner,
+        { kind: "cost", level: "member", userId: ids.ana!, amount: "600", apply: "new" },
+        now,
+      );
+      expect(member.rate).toMatchObject({
+        kind: "cost",
+        level: "member",
+        amountMinor: 60_000,
+        currency: "PHP",
+      });
+      // On a project billed in USD the cost is still what the company pays, in PHP.
+      const onOps = await setRate(
+        db,
+        owner,
+        {
+          kind: "cost",
+          level: "project_member",
+          userId: ids.ana!,
+          projectId: ids.Ops!,
+          amount: "750",
+          apply: "new",
+        },
+        now,
+      );
+      expect(onOps.rate).toMatchObject({ kind: "cost", amountMinor: 75_000, currency: "PHP" });
+
+      const refused = [
+        { level: "workspace" as const },
+        { level: "project" as const, projectId: ids.Web! },
+        { level: "task" as const, taskId: ids.design! },
+      ];
+      for (const target of refused) {
+        await expect(
+          setRate(db, owner, { kind: "cost", ...target, amount: "10", apply: "new" }, now),
+        ).rejects.toThrow("Cost rates are per member or per project member.");
+      }
+      const rows = await db.select().from(rate).where(eq(rate.workspaceId, wsId));
+      expect(rows.map((r) => [r.kind, r.level, r.currency]).sort()).toEqual([
+        ["cost", "member", "PHP"],
+        ["cost", "project_member", "PHP"],
+      ]);
+    });
+
+    it("a project rate takes the client's currency", async () => {
+      const owner = await viewer("olga");
+      const set = async (input: RateTargetInput, amount: string) =>
+        (await setRate(db, owner, { ...input, amount, apply: "new" }, now)).rate;
+
+      expect(await set({ level: "project", projectId: ids.Ops! }, "40")).toMatchObject({
+        currency: "USD",
+        amountMinor: 4000,
+      });
+      expect(
+        await set({ level: "project_member", projectId: ids.Ops!, userId: ids.ana! }, "45.5"),
+      ).toMatchObject({ currency: "USD", amountMinor: 4550 });
+      // A project without a client, its task, a member and the workspace: the workspace's.
+      expect(await set({ level: "project", projectId: ids.Web! }, "2000")).toMatchObject({
+        currency: "PHP",
+      });
+      expect(await set({ level: "task", taskId: ids.design! }, "2100")).toMatchObject({
+        currency: "PHP",
+      });
+      expect(await set({ level: "member", userId: ids.ana! }, "2500")).toMatchObject({
+        currency: "PHP",
+      });
+      expect(await set({ level: "workspace" }, "1500")).toMatchObject({ currency: "PHP" });
+
+      // The typed amount is read in the rate's own currency: yen has no decimals, dollars two.
+      await setCurrency("JPY");
+      await expect(set({ level: "member", userId: ids.ana! }, "2500.50")).rejects.toThrow(
+        /amount in JPY/,
+      );
+      expect(await set({ level: "project", projectId: ids.Ops! }, "42.50")).toMatchObject({
+        currency: "USD",
+        amountMinor: 4250,
+      });
+    });
+
+    it("cost history and the current cost rate read by kind", async () => {
+      const owner = await viewer("olga");
+      const ana = ids.ana!;
+      await setRate(db, owner, { level: "member", userId: ana, amount: "2500", apply: "new" }, now);
+      await setRate(
+        db,
+        owner,
+        { level: "member", userId: ana, amount: "2600", apply: "from", from: "2026-05-01" },
+        now,
+      );
+      await setRate(
+        db,
+        owner,
+        { kind: "cost", level: "member", userId: ana, amount: "600", apply: "new" },
+        now,
+      );
+      // A backdated cost row replaces later cost rows only: the May billable row stays.
+      await setRate(
+        db,
+        owner,
+        {
+          kind: "cost",
+          level: "member",
+          userId: ana,
+          amount: "700",
+          apply: "from",
+          from: "2026-04-01",
+        },
+        now,
+      );
+
+      const cost = await rateHistory(db, owner, { kind: "cost", level: "member", userId: ana });
+      expect(cost.map((h) => [h.kind, h.amountMinor])).toEqual([
+        ["cost", 70_000],
+        ["cost", 60_000],
+      ]);
+      const billable = await rateHistory(db, owner, { level: "member", userId: ana });
+      expect(billable.map((h) => [h.kind, h.amountMinor])).toEqual([
+        ["billable", 260_000],
+        ["billable", 250_000],
+      ]);
+
+      const cur = (kind?: "cost") =>
+        currentRate(db, owner, { ...(kind ? { kind } : {}), level: "member", userId: ana }, now);
+      expect((await cur("cost"))?.amountMinor).toBe(60_000);
+      expect((await cur())?.amountMinor).toBe(250_000);
+      expect(await currentRatesAt(db, owner, "member", { kind: "cost", now })).toEqual(
+        new Map([[ana, 60_000]]),
+      );
+      expect(await currentRatesAt(db, owner, "member", { now })).toEqual(new Map([[ana, 250_000]]));
+    });
+
+    it("a manager cannot read cost rate rows", async () => {
+      const cost = { kind: "cost" as const, level: "member" as const, userId: ids.ana! };
+      await setRate(db, await viewer("olga"), { ...cost, amount: "600", apply: "new" }, now);
+      // Seeing cost in reports (the workspace setting) is not seeing what people are paid.
+      await db
+        .update(workspaceSettings)
+        .set({ managersSeeCosts: true })
+        .where(eq(workspaceSettings.workspaceId, wsId));
+      const max = await viewer("max");
+      expect(can(max.actor, "report.viewCosts", { kind: "none" })).toBe(true);
+      expect(can((await viewer("ana")).actor, "report.viewCosts", { kind: "none" })).toBe(false);
+
+      await expect(rateHistory(db, max, cost)).rejects.toMatchObject({ status: 403 });
+      await expect(currentRatesAt(db, max, "member", { kind: "cost" })).rejects.toMatchObject({
+        status: 403,
+      });
+      await expect(
+        setRate(db, max, { ...cost, amount: "1", apply: "new" }, now),
+      ).rejects.toMatchObject({ status: 403 });
+    });
+
+    it("a manager sees cost in reports only while the workspace says so", async () => {
+      expect(can((await viewer("max")).actor, "report.viewCosts", { kind: "none" })).toBe(false);
+      expect(can((await viewer("olga")).actor, "report.viewCosts", { kind: "none" })).toBe(true);
+    });
   });
 });

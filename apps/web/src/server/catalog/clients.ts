@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import type { ClientInput } from "@timekeep/core";
+import { type ClientInput, entryCurrency } from "@timekeep/core";
 import {
   and,
   asc,
@@ -14,10 +14,12 @@ import {
   isNotNull,
   project,
   sql,
+  workspaceSettings,
 } from "@timekeep/db";
 
 import type { ClientDTO } from "@/lib/catalog-types";
 
+import { projectsHaveRates, relabelProjectsCurrency } from "../rates";
 import { CatalogError, isUniqueViolation } from "./errors";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
@@ -119,25 +121,68 @@ export async function createClient(
   return toDTO(await findOwned(db, workspaceId, id), new Map());
 }
 
+/** The workspace's currency, which a client without one of its own follows. */
+export async function workspaceCurrency(
+  db: Pick<Database, "select">,
+  workspaceId: string,
+): Promise<string> {
+  const [row] = await db
+    .select({ currency: workspaceSettings.currency })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.workspaceId, workspaceId));
+  return row?.currency ?? "USD";
+}
+
+/**
+ * A client's new currency relabels the rates of its projects and the saved
+ * amounts of their entries, never converting them (Phase 6 design, decision
+ * 8), so it asks first: without `confirmCurrencyChange` the change is refused
+ * with CONFIRM when there is anything to relabel.
+ */
 export async function updateClient(
-  db: Executor,
+  db: Database,
   workspaceId: string,
   id: string,
   patch: Partial<ClientInput> & { archived?: boolean },
+  options: { confirmCurrencyChange?: boolean } = {},
 ): Promise<ClientDTO> {
-  await findOwned(db, workspaceId, id);
+  const before = await findOwned(db, workspaceId, id);
+  let relabel: { projectIds: string[]; to: string } | null = null;
+  if (patch.currency !== undefined && patch.currency !== before.currency) {
+    const base = await workspaceCurrency(db, workspaceId);
+    const to = entryCurrency(patch.currency, base);
+    if (to !== entryCurrency(before.currency, base)) {
+      const projects = await db
+        .select({ id: project.id })
+        .from(project)
+        .where(and(eq(project.workspaceId, workspaceId), eq(project.clientId, id)));
+      const projectIds = projects.map((p) => p.id);
+      if (await projectsHaveRates(db, workspaceId, projectIds)) {
+        if (!options.confirmCurrencyChange) {
+          throw new CatalogError(
+            "CONFIRM",
+            `Rates and amounts on this client's projects will show in ${to}; they are not converted.`,
+          );
+        }
+        relabel = { projectIds, to };
+      }
+    }
+  }
   try {
-    await db
-      .update(client)
-      .set({
-        ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-        ...(patch.address !== undefined ? { address: patch.address } : {}),
-        ...(patch.email !== undefined ? { email: patch.email } : {}),
-        ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
-        ...(patch.currency !== undefined ? { currency: patch.currency } : {}),
-        ...(patch.archived !== undefined ? { archived: patch.archived } : {}),
-      })
-      .where(and(eq(client.id, id), eq(client.workspaceId, workspaceId)));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(client)
+        .set({
+          ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+          ...(patch.address !== undefined ? { address: patch.address } : {}),
+          ...(patch.email !== undefined ? { email: patch.email } : {}),
+          ...(patch.notes !== undefined ? { notes: patch.notes } : {}),
+          ...(patch.currency !== undefined ? { currency: patch.currency } : {}),
+          ...(patch.archived !== undefined ? { archived: patch.archived } : {}),
+        })
+        .where(and(eq(client.id, id), eq(client.workspaceId, workspaceId)));
+      if (relabel) await relabelProjectsCurrency(tx, workspaceId, relabel.projectIds, relabel.to);
+    });
   } catch (error) {
     if (isUniqueViolation(error, "client_workspace_name_uq")) {
       throw new CatalogError("CONFLICT", DUPLICATE_NAME);

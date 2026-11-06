@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import {
   bucketFor,
   can,
+  entryCurrency,
   type CopyProjectInput,
   DEFAULT_REPORT_QUERY,
   type DeleteProjectMode,
@@ -53,6 +54,8 @@ import type { PickerProject, PickerTask } from "@/lib/tracker-types";
 import { CatalogError, isUniqueViolation } from "./errors";
 import { inSubmittedPeriodSql, SUBMITTED_TIME_MESSAGE } from "../approval-sql";
 import { scopeFilter } from "../authz";
+import { projectCurrency, projectsHaveRates, relabelProjectsCurrency } from "../rates";
+import { workspaceCurrency } from "./clients";
 import { visibleTasksFor } from "./tasks";
 import { type Viewer, visibleProjectFilter } from "./viewer";
 import { type EntryScope, reassignProjectEntries, softDeleteProjectEntries } from "../time-entries";
@@ -488,28 +491,71 @@ export async function createProject(
   };
 }
 
+/**
+ * Moving a project to a client billed in another currency relabels the
+ * project's rates and the saved amounts of its entries, unconverted (Phase 6
+ * design, decision 8): it asks first (CONFIRM), and since it rewrites rates
+ * it is for those who set them.
+ */
 export async function updateProject(
-  db: Executor,
+  db: Database,
   viewer: Viewer,
   projectId: string,
   patch: ProjectPatch,
+  options: { confirmCurrencyChange?: boolean } = {},
 ): Promise<ProjectDetail> {
-  await requireVisibleProject(db, viewer, projectId);
+  const before = await requireVisibleProject(db, viewer, projectId);
   if (patch.clientId) await requireClientName(db, viewer.workspaceId, patch.clientId);
+  let relabelTo: string | null = null;
+  if (patch.clientId !== undefined && patch.clientId !== before.clientId) {
+    const ws = viewer.workspaceId;
+    const base = await workspaceCurrency(db, ws);
+    let to = base;
+    if (patch.clientId) {
+      const [target] = await db
+        .select({ currency: client.currency })
+        .from(client)
+        .where(and(eq(client.id, patch.clientId), eq(client.workspaceId, ws)));
+      to = entryCurrency(target?.currency, base);
+    }
+    if (
+      to !== (await projectCurrency(db, ws, projectId)) &&
+      (await projectsHaveRates(db, ws, [projectId]))
+    ) {
+      if (!can(viewer.actor, "rate.set", { kind: "none" })) {
+        throw new CatalogError(
+          "INVALID",
+          "Only owners and admins can move a project with rates to a client billed in another currency.",
+        );
+      }
+      if (!options.confirmCurrencyChange) {
+        throw new CatalogError(
+          "CONFIRM",
+          `This project's rates and amounts will show in ${to}; they are not converted.`,
+        );
+      }
+      relabelTo = to;
+    }
+  }
   try {
-    await db
-      .update(project)
-      .set({
-        ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-        ...(patch.clientId !== undefined ? { clientId: patch.clientId } : {}),
-        ...(patch.color !== undefined ? { color: patch.color } : {}),
-        ...(patch.billable !== undefined ? { billable: patch.billable } : {}),
-        ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
-        ...(patch.note !== undefined ? { note: patch.note } : {}),
-        ...(patch.archived !== undefined ? { archived: patch.archived } : {}),
-        ...(patch.isTemplate !== undefined ? { isTemplate: patch.isTemplate } : {}),
-      })
-      .where(eq(project.id, projectId));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(project)
+        .set({
+          ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+          ...(patch.clientId !== undefined ? { clientId: patch.clientId } : {}),
+          ...(patch.color !== undefined ? { color: patch.color } : {}),
+          ...(patch.billable !== undefined ? { billable: patch.billable } : {}),
+          ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
+          ...(patch.note !== undefined ? { note: patch.note } : {}),
+          ...(patch.archived !== undefined ? { archived: patch.archived } : {}),
+          ...(patch.isTemplate !== undefined ? { isTemplate: patch.isTemplate } : {}),
+        })
+        .where(eq(project.id, projectId));
+      if (relabelTo) {
+        await relabelProjectsCurrency(tx, viewer.workspaceId, [projectId], relabelTo);
+      }
+    });
   } catch (error) {
     if (isUniqueViolation(error, "project_workspace_client_name_uq")) {
       throw new CatalogError("CONFLICT", DUPLICATE_NAME);

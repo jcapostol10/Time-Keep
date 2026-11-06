@@ -15,7 +15,7 @@ import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
 import type { ProjectDetail } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
 import type { PickerProject } from "@/lib/tracker-types";
-import { userErrorMessage } from "@/server/actions/errors";
+import { catalogFailure, userErrorMessage } from "@/server/actions/errors";
 import {
   copyProject,
   createProject,
@@ -63,6 +63,11 @@ export async function createProjectAction(
   }
 }
 
+const updateProjectSchema = projectPatchSchema.extend({
+  /** The person saw that a client in another currency relabels the project's rates. */
+  confirmCurrencyChange: z.boolean().optional(),
+});
+
 export async function updateProjectAction(
   slug: string,
   projectId: string,
@@ -71,13 +76,16 @@ export async function updateProjectAction(
   try {
     const ctx = await requireWorkspaceAccess(slug);
     const viewer = await authorizeProject(ctx, "project.update", projectId);
-    const parsed = projectPatchSchema.safeParse(input);
+    const parsed = updateProjectSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const updated = await updateProject(getDb(), viewer, projectId, parsed.data);
+    const { confirmCurrencyChange, ...patch } = parsed.data;
+    const updated = await updateProject(getDb(), viewer, projectId, patch, {
+      confirmCurrencyChange,
+    });
     refresh(slug);
     return ok(updated);
   } catch (error) {
-    return fail(userErrorMessage(error));
+    return catalogFailure(error);
   }
 }
 

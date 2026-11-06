@@ -1,8 +1,10 @@
-import type { RateLevel } from "@timekeep/core";
+import type { RateKind, RateLevel } from "@timekeep/core";
 
 /** One rate row as the rate dialog's history shows it. */
 export interface RateDTO {
   id: string;
+  /** Billable (what the client is charged) or cost (what the hour costs the company). */
+  kind: RateKind;
   level: RateLevel;
   /** Minor units per hour; null = no rate at this level from this date. */
   amountMinor: number | null;
@@ -24,6 +26,8 @@ export interface RateRecalcDTO {
 
 /** Which rate a dialog edits. */
 export interface RateTarget {
+  /** Billable when left out. */
+  kind?: RateKind;
   level: RateLevel;
   userId?: string | null;
   projectId?: string | null;

@@ -117,7 +117,14 @@ export async function updateWorkspaceSettingsAction(
         .update(workspaceSettings)
         .set(settings)
         .where(eq(workspaceSettings.workspaceId, ctx.workspace.id));
-      if (newCurrency) await relabelWorkspaceCurrency(tx, ctx.workspace.id, settings.currency);
+      if (newCurrency) {
+        await relabelWorkspaceCurrency(
+          tx,
+          ctx.workspace.id,
+          ctx.settings.currency,
+          settings.currency,
+        );
+      }
     });
 
     revalidatePath(`/w/${slug}`, "layout");
