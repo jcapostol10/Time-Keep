@@ -1,12 +1,13 @@
 "use client";
 
-import { formatDuration, formatMoney } from "@timekeep/core";
+import { formatDuration } from "@timekeep/core";
 import { Skeleton } from "@timekeep/ui/components/skeleton";
 
 import { detailedHref, detailedParams } from "@/lib/report-links";
 
 import { useTracker } from "../tracker/tracker-provider";
 import { GroupByControl } from "./group-by-control";
+import { amountText } from "./money-cell";
 import { useReportQuery } from "./report-url";
 import { SummaryCharts } from "./summary-charts";
 import { SummaryTable } from "./summary-table";
@@ -29,7 +30,7 @@ export function SummaryView() {
             <p className="text-muted-foreground text-sm">
               {formatDuration(data.totals.billableSeconds, viewer.durationFormat)} billable ·{" "}
               {data.totals.entryCount} {data.totals.entryCount === 1 ? "entry" : "entries"}
-              {data.money ? ` · ${formatMoney(data.totals.amountMinor, data.money.currency)}` : ""}
+              {data.money ? ` · ${amountText(data.totals, data.money.currency)}` : ""}
             </p>
           ) : null}
         </div>

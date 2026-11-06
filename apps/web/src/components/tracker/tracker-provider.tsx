@@ -76,6 +76,8 @@ interface TrackerContextValue {
   canCreate: { project: boolean; tag: boolean };
   /** The viewer may see amounts (owners, admins, managers in their scope). */
   canSeeAmounts: boolean;
+  /** The viewer may see cost and profit (owners, admins; managers when the workspace says so). */
+  canSeeCosts: boolean;
   /** The workspace currency (ISO 4217). */
   currency: string;
   viewer: ViewerPrefs;
@@ -192,6 +194,7 @@ export interface TrackerProviderProps {
   workspaceId: string;
   canCreate: { project: boolean; tag: boolean };
   canSeeAmounts: boolean;
+  canSeeCosts: boolean;
   currency: string;
   rules: TrackerRules;
   viewer: ViewerPrefs;
@@ -205,6 +208,7 @@ export function TrackerProvider({
   workspaceId,
   canCreate,
   canSeeAmounts,
+  canSeeCosts,
   currency,
   rules,
   viewer,
@@ -450,6 +454,7 @@ export function TrackerProvider({
       stopProblem,
       canCreate,
       canSeeAmounts,
+      canSeeCosts,
       currency,
       viewer,
       settings,
@@ -474,6 +479,7 @@ export function TrackerProvider({
       stopProblem,
       canCreate,
       canSeeAmounts,
+      canSeeCosts,
       currency,
       viewer,
       settings,

@@ -18,14 +18,14 @@ import { Badge } from "@timekeep/ui/components/badge";
 import { CameraIcon, DollarSignIcon } from "lucide-react";
 import { toast } from "sonner";
 
-import type { DetailedEntryDTO } from "@/lib/report-types";
+import type { DetailedEntryDTO, ReportMoney } from "@/lib/report-types";
 
 import { BillableToggle } from "../tracker/billable-toggle";
 import { CommitInput } from "../tracker/manual-entry-fields";
 import { ColorDot, ProjectPicker } from "../tracker/project-picker";
 import { useTracker } from "../tracker/tracker-provider";
 import { type UpdateEntryPatch, useEntryWrites } from "../tracker/use-entry-writes";
-import type { DetailedColumn } from "./detailed-columns";
+import { columnAllowed, type DetailedColumn } from "./detailed-columns";
 
 const INPUT = "hover:border-input h-8 border-transparent shadow-none";
 
@@ -40,14 +40,14 @@ function entryName(entry: DetailedEntryDTO) {
 export function DetailedRow({
   entry,
   hidden,
-  currency,
+  money,
   selected,
   onSelectedChange,
 }: {
   entry: DetailedEntryDTO;
   hidden: ReadonlySet<DetailedColumn>;
-  /** The workspace currency when the viewer may see amounts; null hides the column. */
-  currency: string | null;
+  /** The workspace currency and whether cost shows; null hides every money column. */
+  money: ReportMoney;
   selected: boolean;
   onSelectedChange: (selected: boolean) => void;
 }) {
@@ -56,7 +56,7 @@ export function DetailedRow({
   const tz = viewer.timezone;
   const times = { start: new Date(entry.start), end: new Date(entry.end) };
   const crossesMidnight = localDateKey(times.end, tz) !== localDateKey(times.start, tz);
-  const show = (key: DetailedColumn) => !hidden.has(key) && (key !== "amount" || currency !== null);
+  const show = (key: DetailedColumn) => !hidden.has(key) && columnAllowed(key, money);
 
   function save(patch: UpdateEntryPatch) {
     void writes.update(entry.id, patch);
@@ -221,7 +221,7 @@ export function DetailedRow({
           )}
         </TableCell>
       ) : null}
-      {show("amount") && currency ? (
+      {show("amount") && money ? (
         <TableCell className="text-right tabular-nums">
           {entry.amountMinor === null ? (
             <span
@@ -231,7 +231,33 @@ export function DetailedRow({
               —
             </span>
           ) : (
-            formatMoney(entry.amountMinor, currency)
+            // In the entry's own currency: its project's client's, else the workspace's.
+            formatMoney(entry.amountMinor, entry.currency ?? money.currency)
+          )}
+        </TableCell>
+      ) : null}
+      {show("cost") && money ? (
+        <TableCell className="text-right tabular-nums">
+          {entry.costMinor === null ? (
+            <span className="text-muted-foreground" title="No cost rate">
+              —
+            </span>
+          ) : (
+            formatMoney(entry.costMinor, money.currency)
+          )}
+        </TableCell>
+      ) : null}
+      {show("profit") && money ? (
+        <TableCell className="text-right tabular-nums">
+          {entry.profitMinor === null ? (
+            <span
+              className="text-muted-foreground"
+              title="Billed in another currency: not converted"
+            >
+              —
+            </span>
+          ) : (
+            formatMoney(entry.profitMinor, money.currency)
           )}
         </TableCell>
       ) : null}

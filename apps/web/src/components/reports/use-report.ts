@@ -27,6 +27,17 @@ export function useSummary(slug: string, params: string) {
   });
 }
 
+/** The Profit tab: the Summary engine over one key, sorted by profit (those who see cost). */
+export function useProfit(slug: string, params: string) {
+  return useQuery({
+    queryKey: trackerKeys.report(slug, "profit", params),
+    queryFn: () => fetchJson<SummaryReport>(trackerUrls.report(slug, "profit", params)),
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useReportOptions(slug: string) {
   return useQuery({
     queryKey: trackerKeys.reportOptions(slug),

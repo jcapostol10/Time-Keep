@@ -38,6 +38,7 @@ export default async function WorkspaceLayout({
         tag: can(scope.actor, "tag.create", { kind: "none" }),
       }}
       canSeeAmounts={can(scope.actor, "report.viewAmounts", { kind: "none" })}
+      canSeeCosts={can(scope.actor, "report.viewCosts", { kind: "none" })}
       currency={ctx.settings.currency}
       rules={{
         requiredFields: rules.requiredFields,

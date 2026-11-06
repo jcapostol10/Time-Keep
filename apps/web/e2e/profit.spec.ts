@@ -99,7 +99,9 @@ test.describe("cost, profit and currencies", () => {
     const res = await member.page.request.get(`/api/w/${freshUser.slug}/reports/profit`);
     expect(res.status()).toBe(403);
     await member.page.goto(`/w/${freshUser.slug}/reports/profit`);
-    await expect(member.page.getByText(/not found/i).first()).toBeVisible();
+    await expect(
+      member.page.getByRole("heading", { name: "We couldn't find that page" }),
+    ).toBeVisible();
     await member.context.close();
   });
 

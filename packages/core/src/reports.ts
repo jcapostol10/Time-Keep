@@ -54,7 +54,7 @@ export const REPORT_KINDS = ["summary", "detailed", "weekly"] as const;
 export type ReportKind = (typeof REPORT_KINDS)[number];
 /** The report pages: the kinds, plus the Audit tab (the Detailed report with audit criteria). */
 /** The report tabs; Attendance (Phase 5b) reads its own engine, not the entry groupings. */
-export type ReportView = ReportKind | "audit" | "attendance";
+export type ReportView = ReportKind | "audit" | "attendance" | "profit";
 
 /** What the Profit tab groups by (Phase 6a): one level, sorted by profit. */
 export const PROFIT_GROUP_KEYS = [

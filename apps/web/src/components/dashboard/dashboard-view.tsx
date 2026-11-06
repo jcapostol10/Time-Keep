@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDuration, formatMoney, formatTimeOfDay } from "@timekeep/core";
+import { formatDuration, formatTimeOfDay } from "@timekeep/core";
 import { Card, CardContent, CardHeader, CardTitle } from "@timekeep/ui/components/card";
 import { Skeleton } from "@timekeep/ui/components/skeleton";
 import {
@@ -22,6 +22,7 @@ import { detailedHref } from "@/lib/report-links";
 import type { DashboardMe, TeamMember } from "@/server/dashboard";
 
 import { DatePresetMenu } from "../reports/date-preset-menu";
+import { MoneyCell } from "../reports/money-cell";
 import { useReportQuery } from "../reports/report-url";
 import { trackerKeys } from "../tracker/query-keys";
 import { useTracker } from "../tracker/tracker-provider";
@@ -77,7 +78,7 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
               className="text-2xl font-semibold tabular-nums"
               data-testid="dashboard-amount"
             >
-              {formatMoney(data.totals.amountMinor, data.money.currency)}
+              <MoneyCell amounts={data.totals} currency={data.money.currency} />
             </CardContent>
           </Card>
         ) : null}
@@ -226,7 +227,7 @@ function TeamTab({ slug, params }: { slug: string; params: string }) {
               </TableCell>
               {currency ? (
                 <TableCell className="text-right tabular-nums">
-                  {formatMoney(m.amountMinor, currency)}
+                  <MoneyCell amounts={m} currency={currency} />
                 </TableCell>
               ) : null}
             </TableRow>

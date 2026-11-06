@@ -42,7 +42,7 @@ async function save(res: Response, fallback: string) {
 }
 
 /** Downloads the current report, with its filters; a large one becomes an export job. */
-export function ExportMenu({ kind }: { kind: ReportKind | "attendance" }) {
+export function ExportMenu({ kind }: { kind: ReportKind | "attendance" | "profit" }) {
   const { slug } = useTracker();
   const { params } = useReportQuery();
   const [busy, setBusy] = useState(false);
