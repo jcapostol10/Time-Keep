@@ -34,6 +34,7 @@ import {
   copyProjectAction,
 } from "@/server/actions/projects";
 
+import { CurrencyConfirm } from "../currency-confirm";
 import { ProjectFormFields } from "./project-form-fields";
 import type { ClientOption } from "./projects-toolbar";
 
@@ -58,6 +59,8 @@ export function ProjectDialog({
 }) {
   const router = useRouter();
   const [templateId, setTemplateId] = useState<string | null>(null);
+  // A client billed in another currency relabels the project's rates: the server asks first.
+  const [confirm, setConfirm] = useState<{ message: string; values: ProjectInput } | null>(null);
   const form = useForm<FormValues, unknown, ProjectInput>({
     resolver: zodResolver(projectInputSchema),
     defaultValues: {
@@ -75,14 +78,22 @@ export function ProjectDialog({
   const [colorPicked, setColorPicked] = useState(Boolean(project));
   const effectiveColor = colorPicked ? (color ?? pickColor(name)) : pickColor(name);
 
-  async function onSubmit(values: ProjectInput) {
+  async function onSubmit(values: ProjectInput, confirmed = false) {
     const payload = { ...values, color: effectiveColor };
     const result = project
-      ? await updateProjectAction(slug, project.id, payload)
+      ? await updateProjectAction(slug, project.id, {
+          ...payload,
+          ...(confirmed ? { confirmCurrencyChange: true } : {}),
+        })
       : templateId
         ? await copyProjectAction(slug, { sourceId: templateId, ...payload, isTemplate: false })
         : await createProjectAction(slug, payload);
     if (!result.ok) {
+      const question = result.fieldErrors?.confirmCurrencyChange?.[0];
+      if (question && !confirmed) {
+        setConfirm({ message: question, values });
+        return;
+      }
       const nameError = result.fieldErrors?.name?.[0];
       if (nameError) form.setError("name", { message: nameError });
       else if (/already exists/.test(result.error))
@@ -109,7 +120,11 @@ export function ProjectDialog({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          <form
+            onSubmit={form.handleSubmit((values) => onSubmit(values))}
+            className="space-y-4"
+            noValidate
+          >
             {!project && templates.length > 0 ? (
               <div className="space-y-2">
                 <Label>Start from template</Label>
@@ -161,6 +176,15 @@ export function ProjectDialog({
             </DialogFooter>
           </form>
         </Form>
+        <CurrencyConfirm
+          message={confirm?.message ?? null}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            const pending = confirm;
+            setConfirm(null);
+            if (pending) void onSubmit(pending.values, true);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

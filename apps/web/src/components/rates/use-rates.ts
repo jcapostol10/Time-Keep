@@ -11,6 +11,8 @@ import { trackerKeys, trackerUrls } from "../tracker/query-keys";
 /** The query string that names one rate level and target. */
 export function rateTargetParams(target: RateTarget): string {
   const params = new URLSearchParams({ level: target.level });
+  // Billable is the default: only a cost rate names its kind.
+  if (target.kind === "cost") params.set("kind", "cost");
   if (target.userId) params.set("userId", target.userId);
   if (target.projectId) params.set("projectId", target.projectId);
   if (target.taskId) params.set("taskId", target.taskId);

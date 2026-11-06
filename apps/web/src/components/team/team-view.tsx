@@ -217,6 +217,9 @@ function MembersTable({ rows, ctx }: { rows: TeamRow[]; ctx: TeamContext }) {
             {permissions.rates ? (
               <TableHead className="hidden text-right sm:table-cell">Billable rate</TableHead>
             ) : null}
+            {permissions.rates ? (
+              <TableHead className="hidden text-right lg:table-cell">Cost rate</TableHead>
+            ) : null}
             <TableHead className="hidden sm:table-cell">Status</TableHead>
             {permissions.manage ? <TableHead className="w-0" /> : null}
           </TableRow>
@@ -269,6 +272,13 @@ function MembersTable({ rows, ctx }: { rows: TeamRow[]; ctx: TeamContext }) {
                   {r.billableRateMinor === null
                     ? "—"
                     : `${formatMoney(r.billableRateMinor, ctx.currency)} / h`}
+                </TableCell>
+              ) : null}
+              {permissions.rates ? (
+                <TableCell className="hidden text-right tabular-nums lg:table-cell">
+                  {r.costRateMinor === null
+                    ? "—"
+                    : `${formatMoney(r.costRateMinor, ctx.currency)} / h`}
                 </TableCell>
               ) : null}
               <TableCell className="hidden sm:table-cell">

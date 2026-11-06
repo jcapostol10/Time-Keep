@@ -355,6 +355,31 @@ export function RulesFields() {
           )}
         />
       </SettingsSection>
+
+      <SettingsSection
+        id="cost-profit"
+        title="Cost and profit"
+        description="Owners and admins see what work costs and the profit on it; members never do. Cost and profit are in the workspace currency. Amounts billed in another currency are never converted, so profit leaves them out."
+      >
+        <FormField
+          control={form.control}
+          name="managersSeeCosts"
+          render={({ field }) => (
+            <FormItem className="space-y-2">
+              <div className="flex items-center gap-3">
+                <FormControl>
+                  <Switch checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+                <FormLabel className="font-normal">Managers see cost and profit</FormLabel>
+              </div>
+              <FormDescription>
+                For the people and projects they manage. A manager who sees cost can work out what
+                their people are paid.
+              </FormDescription>
+            </FormItem>
+          )}
+        />
+      </SettingsSection>
     </div>
   );
 }

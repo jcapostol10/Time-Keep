@@ -37,7 +37,13 @@ export default async function ClientsPage({
       <PageHeader
         title="Clients"
         description="The companies you work for. Group projects under them and bill them later."
-        actions={<NewClientButton slug={workspaceSlug} />}
+        actions={
+          <NewClientButton
+            slug={workspaceSlug}
+            workspaceCurrency={ctx.settings.currency}
+            canSetCurrency={canManage}
+          />
+        }
       />
       <ClientsToolbar q={q} status={status} />
       <ClientsTable
@@ -46,6 +52,7 @@ export default async function ClientsPage({
         status={status}
         query={q}
         canManage={canManage}
+        workspaceCurrency={ctx.settings.currency}
       />
     </>
   );

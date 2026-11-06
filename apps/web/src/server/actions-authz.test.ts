@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { DEFAULT_WORKSPACE_SETTINGS } from "@timekeep/core";
+import { can, DEFAULT_WORKSPACE_SETTINGS } from "@timekeep/core";
 import {
   client,
   eq,
@@ -39,6 +39,7 @@ vi.mock("next/server", async (original) => ({
 const { updateEntryAction } = await import("./actions/time-entries");
 const { createProjectAction, updateProjectAction } = await import("./actions/projects");
 const { createProject } = await import("./catalog/projects");
+const { loadViewer } = await import("./authz");
 const { inviteMembersAction } = await import("./actions/team");
 const { setRateAction } = await import("./actions/rates");
 const { createClientAction, updateClientAction } = await import("./actions/clients");
@@ -203,6 +204,37 @@ describe("server actions ask the permission matrix", () => {
     expect(moved.ok).toBe(true);
     const after = await db.select().from(rate).where(eq(rate.projectId, ids.managed!));
     expect(after.map((r) => r.currency)).toEqual(["GBP"]);
+  });
+
+  it("saves the setting that lets managers see cost and profit", async () => {
+    const [ws] = await db.select().from(workspace).where(eq(workspace.slug, slug));
+    const settings = { ...DEFAULT_WORKSPACE_SETTINGS, name: ws!.name };
+    const canSee = async () =>
+      can((await loadViewer(db, ws!.id, users.max!.id)).actor, "report.viewCosts", {
+        kind: "none",
+      });
+    expect(await canSee()).toBe(false);
+
+    // Not the manager's to switch on.
+    signIn(users.max!);
+    const refused = await updateWorkspaceSettingsAction(slug, {
+      ...settings,
+      managersSeeCosts: true,
+    });
+    expect(refused.ok).toBe(false);
+    expect(await canSee()).toBe(false);
+
+    signIn({ id: ids.olga! });
+    const saved = await updateWorkspaceSettingsAction(slug, {
+      ...settings,
+      managersSeeCosts: true,
+    });
+    expect(saved.ok).toBe(true);
+    expect(await canSee()).toBe(true);
+    // A save from a form that predates the setting is refused, not read as "off".
+    const { managersSeeCosts: _omitted, ...older } = { ...settings, managersSeeCosts: true };
+    expect((await updateWorkspaceSettingsAction(slug, older)).ok).toBe(false);
+    expect(await canSee()).toBe(true);
   });
 
   it("gives a new client a currency only for owners and admins", async () => {

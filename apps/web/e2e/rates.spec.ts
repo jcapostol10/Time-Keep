@@ -93,6 +93,8 @@ test.describe("rates", () => {
 
     // From a date that covers it: once the job has run, $160.00.
     await page.goBack();
+    // A full page load again: wait for it to hydrate before clicking.
+    await waitForApp(page);
     await setRateIn(page, projectRate.getByRole("button", { name: "Change rate" }), {
       amount: "80",
       apply: "Entries from a date",

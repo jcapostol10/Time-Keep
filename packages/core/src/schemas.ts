@@ -136,6 +136,8 @@ export const workspaceSettingsSchema = z.object({
   lockMode: z.enum(LOCK_MODES),
   lockDate: z.iso.date().nullable(),
   lockDays: z.number().int().min(0).max(365).nullable(),
+  // Phase 6a: managers see cost and profit for their scope (owners and admins always do).
+  managersSeeCosts: z.boolean(),
 });
 export type WorkspaceSettingsInput = z.infer<typeof workspaceSettingsSchema>;
 
@@ -163,6 +165,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettingsInput = {
   lockMode: "OFF",
   lockDate: null,
   lockDays: null,
+  managersSeeCosts: false,
 };
 
 /** A fixed lock needs its date, a rolling one its days. */
