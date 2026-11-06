@@ -19,7 +19,6 @@ import {
   eq,
   gt,
   inArray,
-  isNotNull,
   isNull,
   lte,
   membership,
