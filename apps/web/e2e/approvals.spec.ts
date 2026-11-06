@@ -63,7 +63,7 @@ async function approve(page: Page, slug: string, name: string, p: Period) {
   await expect(row).toBeHidden();
 }
 
-test.describe("approvals and locks", () => {
+test.describe("approvals and locks", { tag: "@nightly" }, () => {
   test("an approved week cannot be edited by its member", async ({
     page,
     freshUser,

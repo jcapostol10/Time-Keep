@@ -252,6 +252,16 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A task rate beats the project rate on a new entry — `rates.spec.ts` › "a task rate beats the project rate on a new entry"
 - [x] The rate dialog fits a 375px screen — `rates.spec.ts` › "the rate dialog fits a 375px screen"
 
+## Cost, profit and currencies
+
+- [ ] An admin sets a member's cost rate and sees Cost and Profit in the Summary and Detailed reports — `profit.spec.ts` › "a cost rate shows cost and profit to an admin"
+- [ ] A member never sees cost or profit, in a report, a tab or the route — `profit.spec.ts` › "a member sees no cost or profit"
+- [ ] A manager sees cost only when the workspace setting is on — `profit.spec.ts` › "the setting opens cost to managers"
+- [ ] A client billed in EUR shows its amounts in EUR beside the workspace's USD, never one sum — `profit.spec.ts` › "a EUR client's amounts stay in EUR"
+- [ ] A workspace rate does not bill a EUR project until it has a project rate — `profit.spec.ts` › "a EUR project needs its own rate"
+- [ ] The Profit tab ranks projects by profit — `profit.spec.ts` › "the Profit tab ranks projects"
+- [ ] The Summary CSV has Cost and Profit for an admin — `profit.spec.ts` › "the export carries cost for an admin"
+
 ## Permissions
 
 - [x] A manager opens a project they manage, without its Rates and Budget tabs — `permissions.spec.ts` › "a manager opens a project they manage, without its Rates tab"
