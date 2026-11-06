@@ -16,6 +16,8 @@ export interface Viewer {
   actor: Actor;
   /** A share link made without "Include amounts": reports omit money for its readers. */
   hideAmounts?: boolean;
+  /** A share link or the dashboard: reports omit cost and profit, whoever is asking. */
+  hideCosts?: boolean;
 }
 
 /**

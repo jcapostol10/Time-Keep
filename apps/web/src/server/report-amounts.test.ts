@@ -101,7 +101,7 @@ describe("amounts in reports", () => {
       PREFS,
       NOW,
     );
-    expect(report.money).toEqual({ currency: "USD" });
+    expect(report.money).toEqual({ currency: "USD", costs: true });
     expect(report.totals).toMatchObject({ amountMinor: 15000, unratedCount: 1 });
     const byUser = Object.fromEntries(report.groups.map((g) => [g.label, g.totals.amountMinor]));
     expect(byUser).toEqual({ "Olga Owner": 10000, "Bob Member": 5000, "Carol Member": 0 });
@@ -109,7 +109,7 @@ describe("amounts in reports", () => {
 
   it("shows a manager the amounts in their scope", async () => {
     const report = await summaryReport(db, await viewer("max"), q(), PREFS, NOW);
-    expect(report.money).toEqual({ currency: "USD" });
+    expect(report.money).toEqual({ currency: "USD", costs: false });
     expect(report.totals.amountMinor).toBe(5000);
   });
 
@@ -161,7 +161,7 @@ describe("amounts in reports", () => {
       PREFS,
       NOW,
     );
-    expect(weekly.money).toEqual({ currency: "USD" });
+    expect(weekly.money).toEqual({ currency: "USD", costs: true });
     expect(weekly.amountMinor).toBe(15000);
     expect(weekly.rows.find((r) => r.label === "Olga Owner")?.amountMinor).toBe(10000);
   });
@@ -169,7 +169,7 @@ describe("amounts in reports", () => {
   it("shows amounts on the dashboard to those who may see them", async () => {
     const owner = await viewer("olga");
     const me = await dashboardMe(db, owner, q(), PREFS, NOW);
-    expect(me.money).toEqual({ currency: "USD" });
+    expect(me.money).toEqual({ currency: "USD", costs: false });
     expect(me.totals.amountMinor).toBe(10000);
     const team = await dashboardTeam(db, owner, q(), PREFS, NOW);
     expect(team.find((m) => m.name === "Bob Member")?.amountMinor).toBe(5000);
@@ -193,7 +193,7 @@ describe("amounts in reports", () => {
     const without = await make(false);
     expect((await read(without.token)).money).toBeNull();
     const withAmounts = await make(true);
-    expect((await read(withAmounts.token)).money).toEqual({ currency: "USD" });
+    expect((await read(withAmounts.token)).money).toEqual({ currency: "USD", costs: false });
 
     await db
       .update(membership)

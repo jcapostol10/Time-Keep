@@ -1,3 +1,5 @@
+import type { MoneyAmount } from "@timekeep/core";
+
 /**
  * Isomorphic DTOs for clients, projects, tasks and tags. Like the tracker
  * DTOs, everything crossing the server/client boundary is JSON-safe.
@@ -41,11 +43,30 @@ export interface ProjectStatus {
   to: string;
   /** Time per week of the range when it is longer than a month; null otherwise. */
   weeks: { key: string; label: string; seconds: number }[] | null;
-  byTask: { taskId: string | null; name: string; seconds: number; amountMinor: number }[];
-  byMember: { userId: string; name: string; seconds: number; amountMinor: number }[];
-  /** The currency amounts are in; null when the viewer may not see them (amounts are 0). */
-  money: { currency: string } | null;
+  byTask: {
+    taskId: string | null;
+    name: string;
+    seconds: number;
+    amountMinor: number;
+    otherAmounts: MoneyAmount[];
+  }[];
+  byMember: {
+    userId: string;
+    name: string;
+    seconds: number;
+    amountMinor: number;
+    otherAmounts: MoneyAmount[];
+  }[];
+  /** As a report's: the workspace currency and whether cost shows; null when amounts are hidden. */
+  money: { currency: string; costs: boolean } | null;
   amountMinor: number;
+  /** Amounts in other currencies (a project billed in its client's). */
+  otherAmounts: MoneyAmount[];
+  /** Cost and profit in the workspace currency (0 for viewers who may not see them). */
+  costMinor: number;
+  uncostedCount: number;
+  profitMinor: number;
+  profitExcludedCount: number;
   billableSeconds: number;
   nonBillableSeconds: number;
   totalSeconds: number;

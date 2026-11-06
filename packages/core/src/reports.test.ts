@@ -306,7 +306,7 @@ describe("buildWeekly", () => {
       "2026-03-14",
       "2026-03-15",
     ];
-    const { rows, dayTotals, total } = buildWeekly(
+    const { rows, dayTotals, total, otherAmounts } = buildWeekly(
       [
         { id: "web", label: "Web", dateKey: "2026-03-09", seconds: 3600 },
         { id: "web", label: "Web", dateKey: "2026-03-10", seconds: 1800 },
@@ -316,11 +316,81 @@ describe("buildWeekly", () => {
       days,
     );
     expect(rows).toEqual([
-      { id: "app", label: "App", days: [0, 0, 7200, 0, 0, 0, 0], total: 7200, amountMinor: 16000 },
-      { id: "web", label: "Web", days: [3600, 1800, 0, 0, 0, 0, 0], total: 5400, amountMinor: 0 },
+      {
+        id: "app",
+        label: "App",
+        days: [0, 0, 7200, 0, 0, 0, 0],
+        total: 7200,
+        amountMinor: 16000,
+        otherAmounts: [],
+      },
+      {
+        id: "web",
+        label: "Web",
+        days: [3600, 1800, 0, 0, 0, 0, 0],
+        total: 5400,
+        amountMinor: 0,
+        otherAmounts: [],
+      },
     ]);
     expect(dayTotals).toEqual([3600, 1800, 7200, 0, 0, 0, 0]);
     expect(total).toBe(12600);
+    expect(otherAmounts).toEqual([]);
+  });
+
+  it("keeps a row's amounts in other currencies apart, per currency (Phase 6a)", () => {
+    const usd = (amountMinor: number) => [{ currency: "USD", amountMinor }];
+    const grid = buildWeekly(
+      [
+        // The same person and day, once per currency: the time adds, the money does not.
+        { id: "olga", label: "Olga", dateKey: "2026-03-09", seconds: 7200, amountMinor: 200_000 },
+        {
+          id: "olga",
+          label: "Olga",
+          dateKey: "2026-03-09",
+          seconds: 3600,
+          otherAmounts: usd(4000),
+        },
+        {
+          id: "olga",
+          label: "Olga",
+          dateKey: "2026-03-10",
+          seconds: 1800,
+          otherAmounts: usd(2000),
+        },
+        {
+          id: "bob",
+          label: "Bob",
+          dateKey: "2026-03-09",
+          seconds: 3600,
+          otherAmounts: [{ currency: "EUR", amountMinor: 3000 }],
+        },
+      ],
+      ["2026-03-09", "2026-03-10"],
+    );
+    expect(grid.rows).toEqual([
+      {
+        id: "olga",
+        label: "Olga",
+        days: [10800, 1800],
+        total: 12600,
+        amountMinor: 200_000,
+        otherAmounts: usd(6000),
+      },
+      {
+        id: "bob",
+        label: "Bob",
+        days: [3600, 0],
+        total: 3600,
+        amountMinor: 0,
+        otherAmounts: [{ currency: "EUR", amountMinor: 3000 }],
+      },
+    ]);
+    expect(grid.amountMinor).toBe(200_000);
+    expect(grid.otherAmounts).toEqual([
+      { currency: "EUR", amountMinor: 3000 },
+      { currency: "USD", amountMinor: 6000 },
+    ]);
   });
 });
 

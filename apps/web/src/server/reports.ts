@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   addDaysInZone,
+  addTotals,
   bucketFor,
   bucketKeyOfDay,
   bucketKeys,
@@ -10,9 +11,11 @@ import {
   EMPTY_TOTALS,
   type GroupKey,
   groupRows,
+  hideCosts,
   type ReportGroup,
   localDateKey,
   NONE_ID,
+  profitGroupKey,
   type ReportQuery,
   type ReportRow,
   type ReportTotals,
@@ -41,6 +44,7 @@ import {
   or,
   project,
   roundedAmountSql,
+  roundedCostSql,
   roundedSecondsSql,
   sql,
   tag,
@@ -67,12 +71,13 @@ import type {
   WeeklyReport,
 } from "@/lib/report-types";
 
-import { scopeFilter } from "./authz";
+import { assertCan, scopeFilter } from "./authz";
 import { listClientOptions } from "./catalog/clients";
 import { listPickerProjects } from "./catalog/projects";
 import { listTagOptions } from "./catalog/tags";
 import type { Viewer } from "./catalog/viewer";
 import { listMembers } from "./queries/team";
+import { WorkspaceAccessError } from "./access-error";
 
 /**
  * The report engine: one scoped aggregation over stopped, live entries.
@@ -196,6 +201,14 @@ function baseConditions(
 // 300-person company). node-postgres returns bigint as text, so mapWith(Number).
 const COUNT = sql<number>`count(*)::int`;
 const UNRATED = sql<number>`(count(*) filter (where ${timeEntry.billable} and ${timeEntry.amountMinor} is null))::int`;
+/** Work without a cost rate: it counts as zero cost, and is counted (Phase 6a). */
+const UNCOSTED = sql<number>`(count(*) filter (where ${timeEntry.type} = 'work' and ${timeEntry.costAmountMinor} is null))::int`;
+/**
+ * The hidden grouping key every aggregate carries: the entry's currency, its
+ * project's client's (null = the workspace's). Money in two currencies is
+ * never added, so each currency is summed on its own row and folded here.
+ */
+const CURRENCY = sql<string | null>`${client.currency}`;
 
 /** A bigint/int column or expression that may be null: node-postgres returns it as text. */
 const nullableNumber = (v: unknown): number | null => (v === null ? null : Number(v));
@@ -205,6 +218,46 @@ interface Measures {
   billable: SQL<number>;
   nonBillable: SQL<number>;
   amount: SQL<number>;
+  cost: SQL<number>;
+}
+
+/** One aggregated row of one currency, as SQL returns it. */
+interface MeasureRow {
+  currency: unknown;
+  durationSeconds: unknown;
+  billableSeconds: unknown;
+  entryCount: unknown;
+  amountMinor: unknown;
+  unratedCount: unknown;
+  costMinor: unknown;
+  uncostedCount: unknown;
+}
+
+/**
+ * A row's totals. Its amount is in its own currency: the workspace's goes to
+ * `amountMinor`, any other to `otherAmounts`. Cost is always the workspace's.
+ * Profit is amount less cost where both are in the workspace currency; a row
+ * billed in another currency is left out and its entries counted (decision 7).
+ */
+function totalsOfRow(row: MeasureRow, workspaceCurrency: string): ReportTotals {
+  const currency =
+    row.currency === null || row.currency === undefined ? workspaceCurrency : String(row.currency);
+  const own = currency === workspaceCurrency;
+  const amount = Number(row.amountMinor);
+  const cost = Number(row.costMinor);
+  const entryCount = Number(row.entryCount);
+  return {
+    durationSeconds: Number(row.durationSeconds),
+    billableSeconds: Number(row.billableSeconds),
+    entryCount,
+    amountMinor: own ? amount : 0,
+    otherAmounts: own || amount === 0 ? [] : [{ currency, amountMinor: amount }],
+    unratedCount: Number(row.unratedCount),
+    costMinor: cost,
+    uncostedCount: Number(row.uncostedCount),
+    profitMinor: own ? amount - cost : 0,
+    profitExcludedCount: own ? 0 : entryCount,
+  };
 }
 
 /**
@@ -216,7 +269,10 @@ interface Measures {
 function measures(rule: RoundingRule | null): Measures {
   const s = rule ? roundedSecondsSql(rule) : sql`${timeEntry.durationSeconds}`;
   const a = rule ? roundedAmountSql(rule) : sql`${timeEntry.amountMinor}`;
+  // Cost counts every work entry, billable or not; a break has none.
+  const c = rule ? roundedCostSql(rule) : sql`${timeEntry.costAmountMinor}`;
   return {
+    cost: sql`coalesce(sum(${c}), 0)::bigint`.mapWith(Number),
     duration: sql`coalesce(sum(${s}), 0)::bigint`.mapWith(Number),
     billable:
       sql`coalesce(sum(case when ${timeEntry.billable} then ${s} else 0 end), 0)::bigint`.mapWith(
@@ -252,21 +308,30 @@ function ruleFor(query: ReportQuery, settings: ReportSettings): RoundingRule | n
   return query.rounding === "on" ? settings.rounding : null;
 }
 
-/** The workspace currency when the viewer may see amounts, else null (and amounts read 0). */
+/**
+ * The workspace currency when the viewer may see amounts, else null (and
+ * amounts read 0); `costs` when they may also see cost and profit.
+ */
 function moneyOf(viewer: Viewer, settings: ReportSettings): ReportMoney {
   if (viewer.hideAmounts || !can(viewer.actor, "report.viewAmounts", { kind: "none" })) return null;
-  return { currency: settings.currency };
+  return {
+    currency: settings.currency,
+    costs: !viewer.hideCosts && can(viewer.actor, "report.viewCosts", { kind: "none" }),
+  };
 }
 
-function hideTotals(t: ReportTotals): ReportTotals {
-  return { ...t, amountMinor: 0, unratedCount: 0 };
+/** Totals as the viewer may see them: hidden money reads 0, on the server. */
+function maskTotals(t: ReportTotals, money: ReportMoney): ReportTotals {
+  if (!money) return hideCosts({ ...t, amountMinor: 0, otherAmounts: [], unratedCount: 0 });
+  return money.costs ? t : hideCosts(t);
 }
 
-function hideGroups(groups: ReportGroup[]): ReportGroup[] {
+function maskGroups(groups: ReportGroup[], money: ReportMoney): ReportGroup[] {
+  if (money?.costs) return groups;
   return groups.map((g) => ({
     ...g,
-    totals: hideTotals(g.totals),
-    children: hideGroups(g.children),
+    totals: maskTotals(g.totals, money),
+    children: maskGroups(g.children, money),
   }));
 }
 
@@ -336,30 +401,50 @@ function groupExprs(key: GroupKey, prefs: ViewerPrefs): { id: SQL; label: SQL } 
   }
 }
 
-async function aggregateTotals(db: Executor, where: SQL, m: Measures): Promise<ReportTotals> {
-  const [row] = await db
-    .select({
-      durationSeconds: m.duration,
-      billableSeconds: m.billable,
-      entryCount: COUNT,
-      amountMinor: m.amount,
-      unratedCount: UNRATED,
-    })
+/** The currency key and the sums, in the order every aggregate selects them. */
+const measureFields = (m: Measures) => ({
+  currency: CURRENCY,
+  durationSeconds: m.duration,
+  billableSeconds: m.billable,
+  entryCount: COUNT,
+  amountMinor: m.amount,
+  unratedCount: UNRATED,
+  costMinor: m.cost,
+  uncostedCount: UNCOSTED,
+});
+
+async function aggregateTotals(
+  db: Executor,
+  where: SQL,
+  m: Measures,
+  workspaceCurrency: string,
+): Promise<ReportTotals> {
+  const rows = await db
+    .select(measureFields(m))
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
     .leftJoin(client, eq(client.id, project.clientId))
     .leftJoin(task, eq(task.id, timeEntry.taskId))
     .innerJoin(user, eq(user.id, timeEntry.userId))
-    .where(where);
-  return row ? { ...EMPTY_TOTALS, ...row } : EMPTY_TOTALS;
+    .where(where)
+    .groupBy(sql.raw("1"));
+  return rows.reduce<ReportTotals>(
+    (sum, row) => addTotals(sum, totalsOfRow(row, workspaceCurrency)),
+    EMPTY_TOTALS,
+  );
 }
 
+/**
+ * One row per group and currency: `groupRows` adds the rows of a group, so a
+ * group billed in two currencies comes out as one, with both amounts.
+ */
 async function groupedRows(
   db: Executor,
   where: SQL,
   keys: GroupKey[],
   prefs: ViewerPrefs,
   m: Measures,
+  workspaceCurrency: string,
 ): Promise<ReportRow[]> {
   const fields: Record<string, SQL> = {};
   keys.forEach((key, i) => {
@@ -369,16 +454,13 @@ async function groupedRows(
   });
   // Group by ordinal position: the same expression carries a different parameter
   // index in SELECT and GROUP BY, which Postgres would not match.
-  const ordinals = keys.flatMap((_, i) => [sql.raw(String(2 * i + 1)), sql.raw(String(2 * i + 2))]);
+  // The currency key follows the grouping keys.
+  const ordinals = [
+    ...keys.flatMap((_, i) => [sql.raw(String(2 * i + 1)), sql.raw(String(2 * i + 2))]),
+    sql.raw(String(2 * keys.length + 1)),
+  ];
   const base = db
-    .select({
-      ...fields,
-      durationSeconds: m.duration,
-      billableSeconds: m.billable,
-      entryCount: COUNT,
-      amountMinor: m.amount,
-      unratedCount: UNRATED,
-    })
+    .select({ ...fields, ...measureFields(m) })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
     .leftJoin(client, eq(client.id, project.clientId))
@@ -394,14 +476,7 @@ async function groupedRows(
   return rows.map((rec) => {
     const out: ReportRow = {
       keys: {},
-      totals: {
-        ...EMPTY_TOTALS,
-        durationSeconds: Number(rec.durationSeconds),
-        billableSeconds: Number(rec.billableSeconds),
-        entryCount: Number(rec.entryCount),
-        amountMinor: Number(rec.amountMinor),
-        unratedCount: Number(rec.unratedCount),
-      },
+      totals: totalsOfRow(rec as unknown as MeasureRow, workspaceCurrency),
     };
     keys.forEach((key, i) => {
       const id = rec[`id${i}`];
@@ -421,6 +496,7 @@ async function seriesRows(
   prefs: ViewerPrefs,
   range: { from: Date; to: Date },
   m: Measures,
+  workspaceCurrency: string,
 ): Promise<{ series: SeriesPoint[]; totals: ReportTotals }> {
   // Sum by local day, the cheapest key per row (one time zone conversion), then roll the few
   // hundred days up into weeks or months here. Formatting per row, or a week expression,
@@ -428,11 +504,14 @@ async function seriesRows(
   const grouped = db
     .select({
       d: sql`${dayDateExpr(prefs.timezone)}`.as("d"),
+      cur: CURRENCY.as("cur"),
       b: m.billable.as("b"),
       nb: m.nonBillable.as("nb"),
       n: COUNT.as("n"),
       a: m.amount.as("a"),
       u: UNRATED.as("u"),
+      c: m.cost.as("c"),
+      uc: UNCOSTED.as("uc"),
     })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
@@ -440,16 +519,19 @@ async function seriesRows(
     .leftJoin(task, eq(task.id, timeEntry.taskId))
     .innerJoin(user, eq(user.id, timeEntry.userId))
     .where(where)
-    .groupBy(sql.raw("1"))
+    .groupBy(sql.raw("1"), sql.raw("2"))
     .as("series");
   const days = await db
     .select({
       day: sql<string>`to_char(${grouped.d}, 'YYYY-MM-DD')`,
+      currency: sql<string | null>`${grouped.cur}`,
       billableSeconds: sql`${grouped.b}`.mapWith(Number),
       nonBillableSeconds: sql`${grouped.nb}`.mapWith(Number),
       entryCount: sql`${grouped.n}`.mapWith(Number),
       amountMinor: sql`${grouped.a}`.mapWith(Number),
       unratedCount: sql`${grouped.u}`.mapWith(Number),
+      costMinor: sql`${grouped.c}`.mapWith(Number),
+      uncostedCount: sql`${grouped.uc}`.mapWith(Number),
     })
     .from(grouped);
   const rows = new Map<string, { billableSeconds: number; nonBillableSeconds: number }>();
@@ -463,14 +545,14 @@ async function seriesRows(
   // Every entry lands in exactly one bucket (no tag join here), so the buckets add up to the
   // report's totals and the summary needs no third scan.
   const totals = days.reduce<ReportTotals>(
-    (acc, r) => ({
-      ...acc,
-      durationSeconds: acc.durationSeconds + r.billableSeconds + r.nonBillableSeconds,
-      billableSeconds: acc.billableSeconds + r.billableSeconds,
-      entryCount: acc.entryCount + r.entryCount,
-      amountMinor: acc.amountMinor + r.amountMinor,
-      unratedCount: acc.unratedCount + r.unratedCount,
-    }),
+    (acc, r) =>
+      addTotals(
+        acc,
+        totalsOfRow(
+          { ...r, durationSeconds: r.billableSeconds + r.nonBillableSeconds },
+          workspaceCurrency,
+        ),
+      ),
     EMPTY_TOTALS,
   );
   const series = bucketKeys(range.from, range.to, bucket, prefs).map(({ key, label }) => ({
@@ -500,10 +582,11 @@ export async function summaryReport(
   const settings = await reportSettings(db, viewer.workspaceId);
   const m = measures(ruleFor(eff, settings));
   const money = moneyOf(viewer, settings);
+  const cur = settings.currency;
   const [rows, { series, totals }, prefixRows] = await Promise.all([
-    groupedRows(db, where, eff.groupBy, prefs, m),
-    seriesRows(db, where, bucket, prefs, range, m),
-    tagAt > 0 ? groupedRows(db, where, eff.groupBy.slice(0, tagAt), prefs, m) : undefined,
+    groupedRows(db, where, eff.groupBy, prefs, m, cur),
+    seriesRows(db, where, bucket, prefs, range, m, cur),
+    tagAt > 0 ? groupedRows(db, where, eff.groupBy.slice(0, tagAt), prefs, m, cur) : undefined,
   ]);
   const { groups } = groupRows(rows, eff.groupBy, totals, prefixRows);
   return {
@@ -512,8 +595,39 @@ export async function summaryReport(
     bucket,
     series,
     groupBy: eff.groupBy,
-    groups: money ? groups : hideGroups(groups),
-    totals: money ? totals : hideTotals(totals),
+    groups: maskGroups(groups, money),
+    totals: maskTotals(totals, money),
+  };
+}
+
+/**
+ * The Profit tab (Phase 6a): the Summary engine over one grouping key
+ * (project, client or person), its groups sorted by profit. Only for viewers
+ * who may see cost; a share link never is one.
+ */
+export async function profitReport(
+  db: Executor,
+  viewer: Viewer,
+  query: ReportQuery,
+  prefs: ViewerPrefs,
+  now: Date = new Date(),
+): Promise<SummaryReport> {
+  assertCan(viewer.actor, "report.viewCosts", { kind: "none" });
+  if (viewer.hideCosts || viewer.hideAmounts) {
+    throw new WorkspaceAccessError(403, "You don't have permission to do that.");
+  }
+  const report = await summaryReport(
+    db,
+    viewer,
+    { ...query, groupBy: [profitGroupKey(query)] },
+    prefs,
+    now,
+  );
+  return {
+    ...report,
+    groups: [...report.groups].sort(
+      (a, b) => b.totals.profitMinor - a.totals.profitMinor || a.label.localeCompare(b.label),
+    ),
   };
 }
 
@@ -569,6 +683,10 @@ export async function detailedReport(
       amountMinor: sql`${rule ? roundedAmountSql(rule) : timeEntry.amountMinor}`.mapWith(
         nullableNumber,
       ),
+      clientCurrency: client.currency,
+      costMinor: sql`${rule ? roundedCostSql(rule) : timeEntry.costAmountMinor}`.mapWith(
+        nullableNumber,
+      ),
     })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
@@ -617,6 +735,10 @@ export async function detailedReport(
     const editable =
       r.ownerStatus === "ACTIVE" &&
       can(viewer.actor, "entry.write", { kind: "entry", userId: r.userId, projectId: r.projectId });
+    // The entry's currency is its project's client's, else the workspace's.
+    const currency = money ? (r.clientCurrency ?? money.currency) : null;
+    const amountMinor = money && r.billable ? (r.amountMinor ?? null) : null;
+    const costs = money?.costs ?? false;
     return {
       id: r.id,
       description: r.description,
@@ -631,7 +753,12 @@ export async function detailedReport(
       end: (r.end ?? r.start).toISOString(),
       durationSeconds: r.durationSeconds ?? 0,
       rateMinor: money ? (r.rateMinor ?? null) : null,
-      amountMinor: money && r.billable ? (r.amountMinor ?? null) : null,
+      amountMinor,
+      currency,
+      costMinor: costs ? (r.costMinor ?? null) : null,
+      // Amount less cost, only where both are in the workspace currency.
+      profitMinor:
+        costs && currency === money?.currency ? (amountMinor ?? 0) - (r.costMinor ?? 0) : null,
       userId: r.userId,
       projectId: r.projectId,
       projectColor: r.projectColor ?? null,
@@ -662,13 +789,15 @@ export async function detailedReport(
         }
       : null;
   // The range's totals are the first page's; later pages (an export's loop, Load more) skip them.
-  const totals = page.cursor ? null : await aggregateTotals(db, and(...base)!, measures(rule));
+  const totals = page.cursor
+    ? null
+    : await aggregateTotals(db, and(...base)!, measures(rule), settings.currency);
   return {
     money,
     range: { from: range.from.toISOString(), to: range.to.toISOString(), label: range.label },
     entries,
     nextCursor,
-    totals: totals && !money ? hideTotals(totals) : totals,
+    totals: totals && maskTotals(totals, money),
   };
 }
 
@@ -698,6 +827,7 @@ export async function weeklyReport(
       id: idExpr,
       label: labelExpr,
       dateKey: dateKeyExpr(tz),
+      currency: CURRENCY,
       seconds: m.duration,
       amountMinor: m.amount,
     })
@@ -707,18 +837,25 @@ export async function weeklyReport(
     .leftJoin(task, eq(task.id, timeEntry.taskId))
     .innerJoin(user, eq(user.id, timeEntry.userId))
     .where(where)
-    .groupBy(sql.raw("1"), sql.raw("2"), sql.raw("3"));
+    .groupBy(sql.raw("1"), sql.raw("2"), sql.raw("3"), sql.raw("4"));
   const dayKeys = Array.from({ length: 7 }, (_, i) =>
     localDateKey(addDaysInZone(week.weekStart, i, tz), tz),
   );
   const grid = buildWeekly(
-    rows.map((r) => ({
-      id: r.id === null || r.id === undefined ? null : String(r.id),
-      label: String(r.label),
-      dateKey: String(r.dateKey),
-      seconds: Number(r.seconds),
-      amountMinor: Number(r.amountMinor),
-    })),
+    rows.map((r) => {
+      // One row per currency: the workspace's is the row's amount, the rest are listed.
+      const amount = Number(r.amountMinor);
+      const currency = r.currency ?? settings.currency;
+      const own = currency === settings.currency;
+      return {
+        id: r.id === null || r.id === undefined ? null : String(r.id),
+        label: String(r.label),
+        dateKey: String(r.dateKey),
+        seconds: Number(r.seconds),
+        amountMinor: own ? amount : 0,
+        otherAmounts: own || amount === 0 ? [] : [{ currency, amountMinor: amount }],
+      };
+    }),
     dayKeys,
   );
   const money = moneyOf(viewer, settings);
@@ -728,8 +865,9 @@ export async function weeklyReport(
     dayKeys,
     by,
     ...grid,
-    rows: money ? grid.rows : grid.rows.map((r) => ({ ...r, amountMinor: 0 })),
+    rows: money ? grid.rows : grid.rows.map((r) => ({ ...r, amountMinor: 0, otherAmounts: [] })),
     amountMinor: money ? grid.amountMinor : 0,
+    otherAmounts: money ? grid.otherAmounts : [],
   };
 }
 

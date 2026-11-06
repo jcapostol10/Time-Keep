@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   can,
+  type MoneyAmount,
   type ReportGroup,
   type ReportQuery,
   type ReportTotals,
@@ -62,10 +63,12 @@ export async function dashboardMe(
 ): Promise<DashboardMe> {
   // The dashboard shows raw time; rounding is a report rule (decision 13).
   const own = { ...query, userIds: [viewer.userId], rounding: "off" as const };
+  // And no cost or profit (Phase 6 design, decision 6).
+  const asker = { ...viewer, hideCosts: true };
   const [byProject, byClient, byActivity] = await Promise.all([
-    summaryReport(db, viewer, { ...own, groupBy: ["project"] }, prefs, now),
-    summaryReport(db, viewer, { ...own, groupBy: ["client"] }, prefs, now),
-    summaryReport(db, viewer, { ...own, groupBy: ["description", "project"] }, prefs, now),
+    summaryReport(db, asker, { ...own, groupBy: ["project"] }, prefs, now),
+    summaryReport(db, asker, { ...own, groupBy: ["client"] }, prefs, now),
+    summaryReport(db, asker, { ...own, groupBy: ["description", "project"] }, prefs, now),
   ]);
   const mostTracked = byActivity.groups
     .flatMap((d) =>
@@ -104,6 +107,8 @@ export interface TeamMember {
   totalSeconds: number;
   /** Their billable amount for the range (0 when the viewer may not see amounts). */
   amountMinor: number;
+  /** Their amounts in currencies other than the workspace's. */
+  otherAmounts: MoneyAmount[];
   /** Their newest entry, running or not. */
   latest: {
     description: string;
@@ -133,7 +138,7 @@ export async function dashboardTeam(
     listMembers(db, viewer.workspaceId),
     summaryReport(
       db,
-      viewer,
+      { ...viewer, hideCosts: true },
       { ...query, userIds: [], groupBy: ["user"], rounding: "off" },
       prefs,
       now,
@@ -172,6 +177,7 @@ export async function dashboardTeam(
         image: m.image ?? null,
         totalSeconds: totals.get(m.userId)?.durationSeconds ?? 0,
         amountMinor: totals.get(m.userId)?.amountMinor ?? 0,
+        otherAmounts: totals.get(m.userId)?.otherAmounts ?? [],
         latest: l
           ? {
               description: l.description,

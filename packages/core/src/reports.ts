@@ -56,6 +56,20 @@ export type ReportKind = (typeof REPORT_KINDS)[number];
 /** The report tabs; Attendance (Phase 5b) reads its own engine, not the entry groupings. */
 export type ReportView = ReportKind | "audit" | "attendance";
 
+/** What the Profit tab groups by (Phase 6a): one level, sorted by profit. */
+export const PROFIT_GROUP_KEYS = [
+  "project",
+  "client",
+  "user",
+] as const satisfies readonly GroupKey[];
+export type ProfitGroupKey = (typeof PROFIT_GROUP_KEYS)[number];
+
+/** The Profit tab's key for a query: its first grouping key when the tab offers it, else project. */
+export function profitGroupKey(query: { groupBy: readonly GroupKey[] }): ProfitGroupKey {
+  const first = query.groupBy[0];
+  return PROFIT_GROUP_KEYS.find((k) => k === first) ?? "project";
+}
+
 /** Audit criteria (Phase 4b): an entry matching any chosen one is a problem entry. */
 export const AUDIT_CRITERIA = ["noProject", "noTask", "short", "long"] as const;
 export type AuditCriterion = (typeof AUDIT_CRITERIA)[number];
@@ -452,8 +466,10 @@ export interface WeeklyRow {
   label: string;
   days: number[];
   total: number;
-  /** The row's billable amount for the week (0 when hidden). */
+  /** The row's billable amount for the week in the workspace currency (0 when hidden). */
   amountMinor: number;
+  /** Its amounts in every other currency, sorted by code. */
+  otherAmounts: MoneyAmount[];
 }
 
 /** Rows (users or projects) over the week's day keys; a day without entries is 0. */
@@ -464,9 +480,16 @@ export function buildWeekly(
     dateKey: string;
     seconds: number;
     amountMinor?: number;
+    otherAmounts?: readonly MoneyAmount[];
   }[],
   dayKeys: string[],
-): { rows: WeeklyRow[]; dayTotals: number[]; total: number; amountMinor: number } {
+): {
+  rows: WeeklyRow[];
+  dayTotals: number[];
+  total: number;
+  amountMinor: number;
+  otherAmounts: MoneyAmount[];
+} {
   const index = new Map(dayKeys.map((k, i) => [k, i]));
   const byId = new Map<string, WeeklyRow>();
   for (const r of rows) {
@@ -479,10 +502,12 @@ export function buildWeekly(
       days: dayKeys.map(() => 0),
       total: 0,
       amountMinor: 0,
+      otherAmounts: [],
     };
     row.days[col] = (row.days[col] ?? 0) + r.seconds;
     row.total += r.seconds;
     row.amountMinor += r.amountMinor ?? 0;
+    if (r.otherAmounts?.length) row.otherAmounts = mergeAmounts(row.otherAmounts, r.otherAmounts);
     byId.set(mapKey, row);
   }
   const result = [...byId.values()].sort(
@@ -494,6 +519,7 @@ export function buildWeekly(
     dayTotals,
     total: dayTotals.reduce((n, d) => n + d, 0),
     amountMinor: result.reduce((n, r) => n + r.amountMinor, 0),
+    otherAmounts: result.reduce<MoneyAmount[]>((all, r) => mergeAmounts(all, r.otherAmounts), []),
   };
 }
 
