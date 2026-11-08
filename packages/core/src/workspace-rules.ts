@@ -5,6 +5,7 @@ import {
   type LockRule,
   type PeriodRule,
 } from "./approvals";
+import { BUDGET_THRESHOLDS_DEFAULT, normalizeThresholds } from "./estimates";
 import {
   type CatalogType,
   CREATOR_SETTINGS,
@@ -47,6 +48,13 @@ export interface WorkspaceRuleColumns {
   lockDays: number | null;
   // Phase 6a: managers see cost and profit. Optional: a row read before the column existed is off.
   managersSeeCosts?: boolean;
+  // Phase 6b: the percents of an estimate at which the daily job emails. Optional: absent means the default.
+  budgetThresholds?: number[];
+}
+
+/** The budget alert thresholds, whole percents ascending; the default when the column is absent. */
+export function budgetThresholdsOf(row: Pick<WorkspaceRuleColumns, "budgetThresholds">): number[] {
+  return normalizeThresholds(row.budgetThresholds ?? BUDGET_THRESHOLDS_DEFAULT);
 }
 
 function oneOf<T extends string | number>(allowed: readonly T[], value: unknown, fallback: T): T {

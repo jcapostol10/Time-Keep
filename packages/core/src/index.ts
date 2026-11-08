@@ -8,6 +8,7 @@ export * from "./duration";
 export * from "./entry-edit";
 export * from "./entry-grouping";
 export * from "./entry-import";
+export * from "./estimates";
 export * from "./permissions";
 export * from "./money";
 export * from "./outbox";
