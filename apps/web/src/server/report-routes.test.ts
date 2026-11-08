@@ -4,6 +4,7 @@ import { eq, exportJob } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  addMember,
   connectTestDb,
   createTestUser,
   createTestWorkspace,
@@ -53,6 +54,7 @@ vi.mock("next/server", async (original) => ({
 const { GET: detailedGET } = await import("@/app/api/w/[workspaceSlug]/reports/detailed/route");
 const { GET: summaryGET } = await import("@/app/api/w/[workspaceSlug]/reports/summary/route");
 const { GET: exportGET } = await import("@/app/api/w/[workspaceSlug]/reports/export/route");
+const { GET: profitGET } = await import("@/app/api/w/[workspaceSlug]/reports/profit/route");
 const { createManualEntry } = await import("./time-entries");
 
 const handle = connectTestDb();
@@ -110,6 +112,30 @@ describe("report routes", () => {
       ctx(),
     );
     expect(byDuration.status).toBe(200);
+  });
+
+  it("answers the profit report only for those who may see cost", async () => {
+    const owner = await profitGET(url("profit?groupBy=user"), ctx());
+    expect(owner.status).toBe(200);
+    const body = (await owner.json()) as { money: unknown; groupBy: string[]; groups: unknown[] };
+    expect(body).toMatchObject({ money: { currency: "USD", costs: true }, groupBy: ["user"] });
+    expect(body.groups).toHaveLength(1);
+
+    // A role the matrix never allows: 403 from a JSON route (the page is a 404).
+    const bob = await createTestUser(db, "Bob B");
+    await addMember(db, workspaceId, bob.id, "member");
+    session.current = {
+      user: bob,
+      session: { id: randomUUID(), userId: bob.id },
+    } as unknown as AuthSession;
+    expect((await profitGET(url("profit"), ctx())).status).toBe(403);
+    const max = await createTestUser(db, "Max M");
+    await addMember(db, workspaceId, max.id, "manager");
+    session.current = {
+      user: max,
+      session: { id: randomUUID(), userId: max.id },
+    } as unknown as AuthSession;
+    expect((await profitGET(url("profit"), ctx())).status).toBe(403);
   });
 
   it("logs an unexpected failure before answering 500", async () => {

@@ -40,3 +40,16 @@ export function actionFailure(error: unknown): ActionResult<never> {
     return fail(message, { [error.field]: [message] });
   return fail(message);
 }
+
+/**
+ * The failed result of a catalog action: a change that needs the person's
+ * confirmation first (a currency relabel) names `confirmCurrencyChange`, so
+ * the form asks and resends, as the workspace settings do.
+ */
+export function catalogFailure(error: unknown): ActionResult<never> {
+  const message = userErrorMessage(error);
+  if (error instanceof CatalogError && error.code === "CONFIRM") {
+    return fail(message, { confirmCurrencyChange: [message] });
+  }
+  return fail(message);
+}

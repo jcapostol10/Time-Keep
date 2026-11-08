@@ -1,11 +1,19 @@
 import { z } from "zod";
 
-import { RATE_APPLY, RATE_LEVELS } from "./rates";
+import {
+  COST_LEVELS,
+  RATE_APPLY,
+  RATE_KINDS,
+  RATE_LEVELS,
+  type RateKind,
+  type RateLevel,
+} from "./rates";
 
 import { APPROVAL_PERIODS, APPROVAL_REVIEWERS, LOCK_MODES } from "./approvals";
 
 import { PROJECT_VISIBILITIES, TASK_STATUSES } from "./catalog";
 import { hexColorSchema } from "./colors";
+import { isCurrencyCode } from "./money";
 import { parseDuration } from "./duration";
 import { IMPORT_COLUMNS } from "./entry-import";
 import { KIOSK_ACTIONS } from "./kiosk";
@@ -66,7 +74,8 @@ export const timeZoneSchema = z
 export const currencyCodeSchema = z
   .string()
   .length(3, "Currency must be a 3-letter ISO 4217 code")
-  .regex(/^[A-Z]{3}$/, "Currency must be uppercase letters, e.g. USD or PHP");
+  .regex(/^[A-Z]{3}$/, "Currency must be uppercase letters, e.g. USD or PHP")
+  .refine(isCurrencyCode, { message: "Unknown currency code" });
 
 export const weekStartSchema = z.union([
   z.literal(0),
@@ -127,6 +136,8 @@ export const workspaceSettingsSchema = z.object({
   lockMode: z.enum(LOCK_MODES),
   lockDate: z.iso.date().nullable(),
   lockDays: z.number().int().min(0).max(365).nullable(),
+  // Phase 6a: managers see cost and profit for their scope (owners and admins always do).
+  managersSeeCosts: z.boolean(),
 });
 export type WorkspaceSettingsInput = z.infer<typeof workspaceSettingsSchema>;
 
@@ -154,6 +165,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettingsInput = {
   lockMode: "OFF",
   lockDate: null,
   lockDays: null,
+  managersSeeCosts: false,
 };
 
 /** A fixed lock needs its date, a rolling one its days. */
@@ -557,24 +569,46 @@ export const DEFAULT_TRACKER_SETTINGS: TrackerSettingsInput = {
   muteTargetReminders: false,
 };
 
+export const rateKindSchema = z.enum(RATE_KINDS);
+
+/** Cost has two levels (Phase 6a decision 2); billable has all five. */
+function costLevelIssue(
+  value: { kind: RateKind; level: RateLevel },
+  ctx: z.core.$RefinementCtx,
+): void {
+  if (value.kind === "cost" && !(COST_LEVELS as readonly RateLevel[]).includes(value.level)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["level"],
+      message: "Cost rates are per member or per project member.",
+    });
+  }
+}
+
 /** A rate change from the rate dialog; the server parses the amount with the currency. */
-export const setRateSchema = z.object({
-  level: z.enum(RATE_LEVELS),
-  userId: z.string().min(1).max(64).nullish(),
-  projectId: z.string().min(1).max(64).nullish(),
-  taskId: z.string().min(1).max(64).nullish(),
-  amount: z.string().max(32).nullable(),
-  apply: z.enum(RATE_APPLY),
-  from: z.iso.date().optional(),
-});
+export const setRateSchema = z
+  .object({
+    kind: rateKindSchema.default("billable"),
+    level: z.enum(RATE_LEVELS),
+    userId: z.string().min(1).max(64).nullish(),
+    projectId: z.string().min(1).max(64).nullish(),
+    taskId: z.string().min(1).max(64).nullish(),
+    amount: z.string().max(32).nullable(),
+    apply: z.enum(RATE_APPLY),
+    from: z.iso.date().optional(),
+  })
+  .superRefine(costLevelIssue);
 
 /** Which rate's history to read. */
-export const rateTargetSchema = z.object({
-  level: z.enum(RATE_LEVELS),
-  userId: z.string().min(1).max(64).nullish(),
-  projectId: z.string().min(1).max(64).nullish(),
-  taskId: z.string().min(1).max(64).nullish(),
-});
+export const rateTargetSchema = z
+  .object({
+    kind: rateKindSchema.default("billable"),
+    level: z.enum(RATE_LEVELS),
+    userId: z.string().min(1).max(64).nullish(),
+    projectId: z.string().min(1).max(64).nullish(),
+    taskId: z.string().min(1).max(64).nullish(),
+  })
+  .superRefine(costLevelIssue);
 
 // --- Time off, holidays, capacity and targets (Phase 5b) ----------------------
 

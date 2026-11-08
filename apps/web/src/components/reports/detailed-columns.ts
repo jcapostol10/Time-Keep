@@ -16,7 +16,17 @@ export const DETAILED_COLUMNS = [
   { key: "duration", label: "Duration" },
   /** Only when the viewer may see amounts. */
   { key: "amount", label: "Amount" },
+  /** Only when the viewer may see cost and profit (Phase 6a). */
+  { key: "cost", label: "Cost" },
+  { key: "profit", label: "Profit" },
 ] as const;
+
+/** Whether a column exists for this viewer: money columns follow what they may see. */
+export function columnAllowed(key: DetailedColumn, money: { costs: boolean } | null): boolean {
+  if (key === "amount") return money !== null;
+  if (key === "cost" || key === "profit") return money?.costs === true;
+  return true;
+}
 
 export type DetailedColumn = (typeof DETAILED_COLUMNS)[number]["key"];
 

@@ -11,6 +11,7 @@ import {
   entryRulesOf,
   MAX_ENTRY_SECONDS,
   missingRequiredField,
+  needsCostRerate,
   needsRerate,
   requiredFieldMessage,
   TASK_UNAVAILABLE_MESSAGE,
@@ -810,17 +811,25 @@ export async function updateEntry(
 
     // Decision 3 of the Phase 4 design: an edit keeps the entry's rate unless
     // it changes what decides the rate; a new duration only recomputes the amount.
-    const rerate = needsRerate(
-      { userId: row.userId, projectId: row.projectId, taskId: row.taskId, billable: row.billable },
-      {
-        userId: row.userId,
-        projectId: patch.projectId !== undefined ? patch.projectId : row.projectId,
-        taskId: patch.taskId !== undefined ? patch.taskId : row.taskId,
-        billable: patch.billable ?? row.billable,
-      },
-    );
-    if (rerate) await rateEntry(tx, row.id);
-    else if (touchesTimes) await recomputeAmount(tx, row.id);
+    // Cost follows the same rule with fewer inputs: only the person and the project decide it.
+    const before = {
+      userId: row.userId,
+      projectId: row.projectId,
+      taskId: row.taskId,
+      billable: row.billable,
+    };
+    const after = {
+      userId: row.userId,
+      projectId: patch.projectId !== undefined ? patch.projectId : row.projectId,
+      taskId: patch.taskId !== undefined ? patch.taskId : row.taskId,
+      billable: patch.billable ?? row.billable,
+    };
+    await rateEntry(tx, row.id, {
+      billable: needsRerate(before, after),
+      cost: needsCostRerate(before, after),
+    });
+    // A snapshot that kept its rate still takes the new duration.
+    if (touchesTimes) await recomputeAmount(tx, row.id);
 
     return loadDTO(tx, scope, row.id);
   });
@@ -1082,6 +1091,9 @@ export async function splitEntry(
       billableRateMinor: row.billableRateMinor,
       rateCurrency: row.rateCurrency,
       rateSource: row.rateSource,
+      // Both snapshots stay with both parts: a split is an edit of times.
+      costRateMinor: row.costRateMinor,
+      costRateSource: row.costRateSource,
     });
     const tagIds = row.tags.map((t) => t.tag.id);
     if (tagIds.length > 0) await replaceTags(tx, id, tagIds);
@@ -1225,16 +1237,22 @@ async function applyBulkPatch(
     })
     .where(eq(timeEntry.id, row.id));
   if (details.tagIds !== undefined) await replaceTags(tx, row.id, details.tagIds);
-  const rerate = needsRerate(
-    { userId: row.userId, projectId: row.projectId, taskId: row.taskId, billable: row.billable },
-    {
-      userId: row.userId,
-      projectId: merged.projectId,
-      taskId: merged.taskId,
-      billable: details.billable ?? row.billable,
-    },
-  );
-  if (rerate) await rateEntry(tx, row.id);
+  const before = {
+    userId: row.userId,
+    projectId: row.projectId,
+    taskId: row.taskId,
+    billable: row.billable,
+  };
+  const after = {
+    userId: row.userId,
+    projectId: merged.projectId,
+    taskId: merged.taskId,
+    billable: details.billable ?? row.billable,
+  };
+  await rateEntry(tx, row.id, {
+    billable: needsRerate(before, after),
+    cost: needsCostRerate(before, after),
+  });
   return loadDTO(tx, scope, row.id);
 }
 

@@ -16,12 +16,16 @@ import { authorizePage } from "@/server/authz-page";
 import { getProject } from "@/server/catalog/projects";
 import { listTasks } from "@/server/catalog/tasks";
 import { listMembers } from "@/server/queries/team";
-import { currentRate, currentRatesAt } from "@/server/rates";
+import { currentRate, currentRatesAt, projectCurrency } from "@/server/rates";
 import { requireWorkspacePage } from "@/server/workspace-access";
 
 export const metadata: Metadata = { title: "Rates" };
 
-/** The project's own rate, each member's rate on it, and each task's (owners and admins). */
+/**
+ * The project's own rate, each member's rate and cost on it, and each task's
+ * (owners and admins). Billable rates are in the project's currency (its
+ * client's, else the workspace's); cost is always the workspace's.
+ */
 export default async function ProjectRatesPage({
   params,
 }: PageProps<"/w/[workspaceSlug]/projects/[projectId]/rates">) {
@@ -29,24 +33,25 @@ export default async function ProjectRatesPage({
   const ctx = await requireWorkspacePage(workspaceSlug);
   const viewer = await authorizePage(() => authorize(ctx, "rate.view"));
   const db = getDb();
-  const [project, members, tasks, projectRate, memberRates, taskRates] = await Promise.all([
-    getProject(db, viewer, projectId),
-    listMembers(db, ctx.workspace.id),
-    listTasks(db, viewer, projectId),
-    currentRate(db, viewer, { level: "project", projectId }),
-    currentRatesAt(db, viewer, "project_member", { projectId }),
-    currentRatesAt(db, viewer, "task", { projectId }),
-  ]);
+  const [project, members, tasks, projectRate, memberRates, memberCosts, taskRates] =
+    await Promise.all([
+      getProject(db, viewer, projectId),
+      listMembers(db, ctx.workspace.id),
+      listTasks(db, viewer, projectId),
+      currentRate(db, viewer, { level: "project", projectId }),
+      currentRatesAt(db, viewer, "project_member", { projectId }),
+      currentRatesAt(db, viewer, "project_member", { projectId, kind: "cost" }),
+      currentRatesAt(db, viewer, "task", { projectId }),
+    ]);
+  const currency = await projectCurrency(db, ctx.workspace.id, projectId);
+  const workspaceCurrency = ctx.settings.currency;
+  const foreign = currency !== workspaceCurrency;
   const onProject = members.filter(
     (m) =>
       m.status === "ACTIVE" &&
       (project.visibility === "PUBLIC" || project.memberIds.includes(m.userId)),
   );
-  const common = {
-    slug: workspaceSlug,
-    currency: ctx.settings.currency,
-    timezone: ctx.settings.timezone,
-  };
+  const common = { slug: workspaceSlug, currency, timezone: ctx.settings.timezone };
 
   return (
     <div className="space-y-8">
@@ -57,7 +62,17 @@ export default async function ProjectRatesPage({
         </h2>
         <p className="text-muted-foreground text-sm">
           For time on {project.name}, unless a member or task rate below says otherwise.
+          {foreign ? ` Billed in ${currency}, its client's currency.` : ""}
         </p>
+        {foreign && (projectRate?.amountMinor ?? null) === null ? (
+          <p
+            role="note"
+            className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200"
+          >
+            Set a project rate: member and workspace rates are in {workspaceCurrency} and are not
+            converted.
+          </p>
+        ) : null}
         <RateCell
           {...common}
           target={{ level: "project", projectId }}
@@ -77,6 +92,7 @@ export default async function ProjectRatesPage({
               <TableRow>
                 <TableHead>Member</TableHead>
                 <TableHead>Rate</TableHead>
+                <TableHead>Cost</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -91,6 +107,23 @@ export default async function ProjectRatesPage({
                       current={memberRates.get(m.userId) ?? null}
                       ariaLabel={`Change rate for ${m.name}`}
                       inherited="Uses the project rate"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <RateCell
+                      {...common}
+                      currency={workspaceCurrency}
+                      target={{
+                        kind: "cost",
+                        level: "project_member",
+                        projectId,
+                        userId: m.userId,
+                      }}
+                      title={`${m.name}'s cost on ${project.name}`}
+                      current={memberCosts.get(m.userId) ?? null}
+                      buttonLabel="Change cost"
+                      ariaLabel={`Change cost for ${m.name}`}
+                      inherited="Uses their cost rate"
                     />
                   </TableCell>
                 </TableRow>

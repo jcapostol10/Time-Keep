@@ -20,6 +20,8 @@ const VIEWS: { kind: ReportView; label: string }[] = [
   { kind: "summary", label: "Summary" },
   { kind: "detailed", label: "Detailed" },
   { kind: "weekly", label: "Weekly" },
+  // Only for viewers who may see cost (Phase 6a).
+  { kind: "profit", label: "Profit" },
   { kind: "audit", label: "Audit" },
   { kind: "attendance", label: "Attendance" },
 ];
@@ -51,7 +53,7 @@ export function ReportShell({
   const kind = view === "audit" ? "detailed" : view;
   // Attendance is raw time per person: no share link, no rounding, only the people filters.
   const attendance = view === "attendance";
-  const { slug } = useTracker();
+  const { slug, canSeeCosts } = useTracker();
   const { params } = useReportQuery();
 
   return (
@@ -62,7 +64,8 @@ export function ReportShell({
           <>
             {actions}
             {attendance ? null : <RoundingToggle />}
-            {kind === "attendance" ? null : <ShareDialog kind={kind} />}
+            {/* A shared report is for clients: Profit is never shared. */}
+            {kind === "attendance" || kind === "profit" ? null : <ShareDialog kind={kind} />}
             <ExportMenu kind={kind} />
           </>
         }
@@ -71,7 +74,7 @@ export function ReportShell({
         aria-label="Report views"
         className="flex gap-1 overflow-x-auto border-b [scrollbar-width:none]"
       >
-        {VIEWS.map((v) => (
+        {VIEWS.filter((v) => v.kind !== "profit" || canSeeCosts).map((v) => (
           <Link
             key={v.kind}
             href={reportHref(slug, v.kind, paramsFor(v.kind, params))}

@@ -197,6 +197,7 @@ export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}
 
     const catalog = await seedTrackerData(tx, demo.id, ids);
     await seedTeamAndRates(tx, demo.id, ids, catalog);
+    await seedCostAndCurrency(tx, demo.id, ids, catalog);
     await seedApprovals(tx, demo.id, ids);
     await seedTimeOff(tx, demo.id, ids);
     const kioskToken = await seedKiosk(tx, demo.id, ids, catalog.taskIds);
@@ -795,6 +796,127 @@ async function seedTeamAndRates(
     ...r,
   }));
   await db.insert(rate).values(rates);
+  await db.execute(rateEntriesSql(eq(timeEntry.workspaceId, workspaceId)));
+}
+
+/** What an hour of each demo person costs the company, in the workspace's USD (minor units). */
+const DEMO_COST_RATES: [email: string, amountMinor: number][] = [
+  ["owner@demo.test", 4000],
+  ["admin@demo.test", 3500],
+  ["manager@demo.test", 3000],
+  ["member1@demo.test", 2500],
+  ["member2@demo.test", 2200],
+];
+
+/**
+ * Phase 6a: a cost rate for every demo person (and member1's own on Website
+ * redesign), so the reports show cost and profit; and Initech, a client
+ * billed in EUR, with one project, its rate in EUR and two hours of the
+ * owner's time, so the demo shows amounts in two currencies that are never
+ * added. The project has no tasks, so tasks by group hides it from nobody.
+ */
+async function seedCostAndCurrency(
+  db: DbExecutor,
+  workspaceId: string,
+  ids: Map<string, string>,
+  catalog: { projectIds: string[] },
+) {
+  const owner = ids.get("owner@demo.test");
+  const member1 = ids.get("member1@demo.test");
+  const website = catalog.projectIds[0];
+  if (!owner || !member1 || !website) throw new Error("seed: owner, member1 or project missing");
+  const effectiveFrom = new Date(0);
+  const base = { workspaceId, effectiveFrom, createdBy: owner };
+
+  const clientId = randomUUID();
+  const projectId = randomUUID();
+  await db.insert(client).values({
+    id: clientId,
+    workspaceId,
+    name: "Initech",
+    email: "billing@initech.example",
+    currency: "EUR",
+  });
+  await db.insert(project).values({
+    id: projectId,
+    workspaceId,
+    name: "Euro launch",
+    color: pickColor("Euro launch"),
+    clientId,
+    visibility: "PUBLIC",
+    billable: true,
+  });
+
+  await db.insert(rate).values([
+    ...DEMO_COST_RATES.flatMap(([email, amountMinor]) => {
+      const userId = ids.get(email);
+      return userId
+        ? [
+            {
+              ...base,
+              id: randomUUID(),
+              kind: "cost" as const,
+              level: "member" as const,
+              userId,
+              amountMinor,
+              currency: "USD",
+            },
+          ]
+        : [];
+    }),
+    {
+      ...base,
+      id: randomUUID(),
+      kind: "cost" as const,
+      level: "project_member" as const,
+      userId: member1,
+      projectId: website,
+      amountMinor: 3000,
+      currency: "USD",
+    },
+    // A project billed in EUR needs its own rate: the USD rates are never converted.
+    {
+      ...base,
+      id: randomUUID(),
+      kind: "billable" as const,
+      level: "project" as const,
+      projectId,
+      amountMinor: 7000,
+      currency: "EUR",
+    },
+  ]);
+
+  // The owner's last two weekdays before yesterday, 20:00-21:00: after the seeded working day.
+  const tz = DEMO_WORKSPACE.timezone;
+  const now = new Date();
+  const todayStart = zonedDateTimeToInstant(
+    { date: localDateKey(now, tz), hours: 0, minutes: 0 },
+    tz,
+  );
+  const entries: (typeof timeEntry.$inferInsert)[] = [];
+  for (let back = 2; back <= 9 && entries.length < 2; back++) {
+    const dayStart = addDaysInZone(todayStart, -back, tz);
+    const weekday = localWeekday(dayStart, tz);
+    if (weekday === 0 || weekday === 6) continue;
+    const start = zonedDateTimeToInstant(
+      { date: localDateKey(dayStart, tz), hours: 20, minutes: 0 },
+      tz,
+    );
+    entries.push({
+      id: randomUUID(),
+      workspaceId,
+      userId: owner,
+      description: "Launch plan",
+      projectId,
+      taskId: null,
+      billable: true,
+      start,
+      end: new Date(start.getTime() + 3_600_000),
+      durationSeconds: 3600,
+    });
+  }
+  await db.insert(timeEntry).values(entries);
+  // Both snapshots, by the SQL the app uses: cost on every work entry, EUR on the new ones.
   await db.execute(rateEntriesSql(eq(timeEntry.workspaceId, workspaceId)));
 }
 

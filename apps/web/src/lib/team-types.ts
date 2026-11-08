@@ -18,6 +18,8 @@ export interface TeamRow {
   groups: { id: string; name: string }[];
   /** The member-level billable rate in force now; null without rate.view or without a rate. */
   billableRateMinor: number | null;
+  /** The member-level cost rate in force now (Phase 6a); null without rate.view or without one. */
+  costRateMinor: number | null;
   /** A manager's people, groups and projects; null for other roles or without permission. */
   scope: { userIds: string[]; groupIds: string[]; projectIds: string[] } | null;
   /** Kiosk only (Phase 5c): no login; an admin sets their PIN and can convert them. */

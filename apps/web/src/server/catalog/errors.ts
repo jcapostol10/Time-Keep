@@ -3,7 +3,8 @@ import "server-only";
 /** Thrown by the catalog services; server actions turn it into a message. */
 export class CatalogError extends Error {
   constructor(
-    public readonly code: "NOT_FOUND" | "INVALID" | "CONFLICT" | "IN_USE",
+    /** CONFIRM: the change is allowed once the person has confirmed what it does. */
+    public readonly code: "NOT_FOUND" | "INVALID" | "CONFLICT" | "IN_USE" | "CONFIRM",
     message: string,
   ) {
     super(message);

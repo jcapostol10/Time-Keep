@@ -13,10 +13,14 @@ export type RateKind = (typeof RATE_KINDS)[number];
 export const RATE_LEVELS = ["task", "project_member", "project", "member", "workspace"] as const;
 export type RateLevel = (typeof RATE_LEVELS)[number];
 
+/** Cost has two levels (Phase 6a): what a person costs on one project, else what they cost. */
+export const COST_LEVELS = ["project_member", "member"] as const satisfies readonly RateLevel[];
+
 export const RATE_RECALC_STATUSES = ["queued", "running", "done", "failed"] as const;
 export type RateRecalcStatus = (typeof RATE_RECALC_STATUSES)[number];
 
 export interface RateRow {
+  kind: RateKind;
   level: RateLevel;
   userId: string | null;
   projectId: string | null;
@@ -33,6 +37,8 @@ export interface RateTarget {
   projectId: string | null;
   taskId: string | null;
   start: Date;
+  /** The entry's currency (`entryCurrency`): a billable rate applies only in its own. */
+  currency: string;
 }
 
 export interface ResolvedRate {
@@ -59,14 +65,23 @@ function matches(row: RateRow, t: RateTarget): boolean {
 /**
  * The rate for an entry: at each level, most specific first, the latest
  * matching row in force at the entry's start; a null row falls through.
+ * A billable rate applies only in the entry's currency (Phase 6a: no amount
+ * is ever converted); cost has its own two levels and is always in the
+ * workspace currency, so the entry's currency does not matter to it.
  * The SQL twin is packages/db/src/rates-sql.ts (tested to agree).
  */
-export function resolveRate(rates: readonly RateRow[], target: RateTarget): ResolvedRate | null {
-  for (const level of RATE_LEVELS) {
+export function resolveRate(
+  rates: readonly RateRow[],
+  target: RateTarget,
+  kind: RateKind = "billable",
+): ResolvedRate | null {
+  const levels: readonly RateLevel[] = kind === "cost" ? COST_LEVELS : RATE_LEVELS;
+  for (const level of levels) {
     let latest: RateRow | null = null;
     for (const row of rates) {
-      if (row.level !== level || row.effectiveFrom > target.start || !matches(row, target))
-        continue;
+      if (row.kind !== kind || row.level !== level) continue;
+      if (row.effectiveFrom > target.start || !matches(row, target)) continue;
+      if (kind === "billable" && row.currency !== target.currency) continue;
       if (!latest || row.effectiveFrom > latest.effectiveFrom) latest = row;
     }
     if (latest && latest.amountMinor !== null) {
@@ -96,6 +111,22 @@ export function needsRerate(before: RateInputs, after: RateInputs): boolean {
     before.taskId !== after.taskId ||
     (!before.billable && after.billable)
   );
+}
+
+/** Whether an edit re-rates the entry's cost: a new person or project (cost has no other input). */
+export function needsCostRerate(before: RateInputs, after: RateInputs): boolean {
+  return before.userId !== after.userId || before.projectId !== after.projectId;
+}
+
+/**
+ * The currency an entry's billable amount is in: its project's client's, or
+ * the workspace's when the project has no client or the client has none set.
+ */
+export function entryCurrency(
+  clientCurrency: string | null | undefined,
+  workspaceCurrency: string,
+): string {
+  return clientCurrency ? clientCurrency : workspaceCurrency;
 }
 
 /** "New entries only", "Entries from a date", "All entries, past and future". */

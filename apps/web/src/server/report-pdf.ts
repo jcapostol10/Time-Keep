@@ -11,6 +11,8 @@ import {
   formatDuration,
   formatRangeLabel,
   NONE_ID,
+  profitColumns,
+  profitGroupKey,
   type ReportQuery,
   resolveReportRange,
   summaryColumns,
@@ -19,12 +21,18 @@ import {
 } from "@timekeep/core";
 import type { Database } from "@timekeep/db";
 
-import type { SeriesPoint, SummaryReport } from "@/lib/report-types";
+import type { ReportMoney, SeriesPoint, SummaryReport } from "@/lib/report-types";
 
 import type { Viewer } from "./catalog/viewer";
 import { env } from "./env";
-import { attendanceRows, type ExportFile, exportFilename, type FileReport } from "./report-files";
-import { detailedReport, summaryReport, weeklyReport } from "./reports";
+import {
+  attendanceRows,
+  type ExportFile,
+  exportFilename,
+  exportMoney,
+  type FileReport,
+} from "./report-files";
+import { detailedReport, profitReport, summaryReport, weeklyReport } from "./reports";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
 
@@ -188,6 +196,7 @@ const TITLES: Record<FileReport, string> = {
   detailed: "Detailed report",
   weekly: "Weekly report",
   attendance: "Attendance report",
+  profit: "Profit report",
 };
 
 /** The report as one self-contained HTML page, and how many rows its table has. */
@@ -206,7 +215,7 @@ export async function renderReportHtml(
   if (req.report === "summary") {
     const report = await summaryReport(db, viewer, req.query, req.prefs, now);
     const rows = flattenGroups(report.groups, report.groupBy);
-    const body = `<div class="charts">${barChart(report.series, req.prefs.durationFormat)}${donut(slicesOf(report))}</div>${table(rows, summaryColumns(report.groupBy, req.prefs, report.money ?? undefined))}`;
+    const body = `<div class="charts">${barChart(report.series, req.prefs.durationFormat)}${donut(slicesOf(report))}</div>${table(rows, summaryColumns(report.groupBy, req.prefs, exportMoney(report.money, [report.totals])))}`;
     const html = page({
       title,
       workspaceName: req.workspaceName,
@@ -214,6 +223,21 @@ export async function renderReportHtml(
       filters,
       total: fmt(report.totals.durationSeconds),
       body,
+    });
+    return { html, rowCount: rows.length };
+  }
+  if (req.report === "profit") {
+    const report = await profitReport(db, viewer, req.query, req.prefs, now);
+    const money = exportMoney(report.money, [report.totals]);
+    if (!money) throw new Error("A profit export needs amounts");
+    const rows = flattenGroups(report.groups, report.groupBy);
+    const html = page({
+      title,
+      workspaceName: req.workspaceName,
+      rangeLabel,
+      filters,
+      total: fmt(report.totals.durationSeconds),
+      body: table(rows, profitColumns(profitGroupKey(report), req.prefs, money)),
     });
     return { html, rowCount: rows.length };
   }
@@ -240,14 +264,17 @@ export async function renderReportHtml(
       rangeLabel,
       filters,
       total: fmt(report.total),
-      body: table(report.rows, weeklyColumns(report.dayKeys, req.prefs, report.money ?? undefined)),
+      body: table(
+        report.rows,
+        weeklyColumns(report.dayKeys, req.prefs, exportMoney(report.money, [report])),
+      ),
     });
     return { html, rowCount: report.rows.length };
   }
   const entries = [];
   let cursor: { value: string; id: string } | undefined;
   let totals = { durationSeconds: 0 };
-  let money: { currency: string } | null = null;
+  let money: ReportMoney = null;
   do {
     const p = await detailedReport(
       db,
@@ -268,7 +295,7 @@ export async function renderReportHtml(
     rangeLabel,
     filters,
     total: fmt(totals.durationSeconds),
-    body: table(entries, detailedColumns(req.prefs, money ?? undefined)),
+    body: table(entries, detailedColumns(req.prefs, exportMoney(money, []))),
   });
   return { html, rowCount: entries.length };
 }

@@ -38,6 +38,8 @@ import type { z } from "zod";
 import type { ClientDTO } from "@/lib/catalog-types";
 import { createClientAction, updateClientAction } from "@/server/actions/clients";
 
+import { CurrencyConfirm } from "../currency-confirm";
+
 const NO_CURRENCY = "__none__";
 
 /** What the fields hold (defaults optional) vs what the schema produces. */
@@ -47,15 +49,23 @@ type FormValues = z.input<typeof clientInputSchema>;
 export function ClientDialog({
   slug,
   client,
+  workspaceCurrency,
+  canSetCurrency,
   open,
   onOpenChange,
 }: {
   slug: string;
   client?: ClientDTO;
+  /** What the client is billed in when it has no currency of its own. */
+  workspaceCurrency: string;
+  /** Owners and admins: what a client is billed in is theirs to choose. */
+  canSetCurrency: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  // A new currency relabels the rates and amounts of the client's projects: the server asks first.
+  const [confirm, setConfirm] = useState<{ message: string; values: ClientInput } | null>(null);
   const form = useForm<FormValues, unknown, ClientInput>({
     resolver: zodResolver(clientInputSchema),
     defaultValues: {
@@ -67,11 +77,19 @@ export function ClientDialog({
     },
   });
 
-  async function onSubmit(values: ClientInput) {
+  async function onSubmit(values: ClientInput, confirmed = false) {
     const result = client
-      ? await updateClientAction(slug, client.id, values)
+      ? await updateClientAction(slug, client.id, {
+          ...values,
+          ...(confirmed ? { confirmCurrencyChange: true } : {}),
+        })
       : await createClientAction(slug, values);
     if (!result.ok) {
+      const question = result.fieldErrors?.confirmCurrencyChange?.[0];
+      if (question && !confirmed) {
+        setConfirm({ message: question, values });
+        return;
+      }
       const nameError = result.fieldErrors?.name?.[0];
       if (nameError) form.setError("name", { message: nameError });
       else if (/already exists/.test(result.error))
@@ -97,7 +115,11 @@ export function ClientDialog({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          <form
+            onSubmit={form.handleSubmit((values) => onSubmit(values))}
+            className="space-y-4"
+            noValidate
+          >
             <FormField
               control={form.control}
               name="name"
@@ -150,37 +172,44 @@ export function ClientDialog({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="currency"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Currency</FormLabel>
-                  <Select
-                    value={field.value ?? NO_CURRENCY}
-                    onValueChange={(value) => field.onChange(value === NO_CURRENCY ? null : value)}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={NO_CURRENCY}>Workspace default</SelectItem>
-                      {COMMON_CURRENCIES.map((c) => (
-                        <SelectItem key={c.code} value={c.code}>
-                          {c.code} · {c.label}
+            {canSetCurrency ? (
+              <FormField
+                control={form.control}
+                name="currency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Currency</FormLabel>
+                    <Select
+                      value={field.value ?? NO_CURRENCY}
+                      onValueChange={(value) =>
+                        field.onChange(value === NO_CURRENCY ? null : value)
+                      }
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NO_CURRENCY}>
+                          Workspace currency ({workspaceCurrency})
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-muted-foreground text-xs">
-                    Used for invoicing in a later phase.
-                  </p>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                        {COMMON_CURRENCIES.map((c) => (
+                          <SelectItem key={c.code} value={c.code}>
+                            {c.code} · {c.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-muted-foreground text-xs">
+                      What this client is billed in. Its projects&apos; rates and amounts are in
+                      this currency; nothing is converted.
+                    </p>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : null}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
@@ -192,19 +221,44 @@ export function ClientDialog({
             </DialogFooter>
           </form>
         </Form>
+        <CurrencyConfirm
+          message={confirm?.message ?? null}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            const pending = confirm;
+            setConfirm(null);
+            if (pending) void onSubmit(pending.values, true);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );
 }
 
-export function NewClientButton({ slug }: { slug: string }) {
+export function NewClientButton({
+  slug,
+  workspaceCurrency,
+  canSetCurrency,
+}: {
+  slug: string;
+  workspaceCurrency: string;
+  canSetCurrency: boolean;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <Button onClick={() => setOpen(true)}>
         <PlusIcon /> New client
       </Button>
-      {open ? <ClientDialog slug={slug} open={open} onOpenChange={setOpen} /> : null}
+      {open ? (
+        <ClientDialog
+          slug={slug}
+          workspaceCurrency={workspaceCurrency}
+          canSetCurrency={canSetCurrency}
+          open={open}
+          onOpenChange={setOpen}
+        />
+      ) : null}
     </>
   );
 }

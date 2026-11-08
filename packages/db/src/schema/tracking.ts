@@ -55,6 +55,14 @@ export const timeEntry = pgTable(
     rateSource: rateLevelEnum("rate_source"),
     /** round(rate × seconds / 3600) in minor units; null while running or without a rate. */
     amountMinor: bigint("amount_minor", { mode: "number" }),
+    /**
+     * What the work cost (Phase 6a): the cost rate in force at the entry's
+     * start (minor units per hour, the workspace currency), the level it came
+     * from, and the amount. On every work entry, billable or not.
+     */
+    costRateMinor: bigint("cost_rate_minor", { mode: "number" }),
+    costRateSource: rateLevelEnum("cost_rate_source"),
+    costAmountMinor: bigint("cost_amount_minor", { mode: "number" }),
     /** A break has no project, task, tags, billing or amount (decision 6). Fixed at creation. */
     type: entryTypeEnum("type").notNull().default("work"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),

@@ -15,6 +15,7 @@ import type { ProjectDetail, ProjectListItem } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
 import { updateProjectAction } from "@/server/actions/projects";
 
+import { CurrencyConfirm } from "../currency-confirm";
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { ProjectFormFields, type ProjectFormValues } from "./project-form-fields";
 import type { ClientOption } from "./projects-toolbar";
@@ -33,6 +34,8 @@ export function ProjectSettingsTab({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [deleting, setDeleting] = useState(false);
+  // A client billed in another currency relabels the project's rates: the server asks first.
+  const [confirm, setConfirm] = useState<{ message: string; values: ProjectInput } | null>(null);
   const form = useForm<ProjectFormValues, unknown, ProjectInput>({
     resolver: zodResolver(projectInputSchema),
     defaultValues: {
@@ -46,9 +49,17 @@ export function ProjectSettingsTab({
   });
   const color = useWatch({ control: form.control, name: "color" }) ?? project.color;
 
-  async function onSubmit(values: ProjectInput) {
-    const result = await updateProjectAction(slug, project.id, values);
+  async function onSubmit(values: ProjectInput, confirmed = false) {
+    const result = await updateProjectAction(slug, project.id, {
+      ...values,
+      ...(confirmed ? { confirmCurrencyChange: true } : {}),
+    });
     if (!result.ok) {
+      const question = result.fieldErrors?.confirmCurrencyChange?.[0];
+      if (question && !confirmed) {
+        setConfirm({ message: question, values });
+        return;
+      }
       if (/already exists/.test(result.error)) form.setError("name", { message: result.error });
       else toast.error(result.error);
       return;
@@ -73,7 +84,11 @@ export function ProjectSettingsTab({
   return (
     <div className="max-w-xl space-y-8">
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
+        <form
+          onSubmit={form.handleSubmit((values) => onSubmit(values))}
+          className="space-y-4"
+          noValidate
+        >
           <ProjectFormFields
             form={form}
             clients={selectableClients}
@@ -86,6 +101,15 @@ export function ProjectSettingsTab({
           </Button>
         </form>
       </Form>
+      <CurrencyConfirm
+        message={confirm?.message ?? null}
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => {
+          const pending = confirm;
+          setConfirm(null);
+          if (pending) void onSubmit(pending.values, true);
+        }}
+      />
 
       <div className="flex items-center justify-between rounded-md border px-4 py-3">
         <div>

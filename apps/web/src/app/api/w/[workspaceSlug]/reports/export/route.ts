@@ -11,7 +11,7 @@ import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-a
 import { authorize } from "@/server/authz";
 
 const requestSchema = z.object({
-  report: z.enum([...REPORT_KINDS, "attendance"]),
+  report: z.enum([...REPORT_KINDS, "attendance", "profit"]),
   format: z.enum(["csv", "xlsx", "pdf"]),
 });
 
@@ -48,27 +48,39 @@ export async function GET(
       parsed.data.report === "attendance"
         ? await authorize(access, "attendance.read", { kind: "person", userId: access.user.id })
         : await authorize(access, "page.view", { kind: "page", page: "reports" });
+    // Profit is cost: only for those the matrix lets see it (Phase 6a).
+    if (parsed.data.report === "profit") await authorize(access, "report.viewCosts");
+    const { report } = parsed.data;
     const req = {
       ...parsed.data,
       query: parseReportQuery(params),
       prefs: resolveViewerPrefs(access.user, access.settings),
     };
 
-    const queue = async () => {
-      const job = await createExportJob(db, viewer, req);
-      after(async () => {
-        await expireExportJobs(db);
-        await runExportJob(db, job.id);
-      });
-      return Response.json({ jobId: job.id }, { status: 202 });
-    };
+    // A Profit export is one row per project, client or person: it always streams.
+    const queue =
+      report === "profit"
+        ? null
+        : async () => {
+            const job = await createExportJob(db, viewer, { ...req, report });
+            after(async () => {
+              await expireExportJobs(db);
+              await runExportJob(db, job.id);
+            });
+            return Response.json({ jobId: job.id }, { status: 202 });
+          };
 
-    if ((await countExportRows(db, viewer, req)) > env().EXPORT_JOB_THRESHOLD) return queue();
+    if (queue && (await countExportRows(db, viewer, req)) > env().EXPORT_JOB_THRESHOLD) {
+      return queue();
+    }
     const file =
       req.format === "pdf"
         ? await buildPdfExport(db, viewer, { ...req, workspaceName: access.workspace.name })
         : await buildExport(db, viewer, { ...req, format: req.format });
-    if (file.body.byteLength > MAX_STREAMED_BYTES) return queue();
+    if (file.body.byteLength > MAX_STREAMED_BYTES) {
+      if (!queue) return Response.json({ error: "This export is too large." }, { status: 413 });
+      return queue();
+    }
     return new Response(Buffer.from(file.body), {
       headers: {
         "Content-Type": file.contentType,

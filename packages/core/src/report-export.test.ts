@@ -9,11 +9,19 @@ import {
   flattenAttendance,
   type ExportColumn,
   flattenGroups,
+  otherCurrencies,
+  profitColumns,
   summaryColumns,
   toCsv,
   weeklyColumns,
 } from "./report-export";
-import { type GroupKey, groupRows, type ReportRow, type ReportTotals } from "./reports";
+import {
+  EMPTY_TOTALS,
+  type GroupKey,
+  groupRows,
+  type ReportRow,
+  type ReportTotals,
+} from "./reports";
 import { formatDateInZone } from "./time";
 import { DEFAULT_CAPACITY } from "./time-off";
 
@@ -31,11 +39,11 @@ const t = (
   entryCount: number,
   amountMinor = 0,
 ): ReportTotals => ({
+  ...EMPTY_TOTALS,
   durationSeconds,
   billableSeconds,
   entryCount,
   amountMinor,
-  unratedCount: 0,
 });
 const row = (
   keys: Partial<Record<GroupKey, { id: string | null; label: string }>>,
@@ -122,6 +130,9 @@ const ENTRIES: DetailedEntry[] = [
     rateMinor: null,
     type: "work",
     amountMinor: null,
+    currency: null,
+    costMinor: null,
+    profitMinor: null,
   },
   {
     id: "e2",
@@ -138,6 +149,9 @@ const ENTRIES: DetailedEntry[] = [
     rateMinor: null,
     type: "work",
     amountMinor: null,
+    currency: null,
+    costMinor: null,
+    profitMinor: null,
   },
   {
     id: "e3",
@@ -154,6 +168,9 @@ const ENTRIES: DetailedEntry[] = [
     rateMinor: null,
     type: "work",
     amountMinor: null,
+    currency: null,
+    costMinor: null,
+    profitMinor: null,
   },
 ];
 
@@ -192,7 +209,16 @@ describe("weekly export", () => {
     ]);
     expect(
       toCsv(
-        [{ id: "web", label: "Web", days: [3600, 1800], total: 5400, amountMinor: 0 }],
+        [
+          {
+            id: "web",
+            label: "Web",
+            days: [3600, 1800],
+            total: 5400,
+            amountMinor: 0,
+            otherAmounts: [],
+          },
+        ],
         columns,
       ),
     ).toContain("Web,1:00:00,0:30:00,1:30:00");
@@ -256,21 +282,170 @@ describe("amounts in exports", () => {
     expect(toCsv(rows, withMoney)).toContain("Acme,Web,1:30:00,1:00:00,3,120.50");
   });
 
-  it("adds the rate and the amount to each Detailed entry", () => {
-    const entry = { ...ENTRIES[0]!, rateMinor: 8000, amountMinor: 12000 };
+  it("adds the rate, the amount and their currency to each Detailed entry", () => {
+    const entry = { ...ENTRIES[0]!, rateMinor: 8000, amountMinor: 12000, currency: "USD" };
     const columns = detailedColumns(PREFS, USD);
-    expect(columns.map((c) => c.header).slice(-2)).toEqual(["Rate (USD)", "Amount (USD)"]);
-    expect(toCsv([entry], columns)).toContain(",1:30:00,80.00,120.00");
+    // An entry is billed in its own currency, so the header cannot name one.
+    expect(columns.map((c) => c.header).slice(-3)).toEqual(["Rate", "Amount", "Currency"]);
+    expect(toCsv([entry], columns)).toContain(",1:30:00,80.00,120.00,USD");
     const unrated = { ...entry, rateMinor: null, amountMinor: null };
-    expect(toCsv([unrated], columns).trimEnd().endsWith(",1:30:00,,")).toBe(true);
+    expect(toCsv([unrated], columns).trimEnd().endsWith(",1:30:00,,,USD")).toBe(true);
+    // Each amount is written with its own currency's decimals: yen has none.
+    const yen = { ...entry, rateMinor: 8000, amountMinor: 12000, currency: "JPY" };
+    expect(toCsv([yen], columns)).toContain(",1:30:00,8000,12000,JPY");
   });
 
   it("adds each Weekly row's amount after its total", () => {
     const columns = weeklyColumns(["2026-03-09"], PREFS, { currency: "JPY" });
     expect(columns.map((c) => c.header).at(-1)).toBe("Amount (JPY)");
     expect(
-      toCsv([{ id: "web", label: "Web", days: [3600], total: 3600, amountMinor: 5000 }], columns),
+      toCsv(
+        [
+          {
+            id: "web",
+            label: "Web",
+            days: [3600],
+            total: 3600,
+            amountMinor: 5000,
+            otherAmounts: [],
+          },
+        ],
+        columns,
+      ),
     ).toContain("Web,1:00:00,1:00:00,5000");
+  });
+});
+
+describe("currencies, cost and profit in exports (Phase 6a)", () => {
+  const web = {
+    labels: ["Web"],
+    totals: {
+      ...t(18000, 14400, 4, 400_000),
+      costMinor: 210_000,
+      profitMinor: 190_000,
+    },
+  };
+  const us = {
+    labels: ["Us"],
+    totals: {
+      ...t(5400, 5400, 2),
+      otherAmounts: [{ currency: "USD", amountMinor: 6000 }],
+      costMinor: 75_000,
+      profitExcludedCount: 2,
+    },
+  };
+
+  it("finds the other currencies of a set of totals, sorted", () => {
+    expect(otherCurrencies([web.totals])).toEqual([]);
+    expect(
+      otherCurrencies([
+        us.totals,
+        { ...web.totals, otherAmounts: [{ currency: "EUR", amountMinor: 1 }] },
+        us.totals,
+      ]),
+    ).toEqual(["EUR", "USD"]);
+  });
+
+  it("lists one amount column in the Summary for one currency", () => {
+    const columns = summaryColumns(["project"], PREFS, { currency: "PHP" });
+    expect(columns.map((c) => c.header)).toEqual([
+      "Project",
+      "Duration",
+      "Billable",
+      "Entries",
+      "Amount (PHP)",
+    ]);
+    expect(toCsv([web], columns)).toContain("Web,5:00:00,4:00:00,4,4000.00\r\n");
+  });
+
+  it("lists one amount column per currency, the workspace currency first", () => {
+    const columns = summaryColumns(["project"], PREFS, { currency: "PHP", others: ["USD"] });
+    expect(columns.map((c) => c.header).slice(-2)).toEqual(["Amount (PHP)", "Amount (USD)"]);
+    expect(toCsv([web, us], columns).split("\r\n").slice(1, 3)).toEqual([
+      "Web,5:00:00,4:00:00,4,4000.00,0.00",
+      "Us,1:30:00,1:30:00,2,0.00,60.00",
+    ]);
+  });
+
+  it("adds Cost and Profit after the amounts for viewers who see costs", () => {
+    const columns = summaryColumns(["project"], PREFS, {
+      currency: "PHP",
+      others: ["USD"],
+      costs: true,
+    });
+    expect(columns.map((c) => c.header).slice(-4)).toEqual([
+      "Amount (PHP)",
+      "Amount (USD)",
+      "Cost (PHP)",
+      "Profit (PHP)",
+    ]);
+    // A row billed only in another currency has a cost and no profit: nothing is converted.
+    expect(toCsv([web, us], columns).split("\r\n").slice(1, 3)).toEqual([
+      "Web,5:00:00,4:00:00,4,4000.00,0.00,2100.00,1900.00",
+      "Us,1:30:00,1:30:00,2,0.00,60.00,750.00,",
+    ]);
+    // Without costs the columns are not there at all.
+    const plain = summaryColumns(["project"], PREFS, { currency: "PHP", costs: false });
+    expect(plain.map((c) => c.header).at(-1)).toBe("Amount (PHP)");
+  });
+
+  it("gives the Profit export a margin column", () => {
+    const columns = profitColumns("project", PREFS, { currency: "PHP", costs: true });
+    expect(columns.map((c) => c.header)).toEqual([
+      "Project",
+      "Duration",
+      "Billable",
+      "Entries",
+      "Amount (PHP)",
+      "Cost (PHP)",
+      "Profit (PHP)",
+      "Margin %",
+    ]);
+    const free = {
+      labels: ["Internal"],
+      totals: { ...t(3600, 0, 1), costMinor: 60_000, profitMinor: -60_000 },
+    };
+    expect(toCsv([web, free], columns).split("\r\n").slice(1, 3)).toEqual([
+      "Web,5:00:00,4:00:00,4,4000.00,2100.00,1900.00,47.5",
+      // Nothing billed: a loss (a plain negative number, not a formula), and no margin.
+      "Internal,1:00:00,0:00:00,1,0.00,600.00,-600.00,",
+    ]);
+  });
+
+  it("adds cost and profit to Detailed entries for viewers who see costs", () => {
+    const entry = {
+      ...ENTRIES[0]!,
+      rateMinor: 100_000,
+      amountMinor: 150_000,
+      currency: "PHP",
+      costMinor: 90_000,
+      profitMinor: 60_000,
+    };
+    const columns = detailedColumns(PREFS, { currency: "PHP", costs: true });
+    expect(columns.map((c) => c.header).slice(-5)).toEqual([
+      "Rate",
+      "Amount",
+      "Currency",
+      "Cost (PHP)",
+      "Profit (PHP)",
+    ]);
+    expect(toCsv([entry], columns)).toContain(",1:30:00,1000.00,1500.00,PHP,900.00,600.00");
+    const foreign = { ...entry, currency: "USD", costMinor: null, profitMinor: null };
+    expect(toCsv([foreign], columns).trimEnd().endsWith(",1000.00,1500.00,USD,,")).toBe(true);
+  });
+
+  it("adds a Weekly amount column per currency", () => {
+    const columns = weeklyColumns(["2026-03-09"], PREFS, { currency: "PHP", others: ["USD"] });
+    expect(columns.map((c) => c.header).slice(-2)).toEqual(["Amount (PHP)", "Amount (USD)"]);
+    const olga = {
+      id: "olga",
+      label: "Olga",
+      days: [14400],
+      total: 14400,
+      amountMinor: 200_000,
+      otherAmounts: [{ currency: "USD", amountMinor: 4000 }],
+    };
+    expect(toCsv([olga], columns)).toContain("Olga,4:00:00,4:00:00,2000.00,40.00");
   });
 });
 

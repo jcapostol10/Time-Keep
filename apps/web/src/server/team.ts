@@ -393,17 +393,17 @@ export async function listTeam(
       .orderBy(asc(userGroup.name)),
     seeRates
       ? db
-          .selectDistinctOn([rate.userId], { userId: rate.userId, amountMinor: rate.amountMinor })
+          // The member-level row in force now, of each kind (billable and cost).
+          .selectDistinctOn([rate.kind, rate.userId], {
+            kind: rate.kind,
+            userId: rate.userId,
+            amountMinor: rate.amountMinor,
+          })
           .from(rate)
           .where(
-            and(
-              eq(rate.workspaceId, ws),
-              eq(rate.kind, "billable"),
-              eq(rate.level, "member"),
-              lte(rate.effectiveFrom, now),
-            ),
+            and(eq(rate.workspaceId, ws), eq(rate.level, "member"), lte(rate.effectiveFrom, now)),
           )
-          .orderBy(asc(rate.userId), desc(rate.effectiveFrom))
+          .orderBy(asc(rate.kind), asc(rate.userId), desc(rate.effectiveFrom))
       : Promise.resolve([]),
     seeInvites
       ? db
@@ -457,7 +457,10 @@ export async function listTeam(
   };
   const groupsOf = byKey(memberGroups, "userId");
   const groupsOfInvite = byKey(inviteGroups, "invitationId");
-  const rateOf = new Map(rates.map((r) => [r.userId, r.amountMinor]));
+  const ratesOf = (kind: "billable" | "cost") =>
+    new Map(rates.filter((r) => r.kind === kind).map((r) => [r.userId, r.amountMinor]));
+  const rateOf = ratesOf("billable");
+  const costOf = ratesOf("cost");
   const ids = (rows: { managerId: string; id: string }[], managerId: string) =>
     rows.filter((r) => r.managerId === managerId).map((r) => r.id);
 
@@ -473,6 +476,7 @@ export async function listTeam(
       status: m.status === "DEACTIVATED" ? "DEACTIVATED" : "ACTIVE",
       groups: (groupsOf.get(m.userId) ?? []).map((g) => ({ id: g.id, name: g.name! })),
       billableRateMinor: seeRates ? (rateOf.get(m.userId) ?? null) : null,
+      costRateMinor: seeRates ? (costOf.get(m.userId) ?? null) : null,
       scope:
         seeScope && m.role === "manager"
           ? {
@@ -499,6 +503,7 @@ export async function listTeam(
       status: "INVITED",
       groups: (groupsOfInvite.get(i.id) ?? []).map((g) => ({ id: g.id, name: g.name! })),
       billableRateMinor: null,
+      costRateMinor: null,
       scope: null,
       limited: false,
       capacity: null,

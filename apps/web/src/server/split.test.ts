@@ -94,6 +94,44 @@ describe("split", () => {
     expect(await stored(second.id)).toMatchObject({ billableRateMinor: 6000, amountMinor: 7500 });
   });
 
+  it("keeps the cost rate on both parts", async () => {
+    const costRate = randomUUID();
+    await db.insert(rate).values({
+      id: costRate,
+      workspaceId: wsId,
+      kind: "cost",
+      level: "member",
+      userId: olga.userId,
+      amountMinor: 4000,
+      currency: "USD",
+      effectiveFrom: new Date(0),
+    });
+    const whole = await createManualEntry(db, olga, {
+      description: "Long one",
+      projectId,
+      taskId: null,
+      tagIds: [],
+      billable: true,
+      start: START,
+      end: at(120),
+    });
+    expect(await stored(whole.id)).toMatchObject({ costRateMinor: 4000, costAmountMinor: 8000 });
+    // The cost rate changes after the entry was saved: a split keeps the stored one.
+    await db.update(rate).set({ amountMinor: 5000 }).where(eq(rate.id, costRate));
+    const { first, second } = await splitEntry(db, olga, whole.id, at(45));
+    expect(await stored(first.id)).toMatchObject({
+      costRateMinor: 4000,
+      costRateSource: "member",
+      costAmountMinor: 3000,
+    });
+    // What the hour cost does not vanish with the split: the two parts add up to the whole.
+    expect(await stored(second.id)).toMatchObject({
+      costRateMinor: 4000,
+      costRateSource: "member",
+      costAmountMinor: 5000,
+    });
+  });
+
   it("refuses a point outside the entry or at its edges", async () => {
     const whole = await createManualEntry(db, olga, {
       description: "x",

@@ -65,6 +65,7 @@ type Open =
   | "groups"
   | "tasks"
   | "rate"
+  | "cost"
   | "capacity"
   | "scope"
   | "deactivate"
@@ -170,6 +171,9 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
           {permissions.rates ? (
             <DropdownMenuItem onSelect={() => setOpen("rate")}>Billable rate</DropdownMenuItem>
           ) : null}
+          {permissions.rates ? (
+            <DropdownMenuItem onSelect={() => setOpen("cost")}>Cost rate</DropdownMenuItem>
+          ) : null}
           {permissions.capacity && row.capacity ? (
             <DropdownMenuItem onSelect={() => setOpen("capacity")}>Capacity</DropdownMenuItem>
           ) : null}
@@ -269,6 +273,17 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
           slug={ctx.slug}
           target={{ level: "member", userId }}
           title={`${row.name}'s billable rate`}
+          currency={ctx.currency}
+          timezone={ctx.timezone}
+          open
+          onOpenChange={(o) => (o ? null : setOpen(null))}
+        />
+      ) : null}
+      {open === "cost" ? (
+        <RateDialog
+          slug={ctx.slug}
+          target={{ kind: "cost", level: "member", userId }}
+          title={`${row.name}'s cost rate`}
           currency={ctx.currency}
           timezone={ctx.timezone}
           open

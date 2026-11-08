@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { can } from "@timekeep/core";
 import {
   and,
+  client,
   eq,
   projectGroup,
   projectMember,
@@ -187,6 +188,36 @@ describe("project templates", () => {
     }
     // The template's own rows are untouched.
     expect(await db.select().from(rate).where(eq(rate.projectId, templateId))).toHaveLength(4);
+  });
+
+  it("copies billable rates only into a project billed in the same currency", async () => {
+    const acme = randomUUID();
+    const local = randomUUID();
+    await db.insert(client).values([
+      { id: acme, workspaceId: wsId, name: "Acme", currency: "EUR" },
+      // No currency of its own: billed in the workspace's, as the template is.
+      { id: local, workspaceId: wsId, name: "Local", currency: null },
+    ]);
+    const abroad = await copyProject(db, olga, templateId, {
+      name: "For Acme",
+      clientId: acme,
+      isTemplate: false,
+    });
+    // $80.00 an hour is not €80.00 an hour: the copy starts without rates, so its
+    // Rates tab asks for one instead of showing a rate that never applies.
+    expect(await db.select().from(rate).where(eq(rate.projectId, abroad.id))).toEqual([]);
+    const home = await copyProject(db, olga, templateId, {
+      name: "For Local",
+      clientId: local,
+      isTemplate: false,
+    });
+    const copied = await db.select().from(rate).where(eq(rate.projectId, home.id));
+    expect(copied.map((r) => [r.level, r.amountMinor, r.currency]).sort()).toEqual([
+      // The row in force today: 70.00 since 2020, not the 80.00 before it.
+      ["project", 7000, "USD"],
+      ["project_member", 9000, "USD"],
+      ["task", 12000, "USD"],
+    ]);
   });
 
   it("keeps templates out of the pickers and reports but lists them under Templates", async () => {

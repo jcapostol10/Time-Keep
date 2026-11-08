@@ -67,6 +67,8 @@ export function RateDialog({
   const qc = useQueryClient();
   const id = useId();
   const history = useRateHistory(slug, target, open);
+  // A cost rate (Phase 6a) is what the hour costs the company, not what is billed.
+  const cost = target.kind === "cost";
   const [amount, setAmount] = useState("");
   const [apply, setApply] = useState<RateApply>("new");
   const [from, setFrom] = useState(() => localDateKey(new Date(), timezone));
@@ -101,7 +103,15 @@ export function RateDialog({
       qc.invalidateQueries({ queryKey: trackerKeys.rateRecalc(slug) }),
       qc.invalidateQueries({ queryKey: ["tracker", slug, "rates"] }),
     ]);
-    toast.success(amount.trim() === "" ? "Rate removed" : "Rate saved");
+    toast.success(
+      amount.trim() === ""
+        ? cost
+          ? "Cost rate removed"
+          : "Rate removed"
+        : cost
+          ? "Cost rate saved"
+          : "Rate saved",
+    );
     setAmount("");
     onOpenChange(false);
     router.refresh();
@@ -113,12 +123,16 @@ export function RateDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            An hourly rate in {currency}. Leave it empty for no rate at this level.
+            {cost
+              ? `What an hour costs the company, in ${currency}. Leave it empty for no cost rate at this level.`
+              : `An hourly rate in ${currency}. Leave it empty for no rate at this level.`}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={save} className="space-y-4" noValidate>
           <div className="space-y-2">
-            <Label htmlFor={`${id}-amount`}>Hourly rate ({currency})</Label>
+            <Label htmlFor={`${id}-amount`}>
+              Hourly {cost ? "cost" : "rate"} ({currency})
+            </Label>
             <Input
               id={`${id}-amount`}
               inputMode="decimal"

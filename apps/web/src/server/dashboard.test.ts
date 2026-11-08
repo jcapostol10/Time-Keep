@@ -1,4 +1,9 @@
-import { DEFAULT_REPORT_QUERY, type ReportQuery, type ViewerPrefs } from "@timekeep/core";
+import {
+  DEFAULT_REPORT_QUERY,
+  hideCosts,
+  type ReportQuery,
+  type ViewerPrefs,
+} from "@timekeep/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -95,7 +100,10 @@ describe("dashboard", () => {
       PREFS,
       NOW,
     );
-    expect(me.totals).toEqual(summary.totals);
+    // The Summary's numbers, less cost and profit: the dashboard never shows them (Phase 6a).
+    expect(summary.totals.uncostedCount).toBe(4);
+    expect(me.totals).toEqual(hideCosts(summary.totals));
+    expect(me.money).toEqual({ currency: "USD", costs: false });
     expect(me.totals.durationSeconds).toBe((90 + 60 + 45 + 15) * 60);
     expect(me.topProject).toEqual({ label: "Web", seconds: 150 * 60 });
     expect(me.topClient).toEqual({ label: "Acme", seconds: 150 * 60 });

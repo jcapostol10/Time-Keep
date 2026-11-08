@@ -348,7 +348,7 @@ describe("changing the workspace currency", () => {
     expect(await workspaceHasRates(db, me.workspaceId)).toBe(true);
     await db.execute(rateEntriesSql(eq(timeEntry.workspaceId, me.workspaceId)));
 
-    await db.transaction((tx) => relabelWorkspaceCurrency(tx, me.workspaceId, "PHP"));
+    await db.transaction((tx) => relabelWorkspaceCurrency(tx, me.workspaceId, "USD", "PHP"));
     const rates = await db.select().from(rate).where(eq(rate.workspaceId, me.workspaceId));
     expect(rates.map((r) => [r.currency, r.amountMinor])).toEqual([["PHP", 5000]]);
     const rated = await db

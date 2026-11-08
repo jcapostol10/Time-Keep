@@ -28,7 +28,13 @@ import { useTracker } from "../tracker/tracker-provider";
 import { BulkEditDialog } from "../tracker/bulk-edit-dialog";
 import { useEntryMutations } from "../tracker/use-entry-mutations";
 import { useEntryWrites } from "../tracker/use-entry-writes";
-import { DETAILED_COLUMNS, type DetailedColumn, useHiddenColumns } from "./detailed-columns";
+import {
+  columnAllowed,
+  DETAILED_COLUMNS,
+  type DetailedColumn,
+  useHiddenColumns,
+} from "./detailed-columns";
+import { amountText } from "./money-cell";
 import { DetailedRow } from "./detailed-row";
 import { useReportQuery } from "./report-url";
 import { useDetailed } from "./use-report";
@@ -82,7 +88,7 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
   const first = data?.pages[0];
   const entries = data?.pages.flatMap((p) => p.entries) ?? [];
   const money = first?.money ?? null;
-  const show = (key: DetailedColumn) => !hidden.has(key) && (key !== "amount" || money !== null);
+  const show = (key: DetailedColumn) => !hidden.has(key) && columnAllowed(key, money);
   const writes = useEntryWrites();
   const { bulkUpdate } = useEntryMutations();
   const [editing, setEditing] = useState(false);
@@ -127,7 +133,8 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
           {first?.totals ? (
             <p className="text-muted-foreground text-sm">
               {first.totals.entryCount} {first.totals.entryCount === 1 ? "entry" : "entries"}
-              {money ? ` · ${formatMoney(first.totals.amountMinor, money.currency)}` : ""}
+              {money ? ` · ${amountText(first.totals, money.currency)}` : ""}
+              {money?.costs ? ` · ${formatMoney(first.totals.costMinor, money.currency)} cost` : ""}
             </p>
           ) : null}
         </div>
@@ -138,7 +145,7 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {DETAILED_COLUMNS.filter((c) => c.key !== "amount" || money).map((c) => (
+            {DETAILED_COLUMNS.filter((c) => columnAllowed(c.key, money)).map((c) => (
               <DropdownMenuCheckboxItem
                 key={c.key}
                 checked={!hidden.has(c.key)}
@@ -215,6 +222,8 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
                   </TableHead>
                 ) : null}
                 {show("amount") ? <TableHead className="text-right">Amount</TableHead> : null}
+                {show("cost") ? <TableHead className="text-right">Cost</TableHead> : null}
+                {show("profit") ? <TableHead className="text-right">Profit</TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -223,7 +232,7 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
                   key={e.id}
                   entry={e}
                   hidden={hidden}
-                  currency={money?.currency ?? null}
+                  money={money}
                   selected={picked.has(e.id)}
                   onSelectedChange={(on) => pick(e.id, on)}
                 />

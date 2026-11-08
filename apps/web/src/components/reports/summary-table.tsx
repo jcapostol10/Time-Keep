@@ -5,7 +5,9 @@ import {
   type DurationFormat,
   formatDuration,
   formatMoney,
+  hasProfit,
   type ReportGroup,
+  type ReportTotals,
 } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import {
@@ -24,6 +26,7 @@ import { Fragment, useState } from "react";
 import type { SummaryReport } from "@/lib/report-types";
 
 import { GROUP_LABELS } from "./group-by-control";
+import { CostNotes, MoneyCell } from "./money-cell";
 
 function groupPath(parents: string[], group: ReportGroup): string {
   return [...parents, `${group.key}:${group.id ?? ""}`].join("/");
@@ -45,6 +48,19 @@ export function SummaryTable({
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const fmt = (seconds: number) => formatDuration(seconds, durationFormat);
   const money = report.money;
+  // Cost and profit, in the workspace currency, for viewers who may see them (Phase 6a).
+  const costs = money?.costs ?? false;
+  const costCells = (t: ReportTotals) =>
+    money && costs ? (
+      <>
+        <TableCell className="hidden text-right tabular-nums sm:table-cell">
+          {formatMoney(t.costMinor, money.currency)}
+        </TableCell>
+        <TableCell className="hidden text-right tabular-nums sm:table-cell">
+          {hasProfit(t) ? formatMoney(t.profitMinor, money.currency) : "—"}
+        </TableCell>
+      </>
+    ) : null;
 
   function toggle(path: string) {
     setCollapsed((prev) => {
@@ -103,9 +119,10 @@ export function SummaryTable({
             </TableCell>
             {money ? (
               <TableCell className="text-right tabular-nums">
-                {formatMoney(g.totals.amountMinor, money.currency)}
+                <MoneyCell amounts={g.totals} currency={money.currency} />
               </TableCell>
             ) : null}
+            {costCells(g.totals)}
           </TableRow>
           {hasChildren && open ? rows(g.children, level + 1, [...parents, path], here) : null}
         </Fragment>
@@ -132,6 +149,12 @@ export function SummaryTable({
             <TableHead className="hidden text-right sm:table-cell">Billable</TableHead>
             <TableHead className="hidden text-right sm:table-cell">Entries</TableHead>
             {money ? <TableHead className="text-right">Amount</TableHead> : null}
+            {costs ? (
+              <>
+                <TableHead className="hidden text-right sm:table-cell">Cost</TableHead>
+                <TableHead className="hidden text-right sm:table-cell">Profit</TableHead>
+              </>
+            ) : null}
           </TableRow>
         </TableHeader>
         <TableBody>{rows(report.groups, 0, [], [])}</TableBody>
@@ -150,9 +173,10 @@ export function SummaryTable({
             </TableCell>
             {money ? (
               <TableCell className="text-right tabular-nums">
-                {formatMoney(report.totals.amountMinor, money.currency)}
+                <MoneyCell amounts={report.totals} currency={money.currency} />
               </TableCell>
             ) : null}
+            {costCells(report.totals)}
           </TableRow>
         </TableFooter>
       </Table>
@@ -163,6 +187,7 @@ export function SummaryTable({
           {report.totals.unratedCount === 1 ? "its amount is" : "their amounts are"} missing.
         </p>
       ) : null}
+      {costs ? <CostNotes totals={report.totals} /> : null}
       {report.groupBy.includes("tag") ? (
         <p className="text-muted-foreground border-t px-3 py-2 text-xs">
           An entry with several tags counts under each of them, so tag totals can exceed the total.

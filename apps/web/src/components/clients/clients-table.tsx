@@ -45,6 +45,7 @@ export function ClientsTable({
   status,
   query,
   canManage,
+  workspaceCurrency,
 }: {
   slug: string;
   clients: ClientDTO[];
@@ -52,6 +53,8 @@ export function ClientsTable({
   query: string;
   /** Edit, archive and delete (admins); creators without it see the list only. */
   canManage: boolean;
+  /** What a client without a currency of its own is billed in. */
+  workspaceCurrency: string;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -93,6 +96,7 @@ export function ClientsTable({
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead className="hidden sm:table-cell">Email</TableHead>
+              <TableHead className="hidden sm:table-cell">Currency</TableHead>
               <TableHead className="text-right">Projects</TableHead>
               <TableHead className="hidden sm:table-cell">Status</TableHead>
               <TableHead className="w-0" />
@@ -109,6 +113,11 @@ export function ClientsTable({
                 </TableCell>
                 <TableCell className="text-muted-foreground hidden sm:table-cell">
                   {c.email || "—"}
+                </TableCell>
+                <TableCell className="hidden sm:table-cell">
+                  {c.currency ?? (
+                    <span className="text-muted-foreground">{workspaceCurrency} (workspace)</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{c.projectCount}</TableCell>
                 <TableCell className="hidden sm:table-cell">
@@ -160,6 +169,8 @@ export function ClientsTable({
           key={editing.id}
           slug={slug}
           client={editing}
+          workspaceCurrency={workspaceCurrency}
+          canSetCurrency={canManage}
           open
           onOpenChange={(open) => {
             if (!open) setEditing(null);

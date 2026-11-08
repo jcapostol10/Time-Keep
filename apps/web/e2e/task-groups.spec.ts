@@ -89,7 +89,7 @@ async function pickerOptions(page: Page, trigger: ReturnType<Page["getByRole"]>)
   return names.filter((n) => n && !n.startsWith("Create "));
 }
 
-test.describe("tasks by group", () => {
+test.describe("tasks by group", { tag: "@nightly" }, () => {
   // Each flow sets up groups, projects and tasks through the UI and walks several pages.
   test.describe.configure({ timeout: 180_000 });
 

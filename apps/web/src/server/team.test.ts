@@ -312,6 +312,16 @@ describe("team service", () => {
       currency: "USD",
       effectiveFrom: new Date("2026-01-01T00:00:00Z"),
     });
+    await db.insert(rate).values({
+      id: randomUUID(),
+      workspaceId: wsId,
+      kind: "cost",
+      level: "member",
+      userId: ids.bob!,
+      amountMinor: 2500,
+      currency: "USD",
+      effectiveFrom: new Date("2026-01-01T00:00:00Z"),
+    });
     await db.insert(invitation).values({
       id: randomUUID(),
       workspaceId: wsId,
@@ -322,14 +332,24 @@ describe("team service", () => {
       expiresAt: new Date(Date.now() + 86_400_000),
     });
     const asAdmin = await listTeam(db, await viewer("ada"), {});
-    expect(asAdmin.find((r) => r.userId === ids.bob)?.billableRateMinor).toBe(6000);
+    expect(asAdmin.find((r) => r.userId === ids.bob)).toMatchObject({
+      billableRateMinor: 6000,
+      costRateMinor: 2500,
+    });
+    expect(asAdmin.find((r) => r.userId === ids.max)).toMatchObject({
+      billableRateMinor: null,
+      costRateMinor: null,
+    });
     expect(asAdmin.find((r) => r.email === "new@example.com")).toMatchObject({
       kind: "invite",
       status: "INVITED",
       userId: null,
     });
     const asManager = await listTeam(db, await viewer("max"), {});
-    expect(asManager.find((r) => r.userId === ids.bob)?.billableRateMinor).toBeNull();
+    expect(asManager.find((r) => r.userId === ids.bob)).toMatchObject({
+      billableRateMinor: null,
+      costRateMinor: null,
+    });
     expect(asManager.some((r) => r.kind === "invite")).toBe(false);
   });
 });

@@ -6,9 +6,14 @@ import {
   detailedColumns,
   type ExportColumn,
   type ExportFormat,
+  type ExportMoney,
   flattenAttendance,
   flattenGroups,
   localDateKey,
+  type MoneyAmount,
+  otherCurrencies,
+  profitColumns,
+  profitGroupKey,
   type ReportKind,
   type ReportQuery,
   resolveReportRange,
@@ -24,7 +29,7 @@ import type { DetailedCursor, DetailedEntryDTO, ReportMoney } from "@/lib/report
 
 import { attendanceReport } from "./attendance";
 import type { Viewer } from "./catalog/viewer";
-import { detailedReport, summaryReport, weeklyReport } from "./reports";
+import { detailedReport, profitReport, summaryReport, weeklyReport } from "./reports";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
 
@@ -35,8 +40,24 @@ export interface ExportFile {
   rowCount: number;
 }
 
-/** The reports that export to a file: the three report tabs and Attendance (Phase 5b). */
-export type FileReport = ReportKind | "attendance";
+/**
+ * The reports that export to a file: the three report tabs, Attendance
+ * (Phase 5b) and Profit (Phase 6a).
+ */
+export type FileReport = ReportKind | "attendance" | "profit";
+
+/**
+ * What money an export's columns show: the report's, with a column for each
+ * other currency its totals hold. Undefined when amounts are hidden.
+ */
+export function exportMoney(
+  money: ReportMoney,
+  totals: readonly { otherAmounts: readonly MoneyAmount[] }[],
+): ExportMoney | undefined {
+  return money
+    ? { currency: money.currency, costs: money.costs, others: otherCurrencies(totals) }
+    : undefined;
+}
 
 export interface ExportRequest {
   report: FileReport;
@@ -118,6 +139,10 @@ export async function countExportRows(
     }
     case "attendance":
       return (await attendanceRows(db, viewer, req)).length;
+    case "profit": {
+      const report = await profitReport(db, viewer, req.query, req.prefs, req.now);
+      return report.groups.length;
+    }
   }
 }
 
@@ -141,15 +166,25 @@ async function exportTable(
         columns: summaryColumns(
           report.groupBy,
           req.prefs,
-          report.money ?? undefined,
+          exportMoney(report.money, [report.totals]),
         ) as ExportColumn<unknown>[],
+      };
+    }
+    case "profit": {
+      // Refused for anyone who may not see cost, so the money is there.
+      const report = await profitReport(db, viewer, req.query, req.prefs, req.now);
+      const money = exportMoney(report.money, [report.totals]);
+      if (!money) throw new Error("A profit export needs amounts");
+      return {
+        rows: flattenGroups(report.groups, report.groupBy),
+        columns: profitColumns(profitGroupKey(report), req.prefs, money) as ExportColumn<unknown>[],
       };
     }
     case "detailed": {
       const { entries, money } = await allEntries(db, viewer, req);
       return {
         rows: entries,
-        columns: detailedColumns(req.prefs, money ?? undefined) as ExportColumn<unknown>[],
+        columns: detailedColumns(req.prefs, exportMoney(money, [])) as ExportColumn<unknown>[],
       };
     }
     case "weekly": {
@@ -159,7 +194,7 @@ async function exportTable(
         columns: weeklyColumns(
           report.dayKeys,
           req.prefs,
-          report.money ?? undefined,
+          exportMoney(report.money, [report]),
         ) as ExportColumn<unknown>[],
       };
     }

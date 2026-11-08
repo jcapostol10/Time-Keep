@@ -7,8 +7,27 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] **Production email:** verify a sending domain in Resend and set `MAIL_FROM` to an address on it (Vercel → Production env, then redeploy). Until then, production can only email the Resend account owner, so sign-up verification, password reset and invites fail for everyone else. On our side (2026-10-22): production refuses to boot with a placeholder sender, a failed send tells the person what happened instead of a bare 500, and Profile settings has "Send me a test email" to check the sender.
 - [ ] **Production is behind Vercel Authentication.** Deployment protection covers every deployment, production included, so anyone not signed in to the Vercel team gets a Vercel login page instead of TimeKeep. Fine while it is private; before real customers use it, switch protection to "Standard" (previews only) or add a custom domain outside protection. The e2e workflow only targets previews, so it is unaffected.
 
+- [ ] **Check for clients whose currency was set before Phase 6a.** The client dialog has offered Currency since Phase 3 with no effect; from 6a it is what the client's projects are billed in. Amounts already saved keep their own currency, but new time on such a client's projects is unrated until the project has a rate in the client's currency (its Rates tab says so). Before the merge deploys, run over the session URL: `select c.name, c.currency, ws.currency from client c join workspace_settings ws using (workspace_id) where c.currency is not null and c.currency <> ws.currency;` and, for each row that was not meant, set the client back to the workspace currency.
+
 ## App
 
+- [ ] **Review the Phase 6 decisions.** The design (`docs/superpowers/specs/2026-11-05-phase-6-design.md`) was written without an interview; its 28 decisions and the 6a rulings in `docs/PROGRESS.md` are the builder's. The two that shape 6a: no currency conversion anywhere, and a rate applies only in its own currency.
+- [ ] **Decide: should cost follow the report rounding rule?** Today a rounded report rounds cost with the same rule as the amount (a half hour rounded up to one costs an hour). Cost is what the company pays, so raw cost may be the better number; one expression in `reports.ts`.
+- [ ] **Phase 6a review minors** (final review, 2026-11-06):
+  - The relabel decisions (`updateClient`, `updateProject`, `setRate`'s currency) are read before the transaction opens; a rate saved or a project added in between keeps the old code. Lock the client row or take a workspace advisory lock inside the transaction.
+  - The client dialog still says "Its projects are not affected" when editing; a currency change does affect them.
+  - The Summary hides Cost and Profit under 640px while the cost notes still show.
+  - A row billed only in another currency with nothing rated prints a workspace-currency zero, and the export has no column for that currency.
+  - The Status tab has its own "is there a profit" rule instead of core `hasProfit`, and no note about entries without a cost rate.
+  - Core has two constants named `COMMON_CURRENCIES` (`currencies.ts`, `money.ts`), and `isCurrencyCode` depends on the runtime's Intl list, so browser and server can disagree.
+  - Only owners and admins see the "Set a project rate" notice (it is on the Rates tab); a project's manager is not told their project is unrated.
+  - On a Profit row that mixes currencies, Cost includes the hours profit leaves out, so Amount less Cost is not Profit; the note should say so.
+  - Untested: `deleteProject` reassigning entries across currencies (the code re-rates both snapshots).
+  - With approvals on, approved time can never be costed after the fact: the recalculation job skips approved periods, so profit for it shows zero cost.
+  - A relabel is one `UPDATE time_entry` inside the request; not measured on a large workspace.
+- [ ] **Watch the one-year Summary's time.** Phase 6a added cost measures and a currency key: on 1,000,000 entries the owner's one-year Summary went from 435 ms to about 650 ms on an idle machine (814 ms measured under load), against a 1 s limit that `report:perf` enforces. If it creeps further, group by the two raw columns and fold in JavaScript, or keep a currency column on the entry for unrated time.
+- [ ] **A cost rate applied to past entries re-rates billable snapshots too.** One job re-rates both snapshots from the date (design decision 2). An entry whose billable rate was kept on purpose ("New entries only", then an edit) takes the rate its start resolves to today. A fix is a `kinds` column on `rate_recalc_job`.
+- [ ] **Client currencies come from the short list** (`COMMON_CURRENCIES`, about twenty codes), though the server accepts any ISO 4217 code the runtime knows. A searchable list of all of them is a UI change only.
 - [ ] **Decide: a default tag for kiosks.** With a required tag, nobody can clock out on a kiosk, because a kiosk adds no tags (spec decision 15 has none); the person stays clocked in until an admin edits the entry. The Kiosks dialog warns about it. A fix is a `kiosk.tag_id` column (an additive migration) and a picker.
 - [ ] Phase 5c review minors:
   - The QR path of `identify` treats any error from `allowedPerson` as "not allowed", so a database error counts as a QR failure; catch only `WorkspaceAccessError`.

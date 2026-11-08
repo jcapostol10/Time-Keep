@@ -38,3 +38,11 @@ export function roundedAmountSql(rule: RoundingRule): SQL {
     else (${timeEntry.billableRateMinor} * ${roundedSecondsSql(rule)} * 2 + 3600) / 7200
   end`;
 }
+
+/** The entry's cost from its stored cost rate and its rounded duration, by the same rule. */
+export function roundedCostSql(rule: RoundingRule): SQL {
+  return sql`case
+    when ${timeEntry.costRateMinor} is null or ${timeEntry.durationSeconds} is null then null
+    else (${timeEntry.costRateMinor} * ${roundedSecondsSql(rule)} * 2 + 3600) / 7200
+  end`;
+}

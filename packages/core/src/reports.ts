@@ -54,7 +54,21 @@ export const REPORT_KINDS = ["summary", "detailed", "weekly"] as const;
 export type ReportKind = (typeof REPORT_KINDS)[number];
 /** The report pages: the kinds, plus the Audit tab (the Detailed report with audit criteria). */
 /** The report tabs; Attendance (Phase 5b) reads its own engine, not the entry groupings. */
-export type ReportView = ReportKind | "audit" | "attendance";
+export type ReportView = ReportKind | "audit" | "attendance" | "profit";
+
+/** What the Profit tab groups by (Phase 6a): one level, sorted by profit. */
+export const PROFIT_GROUP_KEYS = [
+  "project",
+  "client",
+  "user",
+] as const satisfies readonly GroupKey[];
+export type ProfitGroupKey = (typeof PROFIT_GROUP_KEYS)[number];
+
+/** The Profit tab's key for a query: its first grouping key when the tab offers it, else project. */
+export function profitGroupKey(query: { groupBy: readonly GroupKey[] }): ProfitGroupKey {
+  const first = query.groupBy[0];
+  return PROFIT_GROUP_KEYS.find((k) => k === first) ?? "project";
+}
 
 /** Audit criteria (Phase 4b): an entry matching any chosen one is a problem entry. */
 export const AUDIT_CRITERIA = ["noProject", "noTask", "short", "long"] as const;
@@ -284,6 +298,12 @@ export function bucketFor(from: Date, to: Date, tz: string, override?: Bucket): 
   return "month";
 }
 
+/** An amount in one currency. Two currencies are never added (Phase 6: no conversion). */
+export interface MoneyAmount {
+  currency: string;
+  amountMinor: number;
+}
+
 /** Every total is a record of measures. */
 export interface ReportTotals {
   durationSeconds: number;
@@ -291,8 +311,18 @@ export interface ReportTotals {
   entryCount: number;
   /** Billable entries' amounts, in the workspace currency's minor units (0 when hidden). */
   amountMinor: number;
+  /** Billable amounts in every other currency (clients billed in their own), sorted by code. */
+  otherAmounts: MoneyAmount[];
   /** Billable entries without a rate, so their amount is missing. */
   unratedCount: number;
+  /** What the work cost, in the workspace currency (0 when hidden). */
+  costMinor: number;
+  /** Work entries without a cost rate: they count as zero cost. */
+  uncostedCount: number;
+  /** Amount less cost over entries in the workspace currency; the rest are left out. */
+  profitMinor: number;
+  /** Entries billed in another currency, which profit leaves out. */
+  profitExcludedCount: number;
 }
 
 export const EMPTY_TOTALS: ReportTotals = {
@@ -300,8 +330,24 @@ export const EMPTY_TOTALS: ReportTotals = {
   billableSeconds: 0,
   entryCount: 0,
   amountMinor: 0,
+  otherAmounts: [],
   unratedCount: 0,
+  costMinor: 0,
+  uncostedCount: 0,
+  profitMinor: 0,
+  profitExcludedCount: 0,
 };
+
+/** Two lists of amounts as one: summed per currency, sorted by code. */
+export function mergeAmounts(a: readonly MoneyAmount[], b: readonly MoneyAmount[]): MoneyAmount[] {
+  const byCurrency = new Map<string, number>();
+  for (const { currency, amountMinor } of [...a, ...b]) {
+    byCurrency.set(currency, (byCurrency.get(currency) ?? 0) + amountMinor);
+  }
+  return [...byCurrency.entries()]
+    .sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0))
+    .map(([currency, amountMinor]) => ({ currency, amountMinor }));
+}
 
 export function addTotals(a: ReportTotals, b: ReportTotals): ReportTotals {
   return {
@@ -309,8 +355,24 @@ export function addTotals(a: ReportTotals, b: ReportTotals): ReportTotals {
     billableSeconds: a.billableSeconds + b.billableSeconds,
     entryCount: a.entryCount + b.entryCount,
     amountMinor: a.amountMinor + b.amountMinor,
+    otherAmounts: mergeAmounts(a.otherAmounts, b.otherAmounts),
     unratedCount: a.unratedCount + b.unratedCount,
+    costMinor: a.costMinor + b.costMinor,
+    uncostedCount: a.uncostedCount + b.uncostedCount,
+    profitMinor: a.profitMinor + b.profitMinor,
+    profitExcludedCount: a.profitExcludedCount + b.profitExcludedCount,
   };
+}
+
+/** Profit as a percent of the amount, to one decimal; null when nothing was billed. */
+export function marginPercent(t: Pick<ReportTotals, "amountMinor" | "profitMinor">): number | null {
+  if (t.amountMinor === 0) return null;
+  return Math.round((t.profitMinor * 1000) / t.amountMinor) / 10;
+}
+
+/** Totals for a viewer who may not see cost and profit: they read 0, like hidden amounts. */
+export function hideCosts<T extends ReportTotals>(t: T): T {
+  return { ...t, costMinor: 0, uncostedCount: 0, profitMinor: 0, profitExcludedCount: 0 };
 }
 
 export interface GroupValue {
@@ -404,8 +466,10 @@ export interface WeeklyRow {
   label: string;
   days: number[];
   total: number;
-  /** The row's billable amount for the week (0 when hidden). */
+  /** The row's billable amount for the week in the workspace currency (0 when hidden). */
   amountMinor: number;
+  /** Its amounts in every other currency, sorted by code. */
+  otherAmounts: MoneyAmount[];
 }
 
 /** Rows (users or projects) over the week's day keys; a day without entries is 0. */
@@ -416,9 +480,16 @@ export function buildWeekly(
     dateKey: string;
     seconds: number;
     amountMinor?: number;
+    otherAmounts?: readonly MoneyAmount[];
   }[],
   dayKeys: string[],
-): { rows: WeeklyRow[]; dayTotals: number[]; total: number; amountMinor: number } {
+): {
+  rows: WeeklyRow[];
+  dayTotals: number[];
+  total: number;
+  amountMinor: number;
+  otherAmounts: MoneyAmount[];
+} {
   const index = new Map(dayKeys.map((k, i) => [k, i]));
   const byId = new Map<string, WeeklyRow>();
   for (const r of rows) {
@@ -431,10 +502,12 @@ export function buildWeekly(
       days: dayKeys.map(() => 0),
       total: 0,
       amountMinor: 0,
+      otherAmounts: [],
     };
     row.days[col] = (row.days[col] ?? 0) + r.seconds;
     row.total += r.seconds;
     row.amountMinor += r.amountMinor ?? 0;
+    if (r.otherAmounts?.length) row.otherAmounts = mergeAmounts(row.otherAmounts, r.otherAmounts);
     byId.set(mapKey, row);
   }
   const result = [...byId.values()].sort(
@@ -446,6 +519,7 @@ export function buildWeekly(
     dayTotals,
     total: dayTotals.reduce((n, d) => n + d, 0),
     amountMinor: result.reduce((n, r) => n + r.amountMinor, 0),
+    otherAmounts: result.reduce<MoneyAmount[]>((all, r) => mergeAmounts(all, r.otherAmounts), []),
   };
 }
 

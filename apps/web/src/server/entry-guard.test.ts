@@ -288,23 +288,42 @@ describe("with approval and lock off", () => {
 });
 
 describe("writes outside the entry editor", () => {
-  it("the rate job skips approved periods", async () => {
+  it("the recalculation job re-rates cost and skips approved periods", async () => {
     await request(ids.bob!, SUBMITTED, "APPROVED");
     await db.update(timeEntry).set({ billable: true }).where(eq(timeEntry.workspaceId, wsId));
-    await db.insert(rate).values({
-      id: randomUUID(),
-      workspaceId: wsId,
-      level: "workspace",
-      amountMinor: 5000,
-      currency: "USD",
-      effectiveFrom: new Date(0),
-    });
+    await db.insert(rate).values([
+      {
+        id: randomUUID(),
+        workspaceId: wsId,
+        level: "workspace",
+        amountMinor: 5000,
+        currency: "USD",
+        effectiveFrom: new Date(0),
+      },
+      {
+        id: randomUUID(),
+        workspaceId: wsId,
+        kind: "cost",
+        level: "member",
+        userId: ids.bob!,
+        amountMinor: 3000,
+        currency: "USD",
+        effectiveFrom: new Date(0),
+      },
+    ]);
     const { jobId } = await requestRateRecalc(db, wsId, ids.olga!, new Date(0));
     await runRateRecalcJob(db, jobId);
     const rows = await db.select().from(timeEntry).where(eq(timeEntry.workspaceId, wsId));
     const byId = new Map(rows.map((r) => [r.id, r]));
-    expect(byId.get(inId)?.billableRateMinor).toBeNull();
-    expect(byId.get(outId)?.billableRateMinor).toBe(5000);
+    // Approved time keeps what it was approved with: no rate, no cost.
+    expect(byId.get(inId)).toMatchObject({ billableRateMinor: null, costRateMinor: null });
+    expect(byId.get(outId)).toMatchObject({
+      billableRateMinor: 5000,
+      amountMinor: 5000,
+      costRateMinor: 3000,
+      costRateSource: "member",
+      costAmountMinor: 3000,
+    });
   });
 
   it("deleting a task or a tag on submitted time is refused", async () => {

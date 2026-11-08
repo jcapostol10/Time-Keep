@@ -3,7 +3,6 @@
 import {
   addDaysInZone,
   formatDuration,
-  formatMoney,
   localDateKey,
   zonedDateTimeToInstant,
 } from "@timekeep/core";
@@ -31,6 +30,7 @@ import { useSyncExternalStore } from "react";
 import { detailedHref, detailedParams } from "@/lib/report-links";
 
 import { useTracker } from "../tracker/tracker-provider";
+import { MoneyCell } from "./money-cell";
 import { useReportQuery } from "./report-url";
 import { useReportOptions, useWeekly } from "./use-report";
 
@@ -157,7 +157,7 @@ export function WeeklyView() {
                     </TableCell>
                     {data.money ? (
                       <TableCell className="text-right tabular-nums">
-                        {formatMoney(row.amountMinor, data.money.currency)}
+                        <MoneyCell amounts={row} currency={data.money.currency} />
                       </TableCell>
                     ) : null}
                   </TableRow>
@@ -181,7 +181,7 @@ export function WeeklyView() {
                 </TableCell>
                 {data.money ? (
                   <TableCell className="text-right font-semibold tabular-nums">
-                    {formatMoney(data.amountMinor, data.money.currency)}
+                    <MoneyCell amounts={data} currency={data.money.currency} />
                   </TableCell>
                 ) : null}
               </TableRow>

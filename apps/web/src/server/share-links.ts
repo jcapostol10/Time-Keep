@@ -136,6 +136,8 @@ export async function resolveShareLink(
     actor: await loadActor(db, link.workspaceId, link.createdBy, row.role),
     // The engine still checks that the creator may see amounts today.
     hideAmounts: !link.includeAmounts,
+    // A shared report is for clients: never cost or profit, whoever made it.
+    hideCosts: true,
   };
   return {
     id: link.id,

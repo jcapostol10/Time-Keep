@@ -29,6 +29,7 @@ function row(overrides: Partial<WorkspaceRuleColumns> = {}): WorkspaceRuleColumn
     lockMode: "OFF",
     lockDate: null,
     lockDays: null,
+    managersSeeCosts: false,
     ...overrides,
   };
 }

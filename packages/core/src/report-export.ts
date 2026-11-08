@@ -3,18 +3,89 @@ import type { EntryType } from "./schemas";
 import { formatDuration } from "./duration";
 import { minorToDecimal } from "./money";
 import type { ViewerPrefs } from "./prefs";
-import type { GroupKey, ReportGroup, ReportTotals, WeeklyRow } from "./reports";
+import {
+  type GroupKey,
+  marginPercent,
+  type MoneyAmount,
+  type ReportGroup,
+  type ReportTotals,
+  type WeeklyRow,
+} from "./reports";
 import { formatDateInZone, formatTimeOfDay, zonedDateTimeToInstant } from "./time";
 
 /**
  * Exports read one column record per report. CSV and Excel both come from
  * these definitions. With `money` (the viewer may see amounts), amount
- * columns follow the totals, as plain decimals in the workspace currency.
+ * columns follow the totals as plain decimals: one column per currency, the
+ * workspace's first, since two currencies are never added (Phase 6a). Cost
+ * and profit, in the workspace currency, follow for viewers who see them.
  */
 
-/** The currency amounts are in; absent when the viewer may not see them. */
+/** What money an export shows; absent when the viewer may not see amounts. */
 export interface ExportMoney {
+  /** The workspace currency. */
   currency: string;
+  /** The other currencies the rows hold (see `otherCurrencies`): a column each. */
+  others?: readonly string[];
+  /** The viewer may see cost and profit. */
+  costs?: boolean;
+}
+
+/** The currencies, besides the workspace's, that a set of totals holds, sorted. */
+export function otherCurrencies(
+  totals: readonly { otherAmounts: readonly MoneyAmount[] }[],
+): string[] {
+  const codes = new Set<string>();
+  for (const t of totals) for (const a of t.otherAmounts) codes.add(a.currency);
+  return [...codes].sort();
+}
+
+const amountIn = (amounts: readonly MoneyAmount[], currency: string): number =>
+  amounts.find((a) => a.currency === currency)?.amountMinor ?? 0;
+
+/** The amount columns of a row of totals: the workspace currency, then each other one. */
+function amountColumns<T>(
+  money: ExportMoney,
+  of: (row: T) => { amountMinor: number; otherAmounts: readonly MoneyAmount[] },
+): ExportColumn<T>[] {
+  return [
+    {
+      key: "amount",
+      header: `Amount (${money.currency})`,
+      value: (r) => minorToDecimal(of(r).amountMinor, money.currency),
+    },
+    ...(money.others ?? []).map<ExportColumn<T>>((currency) => ({
+      key: `amount-${currency}`,
+      header: `Amount (${currency})`,
+      value: (r) => minorToDecimal(amountIn(of(r).otherAmounts, currency), currency),
+    })),
+  ];
+}
+
+/**
+ * Cost and profit of a row of totals. Profit covers the workspace currency
+ * only, so a row billed entirely in another currency has none to show.
+ */
+function costColumns<T extends { totals: ReportTotals }>(money: ExportMoney): ExportColumn<T>[] {
+  if (!money.costs) return [];
+  return [
+    {
+      key: "cost",
+      header: `Cost (${money.currency})`,
+      value: (r) => minorToDecimal(r.totals.costMinor, money.currency),
+    },
+    {
+      key: "profit",
+      header: `Profit (${money.currency})`,
+      value: (r) =>
+        hasProfit(r.totals) ? minorToDecimal(r.totals.profitMinor, money.currency) : null,
+    },
+  ];
+}
+
+/** False when every entry of the totals is billed in another currency: no profit to state. */
+export function hasProfit(t: Pick<ReportTotals, "entryCount" | "profitExcludedCount">): boolean {
+  return t.profitExcludedCount === 0 || t.profitExcludedCount < t.entryCount;
 }
 export interface ExportColumn<T> {
   key: string;
@@ -41,6 +112,12 @@ export interface DetailedEntry {
   rateMinor: number | null;
   /** Its amount when billable and rated; null otherwise. */
   amountMinor: number | null;
+  /** The currency the entry is billed in (its project's client's, else the workspace's); null when amounts are hidden. */
+  currency: string | null;
+  /** What the entry cost, in the workspace currency; null without a cost rate or hidden. */
+  costMinor: number | null;
+  /** Amount less cost; null for an entry billed in another currency, or hidden. */
+  profitMinor: number | null;
 }
 
 const GROUP_HEADERS: Record<GroupKey, string> = {
@@ -107,15 +184,25 @@ export function summaryColumns(
     value: (r) => r.labels[i] ?? "",
   }));
   const amount: ExportColumn<FlatSummaryRow>[] = money
-    ? [
-        {
-          key: "amount",
-          header: `Amount (${money.currency})`,
-          value: (r) => minorToDecimal(r.totals.amountMinor, money.currency),
-        },
-      ]
+    ? [...amountColumns<FlatSummaryRow>(money, (r) => r.totals), ...costColumns(money)]
     : [];
   return [...labels, ...totalsColumns<FlatSummaryRow>(prefs), ...amount];
+}
+
+/** The Profit report: the Summary's columns for one grouping key, and the margin. */
+export function profitColumns(
+  groupBy: GroupKey,
+  prefs: Pick<ViewerPrefs, "durationFormat">,
+  money: ExportMoney,
+): ExportColumn<FlatSummaryRow>[] {
+  return [
+    ...summaryColumns([groupBy], prefs, { ...money, costs: true }),
+    {
+      key: "margin",
+      header: "Margin %",
+      value: (r) => (hasProfit(r.totals) ? marginPercent(r.totals) : null),
+    },
+  ];
 }
 
 export function detailedColumns(
@@ -123,19 +210,36 @@ export function detailedColumns(
   money?: ExportMoney,
 ): ExportColumn<DetailedEntry>[] {
   const tz = prefs.timezone;
+  // An entry's rate and amount are in its own currency, named in the column beside them.
+  const decimal = (minor: number | null, currency: string) =>
+    minor === null ? null : minorToDecimal(minor, currency);
   const amounts: ExportColumn<DetailedEntry>[] = money
     ? [
         {
           key: "rate",
-          header: `Rate (${money.currency})`,
-          value: (e) => (e.rateMinor === null ? null : minorToDecimal(e.rateMinor, money.currency)),
+          header: "Rate",
+          value: (e) => decimal(e.rateMinor, e.currency ?? money.currency),
         },
         {
           key: "amount",
-          header: `Amount (${money.currency})`,
-          value: (e) =>
-            e.amountMinor === null ? null : minorToDecimal(e.amountMinor, money.currency),
+          header: "Amount",
+          value: (e) => decimal(e.amountMinor, e.currency ?? money.currency),
         },
+        { key: "currency", header: "Currency", value: (e) => e.currency ?? money.currency },
+        ...(money.costs
+          ? [
+              {
+                key: "cost",
+                header: `Cost (${money.currency})`,
+                value: (e: DetailedEntry) => decimal(e.costMinor, money.currency),
+              },
+              {
+                key: "profit",
+                header: `Profit (${money.currency})`,
+                value: (e: DetailedEntry) => decimal(e.profitMinor, money.currency),
+              },
+            ]
+          : []),
       ]
     : [];
   return [
@@ -189,15 +293,7 @@ export function weeklyColumns(
     { key: "name", header: "Name", value: (r) => r.label },
     ...days,
     { key: "total", header: "Total", value: (r) => formatDuration(r.total, prefs.durationFormat) },
-    ...(money
-      ? [
-          {
-            key: "amount",
-            header: `Amount (${money.currency})`,
-            value: (r: WeeklyRow) => minorToDecimal(r.amountMinor, money.currency),
-          },
-        ]
-      : []),
+    ...(money ? amountColumns<WeeklyRow>(money, (r) => r) : []),
   ];
 }
 
@@ -304,8 +400,10 @@ function csvCell(value: string | number | null): string {
   if (value === null || value === undefined) return "";
   // Text a spreadsheet would run as a formula (=, +, -, @, tab or CR first) gets a leading
   // apostrophe, so a description cannot become a live link or command in Excel.
-  const text =
-    typeof value === "string" && /^[=+\-@\t\r]/.test(value) ? `'${value}` : String(value);
+  // A plain negative number (a loss) is a number, not a formula.
+  const risky =
+    typeof value === "string" && /^[=+\-@\t\r]/.test(value) && !/^-\d+(\.\d+)?$/.test(value);
+  const text = risky ? `'${value}` : String(value);
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 

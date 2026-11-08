@@ -28,6 +28,8 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recha
 import type { ProjectStatus } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
 
+import { amountText } from "../reports/money-cell";
+
 /** Tracked time on the project by task and by member for an inclusive date range. */
 export function StatusTab({
   status,
@@ -137,9 +139,22 @@ export function StatusTab({
         {status.money ? (
           <Stat
             label="Amount"
-            value={formatMoney(status.amountMinor, status.money.currency)}
+            value={amountText(status, status.money.currency)}
             testId="status-amount"
           />
+        ) : null}
+        {status.money?.costs ? (
+          <>
+            <Stat label="Cost" value={formatMoney(status.costMinor, status.money.currency)} />
+            <Stat
+              label="Profit"
+              value={
+                status.profitExcludedCount > 0 && status.amountMinor === 0
+                  ? "—"
+                  : formatMoney(status.profitMinor, status.money.currency)
+              }
+            />
+          </>
         ) : null}
       </div>
 

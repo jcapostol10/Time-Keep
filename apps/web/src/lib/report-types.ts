@@ -5,6 +5,7 @@ import type {
   Capacity,
   DetailedEntry,
   GroupKey,
+  MoneyAmount,
   ReportGroup,
   ReportTotals,
   RoundingRule,
@@ -23,8 +24,13 @@ export interface SeriesPoint {
   nonBillableSeconds: number;
 }
 
-/** The currency amounts are in; null when the viewer may not see amounts (they are 0). */
-export type ReportMoney = { currency: string } | null;
+/**
+ * The workspace currency (amountMinor, cost and profit are in it; amounts
+ * billed in other currencies sit in otherAmounts), and whether the viewer may
+ * see cost and profit (0 otherwise). null when the viewer may not see amounts
+ * at all: they are 0 too.
+ */
+export type ReportMoney = { currency: string; costs: boolean } | null;
 
 export interface SummaryReport {
   money: ReportMoney;
@@ -72,8 +78,10 @@ export type { WeeklyBy };
 
 export interface WeeklyReport {
   money: ReportMoney;
-  /** The week's billable amount (0 when hidden). */
+  /** The week's billable amount in the workspace currency (0 when hidden). */
   amountMinor: number;
+  /** The week's amounts in every other currency. */
+  otherAmounts: MoneyAmount[];
   weekStart: string;
   dayKeys: string[];
   by: WeeklyBy;

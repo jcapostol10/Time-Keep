@@ -141,6 +141,7 @@ const TABLE: Row[] = [
   ["entry.write", entry(OTHER), true, true, false, false],
   ["report.readTeam", NONE, true, true, true, false],
   ["report.viewAmounts", NONE, true, true, true, false],
+  ["report.viewCosts", NONE, true, true, false, false],
   ["shareLink.manage", { kind: "shareLink", createdBy: ME }, true, true, true, true],
   ["shareLink.manage", { kind: "shareLink", createdBy: OTHER }, true, true, false, false],
   ["import.users", NONE, true, true, false, false],

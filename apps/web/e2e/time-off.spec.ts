@@ -17,7 +17,7 @@ import {
  * workspace; requests fall on a Monday and Tuesday of the current year.
  */
 
-test.describe("time off", () => {
+test.describe("time off", { tag: "@nightly" }, () => {
   test("time off reduces the balance and shows on the calendar", async ({
     page,
     freshUser,

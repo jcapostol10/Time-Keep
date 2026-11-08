@@ -280,10 +280,23 @@ Rulings made while building 5c, beyond those in the plan: the person lock covers
 
 ## Phase 6 — Expenses, invoicing, budgets and profit
 
-- [ ] Cost rates and profit; multiple currencies
+- [x] Cost rates and profit; multiple currencies (Phase 6a, 2026-11-06)
 - [ ] Budgets, estimates, alerts
 - [ ] Expenses with receipts
 - [ ] Invoicing with payments and recurrence
+
+Design: `docs/superpowers/specs/2026-11-05-phase-6-design.md`, written without an interview (the owner said to decide for now and revise later); its 28 decisions are the builder's. Four branches: 6a cost, profit and currencies; 6b estimates, budgets and alerts; 6c expenses; 6d invoicing.
+
+### Phase 6a — cost, profit and currencies (migration 0016)
+
+- Cost rates are `rate` rows with `kind = 'cost'`, per member (Team page: a Cost rate column and "Cost rate" in the row menu) and per project member (the project's Rates tab), in the workspace currency, with history and the same "apply to past entries" job.
+- Every work entry carries a cost snapshot beside its billable one. Reports show Cost and Profit to owners and admins, and to managers when "Managers see cost and profit" is on; for everyone else they are zeroed on the server. A new Profit tab ranks projects, clients or people by profit, with margin and its own export.
+- A client can be billed in its own currency. An entry's currency is its project's client's, else the workspace's; a rate applies only in its own currency, so a project billed in another currency needs a project rate (the Rates tab says so). Reports, exports, the dashboard and the Status tab list one amount per currency and never add two; profit covers the workspace currency and counts what it leaves out. Nothing is ever converted. Changing a client's currency, or moving a project to a client billed in another one, asks first and relabels.
+- Share links and the dashboard never carry cost.
+
+Rulings made while building 6a, beyond the design: totals keep `amountMinor` (the workspace currency) and gain `otherAmounts`, in place of one `amounts[]`; the report engine groups by the entry's currency (the client's), not the stored rate currency, so an unrated hour on a EUR project is left out of profit instead of counting as a loss; a workspace currency change relabels only what follows the workspace, so a client that chose the old code keeps it; moving a project with rates to a client billed in another currency is for owners and admins; a client created by anyone else gets no currency; a person's cost on one project lives on the project's Rates tab, not the Access tab; the Profit route answers 403 and its page 404; a Profit export always streams (no export job, no enum change); the Detailed export prints Rate, Amount and Currency per entry; a plain negative number in a CSV is not prefixed as a formula; no chart plots money yet, so there is no currency selector. `approvals.spec.ts`, `time-off.spec.ts` and `task-groups.spec.ts` moved to the nightly lane to make room on previews.
+
+The final review (2026-11-06) found no cost leak and four defects, fixed with tests that failed first: a split dropped the cost snapshot on its second part; reports trusted the client's current currency, so an amount could show under a code it was not computed in (they now read the entry's own `rate_currency`); copying a project into a client billed in another currency copied rates that could never apply (it now starts without them); and a project relabel also relabelled time rated by member or workspace rates, reading ₱2,500 as $2,500 until a recalculation unrated it (that time now keeps its amount and currency). A rate row left in another currency than its project's is no longer shown as the current rate, so the Rates tab asks for one. One-year Summary over 1,000,000 entries with the new measures, before the review fixes: owner median 553 ms (435 ms before the phase), manager 247 ms, member 39 ms. Keying on the entry's own currency costs about 17% more in a like-for-like run on a busy machine (697 ms with the client's currency as the key, 814 ms with the entry's), still under the 1 s limit; the margin is thinner than before and is in the backlog to watch.
 
 ## Phase 7 — Scheduling and forecasting
 
