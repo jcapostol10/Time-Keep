@@ -8,6 +8,7 @@ import {
   LayoutDashboardIcon,
   type LucideIcon,
   MonitorSmartphoneIcon,
+  ReceiptIcon,
   SettingsIcon,
   TableIcon,
   TagIcon,
@@ -52,6 +53,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Time Tracker", href: workspaceRoutes.tracker, icon: TimerIcon },
       { label: "Timesheet", href: workspaceRoutes.timesheet, icon: TableIcon },
       { label: "Calendar", href: workspaceRoutes.calendar, icon: CalendarDaysIcon },
+      // Everyone records their own expenses (Phase 6c); admins and managers see their people's.
+      { label: "Expenses", href: (slug) => workspaceRoutes.expenses(slug), icon: ReceiptIcon },
       // Everyone: their own requests and balances; reviewers and admins see more inside.
       { label: "Time off", href: (slug) => workspaceRoutes.timeOff(slug), icon: CalendarOffIcon },
     ],

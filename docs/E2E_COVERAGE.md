@@ -270,6 +270,15 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A task estimate shows on the Tasks tab and in the Budget tab's task table — `budgets.spec.ts` › "a task estimate shows on the Tasks tab and the Budget tab"
 - [x] A member sees a time bar only when members see the team's time, and never a money bar — `budgets.spec.ts` › "a member sees a time bar only when the team's time is shown, never a money bar"
 
+## Expenses
+
+- [ ] A fixed expense with a receipt is listed with its amount, Billable and the receipt thumbnail; the footer totals it — `expenses.spec.ts` › "a fixed expense with a receipt is listed with its thumbnail"
+- [ ] A per-unit category computes the amount from the quantity, snapshotting the price so a later price change leaves the expense alone — `expenses.spec.ts` › "a unit category computes the amount from the quantity"
+- [ ] A submitted period locks the member's expenses; an owner edits one with a note, which the period page shows beside the expense — `expenses.spec.ts` › "a submitted period locks the member's expenses, and an admin edits with a note"
+- [ ] The Expenses report totals by category or project and exports a CSV with its four columns — `expenses.spec.ts` › "the Expenses report totals by category and exports a CSV"
+- [ ] A member sees only their own expenses on the page and in the report; an owner sees everyone's — `expenses.spec.ts` › "a member sees only their own expenses"
+- [ ] The Profit tab counts expenses: billable ones as revenue, all of them as cost — `profit.spec.ts` › "the Profit tab counts expenses"
+
 ## Permissions
 
 - [x] A manager opens a project they manage, with its Budget tab and without its Rates tab — `permissions.spec.ts` › "a manager opens a project they manage, without its Rates tab"

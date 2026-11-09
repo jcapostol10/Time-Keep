@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  formatDateKey,
   formatDayHeading,
   formatDuration,
+  formatMoney,
   formatPeriod,
   formatTimeOfDay,
   localDateKey,
@@ -31,6 +33,12 @@ const VERBS: Record<ApprovalEventDTO["action"], string> = {
   ADMIN_EDIT: "changed an entry",
   AUTO_WITHDRAW: "withdrew the period when approvals were turned off",
 };
+
+/** What an event did: an ADMIN_EDIT names an entry or, from Phase 6c, an expense. */
+function verbOf(e: ApprovalEventDTO): string {
+  if (e.action === "ADMIN_EDIT" && e.expenseId) return "changed an expense";
+  return VERBS[e.action];
+}
 
 /** A submitted period for its owner and reviewers: days, totals, history, and the decision. */
 export function PeriodView({ slug, view }: { slug: string; view: PeriodViewDTO }) {
@@ -82,6 +90,16 @@ export function PeriodView({ slug, view }: { slug: string; view: PeriodViewDTO }
           {" · "}billable <span className="tabular-nums">{fmt(view.totals.billableSeconds)}</span>
           {" · "}
           {view.totals.entryCount} {view.totals.entryCount === 1 ? "entry" : "entries"}
+          {view.totals.expenseCount > 0 ? (
+            <>
+              {" · "}
+              {view.totals.expenseCount} {view.totals.expenseCount === 1 ? "expense" : "expenses"}
+              {" · "}
+              <span className="tabular-nums">
+                {formatMoney(view.totals.expenseMinor, view.currency)}
+              </span>
+            </>
+          ) : null}
         </span>
         {changed ? (
           <span className="text-muted-foreground text-sm">
@@ -162,6 +180,27 @@ export function PeriodView({ slug, view }: { slug: string; view: PeriodViewDTO }
         )}
       </section>
 
+      {view.expenses.length > 0 ? (
+        <section aria-label="Expenses" className="space-y-2">
+          <h2 className="text-lg font-semibold">Expenses</h2>
+          <ul className="divide-y rounded-md border">
+            {view.expenses.map((e) => (
+              <li key={e.id} className="flex flex-wrap gap-x-3 px-3 py-2 text-sm">
+                <span className="text-muted-foreground tabular-nums">{formatDateKey(e.date)}</span>
+                <span className="min-w-0 flex-1 truncate">
+                  {e.categoryName}
+                  {e.description ? <> · {e.description}</> : null}
+                  <span className="text-muted-foreground"> · {e.projectName}</span>
+                </span>
+                <span className="w-24 text-right tabular-nums">
+                  {formatMoney(e.amountMinor, view.currency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section aria-label="History" className="space-y-2">
         <h2 className="text-lg font-semibold">History</h2>
         <ol className="space-y-2 text-sm">
@@ -170,7 +209,7 @@ export function PeriodView({ slug, view }: { slug: string; view: PeriodViewDTO }
               <span className="text-muted-foreground">
                 {localDateKey(new Date(e.createdAt), view.timezone)}
               </span>{" "}
-              <strong>{e.actorName ?? "Someone"}</strong> {VERBS[e.action]}
+              <strong>{e.actorName ?? "Someone"}</strong> {verbOf(e)}
               {e.note ? <>: “{e.note}”</> : null}
             </li>
           ))}

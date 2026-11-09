@@ -41,15 +41,18 @@ async function save(res: Response, fallback: string) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-/** Downloads the current report, with its filters; a large one becomes an export job. */
-export function ExportMenu({ kind }: { kind: ReportKind | "attendance" | "profit" }) {
+/**
+ * Downloads the current report, with its filters; a large one becomes an export job.
+ * The Expenses tab also offers its receipts as a zip (Phase 6c), always a job.
+ */
+export function ExportMenu({ kind }: { kind: ReportKind | "attendance" | "profit" | "expenses" }) {
   const { slug } = useTracker();
   const { params } = useReportQuery();
   const [busy, setBusy] = useState(false);
 
-  async function exportAs(format: string) {
+  async function exportAs(format: string, report: string = kind) {
     const search = new URLSearchParams(params);
-    search.set("report", kind);
+    search.set("report", report);
     search.set("format", format);
     setBusy(true);
     try {
@@ -88,6 +91,11 @@ export function ExportMenu({ kind }: { kind: ReportKind | "attendance" | "profit
             {f.label}
           </DropdownMenuItem>
         ))}
+        {kind === "expenses" ? (
+          <DropdownMenuItem onSelect={() => void exportAs("zip", "receipts")}>
+            Download receipts (zip)
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
