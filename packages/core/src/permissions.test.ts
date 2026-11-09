@@ -176,6 +176,15 @@ const TABLE: Row[] = [
   ["pin.setOwn", person(ME), true, true, true, true],
   ["pin.setOwn", person(OTHER), false, false, false, false],
   ["member.manageLimited", NONE, true, true, false, false],
+  // Phase 6c: expenses follow entries; categories are admins'.
+  ["expense.read", entry(ME), true, true, true, true],
+  ["expense.read", entry(MANAGED), true, true, true, false],
+  ["expense.read", entry(OTHER, MANAGED_PROJECT), true, true, true, false],
+  ["expense.read", entry(OTHER), true, true, false, false],
+  ["expense.write", entry(ME), true, true, true, true],
+  ["expense.write", entry(MANAGED), true, true, true, false],
+  ["expense.write", entry(OTHER, MANAGED_PROJECT), true, true, false, false],
+  ["expenseCategory.manage", NONE, true, true, false, false],
 ];
 
 describe("can", () => {
@@ -389,6 +398,32 @@ describe("renderPermissionsMarkdown", () => {
     const md = renderPermissionsMarkdown();
     expect(md).toContain("| Action | Owner | Admin | Manager | Member |");
     for (const action of ACTIONS) expect(md).toContain(`\`${action}\``);
+    expect(md).toContain("## Expenses");
+    expect(md).toContain("## Expense categories");
+  });
+});
+
+describe("expenses (Phase 6c)", () => {
+  it("a member reads and writes their own and gets 404 for a colleague's", () => {
+    const m = actor("member");
+    expect(can(m, "expense.read", entry(ME))).toBe(true);
+    expect(can(m, "expense.write", entry(ME))).toBe(true);
+    expect(denial(m, "expense.read", entry(OTHER))).toBe(404);
+    expect(denial(m, "expense.write", entry(OTHER))).toBe(404);
+  });
+
+  it("a manager reads their people's and their projects', writes only their people's", () => {
+    const mgr = actor("manager");
+    expect(can(mgr, "expense.read", entry(MANAGED))).toBe(true);
+    expect(can(mgr, "expense.read", entry(OTHER, MANAGED_PROJECT))).toBe(true);
+    expect(can(mgr, "expense.write", entry(MANAGED))).toBe(true);
+    expect(denial(mgr, "expense.write", entry(OTHER, MANAGED_PROJECT))).toBe(404);
+    expect(denial(mgr, "expense.read", entry(OTHER))).toBe(404);
+  });
+
+  it("categories are for owners and admins: 403 for a manager", () => {
+    expect(denial(actor("manager"), "expenseCategory.manage", NONE)).toBe(403);
+    expect(can(actor("admin"), "expenseCategory.manage", NONE)).toBe(true);
   });
 });
 

@@ -23,6 +23,7 @@ import {
   ESTIMATE_RESETS,
   normalizeThresholds,
 } from "./estimates";
+import { EXPENSE_CATEGORY_KINDS, type ExpenseCategoryKind } from "./expenses";
 import { KIOSK_ACTIONS } from "./kiosk";
 import { CREATOR_SETTINGS, PAGES, TASK_VISIBILITY } from "./permissions";
 import { REQUIRED_FIELDS } from "./required-fields";
@@ -862,3 +863,85 @@ export const kioskPunchSchema = z.object({
   action: z.enum(KIOSK_ACTIONS),
 });
 export type KioskPunchInput = z.infer<typeof kioskPunchSchema>;
+
+// --- Expenses (Phase 6c, decisions 14–17) -----------------------------------------
+
+/** Up to 10^11 major units of a two-decimal currency. */
+const expenseMinorSchema = z.int().min(1).max(1e13);
+
+const expenseCategoryFields = {
+  name: z.string().trim().min(1, "Name is required").max(100),
+  kind: z.enum(EXPENSE_CATEGORY_KINDS),
+  /** What a UNIT category counts (km, pages…). */
+  unitName: z.string().trim().max(20).nullable().default(null),
+  /** The price of one unit, in the workspace currency's minor units. */
+  unitPriceMinor: z.int().min(0).max(1e13).nullable().default(null),
+  billableDefault: z.boolean().default(true),
+};
+
+function requireUnitFields(
+  v: { kind?: ExpenseCategoryKind; unitName?: string | null; unitPriceMinor?: number | null },
+  ctx: z.RefinementCtx,
+) {
+  if (v.kind !== "UNIT") return;
+  if (!v.unitName) {
+    ctx.addIssue({ code: "custom", path: ["unitName"], message: "Name the unit." });
+  }
+  if (v.unitPriceMinor === null || v.unitPriceMinor === undefined) {
+    ctx.addIssue({ code: "custom", path: ["unitPriceMinor"], message: "Enter a price per unit." });
+  }
+}
+/** A UNIT category needs its unit name and price; a FIXED one has neither. */
+export const expenseCategoryInputSchema = z
+  .object(expenseCategoryFields)
+  .superRefine(requireUnitFields);
+export type ExpenseCategoryInput = z.infer<typeof expenseCategoryInputSchema>;
+
+/** Absent keys are left untouched; a kind change to UNIT must bring the unit fields. */
+export const expenseCategoryPatchSchema = z
+  .object({
+    name: expenseCategoryFields.name.optional(),
+    kind: expenseCategoryFields.kind.optional(),
+    unitName: z.string().trim().max(20).nullable().optional(),
+    unitPriceMinor: z.int().min(0).max(1e13).nullable().optional(),
+    billableDefault: z.boolean().optional(),
+    archived: z.boolean().optional(),
+  })
+  .superRefine(requireUnitFields);
+export type ExpenseCategoryPatch = z.infer<typeof expenseCategoryPatchSchema>;
+
+const expenseFields = {
+  projectId: z.string().min(1),
+  categoryId: z.string().min(1),
+  /** A local date, "YYYY-MM-DD": the day the money was spent, in no time zone. */
+  date: z.iso.date(),
+  /** FIXED categories: the amount typed, in the workspace currency. */
+  amountMinor: expenseMinorSchema.optional(),
+  /** UNIT categories: the quantity in hundredths; the price is the category's, snapshotted. */
+  quantityCenti: z.int().min(1).max(1e9).optional(),
+  billable: z.boolean(),
+  /** The expense's own text; `note` (entryNoteInputSchema) is the approval note. */
+  description: z.string().trim().max(1000).default(""),
+};
+
+export const expenseInputSchema = z
+  .object({
+    /** The person the expense is for (add for others); the caller by default. */
+    userId: z.string().min(1).optional(),
+    ...expenseFields,
+  })
+  .extend(entryNoteInputSchema.shape);
+export type ExpenseInput = z.infer<typeof expenseInputSchema>;
+
+export const expensePatchSchema = z
+  .object({
+    projectId: expenseFields.projectId.optional(),
+    categoryId: expenseFields.categoryId.optional(),
+    date: expenseFields.date.optional(),
+    amountMinor: expenseFields.amountMinor,
+    quantityCenti: expenseFields.quantityCenti,
+    billable: z.boolean().optional(),
+    description: z.string().trim().max(1000).optional(),
+  })
+  .extend(entryNoteInputSchema.shape);
+export type ExpensePatch = z.infer<typeof expensePatchSchema>;

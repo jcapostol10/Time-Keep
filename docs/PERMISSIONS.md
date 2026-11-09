@@ -157,3 +157,16 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 | Action | Owner | Admin | Manager | Member |
 | --- | --- | --- | --- | --- |
 | `pin.setOwn` | their own | their own | their own | their own |
+
+## Expenses
+
+| Action | Owner | Admin | Manager | Member |
+| --- | --- | --- | --- | --- |
+| `expense.read` | yes | yes | their scope | their own (everyone's if the workspace allows) |
+| `expense.write` | yes | yes | themselves and people they manage | their own |
+
+## Expense categories
+
+| Action | Owner | Admin | Manager | Member |
+| --- | --- | --- | --- | --- |
+| `expenseCategory.manage` | yes | yes | — | — |

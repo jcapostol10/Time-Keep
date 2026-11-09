@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { EXPENSE_GROUP_KEYS } from "./expenses";
 import type { ViewerPrefs } from "./prefs";
 import { MAX_DATE_RANGE_DAYS } from "./schemas";
 import {
@@ -53,8 +54,11 @@ export type Bucket = (typeof BUCKETS)[number];
 export const REPORT_KINDS = ["summary", "detailed", "weekly"] as const;
 export type ReportKind = (typeof REPORT_KINDS)[number];
 /** The report pages: the kinds, plus the Audit tab (the Detailed report with audit criteria). */
-/** The report tabs; Attendance (Phase 5b) reads its own engine, not the entry groupings. */
-export type ReportView = ReportKind | "audit" | "attendance" | "profit";
+/**
+ * The report tabs; Attendance (Phase 5b) reads its own engine, not the entry groupings,
+ * and Expenses (Phase 6c) reads the expense aggregate.
+ */
+export type ReportView = ReportKind | "audit" | "attendance" | "profit" | "expenses";
 
 /** What the Profit tab groups by (Phase 6a): one level, sorted by profit. */
 export const PROFIT_GROUP_KEYS = [
@@ -75,7 +79,8 @@ export const AUDIT_CRITERIA = ["noProject", "noTask", "short", "long"] as const;
 export type AuditCriterion = (typeof AUDIT_CRITERIA)[number];
 /** What the Audit tab opens with: entries without a project, or longer than 10 hours. */
 export const AUDIT_DEFAULT_PARAMS = "audit=noProject&audit=long";
-export const EXPORT_FORMATS = ["csv", "xlsx", "pdf"] as const;
+/** zip: the receipts of the Expenses report (Phase 6c), always an export job. */
+export const EXPORT_FORMATS = ["csv", "xlsx", "pdf", "zip"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
 export const EXPORT_REPORTS = [
   "summary",
@@ -83,6 +88,8 @@ export const EXPORT_REPORTS = [
   "weekly",
   "project-status",
   "attendance",
+  "expenses",
+  "receipts",
 ] as const;
 export type ExportReport = (typeof EXPORT_REPORTS)[number];
 export const EXPORT_STATUSES = ["queued", "running", "done", "failed"] as const;
@@ -134,6 +141,10 @@ export const reportQuerySchema = z
     bucket: z.enum(BUCKETS).optional(),
     /** The Weekly report's rows: projects, or people (team readers). */
     weeklyBy: z.enum(WEEKLY_BYS).default("project"),
+    /** Expense categories (Phase 6c): the Expenses page and report. */
+    categoryIds: idList,
+    /** What the Expenses report groups by. */
+    expenseBy: z.enum(EXPENSE_GROUP_KEYS).default("category"),
   })
   .superRefine((q, ctx) => {
     if (q.preset !== "custom") return;
@@ -158,6 +169,7 @@ const ARRAY_KEYS = [
   "tagIds",
   "groupBy",
   "audit",
+  "categoryIds",
 ] as const;
 const SCALAR_KEYS = [
   "preset",
@@ -172,6 +184,7 @@ const SCALAR_KEYS = [
   "description",
   "bucket",
   "weeklyBy",
+  "expenseBy",
 ] as const;
 
 export const DEFAULT_REPORT_QUERY: ReportQuery = reportQuerySchema.parse({});
@@ -323,6 +336,10 @@ export interface ReportTotals {
   profitMinor: number;
   /** Entries billed in another currency, which profit leaves out. */
   profitExcludedCount: number;
+  /** Every expense of the group (Phase 6c): a cost, in the workspace currency. Profit tab only. */
+  expenseMinor: number;
+  /** The billable expenses of the group: revenue. Profit tab only. */
+  billableExpenseMinor: number;
 }
 
 export const EMPTY_TOTALS: ReportTotals = {
@@ -336,6 +353,8 @@ export const EMPTY_TOTALS: ReportTotals = {
   uncostedCount: 0,
   profitMinor: 0,
   profitExcludedCount: 0,
+  expenseMinor: 0,
+  billableExpenseMinor: 0,
 };
 
 /** Two lists of amounts as one: summed per currency, sorted by code. */
@@ -361,18 +380,34 @@ export function addTotals(a: ReportTotals, b: ReportTotals): ReportTotals {
     uncostedCount: a.uncostedCount + b.uncostedCount,
     profitMinor: a.profitMinor + b.profitMinor,
     profitExcludedCount: a.profitExcludedCount + b.profitExcludedCount,
+    expenseMinor: a.expenseMinor + b.expenseMinor,
+    billableExpenseMinor: a.billableExpenseMinor + b.billableExpenseMinor,
   };
 }
 
-/** Profit as a percent of the amount, to one decimal; null when nothing was billed. */
-export function marginPercent(t: Pick<ReportTotals, "amountMinor" | "profitMinor">): number | null {
-  if (t.amountMinor === 0) return null;
-  return Math.round((t.profitMinor * 1000) / t.amountMinor) / 10;
+/**
+ * Profit as a percent of revenue (the billed amount plus billable expenses), to one
+ * decimal; null when nothing was billed.
+ */
+export function marginPercent(
+  t: Pick<ReportTotals, "amountMinor" | "profitMinor"> & { billableExpenseMinor?: number },
+): number | null {
+  const revenue = t.amountMinor + (t.billableExpenseMinor ?? 0);
+  if (revenue === 0) return null;
+  return Math.round((t.profitMinor * 1000) / revenue) / 10;
 }
 
 /** Totals for a viewer who may not see cost and profit: they read 0, like hidden amounts. */
 export function hideCosts<T extends ReportTotals>(t: T): T {
-  return { ...t, costMinor: 0, uncostedCount: 0, profitMinor: 0, profitExcludedCount: 0 };
+  return {
+    ...t,
+    costMinor: 0,
+    uncostedCount: 0,
+    profitMinor: 0,
+    profitExcludedCount: 0,
+    expenseMinor: 0,
+    billableExpenseMinor: 0,
+  };
 }
 
 export interface GroupValue {
