@@ -10,6 +10,9 @@ export function budgetAlertEmail(b: {
   workspaceName: string;
   projectId: string;
   projectName: string;
+  /** The threshold crossed (a whole percent). */
+  threshold: number;
+  /** Where the project stands now. */
   percent: number;
   /** Formatted: "2:00:00" or "$50.00". */
   usedText: string;
@@ -18,9 +21,9 @@ export function budgetAlertEmail(b: {
   periodLabel: string | null;
 }): Email {
   return {
-    subject: `${b.projectName} has used ${b.percent}% of its estimate`,
-    title: "Budget alert",
-    intro: `${b.projectName} in ${b.workspaceName} has used ${b.usedText} of its ${b.estimateText} estimate (${b.percent}%)${b.periodLabel ? ` for ${b.periodLabel}` : ""}. Budgets are checked once a day.`,
+    subject: `${b.projectName} has passed ${b.threshold}% of its estimate`,
+    title: `Budget alert: ${b.threshold}%`,
+    intro: `${b.projectName} in ${b.workspaceName} has passed ${b.threshold}% of its ${b.estimateText} estimate${b.periodLabel ? ` for ${b.periodLabel}` : ""}: now at ${b.percent}% (${b.usedText}). Budgets are checked once a day.`,
     cta: {
       label: "Open the Budget tab",
       url: `${b.appUrl}/w/${b.slug}/projects/${b.projectId}/budget`,

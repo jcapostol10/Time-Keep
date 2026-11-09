@@ -5,7 +5,6 @@ import {
   type EstimateInput,
   type EstimateKind,
   type EstimateReset,
-  parseDuration,
   parseMoney,
 } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
@@ -25,28 +24,8 @@ import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
+import { estimateAmountText, parseHours } from "@/lib/estimate-input";
 import { setProjectEstimateAction } from "@/server/actions/estimates";
-
-/**
- * Hours typed as a duration ("40", "1.5", "1:30", "90m") or, past the
- * duration parser's 999-hour ceiling, as a plain number of hours.
- */
-export function parseHours(input: string): number | null {
-  const text = input.trim();
-  if (!text) return null;
-  const parsed = parseDuration(text);
-  if (parsed !== null) return parsed > 0 ? parsed : null;
-  if (!/^\d+(?:[.,]\d+)?$/.test(text)) return null;
-  const hours = Number(text.replace(",", "."));
-  return hours > 0 ? Math.round(hours * 3600) : null;
-}
-
-/** Seconds as hours for the input: 5400 → "1.5", 36000 → "10". */
-export function hoursText(seconds: number | null): string {
-  if (seconds === null) return "";
-  const hours = seconds / 3600;
-  return Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100);
-}
 
 const KINDS: { value: EstimateKind; label: string; help: string }[] = [
   { value: "NONE", label: "None", help: "No budget on this project." },
@@ -72,11 +51,7 @@ export function EstimateForm({
   const id = useId();
   const [pending, startTransition] = useTransition();
   const [kind, setKind] = useState<EstimateKind>(estimate.kind);
-  const [amount, setAmount] = useState(
-    estimate.kind === "MONEY" && estimate.minor !== null
-      ? (estimate.minor / 100).toString()
-      : hoursText(estimate.seconds),
-  );
+  const [amount, setAmount] = useState(estimateAmountText(estimate, currency));
   const [reset, setReset] = useState<EstimateReset>(estimate.reset);
   const [alerts, setAlerts] = useState(estimate.alerts);
   const [error, setError] = useState<string | null>(null);

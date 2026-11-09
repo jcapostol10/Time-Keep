@@ -7,6 +7,7 @@ import {
   can,
   entryCurrency,
   type CopyProjectInput,
+  NO_ESTIMATE,
   DEFAULT_REPORT_QUERY,
   type DeleteProjectMode,
   pickColor,
@@ -156,7 +157,8 @@ function toListItem(
     favorite,
     trackedSeconds: tracked,
     memberCount: row.members.length,
-    estimate: estimateOf(row),
+    // The figures travel only with a bar the viewer may see (review fix I1).
+    estimate: progress ? estimateOf(row) : NO_ESTIMATE,
     progress,
   };
 }

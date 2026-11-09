@@ -94,11 +94,13 @@ describe("budget alerts", () => {
     expect((await run()).budgets).toBe(0);
 
     const [row] = await db
-      .select({ subject: emailOutbox.subject })
+      .select({ subject: emailOutbox.subject, text: emailOutbox.text })
       .from(emailOutbox)
-      .where(eq(emailOutbox.kind, `budget:${siteId}:100:all`))
+      .where(eq(emailOutbox.kind, `budget:${siteId}:80:all`))
       .limit(1);
-    expect(row?.subject).toBe("Site has used 100% of its estimate");
+    // Review fix I3: each threshold is its own alert, named in the subject.
+    expect(row?.subject).toBe("Site has passed 80% of its estimate");
+    expect(row?.text).toContain("now at 100%");
   });
 
   it("a monthly estimate restarts next month", async () => {

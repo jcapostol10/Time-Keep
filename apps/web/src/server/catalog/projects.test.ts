@@ -1,4 +1,4 @@
-import type { ClientInput } from "@timekeep/core";
+import { type ClientInput, NO_ESTIMATE } from "@timekeep/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -371,6 +371,8 @@ describe("progress on the projects list (Phase 6b)", () => {
     ]);
     const forMember = await list(member);
     expect(forMember.map((p) => p.progress)).toEqual([null, null]);
+    // Review fix I1: the figures travel only with a bar the viewer may see.
+    expect(forMember.map((p) => p.estimate)).toEqual([NO_ESTIMATE, NO_ESTIMATE]);
 
     await db
       .update(workspaceSettings)

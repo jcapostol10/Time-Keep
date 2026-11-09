@@ -80,7 +80,7 @@ test.describe("estimates, budgets and alerts", () => {
     const first = await runDailyJob(page.request, freshUser.slug, new Date());
     expect(first.budgets).toBeGreaterThanOrEqual(1);
     const mail = await waitForEmail(freshUser.email, {
-      subject: /Launch has used 100% of its estimate/,
+      subject: /Launch has passed 100% of its estimate/,
     });
     expect(mail.Text).toContain("Budgets are checked once a day");
     // The same day again: every threshold was already sent.

@@ -144,6 +144,7 @@ export async function evaluateBudgets(db: Database, zone: BudgetZone, now: Date)
         workspaceName: zone.name,
         projectId: row.id,
         projectName: row.name,
+        threshold,
         percent: p.percent,
         usedText: measureText(p, p.used),
         estimateText: measureText(p, p.estimate),

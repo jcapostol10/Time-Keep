@@ -31,7 +31,7 @@ import type { z } from "zod";
 import type { TaskDTO } from "@/lib/catalog-types";
 import { createTaskAction, updateTaskAction } from "@/server/actions/tasks";
 
-import { hoursText, parseHours } from "./estimate-form";
+import { hoursText, parseHours } from "@/lib/estimate-input";
 import type { GroupOption } from "./tasks-tab";
 
 type FormValues = z.input<typeof taskInputSchema>;
