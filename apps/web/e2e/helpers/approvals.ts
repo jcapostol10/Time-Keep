@@ -77,7 +77,11 @@ export const requestRow = (page: Page, name: string, p: Period) =>
   page.getByRole("row", { name: new RegExp(`${name}.*${formatPeriod(p)}`) });
 
 /** Runs the daily job for one workspace at `now` (e2e hook; never in production). */
-export async function runDailyJob(request: APIRequestContext, slug: string, now: Date) {
+export async function runDailyJob(
+  request: APIRequestContext,
+  slug: string,
+  now: Date,
+): Promise<{ reminders: number; targets: number; budgets: number; sent: number }> {
   const res = await request.get(
     `/api/test/run-daily?slug=${encodeURIComponent(slug)}&now=${encodeURIComponent(now.toISOString())}`,
     {
@@ -87,4 +91,5 @@ export async function runDailyJob(request: APIRequestContext, slug: string, now:
     },
   );
   expect(res.ok(), `run-daily answered ${res.status()}`).toBe(true);
+  return (await res.json()) as Awaited<ReturnType<typeof runDailyJob>>;
 }

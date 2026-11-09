@@ -197,14 +197,9 @@ test.describe("project detail", () => {
     await expect(page.getByRole("heading", { level: 1 })).not.toContainText("Archived");
   });
 
-  test("the Budget tab says which phase brings it and the Rates tab sets rates", async ({
-    page,
-    freshUser,
-  }) => {
+  test("the Rates tab sets rates", async ({ page, freshUser }) => {
     await createProjectViaUi(page, freshUser.slug, "Website");
     await openProject(page, freshUser.slug, "Website");
-    await tab(page, "Budget").click();
-    await expect(page.getByText(/Phase 6/)).toBeVisible();
     await tab(page, "Rates").click();
     await expect(page.getByRole("heading", { name: "Project rate" })).toBeVisible();
   });

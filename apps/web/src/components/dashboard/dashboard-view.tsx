@@ -21,6 +21,7 @@ import { fetchJson } from "@/lib/fetch-json";
 import { detailedHref } from "@/lib/report-links";
 import type { DashboardMe, TeamMember } from "@/server/dashboard";
 
+import { ProgressBar } from "../projects/progress-bar";
 import { DatePresetMenu } from "../reports/date-preset-menu";
 import { MoneyCell } from "../reports/money-cell";
 import { useReportQuery } from "../reports/report-url";
@@ -92,6 +93,13 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
               <p className="text-muted-foreground text-sm tabular-nums">
                 {fmt(data.topProject.seconds)}
               </p>
+            ) : null}
+            {data.topProject?.progress ? (
+              <ProgressBar
+                progress={data.topProject.progress}
+                durationFormat={viewer.durationFormat}
+                className="mt-2"
+              />
             ) : null}
           </CardContent>
         </Card>

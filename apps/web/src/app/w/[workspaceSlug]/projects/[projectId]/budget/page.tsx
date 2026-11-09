@@ -1,24 +1,32 @@
-import { PiggyBankIcon } from "lucide-react";
+import { resolveViewerPrefs } from "@timekeep/core";
+import { getDb } from "@timekeep/db";
 import type { Metadata } from "next";
 
-import { EmptyState } from "@/components/empty-state";
-import { requireWorkspacePage } from "@/server/workspace-access";
-import { authorize } from "@/server/authz";
+import { BudgetTab } from "@/components/projects/budget-tab";
+import { workspaceRoutes } from "@/lib/routes";
+import { authorizeProject } from "@/server/authz";
 import { authorizePage } from "@/server/authz-page";
+import { getProjectBudget } from "@/server/budgets";
+import { requireWorkspacePage } from "@/server/workspace-access";
 
 export const metadata: Metadata = { title: "Budget" };
 
+/** The project's estimate and progress (Phase 6b): owners, admins and the project's managers. */
 export default async function ProjectBudgetPage({
   params,
 }: PageProps<"/w/[workspaceSlug]/projects/[projectId]/budget">) {
-  const { workspaceSlug } = await params;
+  const { workspaceSlug, projectId } = await params;
   const ctx = await requireWorkspacePage(workspaceSlug);
-  await authorizePage(() => authorize(ctx, "rate.view"));
+  const viewer = await authorizePage(() => authorizeProject(ctx, "project.update", projectId));
+  const prefs = resolveViewerPrefs(ctx.user, ctx.settings);
+  const budget = await getProjectBudget(getDb(), viewer, projectId, new Date());
   return (
-    <EmptyState
-      icon={PiggyBankIcon}
-      title="Budgets and estimates arrive in Phase 6"
-      description="Set a time or money estimate, watch progress on the projects list and get alerts as it fills up."
+    <BudgetTab
+      slug={workspaceSlug}
+      projectId={projectId}
+      budget={budget}
+      durationFormat={prefs.durationFormat}
+      settingsHref={`${workspaceRoutes.settings(workspaceSlug)}#budgets`}
     />
   );
 }

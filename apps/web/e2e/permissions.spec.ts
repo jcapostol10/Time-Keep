@@ -16,7 +16,8 @@ test.describe("permissions", () => {
     const tabs = page.getByRole("tablist", { name: "Project sections" });
     await expect(tabs.getByRole("tab", { name: "Tasks" })).toBeVisible();
     await expect(tabs.getByRole("tab", { name: "Rates" })).toHaveCount(0);
-    await expect(tabs.getByRole("tab", { name: "Budget" })).toHaveCount(0);
+    // Budgets are theirs to set (Phase 6b), rates are not.
+    await expect(tabs.getByRole("tab", { name: "Budget" })).toBeVisible();
   });
 
   test("a manager gets not-found for a project they do not manage", async ({ page, demoUser }) => {

@@ -31,7 +31,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@timekeep/ui/components/select";
+import { Input } from "@timekeep/ui/components/input";
 import { Switch } from "@timekeep/ui/components/switch";
+import { useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 
 /**
@@ -101,6 +103,39 @@ export function SettingsSection({
 
 function toggled<T extends string>(list: T[], item: T, on: boolean): T[] {
   return on ? [...new Set([...list, item])] : list.filter((x) => x !== item);
+}
+
+/**
+ * The budget thresholds as one text field ("50, 80, 100"): the typed text is
+ * kept while editing, and the parsed numbers go to the form on every change.
+ */
+function ThresholdsInput({
+  value,
+  onChange,
+  invalid,
+}: {
+  value: number[];
+  onChange: (value: number[]) => void;
+  invalid: boolean;
+}) {
+  const [text, setText] = useState(value.join(", "));
+  return (
+    <Input
+      aria-label="Budget alert thresholds"
+      inputMode="numeric"
+      value={text}
+      aria-invalid={invalid || undefined}
+      onChange={(e) => {
+        setText(e.target.value);
+        const parsed = e.target.value
+          .split(/[,\s]+/)
+          .filter(Boolean)
+          .map(Number);
+        onChange(parsed.every(Number.isFinite) ? parsed : [Number.NaN]);
+      }}
+      className="max-w-xs"
+    />
+  );
 }
 
 export function RulesFields() {
@@ -376,6 +411,35 @@ export function RulesFields() {
                 For the people and projects they manage. A manager who sees cost can work out what
                 their people are paid.
               </FormDescription>
+            </FormItem>
+          )}
+        />
+      </SettingsSection>
+
+      <SettingsSection
+        id="budgets"
+        title="Budgets"
+        description="A project can carry one estimate, by time or by money, for the whole project or each month. Owners, admins and the project's managers set it on its Budget tab."
+      >
+        <FormField
+          control={form.control}
+          name="budgetThresholds"
+          render={({ field, fieldState }) => (
+            <FormItem>
+              <FormLabel>Budget alert thresholds (%)</FormLabel>
+              <FormControl>
+                <ThresholdsInput
+                  value={field.value}
+                  onChange={field.onChange}
+                  invalid={fieldState.invalid}
+                />
+              </FormControl>
+              <FormDescription>
+                Percent of the estimate at which owners, admins and the project&apos;s managers get
+                an email, up to five whole numbers from 1 to 200. Checked once a day, so an alert
+                can arrive the morning after.
+              </FormDescription>
+              <FormMessage />
             </FormItem>
           )}
         />

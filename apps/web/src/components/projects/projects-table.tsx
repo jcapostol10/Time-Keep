@@ -36,6 +36,7 @@ import {
 
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { FavoriteButton } from "./favorite-button";
+import { ProgressBar } from "./progress-bar";
 import { ProjectDialog } from "./project-dialog";
 import type { ClientOption } from "./projects-toolbar";
 
@@ -202,7 +203,15 @@ export function ProjectsTable({
                   {formatDuration(p.trackedSeconds, "hh:mm:ss")}
                 </TableCell>
                 <TableCell className="text-muted-foreground hidden md:table-cell">
-                  <span title="Estimates arrive in Phase 6">—</span>
+                  {p.progress ? (
+                    <ProgressBar
+                      progress={p.progress}
+                      durationFormat="hh:mm:ss"
+                      className="min-w-40"
+                    />
+                  ) : (
+                    "—"
+                  )}
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">
                   <Badge variant={p.visibility === "PRIVATE" ? "default" : "secondary"}>

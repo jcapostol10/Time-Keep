@@ -23,6 +23,7 @@ import { Input } from "@timekeep/ui/components/input";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type { z } from "zod";
@@ -30,6 +31,7 @@ import type { z } from "zod";
 import type { TaskDTO } from "@/lib/catalog-types";
 import { createTaskAction, updateTaskAction } from "@/server/actions/tasks";
 
+import { hoursText, parseHours } from "./estimate-form";
 import type { GroupOption } from "./tasks-tab";
 
 type FormValues = z.input<typeof taskInputSchema>;
@@ -61,6 +63,10 @@ export function TaskDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const estimateId = useId();
+  // The optional time estimate (Phase 6b): hours typed as a duration.
+  const [estimate, setEstimate] = useState(hoursText(task?.estimateSeconds ?? null));
+  const [estimateError, setEstimateError] = useState<string | null>(null);
   const form = useForm<FormValues, unknown, TaskInput>({
     resolver: zodResolver(taskInputSchema),
     defaultValues: { name: task?.name ?? "", groupIds: task?.groupIds ?? [] },
@@ -72,9 +78,18 @@ export function TaskDialog({
       form.setError("groupIds", { message: PICK_A_GROUP });
       return;
     }
+    const estimateSeconds = estimate.trim() ? parseHours(estimate) : null;
+    if (estimate.trim() && estimateSeconds === null) {
+      setEstimateError("Enter the hours, e.g. 8 or 1:30.");
+      return;
+    }
     const result = task
-      ? await updateTaskAction(slug, task.id, { name: values.name, groupIds: values.groupIds })
-      : await createTaskAction(slug, projectId, values);
+      ? await updateTaskAction(slug, task.id, {
+          name: values.name,
+          groupIds: values.groupIds,
+          estimateSeconds,
+        })
+      : await createTaskAction(slug, projectId, { ...values, estimateSeconds });
     if (!result.ok) {
       if (/already exists/.test(result.error)) form.setError("name", { message: result.error });
       else if (result.error === PICK_A_GROUP) form.setError("groupIds", { message: result.error });
@@ -93,7 +108,7 @@ export function TaskDialog({
           <DialogTitle>{task ? "Rename task" : "New task"}</DialogTitle>
           <DialogDescription>
             {task
-              ? "Change the name or the groups."
+              ? "Change the name, the groups or the estimate."
               : byGroup
                 ? "Only the members of its groups can track time on it."
                 : "Anyone on the project can track time on it."}
@@ -161,6 +176,23 @@ export function TaskDialog({
                 </FormItem>
               )}
             />
+            <div className="space-y-1.5">
+              <label htmlFor={estimateId} className="text-sm font-medium">
+                Estimate (hours)
+              </label>
+              <Input
+                id={estimateId}
+                inputMode="decimal"
+                placeholder="Optional, e.g. 8"
+                value={estimate}
+                onChange={(e) => {
+                  setEstimate(e.target.value);
+                  setEstimateError(null);
+                }}
+                aria-invalid={estimateError ? true : undefined}
+              />
+              {estimateError ? <p className="text-destructive text-sm">{estimateError}</p> : null}
+            </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
