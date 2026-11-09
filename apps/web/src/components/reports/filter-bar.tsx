@@ -21,21 +21,27 @@ import {
 import { FilterIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { useExpenseCategories } from "../expenses/use-expenses";
 import { useTracker } from "../tracker/tracker-provider";
 import { DatePresetMenu } from "./date-preset-menu";
 import { MultiSelectFilter } from "./multi-select-filter";
 import { useReportQuery } from "./report-url";
 import { useReportOptions } from "./use-report";
 
-/** Every filter writes to the URL; below md they sit in a sheet behind a "Filters" button. */
-/** `peopleOnly`: the range and Users / Groups (the Attendance tab has no entry filters). */
+/**
+ * Every filter writes to the URL; below md they sit in a sheet behind a "Filters" button.
+ * `peopleOnly`: the range and Users / Groups (the Attendance tab has no entry filters).
+ * `expenses`: the Expenses tab's filters: no tasks, tags, type or text; categories instead.
+ */
 export function FilterBar({
   extra,
   peopleOnly = false,
-}: { extra?: React.ReactNode; peopleOnly?: boolean } = {}) {
+  expenses = false,
+}: { extra?: React.ReactNode; peopleOnly?: boolean; expenses?: boolean } = {}) {
   const { slug, viewer } = useTracker();
   const { query, set } = useReportQuery();
   const { data: options } = useReportOptions(slug);
+  const { data: categories } = useExpenseCategories(slug, false, expenses);
   const [text, setText] = useState(query.description);
   const [shown, setShown] = useState(query.description);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -96,23 +102,35 @@ export function FilterBar({
             options={(options?.projects ?? []).map((p) => ({ id: p.id, name: p.name }))}
             value={query.projectIds}
             onChange={(projectIds) => set({ projectIds })}
-            none={{ id: NONE_ID, name: "Without project" }}
+            none={expenses ? undefined : { id: NONE_ID, name: "Without project" }}
           />
-          <MultiSelectFilter
-            label="Tasks"
-            options={options?.tasks ?? []}
-            value={query.taskIds}
-            onChange={(taskIds) => set({ taskIds })}
-            none={{ id: NONE_ID, name: "Without task" }}
-          />
-          <MultiSelectFilter
-            label="Tags"
-            options={options?.tags ?? []}
-            value={query.tagIds}
-            onChange={(tagIds) => set({ tagIds })}
-            none={{ id: NONE_ID, name: "Without tag" }}
-          />
-          {query.tagIds.filter((id) => id !== NONE_ID).length > 1 ? (
+          {expenses ? (
+            <MultiSelectFilter
+              label="Categories"
+              options={(categories ?? []).map((c) => ({ id: c.id, name: c.name }))}
+              value={query.categoryIds}
+              onChange={(categoryIds) => set({ categoryIds })}
+            />
+          ) : null}
+          {expenses ? null : (
+            <MultiSelectFilter
+              label="Tasks"
+              options={options?.tasks ?? []}
+              value={query.taskIds}
+              onChange={(taskIds) => set({ taskIds })}
+              none={{ id: NONE_ID, name: "Without task" }}
+            />
+          )}
+          {expenses ? null : (
+            <MultiSelectFilter
+              label="Tags"
+              options={options?.tags ?? []}
+              value={query.tagIds}
+              onChange={(tagIds) => set({ tagIds })}
+              none={{ id: NONE_ID, name: "Without tag" }}
+            />
+          )}
+          {!expenses && query.tagIds.filter((id) => id !== NONE_ID).length > 1 ? (
             <Select
               value={query.tagMode}
               onValueChange={(v) => set({ tagMode: v === "and" ? "and" : "or" })}
@@ -141,30 +159,34 @@ export function FilterBar({
               <SelectItem value="no">Non-billable only</SelectItem>
             </SelectContent>
           </Select>
-          <Select
-            value={query.type}
-            onValueChange={(v) =>
-              set({ type: v === "break" ? "break" : v === "all" ? "all" : "work" })
-            }
-          >
-            <SelectTrigger size="sm" aria-label="Type" className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="work">Work</SelectItem>
-              <SelectItem value="break">Breaks</SelectItem>
-              <SelectItem value="all">All</SelectItem>
-            </SelectContent>
-          </Select>
+          {expenses ? null : (
+            <Select
+              value={query.type}
+              onValueChange={(v) =>
+                set({ type: v === "break" ? "break" : v === "all" ? "all" : "work" })
+              }
+            >
+              <SelectTrigger size="sm" aria-label="Type" className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="work">Work</SelectItem>
+                <SelectItem value="break">Breaks</SelectItem>
+                <SelectItem value="all">All</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
           {extra}
-          <Input
-            type="search"
-            aria-label="Description contains"
-            placeholder="Description contains…"
-            className="h-8 w-48"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
+          {expenses ? null : (
+            <Input
+              type="search"
+              aria-label="Description contains"
+              placeholder="Description contains…"
+              className="h-8 w-48"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+          )}
         </>
       )}
     </>

@@ -26,6 +26,7 @@ import {
   type DbExecutor,
   desc,
   eq,
+  expense,
   gte,
   inArray,
   isNotNull,
@@ -55,9 +56,11 @@ import { WorkspaceAccessError } from "./access-error";
 import { approvedEmail, rejectedEmail, reopenedEmail, submittedEmail } from "./approval-emails";
 import { approversFor } from "./approvers";
 import { assertCan } from "./authz";
+import { workspaceCurrency } from "./catalog/clients";
 import { CatalogError } from "./catalog/errors";
 import type { Viewer } from "./catalog/viewer";
 import { env } from "./env";
+import { listExpensesForPerson } from "./expenses";
 import { enqueueEmail } from "./outbox";
 import { timerLock } from "./person-lock";
 import { listEntriesInRange } from "./time-entries";
@@ -112,6 +115,8 @@ const requestColumns = {
   workSeconds: approvalRequest.workSeconds,
   billableSeconds: approvalRequest.billableSeconds,
   entryCount: approvalRequest.entryCount,
+  expenseCount: approvalRequest.expenseCount,
+  expenseMinor: approvalRequest.expenseMinor,
   submittedAt: approvalRequest.submittedAt,
   decidedBy: approvalRequest.decidedBy,
   decidedByName: decider.name,
@@ -140,6 +145,8 @@ function toDTO(r: RequestRow): ApprovalRequestDTO {
     workSeconds: Number(r.workSeconds),
     billableSeconds: Number(r.billableSeconds),
     entryCount: r.entryCount,
+    expenseCount: r.expenseCount,
+    expenseMinor: Number(r.expenseMinor),
     submittedAt: r.submittedAt.toISOString(),
     decidedBy: r.decidedBy ?? null,
     decidedByName: r.decidedByName ?? null,
@@ -173,47 +180,85 @@ function periodEntries(workspaceId: string, userId: string, bounds: { from: Date
   );
 }
 
+/** The live expenses dated in the period (Phase 6c: a period holds the expenses of its days). */
+function periodExpenses(workspaceId: string, userId: string, period: Period) {
+  return and(
+    eq(expense.workspaceId, workspaceId),
+    eq(expense.userId, userId),
+    isNull(expense.deletedAt),
+    gte(expense.date, period.start),
+    lte(expense.date, period.end),
+  );
+}
+
 async function totalsOf(
   db: Executor,
   workspaceId: string,
   userId: string,
+  period: Period,
   bounds: { from: Date; to: Date },
 ): Promise<PeriodTotals> {
-  const [row] = await db
-    .select({
-      workSeconds: sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::bigint`.mapWith(
-        Number,
-      ),
-      billableSeconds:
-        sql<number>`coalesce(sum(case when ${timeEntry.billable} then ${timeEntry.durationSeconds} else 0 end), 0)::bigint`.mapWith(
+  const [[time], [spent]] = await Promise.all([
+    db
+      .select({
+        workSeconds: sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::bigint`.mapWith(
           Number,
         ),
-      entryCount: sql<number>`count(*)::int`,
-    })
-    .from(timeEntry)
-    .where(periodEntries(workspaceId, userId, bounds));
-  return row ?? { workSeconds: 0, billableSeconds: 0, entryCount: 0 };
+        billableSeconds:
+          sql<number>`coalesce(sum(case when ${timeEntry.billable} then ${timeEntry.durationSeconds} else 0 end), 0)::bigint`.mapWith(
+            Number,
+          ),
+        entryCount: sql<number>`count(*)::int`,
+      })
+      .from(timeEntry)
+      .where(periodEntries(workspaceId, userId, bounds)),
+    db
+      .select({
+        expenseCount: sql<number>`count(*)::int`,
+        expenseMinor: sql<number>`coalesce(sum(${expense.amountMinor}), 0)::bigint`.mapWith(Number),
+      })
+      .from(expense)
+      .where(periodExpenses(workspaceId, userId, period)),
+  ]);
+  return {
+    workSeconds: time?.workSeconds ?? 0,
+    billableSeconds: time?.billableSeconds ?? 0,
+    entryCount: time?.entryCount ?? 0,
+    expenseCount: spent?.expenseCount ?? 0,
+    expenseMinor: spent?.expenseMinor ?? 0,
+  };
 }
 
 /**
  * The projects of each request's entries ("" for an entry with no project,
- * which no project manager manages), for the `approval.review` resource.
+ * which no project manager manages) and expenses, for the `approval.review`
+ * resource: a project-manager approver manages every project in the period.
  */
 async function projectIdsOf(db: Executor, requestIds: string[]): Promise<Map<string, string[]>> {
   const out = new Map<string, string[]>(requestIds.map((id) => [id, []]));
   if (requestIds.length === 0) return out;
   const rows = await db.execute<{ id: string; project_ids: string[] }>(sql`
-    select r.id, array_agg(distinct coalesce(e.project_id, '')) as project_ids
+    select r.id, array_agg(distinct p.project_id) as project_ids
     from approval_request r
     join workspace_settings s on s.workspace_id = r.workspace_id
-    join time_entry e
-      on e.workspace_id = r.workspace_id
-     and e.user_id = r.user_id
-     and e.deleted_at is null
-     and e."end" is not null
-     and e.type = 'work'
-     and e.start >= (r.period_start::timestamp at time zone s.timezone)
-     and e.start < ((r.period_end + 1)::timestamp at time zone s.timezone)
+    join lateral (
+      select coalesce(e.project_id, '') as project_id
+      from time_entry e
+      where e.workspace_id = r.workspace_id
+        and e.user_id = r.user_id
+        and e.deleted_at is null
+        and e."end" is not null
+        and e.type = 'work'
+        and e.start >= (r.period_start::timestamp at time zone s.timezone)
+        and e.start < ((r.period_end + 1)::timestamp at time zone s.timezone)
+      union
+      select x.project_id
+      from expense x
+      where x.workspace_id = r.workspace_id
+        and x.user_id = r.user_id
+        and x.deleted_at is null
+        and x.date between r.period_start and r.period_end
+    ) p on true
     where r.id = any(${sql.param(requestIds)}::text[])
     group by r.id
   `);
@@ -322,7 +367,7 @@ export async function submitPeriod(
           : `This overlaps ${formatPeriod({ start: taken.periodStart, end: taken.periodEnd })}, already submitted.`,
       );
     }
-    const totals = await totalsOf(tx, viewer.workspaceId, viewer.userId, bounds);
+    const totals = await totalsOf(tx, viewer.workspaceId, viewer.userId, period, bounds);
     const values = {
       periodEnd: period.end,
       status: "PENDING" as const,
@@ -718,13 +763,23 @@ export async function periodView(
   const ws = await workspaceApproval(db, viewer.workspaceId);
   const tz = ws.rule.timezone;
   const period = { start: request.periodStart, end: request.periodEnd };
-  const entries = await listEntriesInRange(
-    db,
-    { workspaceId: viewer.workspaceId, userId: request.userId },
-    periodBounds(period, tz),
-  );
+  const [entries, expenses, currency] = await Promise.all([
+    listEntriesInRange(
+      db,
+      { workspaceId: viewer.workspaceId, userId: request.userId },
+      periodBounds(period, tz),
+    ),
+    listExpensesForPerson(db, viewer, request.userId, period),
+    workspaceCurrency(db, viewer.workspaceId),
+  ]);
   const days = new Map<string, PeriodViewDTO["days"][number]>();
-  const live: PeriodTotals = { workSeconds: 0, billableSeconds: 0, entryCount: 0 };
+  const live: PeriodTotals = {
+    workSeconds: 0,
+    billableSeconds: 0,
+    entryCount: 0,
+    expenseCount: expenses.length,
+    expenseMinor: expenses.reduce((n, e) => n + e.amountMinor, 0),
+  };
   for (const e of entries) {
     const key = localDateKey(new Date(e.start), tz);
     const d = days.get(key) ?? { dateKey: key, entries: [], workSeconds: 0 };
@@ -746,6 +801,7 @@ export async function periodView(
       actorName: actor.name,
       note: approvalEvent.note,
       entryId: approvalEvent.entryId,
+      expenseId: approvalEvent.expenseId,
       changes: approvalEvent.changes,
       createdAt: approvalEvent.createdAt,
     })
@@ -763,10 +819,14 @@ export async function periodView(
     period,
     timezone: tz,
     days: [...days.values()].sort((a, b) => a.dateKey.localeCompare(b.dateKey)),
+    expenses,
+    currency,
     totals: {
       workSeconds: request.workSeconds,
       billableSeconds: request.billableSeconds,
       entryCount: request.entryCount,
+      expenseCount: request.expenseCount,
+      expenseMinor: request.expenseMinor,
     },
     live,
     events: events.map((e): ApprovalEventDTO => ({
@@ -834,7 +894,7 @@ export async function myPeriods(
         r.periodEnd >= period.start,
     );
     const request = own ?? blocking ?? null;
-    const { workSeconds } = await totalsOf(db, viewer.workspaceId, viewer.userId, bounds);
+    const { workSeconds } = await totalsOf(db, viewer.workspaceId, viewer.userId, period, bounds);
     out.push({
       period,
       status: request?.status ?? null,

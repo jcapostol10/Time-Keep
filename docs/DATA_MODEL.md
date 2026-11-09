@@ -2,7 +2,7 @@
 
 PostgreSQL (16 locally, Supabase in production) via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
 
-## Entity overview (Phases 0–6b)
+## Entity overview (Phases 0–6c)
 
 ```
 user ──< session            (activeWorkspaceId → workspace)
@@ -44,6 +44,8 @@ workspace ──< kiosk ──< kiosk_assignee >── user | user_group   (Phas
 kiosk ──< kiosk_attempt >── user           (PIN and QR checks, for the throttles)
 workspace ──< kiosk_credential >── user    (a person's PIN and QR token)
 workspace ──< kiosk_photo >── time_entry   (clock-in photos, private bucket)
+workspace ──< expense_category             (Phase 6c: a fixed amount, or a priced unit)
+workspace ──< expense >── user;  expense >── project (RESTRICT);  expense >── expense_category (RESTRICT)
 ```
 
 ## Tables
@@ -374,7 +376,7 @@ Every table enables RLS (`.enableRLS()` on each `pgTable`, migration `0003`) wit
 
 ## Enums
 
-`workspace_role`, `membership_status`, `time_format`, `duration_format`, `project_visibility`, `task_status`, `estimate_kind`, `estimate_reset` (and the later phases' enums) — values come from `packages/core` constants so TypeScript and Postgres agree.
+`workspace_role`, `membership_status`, `time_format`, `duration_format`, `project_visibility`, `task_status`, `estimate_kind`, `estimate_reset`, `expense_category_kind` (and the later phases' enums) — values come from `packages/core` constants so TypeScript and Postgres agree.
 
 ### report_share_link
 
@@ -408,8 +410,8 @@ An export too large to stream back (over `EXPORT_JOB_THRESHOLD` rows or 4 MB): b
 | id | text PK | UUID; also the object key's name |
 | workspace_id | text → workspace (cascade) | |
 | user_id | text → user (cascade) | only this person can download it |
-| format | enum export_format | csv, xlsx, pdf |
-| report | enum export_report | summary, detailed, weekly, project-status, attendance (5b) |
+| format | enum export_format | csv, xlsx, pdf, zip (6c: the receipts) |
+| report | enum export_report | summary, detailed, weekly, project-status, attendance (5b), expenses, receipts (6c; receipts is always a job) |
 | query | jsonb | the report query |
 | status | enum export_status | queued → running → done / failed |
 | row_count | integer? | |
@@ -472,6 +474,7 @@ A person's period submitted for approval. Periods are inclusive local dates in t
 | status | enum `approval_status` (`PENDING`, `APPROVED`, `REJECTED`) | |
 | work_seconds, billable_seconds | bigint | totals of the stopped work entries at submission |
 | entry_count | integer | |
+| expense_count, expense_minor | integer, bigint | the period's live expenses at submission (0018, Phase 6c), in the workspace currency |
 | submitted_at | timestamptz | the latest submission |
 | decided_by | text? → user (set null) | |
 | decided_at | timestamptz? | |
@@ -494,6 +497,7 @@ The history of a request, and every owner's or admin's change of submitted time 
 | action | enum `approval_action` (`SUBMIT`, `WITHDRAW`, `APPROVE`, `REJECT`, `REOPEN`, `ADMIN_EDIT`, `AUTO_WITHDRAW`) | AUTO_WITHDRAW: approval was turned off |
 | note | text? | |
 | entry_id | text? | ADMIN_EDIT: the entry (no foreign key: it may be deleted later) |
+| expense_id | text? | ADMIN_EDIT of an expense (0018, Phase 6c); no foreign key either |
 | changes | jsonb? | ADMIN_EDIT: `{ field: { from, to } }` |
 | created_at | timestamptz | index `(workspace_id, user_id, created_at)`; index `(request_id)` |
 
@@ -612,6 +616,47 @@ Every PIN or QR check: `kiosk_id` (cascade), `user_id?` (cascade; null for an un
 
 `entry_id` → time_entry (cascade, unique), `workspace_id`, `object_key` (`kiosk-photos/<workspace>/<entry>.jpg` in the private `S3_EXPORT_BUCKET`), `taken_at` (indexed). Deleted, with the object, after 90 days by the daily job.
 
+### expense_category (Phase 6c)
+
+What an expense can be (decision 14). Owners and admins manage them; archived ones stay on their expenses and take no new ones.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| name | text | unique per workspace (`expense_category_workspace_name_uq`) |
+| kind | enum `expense_category_kind` (`FIXED`, `UNIT`) | an amount typed each time, or a quantity of a unit |
+| unit_name | text? | UNIT: what is counted (km, pages…) |
+| unit_price_minor | bigint? | UNIT: the price of one unit, in the workspace currency; snapshotted on each expense, so a change touches no history |
+| billable_default | boolean | default true; a new expense starts with it |
+| archived | boolean | default false |
+| created_at, updated_at | timestamptz | |
+
+### expense (Phase 6c)
+
+Money a person spent on a project on a local date, always in the workspace currency (decision 14; nothing is converted). Written only by `apps/web/src/server/expenses.ts`, through the approval guard (`assertExpenseWritable`: the lock date and the PENDING / APPROVED period of the expense's date). A project or category with expenses cannot be deleted.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| user_id | text → user (cascade) | whose expense |
+| project_id | text → project (restrict) | required |
+| category_id | text → expense_category (restrict) | |
+| date | date | a local date, in no time zone; the approval period is the one holding it |
+| amount_minor | bigint | typed (FIXED), or `round_half_up(quantity_centi × unit_price_minor / 100)` (UNIT) |
+| quantity_centi | integer? | UNIT: the quantity in hundredths |
+| unit_price_minor | bigint? | UNIT: the category's price when saved |
+| billable | boolean | |
+| description | text | default `''` (the approval note is not stored here: it goes to `approval_event`) |
+| receipt_key, receipt_thumb_key, receipt_mime | text? | the receipt in the private `S3_EXPORT_BUCKET` (`receipts/<workspace>/<expense>`, `….thumb.jpg`; JPEG, PNG, WebP or PDF, 4 MB, typed by its bytes) |
+| invoice_id | text? | set when an invoice takes it (Phase 6d adds the foreign key) |
+| created_by | text? → user (set null) | the person, or the admin or manager who added it for them |
+| deleted_at | timestamptz? | soft delete, with Undo |
+| created_at, updated_at | timestamptz | |
+
+Indexes: `(workspace_id, user_id, date)` for a person's list and the approval period; `(workspace_id, project_id, date)` for a project's.
+
 ## Rules at scale (Phase 4b)
 
 Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf`, 2026-10-28, after the rule columns, `time_entry.type` and the work-only rating:
@@ -637,6 +682,6 @@ Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf` after
 
 ## Planned (later phases)
 
-Phase 6c–6d: `expense`, `expense_category` (6c); `invoice_settings`, `invoice`, `invoice_item`, `payment`, `recurring_invoice` (6d). See `docs/superpowers/specs/2026-11-05-phase-6-design.md`.
+Phase 6d: `invoice_settings`, `invoice`, `invoice_item`, `payment`, `recurring_invoice`, and the foreign key from `expense.invoice_id`. See `docs/superpowers/specs/2026-11-05-phase-6-design.md`.
 Phase 7: `assignment`, `milestone`.
 Phase 8: `subscription`, `api_key`, `webhook`, `webhook_delivery`, `audit_log`, `sso_config`.

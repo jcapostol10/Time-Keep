@@ -5,6 +5,7 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 import { waitForApp } from "./helpers/app";
 import { createProjectViaUi } from "./helpers/catalog";
+import { addCategory, addExpense } from "./helpers/expenses";
 import {
   billableOn,
   createClientIn,
@@ -231,6 +232,42 @@ test.describe("cost, profit and currencies", { tag: "@nightly" }, () => {
     await expect(rows.nth(2)).toContainText("$20.00");
     await expect(rows.nth(2)).toContainText("40%");
     await expect(totalRow(page)).toContainText("$90.00");
+  });
+
+  test("the Profit tab counts expenses", async ({ page, freshUser, trackerPage }) => {
+    // $50.00 billed for the hour, no cost rate; a $30.00 billable expense is revenue
+    // and cost, a $20.00 non-billable one cost only: 50 + 30 − 30 − 20 = $30.00.
+    await setWorkspaceRate(page, freshUser.slug, "50");
+    await createProjectViaUi(page, freshUser.slug, "Alpha");
+    await addCategory(page, freshUser.slug, { name: "Travel", kind: "Fixed amount" });
+    await addCategory(page, freshUser.slug, {
+      name: "Meals",
+      kind: "Fixed amount",
+      billable: false,
+    });
+    await trackerPage();
+    await billableHour(page, "Alpha work", "00:05", "Alpha");
+    await addExpense(page, freshUser.slug, {
+      project: "Alpha",
+      category: "Travel",
+      amount: "30",
+      description: "Train",
+    });
+    await addExpense(page, freshUser.slug, {
+      project: "Alpha",
+      category: "Meals",
+      amount: "20",
+      description: "Lunch",
+    });
+
+    await page.goto(`/w/${freshUser.slug}/reports/profit`);
+    await waitForApp(page);
+    const row = page.getByRole("table", { name: "Profit" }).getByRole("row", { name: /^Alpha/ });
+    await expect(page.getByRole("columnheader", { name: "Expenses" })).toBeVisible();
+    await expect(row).toContainText("$50.00");
+    await expect(row).toContainText("$30.00");
+    await expect(totalRow(page)).toContainText("$30.00");
+    await expect(totalRow(page)).toContainText("$50.00");
   });
 
   test("the export carries cost for an admin", async ({ page, freshUser, trackerPage }) => {

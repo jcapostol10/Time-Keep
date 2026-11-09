@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { DEFAULT_REPORT_QUERY, type ReportQuery, type ViewerPrefs } from "@timekeep/core";
+import {
+  DEFAULT_REPORT_QUERY,
+  marginPercent,
+  type ReportQuery,
+  type ViewerPrefs,
+} from "@timekeep/core";
 import { client, eq, managedUser, project, rate, workspaceSettings } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -16,6 +21,8 @@ import { createProject, getProjectStatus } from "./catalog/projects";
 import { createTag } from "./catalog/tags";
 import type { Viewer } from "./catalog/viewer";
 import { dashboardMe, dashboardTeam } from "./dashboard";
+import { createExpenseCategory } from "./expense-categories";
+import { createExpense } from "./expenses";
 import { buildExport } from "./report-files";
 import { detailedReport, profitReport, summaryReport, weeklyReport } from "./reports";
 import { setProjectEstimate } from "./budgets";
@@ -103,12 +110,16 @@ const ALL = {
   // ₱4,000 billed in PHP less the ₱2,100 those hours cost; the USD hours are left out.
   profitMinor: 190_000,
   profitExcludedCount: 2,
+  // Expenses join only in the Profit tab (Phase 6c).
+  expenseMinor: 0,
+  billableExpenseMinor: 0,
 };
 const NO_COSTS = { costMinor: 0, uncostedCount: 0, profitMinor: 0, profitExcludedCount: 0 };
 
+afterAll(async () => handle.close());
+
 describe("cost, profit and currencies in reports", () => {
   beforeAll(async () => truncateAll(db));
-  afterAll(async () => handle.close());
 
   beforeEach(async () => {
     await truncateAll(db);
@@ -351,7 +362,9 @@ describe("cost, profit and currencies in reports", () => {
     const summary = "Project,Duration,Billable,Entries,Amount (PHP),Amount (USD)";
     expect(await header("olga", "summary")).toBe(`${summary},Cost (PHP),Profit (PHP)`);
     expect(await header("max", "summary")).toBe(summary);
-    expect(await header("olga", "profit")).toBe(`${summary},Cost (PHP),Profit (PHP),Margin %`);
+    expect(await header("olga", "profit")).toBe(
+      `${summary},Cost (PHP),Profit (PHP),Expenses (PHP),Billable expenses (PHP),Margin %`,
+    );
     const detailed =
       "Description,Type,Project,Client,Task,Person,Tags,Billable,Date,Start,End,Duration,Rate,Amount,Currency";
     expect(await header("olga", "detailed")).toBe(`${detailed},Cost (PHP),Profit (PHP)`);
@@ -632,5 +645,154 @@ describe("cost, profit and currencies in reports", () => {
     // A manager without the setting gets the amounts and no cost.
     const forMax = await getProjectStatus(db, await viewer("max"), ids.web!, range, PREFS);
     expect(forMax).toMatchObject({ amountMinor: 100_000, costMinor: 0, profitMinor: 0 });
+  });
+});
+
+describe("expenses in the Profit tab (Phase 6c)", () => {
+  beforeEach(async () => {
+    await truncateAll(db);
+    const olga = await createTestUser(db, "Olga Owner");
+    const bob = await createTestUser(db, "Bob Member");
+    const carol = await createTestUser(db, "Carol Member");
+    const ws = await createTestWorkspace(db, "Workspace", olga.id);
+    wsId = ws.id;
+    await addMember(db, ws.id, bob.id, "member");
+    await addMember(db, ws.id, carol.id, "member");
+    ids = { olga: olga.id, bob: bob.id, carol: carol.id };
+    await setSettings({ currency: "PHP", timezone: "UTC" });
+    const owner = await viewer("olga");
+    ids.web = (await createProject(db, owner, { name: "Web" })).id;
+    ids.us = (await createProject(db, owner, { name: "Us" })).id;
+    ids.ops = (await createProject(db, owner, { name: "Ops" })).id;
+    const acme = randomUUID();
+    await db.insert(client).values({ id: acme, workspaceId: ws.id, name: "Acme", currency: "USD" });
+    await db.update(project).set({ clientId: acme }).where(eq(project.id, ids.us));
+    await addRate({ amountMinor: 100_000 });
+    await addRate({ level: "project", projectId: ids.us, currency: "USD", amountMinor: 4000 });
+    await addRate({ kind: "cost", level: "member", userId: olga.id, amountMinor: 40_000 });
+    // Olga: 1 h on Web (₱1,000, cost ₱400); 1 h on Us ($40, cost ₱400, left out of profit).
+    await entry("olga", "web", 1);
+    await entry("olga", "us", 1);
+    const travel = await createExpenseCategory(db, owner, {
+      name: "Travel",
+      kind: "FIXED",
+      unitName: null,
+      unitPriceMinor: null,
+      billableDefault: true,
+    });
+    const spend = (projectId: string, amountMinor: number, billable: boolean) =>
+      createExpense(
+        db,
+        owner,
+        {
+          projectId,
+          categoryId: travel.id,
+          date: "2026-03-10",
+          amountMinor,
+          billable,
+          description: "",
+        },
+        { now: NOW },
+      );
+    // Web: ₱300 billable, ₱200 not. Us: ₱200 not billable. Ops (no time): ₱150 billable.
+    await spend(ids.web, 30_000, true);
+    await spend(ids.web, 20_000, false);
+    await spend(ids.us, 20_000, false);
+    await spend(ids.ops, 15_000, true);
+  });
+
+  it("counts expenses: all as cost, billable ones as revenue, and its margin is over revenue", async () => {
+    const report = await profitReport(db, await viewer("olga"), q(), PREFS, NOW);
+    const web = report.groups.find((g) => g.label === "Web")!;
+    // 1,000 + 300 − 400 − 500 = 400; margin 400 / 1,300.
+    expect(web.totals).toMatchObject({
+      amountMinor: 100_000,
+      costMinor: 40_000,
+      expenseMinor: 50_000,
+      billableExpenseMinor: 30_000,
+      profitMinor: 40_000,
+    });
+    expect(marginPercent(web.totals)).toBe(30.8);
+    expect(report.totals).toMatchObject({
+      expenseMinor: 85_000,
+      billableExpenseMinor: 45_000,
+      // Web 400 + Us −200 + Ops 0.
+      profitMinor: 20_000,
+    });
+  });
+
+  it("expenses on a project billed in USD still adjust that group's profit", async () => {
+    const report = await profitReport(db, await viewer("olga"), q(), PREFS, NOW);
+    const us = report.groups.find((g) => g.label === "Us")!;
+    expect(us.totals).toMatchObject({
+      amountMinor: 0,
+      otherAmounts: [{ currency: "USD", amountMinor: 4000 }],
+      profitExcludedCount: 1,
+      expenseMinor: 20_000,
+      billableExpenseMinor: 0,
+      profitMinor: -20_000,
+    });
+  });
+
+  it("a project with expenses and no time appears in the Profit tab", async () => {
+    const report = await profitReport(db, await viewer("olga"), q(), PREFS, NOW);
+    const ops = report.groups.find((g) => g.label === "Ops")!;
+    expect(ops.totals).toMatchObject({
+      durationSeconds: 0,
+      entryCount: 0,
+      expenseMinor: 15_000,
+      billableExpenseMinor: 15_000,
+      profitMinor: 0,
+    });
+    expect(ops.id).toBe(ids.ops);
+    // Sorted by profit: Web (400), Ops (0), Us (−200).
+    expect(report.groups.map((g) => g.label)).toEqual(["Web", "Ops", "Us"]);
+    // By person the expenses follow their owner.
+    const byUser = await profitReport(
+      db,
+      await viewer("olga"),
+      q({ groupBy: ["user"] }),
+      PREFS,
+      NOW,
+    );
+    expect(byUser.groups.map((g) => [g.label, g.totals.expenseMinor])).toEqual([
+      ["Olga Owner", 85_000],
+    ]);
+  });
+
+  it("a task, tag or description filter leaves expenses out", async () => {
+    for (const over of [{ description: "web" }, { tagIds: ["none"] }, { taskIds: ["none"] }]) {
+      const report = await profitReport(db, await viewer("olga"), q(over), PREFS, NOW);
+      expect(report.totals).toMatchObject({ expenseMinor: 0, billableExpenseMinor: 0 });
+      expect(report.groups.find((g) => g.label === "Ops")).toBeUndefined();
+    }
+    // The Profit export prints the two expense columns.
+    const file = await buildExport(db, await viewer("olga"), {
+      report: "profit",
+      format: "csv",
+      query: q(),
+      prefs: PREFS,
+      now: NOW,
+    });
+    const lines = new TextDecoder().decode(file.body).split("\r\n");
+    expect(lines[0]).toBe(
+      "Project,Duration,Billable,Entries,Amount (PHP),Amount (USD),Cost (PHP),Profit (PHP),Expenses (PHP),Billable expenses (PHP),Margin %",
+    );
+    expect(lines[1]).toBe("Web,1:00:00,1:00:00,1,1000.00,0.00,400.00,400.00,500.00,300.00,30.8");
+  });
+
+  it("Summary and Detailed never carry expense totals", async () => {
+    const summary = await summaryReport(db, await viewer("olga"), q(), PREFS, NOW);
+    expect(summary.totals).toMatchObject({ expenseMinor: 0, billableExpenseMinor: 0 });
+    for (const g of summary.groups) expect(g.totals.expenseMinor).toBe(0);
+    const detailed = await detailedReport(
+      db,
+      await viewer("olga"),
+      q(),
+      PREFS,
+      { sort: "start", dir: "desc", limit: 50 },
+      NOW,
+    );
+    expect(detailed.totals).toMatchObject({ expenseMinor: 0, billableExpenseMinor: 0 });
   });
 });

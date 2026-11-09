@@ -4,6 +4,8 @@ import type {
   Bucket,
   Capacity,
   DetailedEntry,
+  ExpenseGroupKey,
+  ExpenseTotals,
   GroupKey,
   MoneyAmount,
   Progress,
@@ -138,4 +140,14 @@ export interface AttendanceReport {
   to: string;
   label: string;
   people: AttendancePerson[];
+}
+
+/** The Expenses tab (Phase 6c): totals by category, project or person, in the workspace currency. */
+export interface ExpenseReport {
+  currency: string;
+  range: { from: string; to: string; label: string };
+  by: ExpenseGroupKey;
+  /** Sorted by amount, then label. */
+  groups: { id: string | null; label: string; totals: ExpenseTotals }[];
+  totals: ExpenseTotals;
 }

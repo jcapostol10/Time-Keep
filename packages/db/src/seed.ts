@@ -29,6 +29,8 @@ import {
   approvalEvent,
   approvalRequest,
   client,
+  expense,
+  expenseCategory,
   holiday,
   kiosk,
   kioskCredential,
@@ -199,6 +201,7 @@ export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}
     await seedTeamAndRates(tx, demo.id, ids, catalog);
     await seedCostAndCurrency(tx, demo.id, ids, catalog);
     await seedEstimates(tx, catalog);
+    await seedExpenses(tx, demo.id, ids, catalog);
     await seedApprovals(tx, demo.id, ids);
     await seedTimeOff(tx, demo.id, ids);
     const kioskToken = await seedKiosk(tx, demo.id, ids, catalog.taskIds);
@@ -946,6 +949,96 @@ async function seedEstimates(
     .update(task)
     .set({ estimateSeconds: 40 * 3600 })
     .where(eq(task.id, design));
+}
+
+const DEMO_EXPENSE_CATEGORIES: {
+  name: string;
+  kind: "FIXED" | "UNIT";
+  unitName?: string;
+  unitPriceMinor?: number;
+  billableDefault: boolean;
+}[] = [
+  { name: "Travel", kind: "FIXED", billableDefault: true },
+  { name: "Meals", kind: "FIXED", billableDefault: false },
+  { name: "Mileage", kind: "UNIT", unitName: "km", unitPriceMinor: 1500, billableDefault: true },
+  { name: "Software", kind: "FIXED", billableDefault: true },
+];
+
+/**
+ * Expenses (Phase 6c): a dozen over the last month for the two members and
+ * the manager, on Website redesign and Mobile app, in the workspace currency;
+ * no receipts (the demo tenant writes nothing to the private bucket).
+ */
+async function seedExpenses(
+  db: DbExecutor,
+  workspaceId: string,
+  ids: Map<string, string>,
+  catalog: { projectIds: string[] },
+) {
+  const tz = DEMO_WORKSPACE.timezone;
+  const categoryIds = new Map<string, string>();
+  await db.insert(expenseCategory).values(
+    DEMO_EXPENSE_CATEGORIES.map((c) => {
+      const id = randomUUID();
+      categoryIds.set(c.name, id);
+      return {
+        id,
+        workspaceId,
+        name: c.name,
+        kind: c.kind,
+        unitName: c.unitName ?? null,
+        unitPriceMinor: c.unitPriceMinor ?? null,
+        billableDefault: c.billableDefault,
+      };
+    }),
+  );
+  const [website, mobile] = catalog.projectIds;
+  if (!website || !mobile) throw new Error("seed: expense projects missing");
+  //  who        project  category   amount/quantity        days ago  description
+  const rows: [string, string, string, number, number, string][] = [
+    ["member1@demo.test", website, "Travel", 12_550, 2, "Taxi to the client"],
+    ["member1@demo.test", website, "Meals", 2_400, 2, "Lunch with the client"],
+    ["member1@demo.test", mobile, "Mileage", 4_250, 5, "Site visit (42.5 km)"],
+    ["member1@demo.test", website, "Software", 9_900, 9, "Icon pack"],
+    ["member2@demo.test", mobile, "Travel", 45_000, 3, "Flight to the workshop"],
+    ["member2@demo.test", mobile, "Meals", 3_150, 3, "Dinner, workshop day"],
+    ["member2@demo.test", mobile, "Mileage", 1_200, 12, "Airport run (12 km)"],
+    ["member2@demo.test", website, "Software", 1_999, 16, "Font licence"],
+    ["manager@demo.test", website, "Travel", 8_000, 7, "Train to the review"],
+    ["manager@demo.test", mobile, "Software", 29_000, 20, "Device lab month"],
+    ["manager@demo.test", mobile, "Meals", 5_600, 20, "Team lunch"],
+    ["manager@demo.test", website, "Mileage", 3_000, 26, "Client office (30 km)"],
+  ];
+  const now = new Date();
+  await db.insert(expense).values(
+    rows.flatMap(([email, projectId, category, value, daysAgo, description]) => {
+      const userId = ids.get(email);
+      const categoryId = categoryIds.get(category);
+      const def = DEMO_EXPENSE_CATEGORIES.find((c) => c.name === category);
+      if (!userId || !categoryId || !def) return [];
+      const unit = def.kind === "UNIT";
+      const price = def.unitPriceMinor ?? 0;
+      return [
+        {
+          id: randomUUID(),
+          workspaceId,
+          userId,
+          projectId,
+          categoryId,
+          date: localDateKey(addDaysInZone(now, -daysAgo, tz), tz),
+          // A unit expense stores its quantity in hundredths and the price it was priced at.
+          amountMinor: unit
+            ? Number((BigInt(value) * BigInt(price) + BigInt(50)) / BigInt(100))
+            : value,
+          quantityCenti: unit ? value : null,
+          unitPriceMinor: unit ? price : null,
+          billable: def.billableDefault,
+          description,
+          createdBy: userId,
+        },
+      ];
+    }),
+  );
 }
 
 const isDirectRun = process.argv[1]?.endsWith("seed.ts") ?? false;

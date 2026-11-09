@@ -22,6 +22,8 @@ const VIEWS: { kind: ReportView; label: string }[] = [
   { kind: "weekly", label: "Weekly" },
   // Only for viewers who may see cost (Phase 6a).
   { kind: "profit", label: "Profit" },
+  // Money spent on projects (Phase 6c), in the viewer's scope.
+  { kind: "expenses", label: "Expenses" },
   { kind: "audit", label: "Audit" },
   { kind: "attendance", label: "Attendance" },
 ];
@@ -53,6 +55,8 @@ export function ReportShell({
   const kind = view === "audit" ? "detailed" : view;
   // Attendance is raw time per person: no share link, no rounding, only the people filters.
   const attendance = view === "attendance";
+  // Expenses are money, not time: no rounding, no share link, their own filters.
+  const expenses = view === "expenses";
   const { slug, canSeeCosts } = useTracker();
   const { params } = useReportQuery();
 
@@ -63,9 +67,11 @@ export function ReportShell({
         actions={
           <>
             {actions}
-            {attendance ? null : <RoundingToggle />}
-            {/* A shared report is for clients: Profit is never shared. */}
-            {kind === "attendance" || kind === "profit" ? null : <ShareDialog kind={kind} />}
+            {attendance || expenses ? null : <RoundingToggle />}
+            {/* A shared report is for clients: Profit and Expenses are never shared. */}
+            {kind === "attendance" || kind === "profit" || kind === "expenses" ? null : (
+              <ShareDialog kind={kind} />
+            )}
             <ExportMenu kind={kind} />
           </>
         }
@@ -102,7 +108,11 @@ export function ReportShell({
           Shared
         </Link>
       </nav>
-      <FilterBar extra={view === "audit" ? <AuditFilter /> : null} peopleOnly={attendance} />
+      <FilterBar
+        extra={view === "audit" ? <AuditFilter /> : null}
+        peopleOnly={attendance}
+        expenses={expenses}
+      />
       {children}
     </div>
   );

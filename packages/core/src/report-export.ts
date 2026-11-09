@@ -1,6 +1,7 @@
 import type { AttendanceDay, AttendanceWeek } from "./attendance";
 import type { EntryType } from "./schemas";
 import { formatDuration } from "./duration";
+import type { ExpenseGroupKey, ExpenseTotals } from "./expenses";
 import { minorToDecimal } from "./money";
 import type { ViewerPrefs } from "./prefs";
 import {
@@ -189,7 +190,10 @@ export function summaryColumns(
   return [...labels, ...totalsColumns<FlatSummaryRow>(prefs), ...amount];
 }
 
-/** The Profit report: the Summary's columns for one grouping key, and the margin. */
+/**
+ * The Profit report: the Summary's columns for one grouping key, the group's expenses
+ * (Phase 6c: all of them a cost, the billable ones revenue), and the margin.
+ */
 export function profitColumns(
   groupBy: GroupKey,
   prefs: Pick<ViewerPrefs, "durationFormat">,
@@ -198,9 +202,52 @@ export function profitColumns(
   return [
     ...summaryColumns([groupBy], prefs, { ...money, costs: true }),
     {
+      key: "expenses",
+      header: `Expenses (${money.currency})`,
+      value: (r) => minorToDecimal(r.totals.expenseMinor, money.currency),
+    },
+    {
+      key: "billableExpenses",
+      header: `Billable expenses (${money.currency})`,
+      value: (r) => minorToDecimal(r.totals.billableExpenseMinor, money.currency),
+    },
+    {
       key: "margin",
       header: "Margin %",
       value: (r) => (hasProfit(r.totals) ? marginPercent(r.totals) : null),
+    },
+  ];
+}
+
+/** One row of the Expenses report (Phase 6c): a category, project or person and its totals. */
+export interface FlatExpenseRow {
+  label: string;
+  totals: ExpenseTotals;
+}
+
+const EXPENSE_GROUP_HEADERS: Record<ExpenseGroupKey, string> = {
+  category: "Category",
+  project: "Project",
+  user: "Person",
+};
+
+/** The Expenses report's columns; every amount is in the workspace currency. */
+export function expenseColumns(
+  groupBy: ExpenseGroupKey,
+  currency: string,
+): ExportColumn<FlatExpenseRow>[] {
+  return [
+    { key: groupBy, header: EXPENSE_GROUP_HEADERS[groupBy], value: (r) => r.label },
+    { key: "count", header: "Expenses", value: (r) => r.totals.count },
+    {
+      key: "amount",
+      header: `Amount (${currency})`,
+      value: (r) => minorToDecimal(r.totals.amountMinor, currency),
+    },
+    {
+      key: "billable",
+      header: `Billable (${currency})`,
+      value: (r) => minorToDecimal(r.totals.billableMinor, currency),
     },
   ];
 }

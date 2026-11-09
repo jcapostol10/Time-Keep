@@ -61,6 +61,7 @@ import { projectCurrency, projectsHaveRates, relabelProjectsCurrency } from "../
 import { workspaceCurrency } from "./clients";
 import { visibleTasksFor } from "./tasks";
 import { type Viewer, visibleProjectFilter } from "./viewer";
+import { countProjectExpenses, purgeDeletedProjectExpenses } from "../expenses";
 import { type EntryScope, reassignProjectEntries, softDeleteProjectEntries } from "../time-entries";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
@@ -686,6 +687,16 @@ export async function deleteProject(
     if (submitted) {
       throw new CatalogError("CONFLICT", SUBMITTED_TIME_MESSAGE);
     }
+    // Expenses stay on their project (Phase 6c): live ones block the delete with a message
+    // the foreign key would not give; soft-deleted ones go with the project.
+    const expenses = await countProjectExpenses(tx, viewer.workspaceId, projectId);
+    if (expenses > 0) {
+      throw new CatalogError(
+        "CONFLICT",
+        `This project has ${expenses} ${expenses === 1 ? "expense" : "expenses"}. Move or delete ${expenses === 1 ? "it" : "them"} first.`,
+      );
+    }
+    await purgeDeletedProjectExpenses(tx, viewer.workspaceId, projectId);
     if (mode.mode === "reassign") {
       if (mode.projectId) {
         if (mode.projectId === projectId) {

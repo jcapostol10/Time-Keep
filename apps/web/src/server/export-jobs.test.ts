@@ -171,6 +171,67 @@ describe("export jobs", () => {
     });
   });
 
+  it("a receipts job builds a zip and emails its owner (Phase 6c)", async () => {
+    const { createProject } = await import("./catalog/projects");
+    const { createExpenseCategory } = await import("./expense-categories");
+    const { receiptKeys } = await import("./expense-receipts");
+    const { createExpense, setReceipt } = await import("./expenses");
+    const { uploadExport } = await import("./storage");
+    const { unzipSync } = await import("fflate");
+    const web = await createProject(db, alice, { name: "Web" });
+    const travel = await createExpenseCategory(db, alice, {
+      name: "Travel",
+      kind: "FIXED",
+      unitName: null,
+      unitPriceMinor: null,
+      billableDefault: true,
+    });
+    const e = await createExpense(
+      db,
+      alice,
+      {
+        projectId: web.id,
+        categoryId: travel.id,
+        date: "2026-03-10",
+        amountMinor: 1000,
+        billable: true,
+        description: "Taxi",
+      },
+      { now: NOW },
+    );
+    const keys = receiptKeys(alice.workspaceId, e.id);
+    const bytes = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+    await uploadExport({ key: keys.file, body: bytes, contentType: "image/jpeg" });
+    await setReceipt(
+      db,
+      alice,
+      e.id,
+      { fileKey: keys.file, thumbKey: null, mime: "image/jpeg" },
+      { now: NOW },
+    );
+
+    const job = await createExportJob(db, alice, {
+      report: "receipts",
+      format: "zip",
+      query: QUERY,
+      prefs: PREFS,
+      now: NOW,
+    });
+    const notify = vi.fn().mockResolvedValue(undefined);
+    await runExportJob(db, job.id, { notify, now: NOW });
+    const [done] = await db.select().from(exportJob).where(eq(exportJob.id, job.id));
+    expect(done).toMatchObject({ status: "done", rowCount: 1, format: "zip", report: "receipts" });
+    expect(done!.objectKey).toMatch(/\.zip$/);
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ id: job.id, status: "done" }));
+    const res = await fetch(await exportDownloadUrl(db, alice, job.id, NOW));
+    expect(res.status).toBe(200);
+    const files = unzipSync(new Uint8Array(await res.arrayBuffer()));
+    const name = Object.keys(files).find((n) => n.endsWith(".jpg"))!;
+    expect(name).toMatch(/^2026-03-10-Alice_A-Travel-/);
+    expect([...files[name]!]).toEqual([...bytes]);
+    expect(Object.keys(files)).toContain("expenses.csv");
+  });
+
   it("times out a job by when its build started, so a late retry is not failed mid-build", async () => {
     const job = await createExportJob(db, alice, {
       report: "detailed",

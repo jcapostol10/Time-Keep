@@ -89,7 +89,7 @@ export function ProfitView() {
         <Skeleton className="h-64 w-full" />
       ) : data.groups.length === 0 ? (
         <p className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-          No time in this range.
+          No time or expenses in this range.
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
@@ -101,6 +101,8 @@ export function ProfitView() {
                 <TableHead className="hidden text-right sm:table-cell">Billable</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead className="text-right">Cost</TableHead>
+                <TableHead className="hidden text-right md:table-cell">Expenses</TableHead>
+                <TableHead className="hidden text-right md:table-cell">Billable exp.</TableHead>
                 <TableHead className="text-right">Profit</TableHead>
                 <TableHead className="text-right">Margin</TableHead>
               </TableRow>
@@ -133,6 +135,12 @@ export function ProfitView() {
                   <TableCell className="text-right tabular-nums">
                     {money(g.totals.costMinor)}
                   </TableCell>
+                  <TableCell className="hidden text-right tabular-nums md:table-cell">
+                    {money(g.totals.expenseMinor)}
+                  </TableCell>
+                  <TableCell className="hidden text-right tabular-nums md:table-cell">
+                    {money(g.totals.billableExpenseMinor)}
+                  </TableCell>
                   <TableCell
                     className={cn(
                       "text-right font-semibold tabular-nums",
@@ -159,6 +167,12 @@ export function ProfitView() {
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {money(data.totals.costMinor)}
+                </TableCell>
+                <TableCell className="hidden text-right tabular-nums md:table-cell">
+                  {money(data.totals.expenseMinor)}
+                </TableCell>
+                <TableCell className="hidden text-right tabular-nums md:table-cell">
+                  {money(data.totals.billableExpenseMinor)}
                 </TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">
                   {profit(data.totals)}

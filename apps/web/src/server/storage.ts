@@ -104,6 +104,15 @@ export async function deleteExport(key: string): Promise<void> {
   await getClient().send(new DeleteObjectCommand({ Bucket: env().S3_EXPORT_BUCKET, Key: key }));
 }
 
+/** The bytes of a file in the private bucket (a receipt the zip job bundles). */
+export async function getExport(key: string): Promise<Uint8Array> {
+  const out = await getClient().send(
+    new GetObjectCommand({ Bucket: env().S3_EXPORT_BUCKET, Key: key }),
+  );
+  if (!out.Body) throw new Error(`Empty object: ${key}`);
+  return out.Body.transformToByteArray();
+}
+
 /**
  * Deletes export files last written before `olderThan`, up to one listing
  * page (1,000 keys) per call; the next call takes the rest. Returns how many

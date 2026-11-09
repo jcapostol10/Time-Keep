@@ -6,6 +6,7 @@ import {
   attendanceColumns,
   type DetailedEntry,
   detailedColumns,
+  expenseColumns,
   flattenAttendance,
   type ExportColumn,
   flattenGroups,
@@ -399,6 +400,8 @@ describe("currencies, cost and profit in exports (Phase 6a)", () => {
       "Amount (PHP)",
       "Cost (PHP)",
       "Profit (PHP)",
+      "Expenses (PHP)",
+      "Billable expenses (PHP)",
       "Margin %",
     ]);
     const free = {
@@ -406,10 +409,46 @@ describe("currencies, cost and profit in exports (Phase 6a)", () => {
       totals: { ...t(3600, 0, 1), costMinor: 60_000, profitMinor: -60_000 },
     };
     expect(toCsv([web, free], columns).split("\r\n").slice(1, 3)).toEqual([
-      "Web,5:00:00,4:00:00,4,4000.00,2100.00,1900.00,47.5",
+      "Web,5:00:00,4:00:00,4,4000.00,2100.00,1900.00,0.00,0.00,47.5",
       // Nothing billed: a loss (a plain negative number, not a formula), and no margin.
-      "Internal,1:00:00,0:00:00,1,0.00,600.00,-600.00,",
+      "Internal,1:00:00,0:00:00,1,0.00,600.00,-600.00,0.00,0.00,",
     ]);
+  });
+
+  it("prints a Profit row's expenses, and the margin over its revenue (Phase 6c)", () => {
+    const columns = profitColumns("project", PREFS, { currency: "USD", costs: true });
+    expect(columns.map((c) => c.header).slice(-3)).toEqual([
+      "Expenses (USD)",
+      "Billable expenses (USD)",
+      "Margin %",
+    ]);
+    const row = {
+      labels: ["Web"],
+      totals: {
+        ...t(3600, 3600, 1, 100_000),
+        costMinor: 40_000,
+        expenseMinor: 50_000,
+        billableExpenseMinor: 30_000,
+        profitMinor: 40_000,
+      },
+    };
+    expect(toCsv([row], columns).split("\r\n")[1]).toBe(
+      "Web,1:00:00,1:00:00,1,1000.00,400.00,400.00,500.00,300.00,30.8",
+    );
+  });
+
+  it("exports the Expenses report with its four columns (Phase 6c)", () => {
+    const columns = expenseColumns("category", "PHP");
+    expect(columns.map((c) => c.header)).toEqual([
+      "Category",
+      "Expenses",
+      "Amount (PHP)",
+      "Billable (PHP)",
+    ]);
+    expect(expenseColumns("project", "PHP")[0]?.header).toBe("Project");
+    expect(expenseColumns("user", "PHP")[0]?.header).toBe("Person");
+    const row = { label: "Travel", totals: { count: 2, amountMinor: 12550, billableMinor: 10000 } };
+    expect(toCsv([row], columns).split("\r\n")[1]).toBe("Travel,2,125.50,100.00");
   });
 
   it("adds cost and profit to Detailed entries for viewers who see costs", () => {

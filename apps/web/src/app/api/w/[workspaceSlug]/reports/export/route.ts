@@ -11,8 +11,8 @@ import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-a
 import { authorize } from "@/server/authz";
 
 const requestSchema = z.object({
-  report: z.enum([...REPORT_KINDS, "attendance", "profit"]),
-  format: z.enum(["csv", "xlsx", "pdf"]),
+  report: z.enum([...REPORT_KINDS, "attendance", "profit", "expenses", "receipts"]),
+  format: z.enum(["csv", "xlsx", "pdf", "zip"]),
 });
 
 /** Vercel Functions answer with at most 4.5 MB; leave room for headers. */
@@ -26,7 +26,8 @@ function attachment(filename: string): string {
 /**
  * The current report as a file. Small exports stream back; one over
  * EXPORT_JOB_THRESHOLD rows (or 4 MB) becomes an export job built after
- * the response, and the answer is 202 with the job's id.
+ * the response, and the answer is 202 with the job's id. The receipts zip
+ * (Phase 6c) is always a job.
  */
 export async function GET(
   request: Request,
@@ -41,45 +42,56 @@ export async function GET(
       format: params.get("format"),
     });
     if (!parsed.success) return Response.json({ error: "Invalid export" }, { status: 400 });
+    const { report, format } = parsed.data;
+    // A zip is the receipts and nothing else.
+    if ((format === "zip") !== (report === "receipts")) {
+      return Response.json({ error: "Invalid export" }, { status: 400 });
+    }
 
     const db = getDb();
-    // Attendance is every member's own (decision 13): it asks attendance.read, not the Reports page.
+    // Attendance is every member's own (decision 13): it asks attendance.read, not the Reports
+    // page; the receipts are the expenses the viewer may read (Phase 6c).
+    const own = { kind: "entry", userId: access.user.id, projectId: null } as const;
     const viewer =
-      parsed.data.report === "attendance"
+      report === "attendance"
         ? await authorize(access, "attendance.read", { kind: "person", userId: access.user.id })
-        : await authorize(access, "page.view", { kind: "page", page: "reports" });
+        : report === "receipts"
+          ? await authorize(access, "expense.read", own)
+          : await authorize(access, "page.view", { kind: "page", page: "reports" });
     // Profit is cost: only for those the matrix lets see it (Phase 6a).
-    if (parsed.data.report === "profit") await authorize(access, "report.viewCosts");
-    const { report } = parsed.data;
-    const req = {
-      ...parsed.data,
-      query: parseReportQuery(params),
-      prefs: resolveViewerPrefs(access.user, access.settings),
+    if (report === "profit") await authorize(access, "report.viewCosts");
+    const query = parseReportQuery(params);
+    const prefs = resolveViewerPrefs(access.user, access.settings);
+
+    const queue = async (jobReport: Exclude<typeof report, "profit">, jobFormat: typeof format) => {
+      const job = await createExportJob(db, viewer, {
+        report: jobReport,
+        format: jobFormat,
+        query,
+        prefs,
+      });
+      after(async () => {
+        await expireExportJobs(db);
+        await runExportJob(db, job.id);
+      });
+      return Response.json({ jobId: job.id }, { status: 202 });
     };
+    if (report === "receipts") return queue("receipts", "zip");
+    if (format === "zip") return Response.json({ error: "Invalid export" }, { status: 400 });
 
+    const req = { report, format, query, prefs };
     // A Profit export is one row per project, client or person: it always streams.
-    const queue =
-      report === "profit"
-        ? null
-        : async () => {
-            const job = await createExportJob(db, viewer, { ...req, report });
-            after(async () => {
-              await expireExportJobs(db);
-              await runExportJob(db, job.id);
-            });
-            return Response.json({ jobId: job.id }, { status: 202 });
-          };
-
-    if (queue && (await countExportRows(db, viewer, req)) > env().EXPORT_JOB_THRESHOLD) {
-      return queue();
+    const queued = report === "profit" ? null : () => queue(report, format);
+    if (queued && (await countExportRows(db, viewer, req)) > env().EXPORT_JOB_THRESHOLD) {
+      return queued();
     }
     const file =
       req.format === "pdf"
         ? await buildPdfExport(db, viewer, { ...req, workspaceName: access.workspace.name })
         : await buildExport(db, viewer, { ...req, format: req.format });
     if (file.body.byteLength > MAX_STREAMED_BYTES) {
-      if (!queue) return Response.json({ error: "This export is too large." }, { status: 413 });
-      return queue();
+      if (!queued) return Response.json({ error: "This export is too large." }, { status: 413 });
+      return queued();
     }
     return new Response(Buffer.from(file.body), {
       headers: {

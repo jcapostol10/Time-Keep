@@ -10,6 +10,7 @@ import {
   ENTRY_TYPES,
   ESTIMATE_KINDS,
   ESTIMATE_RESETS,
+  EXPENSE_CATEGORY_KINDS,
   EXPORT_FORMATS,
   EXPORT_REPORTS,
   EXPORT_STATUSES,
@@ -64,3 +65,4 @@ export const targetPeriodEnum = pgEnum("target_period", TARGET_PERIODS);
 export const kioskAttemptMethodEnum = pgEnum("kiosk_attempt_method", KIOSK_ATTEMPT_METHODS);
 export const estimateKindEnum = pgEnum("estimate_kind", ESTIMATE_KINDS);
 export const estimateResetEnum = pgEnum("estimate_reset", ESTIMATE_RESETS);
+export const expenseCategoryKindEnum = pgEnum("expense_category_kind", EXPENSE_CATEGORY_KINDS);

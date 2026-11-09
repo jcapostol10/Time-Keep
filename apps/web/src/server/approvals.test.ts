@@ -31,6 +31,8 @@ import {
 import { loadViewer } from "./authz";
 import { createProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
+import { createExpenseCategory } from "./expense-categories";
+import { createExpense } from "./expenses";
 import { createManualEntry, startTimer, updateEntry } from "./time-entries";
 
 const handle = connectTestDb();
@@ -182,6 +184,59 @@ describe("submitPeriod", () => {
       decidedBy: null,
       workSeconds: 5400 + 900,
     });
+  });
+});
+
+describe("expenses in a period (Phase 6c)", () => {
+  async function travel() {
+    return createExpenseCategory(db, await viewer("olga"), {
+      name: "Travel",
+      kind: "FIXED",
+      unitName: null,
+      unitPriceMinor: null,
+      billableDefault: true,
+    });
+  }
+  let travelId: string | undefined;
+  const spend = async (who: string, projectId: string, amountMinor: number, date: string) =>
+    createExpense(
+      db,
+      await viewer(who),
+      { projectId, categoryId: travelId!, date, amountMinor, billable: true, description: "" },
+      { now: NOW },
+    );
+
+  it("a submission snapshots the period's expense count and total", async () => {
+    travelId = (await travel()).id;
+    await spend("bob", webId, 12550, "2026-10-20");
+    await spend("bob", webId, 3000, "2026-10-25");
+    await spend("bob", webId, 999, "2026-10-26");
+    const request = await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
+    expect(request).toMatchObject({ expenseCount: 2, expenseMinor: 15550, entryCount: 2 });
+    const view = await periodView(db, await viewer("ann"), request.id);
+    expect(view.totals).toMatchObject({ expenseCount: 2, expenseMinor: 15550 });
+    expect(view.live).toMatchObject({ expenseCount: 2, expenseMinor: 15550 });
+    expect(view.expenses.map((e) => [e.date, e.amountMinor])).toEqual([
+      ["2026-10-20", 12550],
+      ["2026-10-25", 3000],
+    ]);
+    expect(view.currency).toBe("USD");
+  });
+
+  it("a project manager approves only when they manage the expenses' projects too", async () => {
+    travelId = (await travel()).id;
+    await setRules({ approvalReviewers: "PROJECT_MANAGERS" });
+    // Carol's time is all on Mobile (Pat's); her expense is on Web.
+    await spend("carol", webId, 500, "2026-10-21");
+    const carols = await submitPeriod(db, await viewer("carol"), LAST_WEEK, NOW);
+    await expect(
+      reviewRequests(db, await viewer("pat"), { ids: [carols.id], decision: "APPROVE" }, NOW),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(periodView(db, await viewer("pat"), carols.id)).rejects.toMatchObject({
+      status: 404,
+    });
+    // An admin may.
+    await reviewRequests(db, await viewer("ann"), { ids: [carols.id], decision: "APPROVE" }, NOW);
   });
 });
 
@@ -382,7 +437,14 @@ describe("periodView", () => {
     const request = await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
     const view = await periodView(db, await viewer("ann"), request.id);
     expect(view.days.map((d) => d.dateKey)).toEqual(["2026-10-20", "2026-10-21"]);
-    expect(view.totals).toEqual({ workSeconds: 5400, billableSeconds: 3600, entryCount: 2 });
+    expect(view.totals).toEqual({
+      workSeconds: 5400,
+      billableSeconds: 3600,
+      entryCount: 2,
+      expenseCount: 0,
+      expenseMinor: 0,
+    });
+    expect(view.expenses).toEqual([]);
     expect(view.events.map((e) => e.action)).toEqual(["SUBMIT"]);
     expect(view.canReview).toBe(true);
     expect((await periodView(db, await viewer("bob"), request.id)).canReview).toBe(false);

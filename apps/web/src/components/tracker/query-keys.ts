@@ -62,6 +62,27 @@ export const timeOffUrls = {
     `/api/w/${slug}/time-off/holidays/import?${params}`,
 };
 
+/**
+ * Expenses (Phase 6c): their own prefix; an expense write invalidates
+ * `expenseKeys.all` and the reports prefix (the Profit tab counts expenses).
+ */
+export const expenseKeys = {
+  all: (slug: string) => ["expenses", slug] as const,
+  /** The page's list for a serialised query; pages by cursor inside. */
+  list: (slug: string, params: string) => ["expenses", slug, "list", params] as const,
+  categories: (slug: string, archived: boolean) =>
+    ["expenses", slug, "categories", archived] as const,
+};
+
+export const expenseUrls = {
+  list: (slug: string, params: string, cursor?: string | null) =>
+    `/api/w/${slug}/expenses?${params}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+  categories: (slug: string, archived: boolean) =>
+    `/api/w/${slug}/expenses/categories${archived ? "?archived=1" : ""}`,
+  receipt: (slug: string, expenseId: string, thumb = false) =>
+    `/api/w/${slug}/expenses/${expenseId}/receipt${thumb ? "?thumb=1" : ""}`,
+};
+
 export interface TrackerOptions {
   projects: PickerProject[];
   tags: EntryTag[];

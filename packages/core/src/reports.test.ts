@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   addTotals,
   EMPTY_TOTALS,
+  hideCosts,
+  marginPercent,
   bucketFor,
   bucketKeyOfDay,
   bucketKeys,
@@ -562,6 +564,37 @@ describe("totals with amounts", () => {
       unratedCount: 1,
     });
     expect(EMPTY_TOTALS).toMatchObject({ amountMinor: 0, unratedCount: 0 });
+  });
+});
+
+describe("expenses in the report query and totals (Phase 6c)", () => {
+  it("reads categoryIds and expenseBy from the URL and writes back only the non-defaults", () => {
+    const q = parseReportQuery(new URLSearchParams("categoryIds=a&categoryIds=b&expenseBy=user"));
+    expect(q.categoryIds).toEqual(["a", "b"]);
+    expect(q.expenseBy).toBe("user");
+    expect(parseReportQuery(reportQueryToSearchParams(q))).toEqual(q);
+    expect(DEFAULT_REPORT_QUERY.expenseBy).toBe("category");
+    expect(DEFAULT_REPORT_QUERY.categoryIds).toEqual([]);
+    const params = reportQueryToSearchParams({ ...DEFAULT_REPORT_QUERY, categoryIds: ["c"] });
+    expect(params.toString()).toBe("categoryIds=c");
+  });
+
+  it("sums the expense totals and hides them with the costs", () => {
+    const a = { ...EMPTY_TOTALS, expenseMinor: 500, billableExpenseMinor: 300 };
+    const b = { ...EMPTY_TOTALS, expenseMinor: 200, billableExpenseMinor: 0 };
+    expect(addTotals(a, b)).toMatchObject({ expenseMinor: 700, billableExpenseMinor: 300 });
+    expect(EMPTY_TOTALS).toMatchObject({ expenseMinor: 0, billableExpenseMinor: 0 });
+    expect(hideCosts(a)).toMatchObject({ expenseMinor: 0, billableExpenseMinor: 0 });
+  });
+
+  it("measures the margin over revenue: amount plus billable expenses", () => {
+    expect(marginPercent({ amountMinor: 0, profitMinor: 500, billableExpenseMinor: 1000 })).toBe(
+      50,
+    );
+    expect(marginPercent({ amountMinor: 1000, profitMinor: 400, billableExpenseMinor: 300 })).toBe(
+      30.8,
+    );
+    expect(marginPercent({ amountMinor: 0, profitMinor: -5, billableExpenseMinor: 0 })).toBeNull();
   });
 });
 

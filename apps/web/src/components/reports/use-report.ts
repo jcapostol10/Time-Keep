@@ -8,6 +8,7 @@ import {
   type DetailedPage,
   type DetailedPaging,
   detailedKey,
+  type ExpenseReport,
   type ReportFilterOptions,
   type SummaryReport,
   type WeeklyReport,
@@ -32,6 +33,17 @@ export function useProfit(slug: string, params: string) {
   return useQuery({
     queryKey: trackerKeys.report(slug, "profit", params),
     queryFn: () => fetchJson<SummaryReport>(trackerUrls.report(slug, "profit", params)),
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** The Expenses tab (Phase 6c): totals by category, project or person. */
+export function useExpensesReport(slug: string, params: string) {
+  return useQuery({
+    queryKey: trackerKeys.report(slug, "expenses", params),
+    queryFn: () => fetchJson<ExpenseReport>(trackerUrls.report(slug, "expenses", params)),
     staleTime: 10_000,
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,

@@ -29,7 +29,8 @@ import { timerLock } from "./person-lock";
 
 /**
  * The write guard of Phase 5a (decisions 5 and 6), called by every write path
- * in `time-entries.ts` and nowhere else (`writable-coverage.test.ts`):
+ * in `time-entries.ts` and nowhere else (`writable-coverage.test.ts`); from
+ * Phase 6c `expense-guard.ts` runs the same lookup over expense dates:
  *
  * - A lock date refuses members' and managers' writes to entries starting
  *   before it, whether the start is the entry's before or after the change.
@@ -91,6 +92,9 @@ export const PENDING_MESSAGE = "This period is submitted for approval.";
 export const APPROVED_MESSAGE = "This period is approved.";
 export const NOTE_REQUIRED_MESSAGE = "Say why you are changing submitted time.";
 
+/** What the guard protects: the wording of the lock message. */
+export type GuardedNoun = "Entries" | "Expenses";
+
 /** The lock line the tracker, timesheet and calendar show (spec Part 2); null when none binds. */
 export async function lockNoticeFor(
   db: Pick<DbExecutor, "select">,
@@ -104,86 +108,14 @@ export async function lockNoticeFor(
   return key ? `Entries before ${formatDateKey(key)} are locked.` : null;
 }
 
-/**
- * Why the scope's actor may not change each entry, for the editor's reads
- * (rows and cells shown read-only): the lock date, or a submitted period.
- * Owners and admins may change everything (with a note), so they get none.
- */
-export async function lockedReasons(
+/** The PENDING and APPROVED requests of the person covering any of `keys`. */
+async function coveringRequests(
   db: Pick<DbExecutor, "select">,
-  scope: EntryScope,
-  entries: { id: string; start: string }[],
-  now: Date = new Date(),
-): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  if (entries.length === 0) return out;
-  const actor = scope.actedBy ?? scope.actor;
-  if (can(actor, "approval.editLocked", { kind: "none" })) return out;
-  const rules = await writeRulesOf(db, scope.workspaceId);
-  const boundary = lockBoundary(rules.lock, now);
-  const lockMessage = boundary
-    ? `Entries before ${formatDateKey(lockDateKey(rules.lock, now)!)} are locked.`
-    : "";
-  const keys = entries.map((e) => localDateKey(new Date(e.start), rules.timezone));
+  scope: Pick<EntryScope, "workspaceId" | "userId">,
+  keys: readonly string[],
+) {
   const sorted = [...keys].sort();
-  const requests = await db
-    .select({
-      status: approvalRequest.status,
-      periodStart: approvalRequest.periodStart,
-      periodEnd: approvalRequest.periodEnd,
-    })
-    .from(approvalRequest)
-    .where(
-      and(
-        eq(approvalRequest.workspaceId, scope.workspaceId),
-        eq(approvalRequest.userId, scope.userId),
-        inArray(approvalRequest.status, ["PENDING", "APPROVED"]),
-        lte(approvalRequest.periodStart, sorted.at(-1)!),
-        gte(approvalRequest.periodEnd, sorted[0]!),
-      ),
-    );
-  entries.forEach((e, i) => {
-    const key = keys[i]!;
-    const request = requests.find((r) => r.periodStart <= key && key <= r.periodEnd);
-    if (request) out.set(e.id, request.status === "PENDING" ? PENDING_MESSAGE : APPROVED_MESSAGE);
-    else if (boundary && new Date(e.start).getTime() < boundary.getTime())
-      out.set(e.id, lockMessage);
-  });
-  return out;
-}
-
-function startsOf(change: WriteChange): Date[] {
-  return [change.before, change.after].filter((d): d is Date => d !== undefined);
-}
-
-export async function assertWritable(
-  db: Pick<DbExecutor, "select" | "insert" | "execute">,
-  scope: EntryScope,
-  input: WriteChange | WriteChange[],
-  opts: { note?: string; now?: Date; rules?: WriteRules } = {},
-): Promise<void> {
-  const changes = Array.isArray(input) ? input : [input];
-  const starts = changes.flatMap(startsOf);
-  if (starts.length === 0) return;
-  const now = opts.now ?? new Date();
-  const rules = opts.rules ?? (await writeRulesOf(db, scope.workspaceId));
-  const actor = scope.actedBy ?? scope.actor;
-  const privileged = can(actor, "approval.editLocked", { kind: "none" });
-
-  if (!privileged) {
-    const boundary = lockBoundary(rules.lock, now);
-    if (boundary && starts.some((s) => s.getTime() < boundary.getTime())) {
-      const key = lockDateKey(rules.lock, now)!;
-      throw new TimeEntryError("INVALID", `Entries before ${formatDateKey(key)} are locked.`);
-    }
-  }
-
-  // A submission takes the same lock: this write lands before its totals, or
-  // sees the request (callers run inside a transaction, which holds the lock).
-  await db.execute(timerLock(scope.workspaceId, scope.userId));
-  const keys = starts.map((s) => localDateKey(s, rules.timezone));
-  const sorted = [...keys].sort();
-  const requests = await db
+  return db
     .select({
       id: approvalRequest.id,
       status: approvalRequest.status,
@@ -200,15 +132,117 @@ export async function assertWritable(
         gte(approvalRequest.periodEnd, sorted[0]!),
       ),
     );
+}
+
+/**
+ * Why the scope's actor may not change each item, for the editor's reads
+ * (rows and cells shown read-only): the lock date, or a submitted period.
+ * Owners and admins may change everything (with a note), so they get none.
+ * `key` is the item's local date; `instant` decides the lock boundary.
+ */
+export async function lockedReasonsForKeys(
+  db: Pick<DbExecutor, "select">,
+  scope: EntryScope,
+  items: { id: string; key: string; instant: Date }[],
+  noun: GuardedNoun,
+  now: Date = new Date(),
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (items.length === 0) return out;
+  const actor = scope.actedBy ?? scope.actor;
+  if (can(actor, "approval.editLocked", { kind: "none" })) return out;
+  const rules = await writeRulesOf(db, scope.workspaceId);
+  const boundary = lockBoundary(rules.lock, now);
+  const lockMessage = boundary
+    ? `${noun} before ${formatDateKey(lockDateKey(rules.lock, now)!)} are locked.`
+    : "";
+  const requests = await coveringRequests(
+    db,
+    scope,
+    items.map((i) => i.key),
+  );
+  for (const item of items) {
+    const request = requests.find((r) => r.periodStart <= item.key && item.key <= r.periodEnd);
+    if (request) {
+      out.set(item.id, request.status === "PENDING" ? PENDING_MESSAGE : APPROVED_MESSAGE);
+    } else if (boundary && item.instant.getTime() < boundary.getTime()) {
+      out.set(item.id, lockMessage);
+    }
+  }
+  return out;
+}
+
+/** `lockedReasonsForKeys` over entries, by their start in the workspace timezone. */
+export async function lockedReasons(
+  db: Pick<DbExecutor, "select">,
+  scope: EntryScope,
+  entries: { id: string; start: string }[],
+  now: Date = new Date(),
+): Promise<Map<string, string>> {
+  if (entries.length === 0) return new Map();
+  const actor = scope.actedBy ?? scope.actor;
+  if (can(actor, "approval.editLocked", { kind: "none" })) return new Map();
+  const { timezone } = await writeRulesOf(db, scope.workspaceId);
+  return lockedReasonsForKeys(
+    db,
+    scope,
+    entries.map((e) => {
+      const instant = new Date(e.start);
+      return { id: e.id, key: localDateKey(instant, timezone), instant };
+    }),
+    "Entries",
+    now,
+  );
+}
+
+/** One guarded item: its local date keys before and after the change, and what to log. */
+export interface KeyedChange {
+  /** The date keys the change touches (before and after), already in the workspace zone. */
+  keys: string[];
+  /** The instants of those keys, for the lock boundary. */
+  instants: Date[];
+  entryId?: string;
+  expenseId?: string;
+  changes?: Record<string, { from: unknown; to: unknown }>;
+}
+
+/**
+ * The guard over date keys: refuses the lock and the submitted periods for
+ * members and managers; asks owners and admins for a note and logs it.
+ * Callers run inside a transaction and take the person's lock here, so this
+ * write lands before a submission's totals or sees the request.
+ */
+export async function assertKeysWritable(
+  db: Pick<DbExecutor, "select" | "insert" | "execute">,
+  scope: EntryScope,
+  items: KeyedChange[],
+  opts: { note?: string; now?: Date; rules?: WriteRules; noun: GuardedNoun },
+): Promise<void> {
+  const keys = items.flatMap((i) => i.keys);
+  if (keys.length === 0) return;
+  const now = opts.now ?? new Date();
+  const rules = opts.rules ?? (await writeRulesOf(db, scope.workspaceId));
+  const actor = scope.actedBy ?? scope.actor;
+  const privileged = can(actor, "approval.editLocked", { kind: "none" });
+
+  if (!privileged) {
+    const boundary = lockBoundary(rules.lock, now);
+    const instants = items.flatMap((i) => i.instants);
+    if (boundary && instants.some((s) => s.getTime() < boundary.getTime())) {
+      const key = lockDateKey(rules.lock, now)!;
+      throw new TimeEntryError("INVALID", `${opts.noun} before ${formatDateKey(key)} are locked.`);
+    }
+  }
+
+  await db.execute(timerLock(scope.workspaceId, scope.userId));
+  const requests = await coveringRequests(db, scope, keys);
   if (requests.length === 0) return;
   const covering = (key: string) =>
     requests.find((r) => r.periodStart <= key && key <= r.periodEnd);
 
-  const hits = changes.flatMap((change) => {
-    const request = startsOf(change)
-      .map((s) => covering(localDateKey(s, rules.timezone)))
-      .find((r) => r !== undefined);
-    return request ? [{ change, request }] : [];
+  const hits = items.flatMap((item) => {
+    const request = item.keys.map(covering).find((r) => r !== undefined);
+    return request ? [{ item, request }] : [];
   });
   if (hits.length === 0) return;
   if (!privileged) {
@@ -219,7 +253,7 @@ export async function assertWritable(
   }
   if (!opts.note) throw new TimeEntryError("NOTE_REQUIRED", NOTE_REQUIRED_MESSAGE);
   await db.insert(approvalEvent).values(
-    hits.map(({ change, request }) => ({
+    hits.map(({ item, request }) => ({
       id: randomUUID(),
       workspaceId: scope.workspaceId,
       requestId: request.id,
@@ -227,8 +261,38 @@ export async function assertWritable(
       actorId: actor.userId,
       action: "ADMIN_EDIT" as const,
       note: opts.note,
-      entryId: change.entryId ?? null,
-      changes: change.changes ?? null,
+      entryId: item.entryId ?? null,
+      expenseId: item.expenseId ?? null,
+      changes: item.changes ?? null,
     })),
+  );
+}
+
+function startsOf(change: WriteChange): Date[] {
+  return [change.before, change.after].filter((d): d is Date => d !== undefined);
+}
+
+export async function assertWritable(
+  db: Pick<DbExecutor, "select" | "insert" | "execute">,
+  scope: EntryScope,
+  input: WriteChange | WriteChange[],
+  opts: { note?: string; now?: Date; rules?: WriteRules } = {},
+): Promise<void> {
+  const changes = Array.isArray(input) ? input : [input];
+  if (changes.every((c) => startsOf(c).length === 0)) return;
+  const rules = opts.rules ?? (await writeRulesOf(db, scope.workspaceId));
+  await assertKeysWritable(
+    db,
+    scope,
+    changes.map((change) => {
+      const instants = startsOf(change);
+      return {
+        keys: instants.map((s) => localDateKey(s, rules.timezone)),
+        instants,
+        entryId: change.entryId,
+        changes: change.changes,
+      };
+    }),
+    { ...opts, rules, noun: "Entries" },
   );
 }
