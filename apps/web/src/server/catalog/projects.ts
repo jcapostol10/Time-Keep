@@ -10,6 +10,7 @@ import {
   DEFAULT_REPORT_QUERY,
   type DeleteProjectMode,
   pickColor,
+  type Progress,
   type ProjectInput,
   type ProjectListQuery,
   type ProjectPatch,
@@ -52,6 +53,7 @@ import type { ProjectDetail, ProjectListItem, ProjectStatus } from "@/lib/catalo
 import type { PickerProject, PickerTask } from "@/lib/tracker-types";
 
 import { CatalogError, isUniqueViolation } from "./errors";
+import { estimateOf, progressFor, visibleProgress, workspaceZone } from "../estimates";
 import { inSubmittedPeriodSql, SUBMITTED_TIME_MESSAGE } from "../approval-sql";
 import { scopeFilter } from "../authz";
 import { projectCurrency, projectsHaveRates, relabelProjectsCurrency } from "../rates";
@@ -66,12 +68,12 @@ const DUPLICATE_NAME = "A project with this name already exists for this client.
 const NOT_FOUND = "Project not found.";
 
 const detailRelations = {
-  client: { columns: { name: true } },
+  client: { columns: { name: true, currency: true } },
   members: { columns: { userId: true } },
 } as const;
 
 type ProjectRow = typeof project.$inferSelect & {
-  client: { name: string } | null;
+  client: { name: string; currency: string | null } | null;
   members: { userId: string }[];
 };
 
@@ -134,7 +136,12 @@ async function favoriteIds(db: Executor, viewer: Viewer): Promise<Set<string>> {
   return new Set(rows.map((r) => r.projectId));
 }
 
-function toListItem(row: ProjectRow, tracked: number, favorite: boolean): ProjectListItem {
+function toListItem(
+  row: ProjectRow,
+  tracked: number,
+  favorite: boolean,
+  progress: Progress | null,
+): ProjectListItem {
   return {
     id: row.id,
     name: row.name,
@@ -149,14 +156,49 @@ function toListItem(row: ProjectRow, tracked: number, favorite: boolean): Projec
     favorite,
     trackedSeconds: tracked,
     memberCount: row.members.length,
+    estimate: estimateOf(row),
+    progress,
   };
 }
 
-function toDetail(row: ProjectRow, tracked: number, favorite: boolean): ProjectDetail {
+function toDetail(
+  row: ProjectRow,
+  tracked: number,
+  favorite: boolean,
+  progress: Progress | null,
+  currency: string,
+): ProjectDetail {
   return {
-    ...toListItem(row, tracked, favorite),
+    ...toListItem(row, tracked, favorite, progress),
     memberIds: row.members.map((m) => m.userId),
+    currency,
   };
+}
+
+/**
+ * The progress of the rows' projects the viewer may see (Phase 6b): one
+ * aggregate for the list, whole-project, raw; `progressVisible` decides who
+ * sees which bar. Also the workspace currency, for each project's own.
+ */
+async function progressOf(
+  db: Executor,
+  viewer: Viewer,
+  rows: ProjectRow[],
+  now: Date,
+): Promise<{ progress: Map<string, Progress>; currency: string }> {
+  const zone = await workspaceZone(db, viewer.workspaceId);
+  const subjects = rows
+    .filter((r) => r.estimateKind !== "NONE")
+    .map((r) => ({
+      id: r.id,
+      visibility: r.visibility,
+      isMember: r.members.some((m) => m.userId === viewer.userId),
+      estimate: estimateOf(r),
+      currency: entryCurrency(r.client?.currency, zone.currency),
+    }));
+  if (subjects.length === 0) return { progress: new Map(), currency: zone.currency };
+  const progress = await progressFor(db, viewer.workspaceId, subjects, now, zone.timezone);
+  return { progress: visibleProgress(viewer, subjects, progress), currency: zone.currency };
 }
 
 function compareBy(sort: ProjectListQuery["sort"], dir: ProjectListQuery["dir"]) {
@@ -187,6 +229,7 @@ export async function listProjects(
   db: Executor,
   viewer: Viewer,
   q: Omit<ProjectListQuery, "kind"> & { kind?: ProjectListQuery["kind"] },
+  now: Date = new Date(),
 ): Promise<ProjectListItem[]> {
   const filters: (SQL | undefined)[] = [
     eq(project.workspaceId, viewer.workspaceId),
@@ -210,12 +253,15 @@ export async function listProjects(
     );
   }
   const rows = await db.query.project.findMany({ where: and(...filters), with: detailRelations });
-  const [tracked, favorites] = await Promise.all([
+  const [tracked, favorites, { progress }] = await Promise.all([
     trackedByProject(db, viewer),
     favoriteIds(db, viewer),
+    progressOf(db, viewer, rows, now),
   ]);
   return rows
-    .map((r) => toListItem(r, tracked.get(r.id) ?? 0, favorites.has(r.id)))
+    .map((r) =>
+      toListItem(r, tracked.get(r.id) ?? 0, favorites.has(r.id), progress.get(r.id) ?? null),
+    )
     .sort(compareBy(q.sort, q.dir));
 }
 
@@ -438,13 +484,21 @@ export async function getProject(
   db: Executor,
   viewer: Viewer,
   projectId: string,
+  now: Date = new Date(),
 ): Promise<ProjectDetail> {
   const row = await requireVisibleProject(db, viewer, projectId);
-  const [tracked, favorites] = await Promise.all([
+  const [tracked, favorites, { progress, currency }] = await Promise.all([
     trackedByProject(db, viewer),
     favoriteIds(db, viewer),
+    progressOf(db, viewer, [row], now),
   ]);
-  return toDetail(row, tracked.get(row.id) ?? 0, favorites.has(row.id));
+  return toDetail(
+    row,
+    tracked.get(row.id) ?? 0,
+    favorites.has(row.id),
+    progress.get(row.id) ?? null,
+    entryCurrency(row.client?.currency, currency),
+  );
 }
 
 async function requireClientName(

@@ -6,6 +6,7 @@ import type {
   DetailedEntry,
   GroupKey,
   MoneyAmount,
+  Progress,
   ReportGroup,
   ReportTotals,
   RoundingRule,
@@ -40,6 +41,11 @@ export interface SummaryReport {
   groupBy: GroupKey[];
   groups: ReportGroup[];
   totals: ReportTotals;
+  /**
+   * Budget progress by project id (Phase 6b) when the report is grouped by
+   * project and the viewer may see it; null otherwise, and always on a share link.
+   */
+  progress: Record<string, Progress> | null;
 }
 
 /** A Detailed row: the export columns plus what inline editing needs. */

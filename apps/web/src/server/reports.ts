@@ -12,6 +12,7 @@ import {
   type GroupKey,
   groupRows,
   hideCosts,
+  type Progress,
   type ReportGroup,
   localDateKey,
   NONE_ID,
@@ -76,6 +77,7 @@ import { listClientOptions } from "./catalog/clients";
 import { listPickerProjects } from "./catalog/projects";
 import { listTagOptions } from "./catalog/tags";
 import type { Viewer } from "./catalog/viewer";
+import { progressForProjects } from "./estimates";
 import { listMembers } from "./queries/team";
 import { WorkspaceAccessError } from "./access-error";
 
@@ -600,7 +602,33 @@ export async function summaryReport(
     groupBy: eff.groupBy,
     groups: maskGroups(groups, money),
     totals: maskTotals(totals, money),
+    progress: await progressOfGroups(db, viewer, eff.groupBy, groups, now),
   };
+}
+
+/** The ids under the `project` level of the grouping tree. */
+function projectIdsIn(groups: ReportGroup[], depth: number): string[] {
+  if (depth === 0) return groups.flatMap((g) => (g.id === null ? [] : [g.id]));
+  return groups.flatMap((g) => projectIdsIn(g.children, depth - 1));
+}
+
+/**
+ * Budget progress for the Summary rows grouped by project (Phase 6b): never
+ * on a share link or the dashboard (`hideCosts`), and only the bars the
+ * viewer may see.
+ */
+async function progressOfGroups(
+  db: Executor,
+  viewer: Viewer,
+  keys: GroupKey[],
+  groups: ReportGroup[],
+  now: Date,
+): Promise<Record<string, Progress> | null> {
+  const depth = keys.indexOf("project");
+  if (depth < 0 || viewer.hideCosts) return null;
+  const ids = [...new Set(projectIdsIn(groups, depth))];
+  const progress = await progressForProjects(db, viewer, ids, now);
+  return progress.size > 0 ? Object.fromEntries(progress) : null;
 }
 
 /**

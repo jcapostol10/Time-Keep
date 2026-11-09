@@ -30,6 +30,8 @@ import type { Viewer } from "./viewer";
 const handle = connectTestDb();
 const db = handle.db;
 
+afterAll(async () => handle.close());
+
 const NOW = new Date("2026-03-11T04:00:00.000Z");
 
 let owner: Viewer;
@@ -38,7 +40,6 @@ let outsider: Viewer;
 
 describe("tasks service", () => {
   beforeAll(async () => truncateAll(db));
-  afterAll(async () => handle.close());
 
   beforeEach(async () => {
     await truncateAll(db);
@@ -275,5 +276,36 @@ describe("tasks service", () => {
         createTask(db, owner, web.id, { name: "T", assigneeIds: [], groupIds: [randomUUID()] }),
       ).rejects.toThrow("Unknown group.");
     });
+  });
+});
+
+describe("task estimates (Phase 6b)", () => {
+  beforeEach(async () => {
+    await truncateAll(db);
+    const alice = await createTestUser(db, "Alice A");
+    const ws = await createTestWorkspace(db, "Workspace A", alice.id);
+    owner = asViewer({ workspaceId: ws.id, userId: alice.id, role: "owner" });
+  });
+
+  it("a task estimate is saved and listed", async () => {
+    const web = await createProject(db, owner, { name: "Web" });
+    const design = await createTask(db, owner, web.id, {
+      name: "Design",
+      assigneeIds: [],
+      estimateSeconds: 7_200,
+    });
+    expect(design.estimateSeconds).toBe(7_200);
+    const qa = await createTask(db, owner, web.id, { name: "QA", assigneeIds: [] });
+    expect(qa.estimateSeconds).toBeNull();
+    expect((await updateTask(db, owner, qa.id, { estimateSeconds: 1_800 })).estimateSeconds).toBe(
+      1_800,
+    );
+    expect(
+      (await updateTask(db, owner, design.id, { estimateSeconds: null })).estimateSeconds,
+    ).toBeNull();
+    expect((await listTasks(db, owner, web.id)).map((t) => [t.name, t.estimateSeconds])).toEqual([
+      ["Design", null],
+      ["QA", 1_800],
+    ]);
   });
 });

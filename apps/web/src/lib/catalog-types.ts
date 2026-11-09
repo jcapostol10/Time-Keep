@@ -1,4 +1,4 @@
-import type { MoneyAmount } from "@timekeep/core";
+import type { Estimate, MoneyAmount, Progress } from "@timekeep/core";
 
 /**
  * Isomorphic DTOs for clients, projects, tasks and tags. Like the tracker
@@ -32,10 +32,37 @@ export interface ProjectListItem {
   /** Everyone's time for admins; the viewer's own time for members. */
   trackedSeconds: number;
   memberCount: number;
+  /** The project's one estimate (Phase 6b). */
+  estimate: Estimate;
+  /** Its progress this period, when there is an estimate and the viewer may see it. */
+  progress: Progress | null;
 }
 
 export interface ProjectDetail extends ProjectListItem {
   memberIds: string[];
+  /** What the project bills in: its client's currency, else the workspace's. */
+  currency: string;
+}
+
+/** The Budget tab (Phase 6b). */
+export interface BudgetDTO {
+  estimate: Estimate;
+  currency: string;
+  /** The workspace's alert thresholds, whole percents ascending. */
+  thresholds: number[];
+  progress: Progress | null;
+  /** A billable rate is in force for the project in its currency (a money estimate can fill). */
+  hasRates: boolean;
+  /** The cumulative measure over the period, one point per day (weekly past two months). */
+  series: { key: string; label: string; value: number }[];
+  /** The tasks with an estimate. */
+  tasks: {
+    id: string;
+    name: string;
+    status: TaskDTO["status"];
+    estimateSeconds: number;
+    trackedSeconds: number;
+  }[];
 }
 
 export interface ProjectStatus {
@@ -84,6 +111,8 @@ export interface TaskDTO {
   trackedSeconds: number;
   /** Live entries on the task; the delete dialog says how many lose it. */
   entryCount: number;
+  /** An optional time estimate (Phase 6b). */
+  estimateSeconds: number | null;
 }
 
 /** The tasks a group gives, or a person can see: the Team page's lists (decision 11). */

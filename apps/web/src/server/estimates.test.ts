@@ -1,13 +1,21 @@
 import { randomUUID } from "node:crypto";
 
 import { type Estimate, NO_ESTIMATE } from "@timekeep/core";
-import { client, eq, rate, timeEntry, workspaceSettings } from "@timekeep/db";
+import { client, eq, projectMember, rate, timeEntry, workspaceSettings } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import { connectTestDb, createTestUser, createTestWorkspace, truncateAll } from "../../test/db";
+import {
+  addMember,
+  connectTestDb,
+  createTestUser,
+  createTestWorkspace,
+  truncateAll,
+} from "../../test/db";
 import { loadViewer } from "./authz";
 import { createProject } from "./catalog/projects";
+import { createTask } from "./catalog/tasks";
 import type { Viewer } from "./catalog/viewer";
+import { getProjectBudget, setProjectEstimate } from "./budgets";
 import { progressFor } from "./estimates";
 import { createManualEntry, deleteEntries, startTimer } from "./time-entries";
 
@@ -16,6 +24,8 @@ import { createManualEntry, deleteEntries, startTimer } from "./time-entries";
 
 const handle = connectTestDb();
 const db = handle.db;
+
+afterAll(async () => handle.close());
 
 let wsId: string;
 let owner: Viewer;
@@ -59,7 +69,6 @@ async function entry(
 
 describe("progressFor", () => {
   beforeAll(async () => truncateAll(db));
-  afterAll(async () => handle.close());
 
   beforeEach(async () => {
     await truncateAll(db);
@@ -186,5 +195,137 @@ describe("progressFor", () => {
     expect(progress.has(p.id)).toBe(false);
     expect(progress.get(q.id)?.used).toBe(0);
     expect((await progressFor(db, wsId, [], NOW, TZ)).size).toBe(0);
+  });
+});
+
+describe("setProjectEstimate and getProjectBudget", () => {
+  let memberViewer: Viewer;
+  let managerViewer: Viewer;
+
+  beforeEach(async () => {
+    await truncateAll(db);
+    const olga = await createTestUser(db, "Olga Owner");
+    const bob = await createTestUser(db, "Bob Member");
+    const max = await createTestUser(db, "Max Manager");
+    const ws = await createTestWorkspace(db, "Workspace", olga.id);
+    wsId = ws.id;
+    await addMember(db, ws.id, bob.id, "member");
+    await addMember(db, ws.id, max.id, "manager");
+    await db
+      .update(workspaceSettings)
+      .set({ timezone: TZ, currency: "USD" })
+      .where(eq(workspaceSettings.workspaceId, ws.id));
+    owner = await loadViewer(db, ws.id, olga.id);
+    memberViewer = await loadViewer(db, ws.id, bob.id);
+    managerViewer = await loadViewer(db, ws.id, max.id);
+  });
+
+  it("setProjectEstimate writes and clears", async () => {
+    const p = await createProject(db, owner, { name: "Site" });
+    const saved = await setProjectEstimate(db, owner, p.id, {
+      kind: "TIME",
+      seconds: 36_000,
+      minor: null,
+      reset: "MONTHLY",
+      alerts: false,
+    });
+    expect(saved.estimate).toEqual({
+      kind: "TIME",
+      seconds: 36_000,
+      minor: null,
+      reset: "MONTHLY",
+      alerts: false,
+    });
+    const cleared = await setProjectEstimate(db, owner, p.id, {
+      kind: "NONE",
+      seconds: 36_000,
+      minor: 5,
+      reset: "NONE",
+      alerts: true,
+    });
+    expect(cleared.estimate).toEqual(NO_ESTIMATE);
+    expect(cleared.progress).toBeNull();
+  });
+
+  it("a project manager sets the estimate of their project, a member cannot", async () => {
+    const p = await createProject(db, owner, { name: "Site" });
+    await db
+      .insert(projectMember)
+      .values({ projectId: p.id, userId: managerViewer.userId, isManager: true });
+    managerViewer = await loadViewer(db, wsId, managerViewer.userId);
+    const input = {
+      kind: "TIME" as const,
+      seconds: 7_200,
+      minor: null,
+      reset: "NONE" as const,
+      alerts: true,
+    };
+    expect((await setProjectEstimate(db, managerViewer, p.id, input)).estimate.seconds).toBe(7_200);
+    await expect(setProjectEstimate(db, memberViewer, p.id, input)).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+
+  it("getProjectBudget: monthly series is cumulative over the month's days", async () => {
+    const p = await createProject(db, owner, { name: "Site" });
+    await setProjectEstimate(db, owner, p.id, {
+      kind: "TIME",
+      seconds: 36_000,
+      minor: null,
+      reset: "MONTHLY",
+      alerts: true,
+    });
+    // Nov 3 and Nov 5 in Manila; now is Nov 8.
+    await entry(p.id, new Date("2026-11-03T02:00:00Z"), 1);
+    await entry(p.id, new Date("2026-11-05T02:00:00Z"), 2);
+    const budget = await getProjectBudget(db, owner, p.id, NOW);
+    expect(budget.progress).toMatchObject({ used: 10_800, percent: 30 });
+    expect(budget.currency).toBe("USD");
+    expect(budget.thresholds).toEqual([50, 80, 100]);
+    expect(budget.series.map((s) => [s.key, s.value])).toEqual([
+      ["2026-11-01", 0],
+      ["2026-11-02", 0],
+      ["2026-11-03", 3_600],
+      ["2026-11-04", 3_600],
+      ["2026-11-05", 10_800],
+      ["2026-11-06", 10_800],
+      ["2026-11-07", 10_800],
+      ["2026-11-08", 10_800],
+    ]);
+  });
+
+  it("getProjectBudget lists only tasks with an estimate", async () => {
+    const p = await createProject(db, owner, { name: "Site" });
+    const design = await createTask(db, owner, p.id, {
+      name: "Design",
+      assigneeIds: [],
+      estimateSeconds: 7_200,
+    });
+    await createTask(db, owner, p.id, { name: "QA", assigneeIds: [] });
+    await entry(p.id, new Date("2026-11-03T02:00:00Z"), 1, { taskId: design.id });
+    const budget = await getProjectBudget(db, owner, p.id, NOW);
+    expect(budget.tasks).toEqual([
+      {
+        id: design.id,
+        name: "Design",
+        status: "ACTIVE",
+        estimateSeconds: 7_200,
+        trackedSeconds: 3_600,
+      },
+    ]);
+  });
+
+  it("getProjectBudget says when the project has no rate in force", async () => {
+    const p = await createProject(db, owner, { name: "Site" });
+    expect((await getProjectBudget(db, owner, p.id, NOW)).hasRates).toBe(false);
+    await db.insert(rate).values({
+      id: randomUUID(),
+      workspaceId: wsId,
+      level: "workspace",
+      currency: "USD",
+      amountMinor: 5_000,
+      effectiveFrom: new Date("2026-01-01T00:00:00Z"),
+    });
+    expect((await getProjectBudget(db, owner, p.id, NOW)).hasRates).toBe(true);
   });
 });
