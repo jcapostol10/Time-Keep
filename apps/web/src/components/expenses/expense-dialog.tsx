@@ -61,12 +61,15 @@ export function ExpenseDialog({
   onClose: () => void;
 }) {
   const { viewer } = useTracker();
-  const { data: categories } = useExpenseCategories(slug);
+  // Archived ones too: an expense keeps its category after it is archived, and edits it.
+  const { data: categories } = useExpenseCategories(slug, true);
   const writes = useExpenseWrites(slug);
   const [userId, setUserId] = useState(expense?.userId ?? people[0]?.id ?? "");
   const [projectId, setProjectId] = useState<string | null>(expense?.projectId ?? null);
   const [categoryId, setCategoryId] = useState(expense?.categoryId ?? "");
-  const [date, setDate] = useState(expense?.date ?? localDateKey(new Date(), viewer.timezone));
+  const [date, setDate] = useState(
+    () => expense?.date ?? localDateKey(new Date(), viewer.timezone),
+  );
   const [amount, setAmount] = useState(
     expense && expense.quantityCenti === null ? decimalOf(expense.amountMinor, currency) : "",
   );
@@ -86,10 +89,13 @@ export function ExpenseDialog({
   const category: ExpenseCategoryDTO | undefined = active.find((c) => c.id === categoryId);
   const unit = category?.kind === "UNIT";
   const quantityCenti = unit ? parseQuantity(quantity) : null;
-  const computed =
-    unit && quantityCenti !== null && category?.unitPriceMinor !== null
-      ? expenseAmount(quantityCenti, category?.unitPriceMinor ?? 0)
-      : null;
+  // The price in force: an edited expense keeps the one it was saved at while its
+  // category stays; a new expense, or a changed category, takes the category's current price.
+  const unitPrice =
+    expense && expense.categoryId === categoryId && expense.unitPriceMinor !== null
+      ? expense.unitPriceMinor
+      : (category?.unitPriceMinor ?? 0);
+  const computed = unit && quantityCenti !== null ? expenseAmount(quantityCenti, unitPrice) : null;
 
   function pickCategory(id: string) {
     setCategoryId(id);
@@ -248,8 +254,8 @@ export function ExpenseDialog({
           {unit && category ? (
             <p className="text-muted-foreground text-sm tabular-nums" aria-live="polite">
               {computed !== null
-                ? `× ${formatMoney(category.unitPriceMinor ?? 0, currency)}/${category.unitName ?? "unit"} = ${formatMoney(computed, currency)}`
-                : `${formatMoney(category.unitPriceMinor ?? 0, currency)} per ${category.unitName ?? "unit"}`}
+                ? `× ${formatMoney(unitPrice, currency)}/${category.unitName ?? "unit"} = ${formatMoney(computed, currency)}`
+                : `${formatMoney(unitPrice, currency)} per ${category.unitName ?? "unit"}`}
             </p>
           ) : null}
           <label className="flex items-center justify-between gap-3 text-sm">

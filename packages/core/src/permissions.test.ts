@@ -421,6 +421,15 @@ describe("expenses (Phase 6c)", () => {
     expect(denial(mgr, "expense.read", entry(OTHER))).toBe(404);
   });
 
+  it("a member never reads a colleague's expense, even when the team's time is shown", () => {
+    // The spec's access table: "Read and edit others' expenses — Member: no". Money and
+    // receipts are not time; the time setting does not open them.
+    const m = actor("member", { membersSeeTeamTime: true });
+    expect(can(m, "entry.read", entry(OTHER))).toBe(true);
+    expect(denial(m, "expense.read", entry(OTHER))).toBe(404);
+    expect(can(m, "expense.read", entry(ME))).toBe(true);
+  });
+
   it("categories are for owners and admins: 403 for a manager", () => {
     expect(denial(actor("manager"), "expenseCategory.manage", NONE)).toBe(403);
     expect(can(actor("admin"), "expenseCategory.manage", NONE)).toBe(true);

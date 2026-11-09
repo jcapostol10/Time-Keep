@@ -20,7 +20,7 @@ import {
   truncateAll,
 } from "../../test/db";
 import { loadViewer, scopeForUser } from "./authz";
-import { createProject, setProjectsArchived } from "./catalog/projects";
+import { createProject, deleteProject, setProjectsArchived } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { APPROVED_MESSAGE, PENDING_MESSAGE } from "./entry-guard";
 import { createExpenseCategory, updateExpenseCategory } from "./expense-categories";
@@ -218,6 +218,66 @@ describe("createExpense and updateExpense", () => {
     ).rejects.toMatchObject({ code: "INVALID", message: "Enter a quantity." });
   });
 
+  it("an amount is never zero: a free unit price or a tiny quantity is refused", async () => {
+    const owner = await viewer("olga");
+    const free = await createExpenseCategory(db, owner, {
+      name: "Free km",
+      kind: "UNIT",
+      unitName: "km",
+      unitPriceMinor: 0,
+      billableDefault: true,
+    });
+    const bob = await as("bob");
+    const unit = (categoryId: string, quantityCenti: number) => ({
+      projectId: webId,
+      categoryId,
+      date: "2026-10-27",
+      quantityCenti,
+      billable: true,
+      description: "",
+    });
+    await expect(createExpense(db, bob, unit(free.id, 100), { now: NOW })).rejects.toMatchObject({
+      code: "INVALID",
+      message: "Enter an amount.",
+    });
+    // 1 centi × 1500 minor / 100 = 15: fine. 1 centi × 1 minor / 100 rounds to 0: refused.
+    const penny = await createExpenseCategory(db, owner, {
+      name: "Penny",
+      kind: "UNIT",
+      unitName: "u",
+      unitPriceMinor: 1,
+      billableDefault: true,
+    });
+    await expect(createExpense(db, bob, unit(penny.id, 1), { now: NOW })).rejects.toMatchObject({
+      code: "INVALID",
+    });
+    await expect(createExpense(db, bob, unit(mileageId, 1), { now: NOW })).resolves.toMatchObject({
+      amountMinor: 15,
+    });
+  });
+
+  it("a category's kind cannot change once it has expenses", async () => {
+    const owner = await viewer("olga");
+    await createExpense(db, await as("bob"), fixed(webId, 100, "2026-10-27"), { now: NOW });
+    await expect(
+      updateExpenseCategory(db, owner, travelId, {
+        kind: "UNIT",
+        unitName: "km",
+        unitPriceMinor: 100,
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "This category has expenses; its kind cannot change.",
+    });
+    // The name and the default still can; and a category without expenses changes freely.
+    await expect(
+      updateExpenseCategory(db, owner, travelId, { name: "Trips", billableDefault: false }),
+    ).resolves.toMatchObject({ name: "Trips", kind: "FIXED" });
+    await expect(
+      updateExpenseCategory(db, owner, mileageId, { kind: "FIXED" }),
+    ).resolves.toMatchObject({ kind: "FIXED", unitName: null, unitPriceMinor: null });
+  });
+
   it("a member records only their own; a manager for their people", async () => {
     await expect(as("bob", "carol")).rejects.toMatchObject({ status: 404 });
     await expect(as("max", "carol")).rejects.toMatchObject({ status: 404 });
@@ -327,16 +387,21 @@ describe("listExpenses", () => {
     expect(third.nextCursor).toBeNull();
   });
 
-  it("a member sees own expenses only; with the team's time shown, everyone's", async () => {
+  it("a member sees own expenses only, even when the team's time is shown", async () => {
     await createExpense(db, await as("bob"), fixed(webId, 100, "2026-10-27"), { now: NOW });
-    await createExpense(db, await as("carol"), fixed(webId, 200, "2026-10-27"), { now: NOW });
+    const carols = await createExpense(db, await as("carol"), fixed(webId, 200, "2026-10-27"), {
+      now: NOW,
+    });
     const mine = await list("bob", { userIds: [ids.carol!] });
     expect(mine.expenses.map((e) => e.amountMinor)).toEqual([100]);
     expect(mine.expenses[0]?.editable).toBe(true);
+    // The spec's access table: a member reads no colleague's expense; the setting is about time.
     await setRules({ membersSeeTeamTime: true });
-    const team = await list("bob");
-    expect(team.expenses.map((e) => e.amountMinor).sort()).toEqual([100, 200]);
-    expect(team.expenses.find((e) => e.userId === ids.carol)?.editable).toBe(false);
+    const still = await list("bob");
+    expect(still.expenses.map((e) => e.amountMinor)).toEqual([100]);
+    await expect(getExpense(db, await viewer("bob"), carols.id)).rejects.toMatchObject({
+      status: 404,
+    });
   });
 
   it("a manager's list is their people and their projects", async () => {
@@ -352,6 +417,23 @@ describe("listExpenses", () => {
     expect(pat.expenses[0]?.editable).toBe(false);
     // A filter outside the scope narrows to nothing, never widens.
     expect((await list("max", { userIds: [ids.carol!] })).totals.count).toBe(0);
+  });
+
+  it("deleting a project refuses while it has live expenses, and purges deleted ones", async () => {
+    const owner = await viewer("olga");
+    const bob = await as("bob");
+    const e = await createExpense(db, bob, fixed(mobileId, 100, "2026-10-27"), { now: NOW });
+    await expect(
+      deleteProject(db, owner, mobileId, { mode: "reassign", projectId: webId }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: "This project has 1 expense. Move or delete it first.",
+    });
+    await deleteExpense(db, bob, e.id, { now: NOW });
+    await deleteProject(db, owner, mobileId, { mode: "reassign", projectId: webId });
+    expect(await db.query.expense.findMany({ where: (x, { eq: is }) => is(x.id, e.id) })).toEqual(
+      [],
+    );
   });
 
   it("deleted expenses leave the list and come back on restore", async () => {

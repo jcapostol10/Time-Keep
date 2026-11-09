@@ -3,7 +3,16 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import type { ExpenseCategoryInput, ExpenseCategoryPatch } from "@timekeep/core";
-import { and, asc, type Database, eq, type ExpenseCategory, expenseCategory } from "@timekeep/db";
+import {
+  and,
+  asc,
+  type Database,
+  eq,
+  expense,
+  type ExpenseCategory,
+  expenseCategory,
+  sql,
+} from "@timekeep/db";
 
 import type { ExpenseCategoryDTO } from "@/lib/expense-types";
 
@@ -21,6 +30,7 @@ type Executor = Pick<Database, "select" | "insert" | "update">;
 
 const NAME_TAKEN = "A category with this name exists.";
 const NOT_FOUND = "Category not found.";
+const KIND_IN_USE = "This category has expenses; its kind cannot change.";
 
 export function toCategoryDTO(row: ExpenseCategory): ExpenseCategoryDTO {
   return {
@@ -99,6 +109,15 @@ export async function updateExpenseCategory(
     );
   if (!before) throw new CatalogError("NOT_FOUND", NOT_FOUND);
   const kind = patch.kind ?? before.kind;
+  if (kind !== before.kind) {
+    // Saved expenses are priced by their category's kind: a FIXED one has no quantity to
+    // price, a UNIT one no typed amount. Once any exist, the kind is fixed.
+    const [used] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(expense)
+      .where(eq(expense.categoryId, categoryId));
+    if ((used?.n ?? 0) > 0) throw new CatalogError("CONFLICT", KIND_IN_USE);
+  }
   try {
     const [row] = await db
       .update(expenseCategory)

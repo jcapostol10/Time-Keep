@@ -81,7 +81,7 @@ export const ACTIONS = [
   "pin.setOwn",
   /** add, convert and set the PIN or QR code of kiosk-only (limited) members */
   "member.manageLimited",
-  /** see an expense (Phase 6c): entries' read rule, over the expense's person and project */
+  /** see an expense (Phase 6c): own, or a manager's scope over the expense's person and project */
   "expense.read",
   /** add, edit, delete an expense: entries' write rule (add for others included) */
   "expense.write",
@@ -288,7 +288,9 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
   "kiosk.manage": ADMINS,
   "pin.setOwn": { owner: "own", admin: "own", manager: "own", member: "own" },
   "member.manageLimited": ADMINS,
-  "expense.read": { owner: "yes", admin: "yes", manager: "scope", member: "ownOrTeam" },
+  // A member reads only their own (the spec's access table): money and receipts are not time,
+  // so "members see the team's time" does not open them.
+  "expense.read": { owner: "yes", admin: "yes", manager: "scope", member: "own" },
   "expense.write": { owner: "yes", admin: "yes", manager: "managedPeople", member: "own" },
   "expenseCategory.manage": ADMINS,
 };

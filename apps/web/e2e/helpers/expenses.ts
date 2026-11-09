@@ -10,12 +10,14 @@ export async function openExpenses(page: Page, slug: string, tab?: "categories")
   await waitForApp(page);
 }
 
-/** A category row on the Categories tab, by name. */
+/** A category row on the Categories tab, by name (the cell also carries an "Archived" badge). */
 export const categoryRow = (page: Page, name: string) =>
   page
     .getByRole("table", { name: "Expense categories" })
     .getByRole("row")
-    .filter({ has: page.getByRole("cell", { name, exact: true }) });
+    .filter({
+      has: page.getByRole("cell", { name: new RegExp(`^${escapeRegExp(name)}( Archived)?$`) }),
+    });
 
 /** Adds a category through the Categories tab (owners and admins). */
 export async function addCategory(

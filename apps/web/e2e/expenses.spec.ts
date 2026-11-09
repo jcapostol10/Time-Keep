@@ -87,6 +87,24 @@ test.describe("expenses", () => {
     await expect(categoryRow(page, "Mileage")).toContainText("$20.00");
     await openExpenses(page, slug);
     await expect(expenseRow(page, "Client visit")).toContainText("$187.50");
+
+    // Editing it previews the price it was saved at, not the new one; and a category
+    // archived afterwards still lets the expense be edited.
+    await expenseAction(page, "Client visit", "Edit");
+    const edit = page.getByRole("dialog", { name: "Edit expense" });
+    await expect(edit.getByText("× $15.00/km = $187.50")).toBeVisible();
+    await edit.getByRole("button", { name: "Cancel" }).click();
+    await openExpenses(page, slug, "categories");
+    await rowAction(page, categoryRow(page, "Mileage"), "Archive");
+    await expect(categoryRow(page, "Mileage")).toContainText("Archived");
+    await openExpenses(page, slug);
+    await expenseAction(page, "Client visit", "Edit");
+    const again = page.getByRole("dialog", { name: "Edit expense" });
+    await expect(again.getByRole("combobox", { name: "Category" })).toContainText("Mileage");
+    await again.getByRole("textbox", { name: "Description" }).fill("Client visit, both ways");
+    await again.getByRole("button", { name: "Save expense" }).click();
+    await expect(again).toBeHidden();
+    await expect(expenseRow(page, "Client visit, both ways")).toContainText("$187.50");
   });
 
   test("a submitted period locks the member's expenses, and an admin edits with a note", async ({

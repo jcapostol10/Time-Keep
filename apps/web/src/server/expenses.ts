@@ -29,6 +29,7 @@ import {
   expenseCategory,
   gte,
   inArray,
+  isNotNull,
   isNull,
   lt,
   lte,
@@ -82,9 +83,8 @@ const MAX_LIMIT = 200;
  */
 export function expenseScopeFilter(actor: Actor): SQL | undefined {
   if (actor.role === "owner" || actor.role === "admin") return undefined;
-  if (actor.role === "member") {
-    return actor.settings.membersSeeTeamTime ? undefined : eq(expense.userId, actor.userId);
-  }
+  // A member reads only their own, whatever the team-time setting says (spec access table).
+  if (actor.role === "member") return eq(expense.userId, actor.userId);
   const parts: SQL[] = [eq(expense.userId, actor.userId)];
   if (actor.managedUserIds.size > 0) {
     parts.push(inArray(expense.userId, [...actor.managedUserIds]));
@@ -470,11 +470,54 @@ function moneyOf(
     throw new TimeEntryError("INVALID", QUANTITY_REQUIRED);
   }
   const price = unitPriceMinor ?? 0;
-  return {
-    amountMinor: expenseAmount(typed.quantityCenti, price),
-    quantityCenti: typed.quantityCenti,
-    unitPriceMinor: price,
-  };
+  const amountMinor = expenseAmount(typed.quantityCenti, price);
+  // An amount is never zero: a free unit price, or a quantity that rounds to nothing.
+  if (amountMinor <= 0) throw new TimeEntryError("INVALID", AMOUNT_REQUIRED);
+  return { amountMinor, quantityCenti: typed.quantityCenti, unitPriceMinor: price };
+}
+
+/**
+ * The live expenses of a project (`deleteProject` refuses while any exist: the
+ * foreign key would, with a database error nobody can read).
+ */
+export async function countProjectExpenses(
+  db: Executor,
+  workspaceId: string,
+  projectId: string,
+): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(expense)
+    .where(
+      and(
+        eq(expense.workspaceId, workspaceId),
+        eq(expense.projectId, projectId),
+        isNull(expense.deletedAt),
+      ),
+    );
+  return row?.n ?? 0;
+}
+
+/**
+ * Hard-deletes a project's soft-deleted expenses so the project itself can go.
+ * Their receipt objects stay in the bucket (see docs/BACKLOG.md).
+ */
+export async function purgeDeletedProjectExpenses(
+  db: Executor,
+  workspaceId: string,
+  projectId: string,
+): Promise<number> {
+  const rows = await db
+    .delete(expense)
+    .where(
+      and(
+        eq(expense.workspaceId, workspaceId),
+        eq(expense.projectId, projectId),
+        isNotNull(expense.deletedAt),
+      ),
+    )
+    .returning({ id: expense.id });
+  return rows.length;
 }
 
 /** Records an expense for the scope's person (the caller, or someone they add for). */

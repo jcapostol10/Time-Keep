@@ -108,7 +108,14 @@ async function bobsExpense(date = "2026-10-27") {
 describe("assertReceipt", () => {
   it("trusts bytes, not names", () => {
     expect(assertReceipt(JPEG, "image/jpeg")).toBe("image/jpeg");
-    expect(() => assertReceipt(JPEG, "image/png")).toThrow(
+    // A JPEG named .png (the browser declares the type from the name): stored as a JPEG.
+    expect(assertReceipt(JPEG, "image/png")).toBe("image/jpeg");
+    expect(assertReceipt(JPEG, "")).toBe("image/jpeg");
+    // A PDF declared as an image, or an image declared as a PDF: refused.
+    expect(() => assertReceipt(pdfOf(20), "image/png")).toThrow(
+      "Receipts are JPEG, PNG, WebP or PDF files.",
+    );
+    expect(() => assertReceipt(JPEG, "application/pdf")).toThrow(
       "Receipts are JPEG, PNG, WebP or PDF files.",
     );
     expect(() => assertReceipt(bytes("GIF89a"), "image/gif")).toThrow(

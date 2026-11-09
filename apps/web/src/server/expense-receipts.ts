@@ -47,11 +47,18 @@ export function receiptKeys(
   };
 }
 
-/** The receipt's type: its magic bytes must name a receipt type and agree with the declared MIME. */
+/**
+ * The receipt's type, from its bytes. The browser declares a type from the file's
+ * name, so a JPEG named `.png` is a JPEG and is stored as one; a PDF declared as an
+ * image, an image declared as a PDF, or bytes of no receipt type are refused.
+ */
 export function assertReceipt(bytes: Uint8Array, declaredMime: string): ReceiptType {
   if (bytes.length > RECEIPT_MAX_BYTES) throw new ReceiptError(RECEIPT_TOO_LARGE);
   const type = sniffReceipt(bytes);
-  if (!type || type !== declaredMime) throw new ReceiptError(RECEIPT_WRONG_TYPE);
+  if (!type) throw new ReceiptError(RECEIPT_WRONG_TYPE);
+  if (declaredMime && (declaredMime === "application/pdf") !== (type === "application/pdf")) {
+    throw new ReceiptError(RECEIPT_WRONG_TYPE);
+  }
   return type;
 }
 
