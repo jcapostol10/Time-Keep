@@ -153,6 +153,11 @@ export const workspaceSettings = pgTable(
     lockDays: smallint("lock_days"),
     /** Phase 6a: managers see cost and profit for their scope (owners and admins always do). */
     managersSeeCosts: boolean("managers_see_costs").notNull().default(false),
+    /** Phase 6b: percents of an estimate at which the daily job emails (up to five, 1-200). */
+    budgetThresholds: smallint("budget_thresholds")
+      .array()
+      .notNull()
+      .default(sql`'{50,80,100}'::smallint[]`),
     ...timestamps,
   },
   (t) => [primaryKey({ columns: [t.workspaceId] })],

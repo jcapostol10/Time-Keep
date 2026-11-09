@@ -412,7 +412,10 @@ export async function createTask(
   db: Database,
   viewer: Viewer,
   projectId: string,
-  input: Omit<TaskInput, "groupIds"> & { groupIds?: string[] },
+  input: Omit<TaskInput, "groupIds" | "estimateSeconds"> & {
+    groupIds?: string[];
+    estimateSeconds?: number | null;
+  },
 ): Promise<TaskDTO> {
   await requireVisibleProject(db, viewer, projectId);
   assertCan(viewer.actor, "task.create", { kind: "task", projectId });
