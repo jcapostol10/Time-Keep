@@ -358,6 +358,31 @@ export async function expenseTotals(db: Executor, conds: SQL[]): Promise<Expense
   return row ?? EMPTY_EXPENSE_TOTALS;
 }
 
+/**
+ * One person's live expenses dated in `[from, to]` (date keys), by date: the
+ * approval period view. The caller has already checked who may see the period.
+ */
+export async function listExpensesForPerson(
+  db: Executor,
+  viewer: EntryScope,
+  userId: string,
+  range: { start: string; end: string },
+  now: Date = new Date(),
+): Promise<ExpenseDTO[]> {
+  const rows = await selectRows(db)
+    .where(
+      and(
+        eq(expense.workspaceId, viewer.workspaceId),
+        eq(expense.userId, userId),
+        isNull(expense.deletedAt),
+        gte(expense.date, range.start),
+        lte(expense.date, range.end),
+      ),
+    )
+    .orderBy(expense.date, expense.id);
+  return toDTOs(db, viewer, rows, now);
+}
+
 /** One expense the viewer may read (`expense.read` over its person and project), else 404. */
 export async function getExpense(
   db: Executor,
@@ -623,5 +648,56 @@ export async function restoreExpense(
       await tx.update(expense).set({ deletedAt: null }).where(eq(expense.id, expenseId));
     }
     return loadDTO(tx, scope, expenseId, now);
+  });
+}
+
+export interface ReceiptRef {
+  fileKey: string;
+  thumbKey: string | null;
+  mime: ReceiptType;
+}
+
+/**
+ * Sets or clears an expense's receipt (Phase 6c decision 15). The guard runs
+ * first; `opts.upload` (the object store write) runs inside the transaction
+ * after it, so a refused write uploads nothing and a failed upload changes no
+ * row. Returns the previous keys, for the caller to delete what is now unused.
+ */
+export async function setReceipt(
+  db: Database,
+  scope: EntryScope,
+  expenseId: string,
+  receipt: ReceiptRef | null,
+  opts: { note?: string; now?: Date; upload?: () => Promise<void> } = {},
+): Promise<{ expense: ExpenseDTO; previous: { fileKey: string | null; thumbKey: string | null } }> {
+  const now = opts.now ?? new Date();
+  return db.transaction(async (tx) => {
+    await tx.execute(timerLock(scope.workspaceId, scope.userId));
+    const row = await liveRow(tx, scope, expenseId);
+    if (row.deletedAt) throw new TimeEntryError("NOT_FOUND", NOT_FOUND);
+    await assertExpenseWritable(
+      tx,
+      scope,
+      {
+        expenseId,
+        before: row.date,
+        after: row.date,
+        changes: { receipt: { from: row.receiptMime, to: receipt?.mime ?? null } },
+      },
+      { note: opts.note, now },
+    );
+    await opts.upload?.();
+    await tx
+      .update(expense)
+      .set({
+        receiptKey: receipt?.fileKey ?? null,
+        receiptThumbKey: receipt?.thumbKey ?? null,
+        receiptMime: receipt?.mime ?? null,
+      })
+      .where(eq(expense.id, expenseId));
+    return {
+      expense: await loadDTO(tx, scope, expenseId, now),
+      previous: { fileKey: row.receiptKey, thumbKey: row.receiptThumbKey },
+    };
   });
 }
