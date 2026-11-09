@@ -3,6 +3,7 @@ import "server-only";
 import {
   can,
   type MoneyAmount,
+  type Progress,
   type ReportGroup,
   type ReportQuery,
   type ReportTotals,
@@ -15,6 +16,7 @@ import type { ReportMoney, SeriesPoint } from "@/lib/report-types";
 
 import { scopeFilter } from "./authz";
 import type { Viewer } from "./catalog/viewer";
+import { progressForProjects } from "./estimates";
 import { listMembers } from "./queries/team";
 import { summaryReport } from "./reports";
 import { WorkspaceAccessError } from "./access-error";
@@ -28,6 +30,8 @@ import { WorkspaceAccessError } from "./access-error";
 export interface TopItem {
   label: string;
   seconds: number;
+  /** The budget progress of the project, when it has one and the viewer may see it (Phase 6b). */
+  progress: Progress | null;
 }
 
 export interface MostTracked {
@@ -48,9 +52,11 @@ export interface DashboardMe {
   mostTracked: MostTracked[];
 }
 
-function top(groups: ReportGroup[]): TopItem | null {
+function top(groups: ReportGroup[], progress?: Progress | null): TopItem | null {
   const first = groups.find((g) => g.id !== null);
-  return first ? { label: first.label, seconds: first.totals.durationSeconds } : null;
+  return first
+    ? { label: first.label, seconds: first.totals.durationSeconds, progress: progress ?? null }
+    : null;
 }
 
 /** The viewer's own picture for the range. */
@@ -89,12 +95,16 @@ export async function dashboardMe(
     )
     .sort((a, b) => b.seconds - a.seconds || a.description.localeCompare(b.description))
     .slice(0, 10);
+  const topId = byProject.groups.find((g) => g.id !== null)?.id;
+  const progress = topId
+    ? ((await progressForProjects(db, viewer, [topId], now)).get(topId) ?? null)
+    : null;
   return {
     money: byProject.money,
     range: byProject.range,
     totals: byProject.totals,
     series: byProject.series,
-    topProject: top(byProject.groups),
+    topProject: top(byProject.groups, progress),
     topClient: top(byClient.groups),
     mostTracked,
   };

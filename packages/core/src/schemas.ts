@@ -16,6 +16,13 @@ import { hexColorSchema } from "./colors";
 import { isCurrencyCode } from "./money";
 import { parseDuration } from "./duration";
 import { IMPORT_COLUMNS } from "./entry-import";
+import {
+  BUDGET_THRESHOLD_MAX,
+  BUDGET_THRESHOLDS_LIMIT,
+  ESTIMATE_KINDS,
+  ESTIMATE_RESETS,
+  normalizeThresholds,
+} from "./estimates";
 import { KIOSK_ACTIONS } from "./kiosk";
 import { CREATOR_SETTINGS, PAGES, TASK_VISIBILITY } from "./permissions";
 import { REQUIRED_FIELDS } from "./required-fields";
@@ -109,6 +116,8 @@ export const createWorkspaceSchema = z.object({
 });
 export type CreateWorkspaceInput = z.infer<typeof createWorkspaceSchema>;
 
+const THRESHOLD_MESSAGE = "Thresholds are whole percentages from 1 to 200.";
+
 export const workspaceSettingsSchema = z.object({
   timezone: timeZoneSchema,
   weekStart: weekStartSchema,
@@ -138,6 +147,17 @@ export const workspaceSettingsSchema = z.object({
   lockDays: z.number().int().min(0).max(365).nullable(),
   // Phase 6a: managers see cost and profit for their scope (owners and admins always do).
   managersSeeCosts: z.boolean(),
+  // Phase 6b: the percents of an estimate at which the daily job emails (decision 13).
+  budgetThresholds: z
+    .array(
+      z
+        .number()
+        .int(THRESHOLD_MESSAGE)
+        .min(1, THRESHOLD_MESSAGE)
+        .max(BUDGET_THRESHOLD_MAX, THRESHOLD_MESSAGE),
+    )
+    .max(BUDGET_THRESHOLDS_LIMIT, "At most five thresholds.")
+    .transform(normalizeThresholds),
 });
 export type WorkspaceSettingsInput = z.infer<typeof workspaceSettingsSchema>;
 
@@ -166,6 +186,7 @@ export const DEFAULT_WORKSPACE_SETTINGS: WorkspaceSettingsInput = {
   lockDate: null,
   lockDays: null,
   managersSeeCosts: false,
+  budgetThresholds: [50, 80, 100],
 };
 
 /** A fixed lock needs its date, a rolling one its days. */
@@ -457,6 +478,37 @@ export const deleteProjectSchema = z.discriminatedUnion("mode", [
 ]);
 export type DeleteProjectMode = z.infer<typeof deleteProjectSchema>;
 
+// --- Estimates (Phase 6b, decision 10) -------------------------------------------
+
+/** Up to 100,000 hours. */
+const estimateSecondsSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(100_000 * 3600);
+
+const ENTER_ESTIMATE = "Enter an estimate.";
+
+/** A project's one estimate: TIME needs seconds, MONEY needs minor units, NONE neither. */
+export const estimateInputSchema = z
+  .object({
+    kind: z.enum(ESTIMATE_KINDS),
+    seconds: estimateSecondsSchema.nullable(),
+    /** Minor units of the project's currency. */
+    minor: z.number().int().min(1).max(1e15).nullable(),
+    reset: z.enum(ESTIMATE_RESETS),
+    alerts: z.boolean(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.kind === "TIME" && v.seconds === null) {
+      ctx.addIssue({ code: "custom", path: ["seconds"], message: ENTER_ESTIMATE });
+    }
+    if (v.kind === "MONEY" && v.minor === null) {
+      ctx.addIssue({ code: "custom", path: ["minor"], message: ENTER_ESTIMATE });
+    }
+  });
+export type EstimateInput = z.infer<typeof estimateInputSchema>;
+
 const groupIdsSchema = z.array(z.string().min(1)).max(100);
 
 export const taskInputSchema = z.object({
@@ -465,6 +517,8 @@ export const taskInputSchema = z.object({
   assigneeIds: z.array(z.string().min(1)).max(100).default([]),
   /** The groups whose members see and track on the task when tasks are by group. */
   groupIds: groupIdsSchema.default([]),
+  /** An optional time estimate (Phase 6b); tasks never add up into the project's. */
+  estimateSeconds: estimateSecondsSchema.nullable().default(null),
 });
 export type TaskInput = z.infer<typeof taskInputSchema>;
 
@@ -473,6 +527,7 @@ export const taskPatchSchema = z.object({
   status: z.enum(TASK_STATUSES).optional(),
   assigneeIds: z.array(z.string().min(1)).max(100).optional(),
   groupIds: groupIdsSchema.optional(),
+  estimateSeconds: estimateSecondsSchema.nullable().optional(),
 });
 export type TaskPatch = z.infer<typeof taskPatchSchema>;
 

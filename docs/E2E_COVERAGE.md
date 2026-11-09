@@ -136,7 +136,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The status tab exports CSV and opens the same numbers in reports — `project-detail.spec.ts` › "the status tab exports CSV and opens the same numbers in reports"
 - [x] Edit project settings, mark it as a template, archive and unarchive it — `project-detail.spec.ts` › "edit project settings, mark it as a template, archive and unarchive it"
 - [x] Members cannot open project detail — `project-detail.spec.ts` › "members cannot open project detail"
-- [x] The Budget tab says which phase brings it; the Rates tab sets the project's rates — `project-detail.spec.ts` › "the Budget tab says which phase brings it and the Rates tab sets rates"
+- [x] The Rates tab sets the project's rates — `project-detail.spec.ts` › "the Rates tab sets rates"
 
 ## Projects and tasks in the tracker
 
@@ -262,9 +262,17 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] The Profit tab ranks projects by profit — `profit.spec.ts` › "the Profit tab ranks projects"
 - [x] The Summary CSV has Cost and Profit for an admin — `profit.spec.ts` › "the export carries cost for an admin"
 
+## Estimates, budgets and alerts
+
+- [x] A time estimate shows a progress bar on the Budget tab, the projects list and the project header — `budgets.spec.ts` › "a time estimate shows a bar on the Budget tab, the list and the header"
+- [x] A money estimate counts billable amounts in the project's currency and resets every month — `budgets.spec.ts` › "a money estimate resets monthly and fills with billable amounts"
+- [x] The daily job emails a budget alert when a threshold is crossed, once — `budgets.spec.ts` › "a budget alert email arrives after the daily job, once"
+- [x] A task estimate shows on the Tasks tab and in the Budget tab's task table — `budgets.spec.ts` › "a task estimate shows on the Tasks tab and the Budget tab"
+- [x] A member sees a time bar only when members see the team's time, and never a money bar — `budgets.spec.ts` › "a member sees a time bar only when the team's time is shown, never a money bar"
+
 ## Permissions
 
-- [x] A manager opens a project they manage, without its Rates and Budget tabs — `permissions.spec.ts` › "a manager opens a project they manage, without its Rates tab"
+- [x] A manager opens a project they manage, with its Budget tab and without its Rates tab — `permissions.spec.ts` › "a manager opens a project they manage, without its Rates tab"
 - [x] A manager gets not-found for a project they do not manage — `permissions.spec.ts` › "a manager gets not-found for a project they do not manage"
 - [x] A member sees no Clients or Tags in the sidebar — `permissions.spec.ts` › "a member sees no Clients or Tags in the sidebar"
 

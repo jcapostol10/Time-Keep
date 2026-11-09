@@ -25,6 +25,7 @@ import { Fragment, useState } from "react";
 
 import type { SummaryReport } from "@/lib/report-types";
 
+import { ProgressBar } from "../projects/progress-bar";
 import { GROUP_LABELS } from "./group-by-control";
 import { CostNotes, MoneyCell } from "./money-cell";
 
@@ -107,6 +108,13 @@ export function SummaryTable({
               ) : (
                 g.label
               )}
+              {g.key === "project" && g.id && report.progress?.[g.id] ? (
+                <ProgressBar
+                  progress={report.progress[g.id]!}
+                  durationFormat={durationFormat}
+                  className="mt-1 max-w-56"
+                />
+              ) : null}
             </TableCell>
             <TableCell className="text-right tabular-nums">
               {fmt(g.totals.durationSeconds)}

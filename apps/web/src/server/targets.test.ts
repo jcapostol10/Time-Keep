@@ -100,7 +100,7 @@ describe("the daily job's targets", () => {
     await work("olga", MONDAY, 8);
     await work("ann", MONDAY, 8);
     const result = await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
-    expect(result).toEqual({ reminders: 0, targets: 1 });
+    expect(result).toEqual({ reminders: 0, targets: 1, budgets: 0 });
     const [mail] = await targetMail();
     expect(mail).toMatchObject({ toAddress: await emailOf("bob") });
     expect(mail?.kind).toMatch(new RegExp(`^target:.+:${cast.ids.bob}:2026-11-02$`));
@@ -197,6 +197,7 @@ describe("the daily job's targets", () => {
     expect(await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] })).toEqual({
       reminders: 0,
       targets: 0,
+      budgets: 0,
     });
   });
 });

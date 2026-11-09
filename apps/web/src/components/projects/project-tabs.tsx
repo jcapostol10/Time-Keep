@@ -15,8 +15,8 @@ const TABS = [
   { label: "Rates", tab: "rates" },
 ] as const;
 
-/** Budget and Rates show money: only for those who may see rates. */
-const MONEY_TABS = new Set<string | undefined>(["budget", "rates"]);
+/** Rates show money: only for those who may see rates. Budget is for whoever may edit the project. */
+const MONEY_TABS = new Set<string | undefined>(["rates"]);
 
 /** Route-backed tabs: each tab is a page under the project, so it has its own URL. */
 export function ProjectTabs({

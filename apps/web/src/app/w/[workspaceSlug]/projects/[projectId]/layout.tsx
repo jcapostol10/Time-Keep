@@ -1,7 +1,9 @@
+import { can, resolveViewerPrefs } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 import { Badge } from "@timekeep/ui/components/badge";
 import { notFound } from "next/navigation";
 
+import { ProgressBar } from "@/components/projects/progress-bar";
 import { ProjectTabs } from "@/components/projects/project-tabs";
 import { ColorDot } from "@/components/tracker/project-picker";
 import { CatalogError } from "@/server/catalog/errors";
@@ -9,7 +11,6 @@ import { getProject } from "@/server/catalog/projects";
 import { requireWorkspacePage } from "@/server/workspace-access";
 import { authorizeProject } from "@/server/authz";
 import { authorizePage } from "@/server/authz-page";
-import { can } from "@timekeep/core";
 
 /** Project detail pages are for admins and the project's managers (the permission matrix). */
 export default async function ProjectLayout({
@@ -45,6 +46,14 @@ export default async function ProjectLayout({
           {project.visibility === "PRIVATE" ? "Private" : "Public"}
           {project.billable ? " · Billable by default" : ""}
         </p>
+        {project.progress ? (
+          <div className="mt-2 max-w-md" data-testid="project-progress">
+            <ProgressBar
+              progress={project.progress}
+              durationFormat={resolveViewerPrefs(ctx.user, ctx.settings).durationFormat}
+            />
+          </div>
+        ) : null}
       </div>
       <ProjectTabs
         slug={workspaceSlug}

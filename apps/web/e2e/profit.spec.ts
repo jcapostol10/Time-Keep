@@ -41,7 +41,7 @@ const tracker = async (page: Page, slug: string) => {
   await expect(page.locator('section[aria-label="Timer"][data-hydrated="true"]')).toBeVisible();
 };
 
-test.describe("cost, profit and currencies", () => {
+test.describe("cost, profit and currencies", { tag: "@nightly" }, () => {
   test("a cost rate shows cost and profit to an admin", async ({
     page,
     freshUser,

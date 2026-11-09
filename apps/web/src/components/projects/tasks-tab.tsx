@@ -127,6 +127,7 @@ export function TasksTab({
               </TableHead>
               <TableHead>Task</TableHead>
               <TableHead>Groups</TableHead>
+              <TableHead className="hidden text-right sm:table-cell">Estimate</TableHead>
               <TableHead className="text-right">Tracked</TableHead>
               <TableHead className="w-0" />
             </TableRow>
@@ -159,6 +160,9 @@ export function TasksTab({
                       )
                     ) : null}
                   </div>
+                </TableCell>
+                <TableCell className="text-muted-foreground hidden text-right tabular-nums sm:table-cell">
+                  {t.estimateSeconds === null ? "—" : formatDuration(t.estimateSeconds, "hh:mm:ss")}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {formatDuration(t.trackedSeconds, "hh:mm:ss")}

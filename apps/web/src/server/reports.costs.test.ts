@@ -18,6 +18,7 @@ import type { Viewer } from "./catalog/viewer";
 import { dashboardMe, dashboardTeam } from "./dashboard";
 import { buildExport } from "./report-files";
 import { detailedReport, profitReport, summaryReport, weeklyReport } from "./reports";
+import { setProjectEstimate } from "./budgets";
 import { createShareLink, resolveShareLink } from "./share-links";
 import { createManualEntry } from "./time-entries";
 
@@ -416,6 +417,44 @@ describe("cost, profit and currencies in reports", () => {
     expect(csvHeader(file.body)).toBe(
       "Project,Duration,Billable,Entries,Amount (PHP),Amount (USD)",
     );
+  });
+
+  it("a summary grouped by project carries progress; a share link does not", async () => {
+    const owner = await viewer("olga");
+    await setProjectEstimate(db, owner, ids.web!, {
+      kind: "TIME",
+      seconds: 36_000,
+      minor: null,
+      reset: "NONE",
+      alerts: true,
+    });
+    const report = await summaryReport(db, owner, q({ groupBy: ["project"] }), PREFS, NOW);
+    // Web has 5 hours of work (billable or not): 50% of 10.
+    expect(report.progress).toEqual({
+      [ids.web!]: expect.objectContaining({ kind: "TIME", used: 18_000, percent: 50 }),
+    });
+    const byUser = await summaryReport(db, owner, q({ groupBy: ["user"] }), PREFS, NOW);
+    expect(byUser.progress).toBeNull();
+    // A member sees no bar: the setting that shows the team's time is off.
+    const member = await summaryReport(
+      db,
+      await viewer("carol"),
+      q({ groupBy: ["project"] }),
+      PREFS,
+      NOW,
+    );
+    expect(member.progress).toBeNull();
+
+    const made = await createShareLink(
+      db,
+      owner,
+      { kind: "summary", query: q({ groupBy: ["project"] }), title: "Week", includeAmounts: true },
+      PREFS,
+      NOW,
+    );
+    const link = await resolveShareLink(db, made.token, NOW);
+    if (!link) throw new Error("no link");
+    expect((await summaryReport(db, link.viewer, link.query, PREFS, NOW)).progress).toBeNull();
   });
 
   it("detailed rows carry currency, cost and profit", async () => {

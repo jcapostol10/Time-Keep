@@ -198,6 +198,7 @@ export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}
     const catalog = await seedTrackerData(tx, demo.id, ids);
     await seedTeamAndRates(tx, demo.id, ids, catalog);
     await seedCostAndCurrency(tx, demo.id, ids, catalog);
+    await seedEstimates(tx, catalog);
     await seedApprovals(tx, demo.id, ids);
     await seedTimeOff(tx, demo.id, ids);
     const kioskToken = await seedKiosk(tx, demo.id, ids, catalog.taskIds);
@@ -918,6 +919,33 @@ async function seedCostAndCurrency(
   await db.insert(timeEntry).values(entries);
   // Both snapshots, by the SQL the app uses: cost on every work entry, EUR on the new ones.
   await db.execute(rateEntriesSql(eq(timeEntry.workspaceId, workspaceId)));
+}
+
+/**
+ * Estimates (Phase 6b): Website redesign has 200 hours for the whole project,
+ * Mobile app a monthly money budget in its currency, and Design a 40-hour
+ * task estimate. Progress is computed from the seeded entries.
+ */
+async function seedEstimates(
+  db: DbExecutor,
+  catalog: { projectIds: string[]; taskIds: Map<string, string> },
+) {
+  const website = catalog.projectIds[0];
+  const mobile = catalog.projectIds[1];
+  const design = catalog.taskIds.get("Website redesign/Design");
+  if (!website || !mobile || !design) throw new Error("seed: estimate targets missing");
+  await db
+    .update(project)
+    .set({ estimateKind: "TIME", estimateSeconds: 200 * 3600, estimateReset: "NONE" })
+    .where(eq(project.id, website));
+  await db
+    .update(project)
+    .set({ estimateKind: "MONEY", estimateMinor: 500_000, estimateReset: "MONTHLY" })
+    .where(eq(project.id, mobile));
+  await db
+    .update(task)
+    .set({ estimateSeconds: 40 * 3600 })
+    .where(eq(task.id, design));
 }
 
 const isDirectRun = process.argv[1]?.endsWith("seed.ts") ?? false;

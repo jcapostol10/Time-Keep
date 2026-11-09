@@ -38,6 +38,7 @@ vi.mock("next/server", async (original) => ({
 
 const { updateEntryAction } = await import("./actions/time-entries");
 const { createProjectAction, updateProjectAction } = await import("./actions/projects");
+const { setProjectEstimateAction } = await import("./actions/estimates");
 const { createProject } = await import("./catalog/projects");
 const { loadViewer } = await import("./authz");
 const { inviteMembersAction } = await import("./actions/team");
@@ -248,6 +249,45 @@ describe("server actions ask the permission matrix", () => {
     expect(made).toMatchObject({ ok: true, data: { name: "Initech", currency: null } });
     const [row] = await db.select().from(client).where(eq(client.name, "Initech"));
     expect(row?.currency).toBeNull();
+  });
+
+  it("refuses a member setting an estimate, and lets the project manager set only theirs", async () => {
+    const input = { kind: "TIME", seconds: 3600, minor: null, reset: "NONE", alerts: true };
+    // A member never sets one: a role refusal (403), not a scope one.
+    signIn(users.bob!);
+    expect(await setProjectEstimateAction(slug, ids.managed!, input)).toEqual({
+      ok: false,
+      error: "You don't have permission to do that.",
+    });
+    signIn(users.max!);
+    const saved = await setProjectEstimateAction(slug, ids.managed!, input);
+    expect(saved).toMatchObject({ ok: true, data: { estimate: { kind: "TIME", seconds: 3600 } } });
+    expect(await setProjectEstimateAction(slug, ids.other!, input)).toEqual({
+      ok: false,
+      error: "Not found",
+    });
+  });
+
+  it("saves the budget alert thresholds, normalised", async () => {
+    const [ws] = await db.select().from(workspace).where(eq(workspace.slug, slug));
+    signIn({ id: ids.olga! });
+    const saved = await updateWorkspaceSettingsAction(slug, {
+      ...DEFAULT_WORKSPACE_SETTINGS,
+      name: ws!.name,
+      budgetThresholds: [100, 25, 25],
+    });
+    expect(saved.ok).toBe(true);
+    const [row] = await db
+      .select({ thresholds: workspaceSettings.budgetThresholds })
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.workspaceId, ws!.id));
+    expect(row?.thresholds).toEqual([25, 100]);
+    const refused = await updateWorkspaceSettingsAction(slug, {
+      ...DEFAULT_WORKSPACE_SETTINGS,
+      name: ws!.name,
+      budgetThresholds: [250],
+    });
+    expect(refused.ok).toBe(false);
   });
 
   it("lets a manager edit a project they manage, and not one they don't", async () => {

@@ -4,6 +4,7 @@ import {
   type ReportQuery,
   type ViewerPrefs,
 } from "@timekeep/core";
+import { eq, project } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -18,6 +19,7 @@ import { createClient } from "./catalog/clients";
 import { createProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { dashboardMe, dashboardTeam } from "./dashboard";
+import { setProjectEstimate } from "./budgets";
 import { summaryReport } from "./reports";
 import { createManualEntry, type EntryScope, startTimer } from "./time-entries";
 
@@ -105,8 +107,8 @@ describe("dashboard", () => {
     expect(me.totals).toEqual(hideCosts(summary.totals));
     expect(me.money).toEqual({ currency: "USD", costs: false });
     expect(me.totals.durationSeconds).toBe((90 + 60 + 45 + 15) * 60);
-    expect(me.topProject).toEqual({ label: "Web", seconds: 150 * 60 });
-    expect(me.topClient).toEqual({ label: "Acme", seconds: 150 * 60 });
+    expect(me.topProject).toEqual({ label: "Web", seconds: 150 * 60, progress: null });
+    expect(me.topClient).toEqual({ label: "Acme", seconds: 150 * 60, progress: null });
     expect(me.series).toHaveLength(7);
     expect(me.mostTracked.map((m) => [m.description, m.projectName, m.seconds])).toEqual([
       ["Site work", "Web", 150 * 60],
@@ -115,10 +117,29 @@ describe("dashboard", () => {
     ]);
   });
 
+  it("the top project carries its progress for an admin, and not for a member", async () => {
+    const [web] = await db.select().from(project).where(eq(project.name, "Web"));
+    await setProjectEstimate(db, alice, web!.id, {
+      kind: "TIME",
+      seconds: 36_000,
+      minor: null,
+      reset: "NONE",
+      alerts: true,
+    });
+    const me = await dashboardMe(db, alice, QUERY, PREFS, NOW);
+    // All of Web's time, everyone's: 150 + 600 + 30 minutes of 10 hours.
+    expect(me.topProject).toMatchObject({
+      label: "Web",
+      progress: { kind: "TIME", used: 780 * 60, percent: 130 },
+    });
+    const his = await dashboardMe(db, bob, QUERY, PREFS, NOW);
+    expect(his.topProject).toEqual({ label: "Web", seconds: 30 * 60, progress: null });
+  });
+
   it("is about the viewer only, even for an owner", async () => {
     const me = await dashboardMe(db, bob, QUERY, PREFS, NOW);
     expect(me.totals.durationSeconds).toBe(30 * 60);
-    expect(me.topClient).toEqual({ label: "Acme", seconds: 30 * 60 });
+    expect(me.topClient).toEqual({ label: "Acme", seconds: 30 * 60, progress: null });
   });
 
   it("shows every active member to team readers, with the latest entry and who is tracking now", async () => {

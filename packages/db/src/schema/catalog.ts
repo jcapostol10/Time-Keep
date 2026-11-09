@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   char,
   index,
@@ -11,7 +12,12 @@ import {
 
 import { user } from "./auth";
 import { timestamps } from "./columns";
-import { projectVisibilityEnum, taskStatusEnum } from "./enums";
+import {
+  estimateKindEnum,
+  estimateResetEnum,
+  projectVisibilityEnum,
+  taskStatusEnum,
+} from "./enums";
 import { workspace } from "./workspace";
 
 /** The companies time is tracked for. Projects hang off a client or stand alone. */
@@ -61,6 +67,15 @@ export const project = pgTable(
     archived: boolean("archived").notNull().default(false),
     /** Used by Phase 4 to clone projects. */
     isTemplate: boolean("is_template").notNull().default(false),
+    // Phase 6b (decision 10): one estimate, by time or by money, whole project or monthly.
+    estimateKind: estimateKindEnum("estimate_kind").notNull().default("NONE"),
+    /** TIME: seconds of work, billable or not. */
+    estimateSeconds: bigint("estimate_seconds", { mode: "number" }),
+    /** MONEY: minor units of the project's currency, billable amount. */
+    estimateMinor: bigint("estimate_minor", { mode: "number" }),
+    estimateReset: estimateResetEnum("estimate_reset").notNull().default("NONE"),
+    /** The daily job emails the thresholds crossed (decision 13). */
+    estimateAlerts: boolean("estimate_alerts").notNull().default(true),
     ...timestamps,
   },
   (t) => [
@@ -125,6 +140,8 @@ export const task = pgTable(
       .references(() => project.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     status: taskStatusEnum("status").notNull().default("ACTIVE"),
+    /** An optional time estimate (Phase 6b); shown on the Tasks tab, never summed into the project's. */
+    estimateSeconds: bigint("estimate_seconds", { mode: "number" }),
     ...timestamps,
   },
   (t) => [

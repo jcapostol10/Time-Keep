@@ -155,6 +155,7 @@ function toDTO(row: TaskRow, usage: { seconds: number; entries: number } | undef
     groupIds: row.groups.map((g) => g.groupId).sort(),
     trackedSeconds: usage?.seconds ?? 0,
     entryCount: usage?.entries ?? 0,
+    estimateSeconds: row.estimateSeconds,
   };
 }
 
@@ -412,7 +413,10 @@ export async function createTask(
   db: Database,
   viewer: Viewer,
   projectId: string,
-  input: Omit<TaskInput, "groupIds"> & { groupIds?: string[] },
+  input: Omit<TaskInput, "groupIds" | "estimateSeconds"> & {
+    groupIds?: string[];
+    estimateSeconds?: number | null;
+  },
 ): Promise<TaskDTO> {
   await requireVisibleProject(db, viewer, projectId);
   assertCan(viewer.actor, "task.create", { kind: "task", projectId });
@@ -433,6 +437,7 @@ export async function createTask(
         workspaceId: viewer.workspaceId,
         projectId,
         name: input.name.trim(),
+        estimateSeconds: input.estimateSeconds ?? null,
       });
     } catch (error) {
       if (isUniqueViolation(error, "task_project_name_uq")) {
@@ -481,13 +486,20 @@ export async function updateTask(
         await grantProjectAccess(tx, [row.projectId], groupIds);
       }
     }
-    if (patch.name !== undefined || patch.status !== undefined) {
+    if (
+      patch.name !== undefined ||
+      patch.status !== undefined ||
+      patch.estimateSeconds !== undefined
+    ) {
       try {
         await tx
           .update(task)
           .set({
             ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
             ...(patch.status !== undefined ? { status: patch.status } : {}),
+            ...(patch.estimateSeconds !== undefined
+              ? { estimateSeconds: patch.estimateSeconds }
+              : {}),
           })
           .where(eq(task.id, taskId));
       } catch (error) {

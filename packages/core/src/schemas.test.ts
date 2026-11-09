@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   clientInputSchema,
+  estimateInputSchema,
+  taskInputSchema,
+  taskPatchSchema,
   clientPatchSchema,
   DEFAULT_WORKSPACE_SETTINGS,
   currencyCodeSchema,
@@ -198,5 +201,44 @@ describe("team schemas", () => {
     expect(transferOwnershipSchema.parse({ userId: "u1", confirmName: " Acme " }).confirmName).toBe(
       "Acme",
     );
+  });
+});
+
+describe("estimates (Phase 6b)", () => {
+  const base = { kind: "NONE", seconds: null, minor: null, reset: "NONE", alerts: true };
+
+  it("an estimate needs its amount", () => {
+    expect(estimateInputSchema.safeParse(base).success).toBe(true);
+    const time = estimateInputSchema.safeParse({ ...base, kind: "TIME" });
+    expect(time.success).toBe(false);
+    expect(JSON.stringify(time.error?.issues)).toContain("Enter an estimate.");
+    const money = estimateInputSchema.safeParse({ ...base, kind: "MONEY" });
+    expect(money.success).toBe(false);
+    expect(JSON.stringify(money.error?.issues)).toContain("Enter an estimate.");
+    expect(estimateInputSchema.safeParse({ ...base, kind: "TIME", seconds: 3600 }).success).toBe(
+      true,
+    );
+    expect(estimateInputSchema.safeParse({ ...base, kind: "TIME", seconds: 0 }).success).toBe(
+      false,
+    );
+    expect(estimateInputSchema.safeParse({ ...base, kind: "MONEY", minor: 100 }).success).toBe(
+      true,
+    );
+  });
+
+  it("a task estimate is optional and never negative", () => {
+    expect(taskInputSchema.parse({ name: "Design" }).estimateSeconds).toBeNull();
+    expect(taskInputSchema.safeParse({ name: "Design", estimateSeconds: 7200 }).success).toBe(true);
+    expect(taskInputSchema.safeParse({ name: "Design", estimateSeconds: -1 }).success).toBe(false);
+    expect(taskPatchSchema.parse({ estimateSeconds: null })).toEqual({ estimateSeconds: null });
+  });
+
+  it("budget thresholds are normalised and bounded", () => {
+    const settings = { ...DEFAULT_WORKSPACE_SETTINGS, budgetThresholds: [100, 50, 50] };
+    expect(workspaceSettingsSchema.parse(settings).budgetThresholds).toEqual([50, 100]);
+    expect(
+      workspaceSettingsSchema.safeParse({ ...settings, budgetThresholds: [201] }).success,
+    ).toBe(false);
+    expect(DEFAULT_WORKSPACE_SETTINGS.budgetThresholds).toEqual([50, 80, 100]);
   });
 });

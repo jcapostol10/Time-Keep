@@ -1,4 +1,4 @@
-import type { ClientInput } from "@timekeep/core";
+import { type ClientInput, NO_ESTIMATE } from "@timekeep/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -10,6 +10,10 @@ import {
   asViewer,
 } from "../../../test/db";
 import { createManualEntry, type EntryScope, listEntriesInRange } from "../time-entries";
+import { eq, workspaceSettings } from "@timekeep/db";
+
+import { loadViewer } from "../authz";
+import { setProjectEstimate } from "../budgets";
 import { createClient } from "./clients";
 import {
   createProject,
@@ -28,6 +32,8 @@ import type { Viewer } from "./viewer";
 
 const handle = connectTestDb();
 const db = handle.db;
+
+afterAll(async () => handle.close());
 
 const NOW = new Date("2026-03-11T04:00:00.000Z");
 const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000);
@@ -63,7 +69,6 @@ async function entry(
 
 describe("projects service", () => {
   beforeAll(async () => truncateAll(db));
-  afterAll(async () => handle.close());
 
   beforeEach(async () => {
     await truncateAll(db);
@@ -310,5 +315,84 @@ describe("projects service", () => {
       ["2026-03-09", 3600],
       ["2026-03-23", 1800],
     ]);
+  });
+});
+
+describe("progress on the projects list (Phase 6b)", () => {
+  let wsId: string;
+  let alice: { id: string };
+  let carol: { id: string };
+
+  beforeEach(async () => {
+    await truncateAll(db);
+    alice = await createTestUser(db, "Alice A");
+    carol = await createTestUser(db, "Carol C");
+    const ws = await createTestWorkspace(db, "Workspace A", alice.id);
+    wsId = ws.id;
+    await addMember(db, ws.id, carol.id, "member");
+    owner = await loadViewer(db, ws.id, alice.id);
+    member = await loadViewer(db, ws.id, carol.id);
+  });
+
+  const list = (v: Viewer) =>
+    listProjects(db, v, {
+      q: "",
+      status: "active",
+      billing: "all",
+      access: "all",
+      sort: "name",
+      dir: "asc",
+    });
+
+  it("carries progress for an admin and hides it from a member unless the team's time is shown", async () => {
+    const site = await createProject(db, owner, { name: "Site" });
+    const app = await createProject(db, owner, { name: "App" });
+    await setProjectEstimate(db, owner, site.id, {
+      kind: "TIME",
+      seconds: 36_000,
+      minor: null,
+      reset: "NONE",
+      alerts: true,
+    });
+    await setProjectEstimate(db, owner, app.id, {
+      kind: "MONEY",
+      seconds: null,
+      minor: 100_000,
+      reset: "NONE",
+      alerts: true,
+    });
+    await entry(owner, site.id, 60);
+    await entry(member, site.id, 60);
+
+    const forOwner = await list(owner);
+    expect(forOwner.map((p) => [p.name, p.estimate.kind, p.progress?.percent ?? null])).toEqual([
+      ["App", "MONEY", 0],
+      ["Site", "TIME", 20],
+    ]);
+    const forMember = await list(member);
+    expect(forMember.map((p) => p.progress)).toEqual([null, null]);
+    // Review fix I1: the figures travel only with a bar the viewer may see.
+    expect(forMember.map((p) => p.estimate)).toEqual([NO_ESTIMATE, NO_ESTIMATE]);
+
+    await db
+      .update(workspaceSettings)
+      .set({ membersSeeTeamTime: true })
+      .where(eq(workspaceSettings.workspaceId, wsId));
+    member = await loadViewer(db, wsId, carol.id);
+    const open = await list(member);
+    expect(open.map((p) => [p.name, p.progress?.kind ?? null])).toEqual([
+      ["App", null],
+      ["Site", "TIME"],
+    ]);
+    // Both hours count: progress is the project's whole, not the viewer's scope.
+    expect(open[1]?.progress?.used).toBe(7_200);
+  });
+
+  it("getProject carries the project's currency", async () => {
+    const acme = await createClient(db, wsId, { ...clientInput("Acme"), currency: "EUR" });
+    const eu = await createProject(db, owner, { name: "Eu", clientId: acme.id });
+    const home = await createProject(db, owner, { name: "Home" });
+    expect((await getProject(db, owner, eu.id)).currency).toBe("EUR");
+    expect((await getProject(db, owner, home.id)).currency).toBe("USD");
   });
 });
