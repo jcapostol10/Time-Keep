@@ -92,7 +92,11 @@ beforeEach(async () => {
 
 describe("runDailyJobs", () => {
   it("reminds whoever has unsubmitted time in a period that just ended, in each workspace's zone", async () => {
-    expect(await runDailyJobs(db, { now: MONDAY_MANILA })).toEqual({ reminders: 1, targets: 0 });
+    expect(await runDailyJobs(db, { now: MONDAY_MANILA })).toEqual({
+      reminders: 1,
+      targets: 0,
+      budgets: 0,
+    });
     const [reminder] = await remindersTo(ids.tom!);
     expect(reminder).toMatchObject({
       kind: "approval.unsubmitted:2026-10-19",
@@ -110,6 +114,7 @@ describe("runDailyJobs", () => {
     expect(await runDailyJobs(db, { now: new Date(MONDAY_MANILA.getTime() + 3_600_000) })).toEqual({
       reminders: 0,
       targets: 0,
+      budgets: 0,
     });
     expect(await remindersTo(ids.tom!)).toHaveLength(1);
   });
@@ -118,19 +123,26 @@ describe("runDailyJobs", () => {
     expect(await runDailyJobs(db, { now: new Date("2026-10-27T22:00:00.000Z") })).toEqual({
       reminders: 0,
       targets: 0,
+      budgets: 0,
     });
     await settings(manila, { approvalEnabled: false });
-    expect(await runDailyJobs(db, { now: MONDAY_MANILA })).toEqual({ reminders: 0, targets: 0 });
+    expect(await runDailyJobs(db, { now: MONDAY_MANILA })).toEqual({
+      reminders: 0,
+      targets: 0,
+      budgets: 0,
+    });
   });
 
   it("runs only the workspaces asked for", async () => {
     expect(await runDailyJobs(db, { now: MONDAY_MANILA, workspaceIds: [newYork] })).toEqual({
       reminders: 0,
       targets: 0,
+      budgets: 0,
     });
     expect(await runDailyJobs(db, { now: MONDAY_MANILA, workspaceIds: [manila] })).toEqual({
       reminders: 1,
       targets: 0,
+      budgets: 0,
     });
   });
 });

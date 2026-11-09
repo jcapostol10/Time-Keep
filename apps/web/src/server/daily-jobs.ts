@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   approvalRulesOf,
+  budgetThresholdsOf,
   isUndeliverable,
   localDateKey,
   periodBounds,
@@ -20,6 +21,7 @@ import {
   lt,
   membership,
   or,
+  project,
   sql,
   targetRule,
   timeEntry,
@@ -32,6 +34,7 @@ import {
 import { e2eOnlyWorkspaceIds } from "@timekeep/db/e2e-tenant";
 
 import { unsubmittedReminderEmail } from "./approval-emails";
+import { evaluateBudgets } from "./budget-alerts";
 import { env } from "./env";
 import { enqueueEmail } from "./outbox";
 import { evaluateTargets } from "./targets";
@@ -42,13 +45,15 @@ import { evaluateTargets } from "./targets";
  * on the first local day after one of its periods ends, everyone with
  * stopped work in that period and no submission gets one reminder (unless
  * they muted reminders). Then the target rules (Phase 5b): yesterday for DAY
- * rules, last week on the week's first day. Idempotent: each outbox row's kind
- * names its period, or its rule, person and day.
+ * rules, last week on the week's first day. Then the budget alerts (Phase 6b):
+ * each threshold an estimated project has crossed. Idempotent: each outbox
+ * row's kind names its period, or its rule, person and day, or its project,
+ * threshold and period.
  */
 export async function runDailyJobs(
   db: Database,
   opts: { now?: Date; workspaceIds?: string[] } = {},
-): Promise<{ reminders: number; targets: number }> {
+): Promise<{ reminders: number; targets: number; budgets: number }> {
   const now = opts.now ?? new Date();
   const workspaces = await db
     .select({
@@ -62,6 +67,8 @@ export async function runDailyJobs(
       lockMode: workspaceSettings.lockMode,
       lockDate: workspaceSettings.lockDate,
       lockDays: workspaceSettings.lockDays,
+      currency: workspaceSettings.currency,
+      budgetThresholds: workspaceSettings.budgetThresholds,
     })
     .from(workspace)
     .innerJoin(workspaceSettings, eq(workspaceSettings.workspaceId, workspace.id))
@@ -70,6 +77,7 @@ export async function runDailyJobs(
         or(
           eq(workspaceSettings.approvalEnabled, true),
           sql`exists (select 1 from ${targetRule} where ${targetRule.workspaceId} = ${workspace.id} and ${targetRule.active})`,
+          sql`exists (select 1 from ${project} where ${project.workspaceId} = ${workspace.id} and ${project.estimateKind} <> 'NONE' and ${project.estimateAlerts} and not ${project.archived} and not ${project.isTemplate})`,
         ),
         opts.workspaceIds ? inArray(workspace.id, opts.workspaceIds) : undefined,
       ),
@@ -77,6 +85,7 @@ export async function runDailyJobs(
 
   let reminders = 0;
   let targets = 0;
+  let budgets = 0;
   for (const ws of workspaces) {
     const { enabled, period: rule } = approvalRulesOf(ws, ws);
     const today = localDateKey(now, rule.timezone);
@@ -89,8 +98,20 @@ export async function runDailyJobs(
       { id: ws.id, slug: ws.slug, name: ws.name, timezone: rule.timezone, weekStart: ws.weekStart },
       now,
     );
+    budgets += await evaluateBudgets(
+      db,
+      {
+        id: ws.id,
+        slug: ws.slug,
+        name: ws.name,
+        timezone: rule.timezone,
+        currency: ws.currency,
+        thresholds: budgetThresholdsOf(ws),
+      },
+      now,
+    );
   }
-  return { reminders, targets };
+  return { reminders, targets, budgets };
 }
 
 async function remindUnsubmitted(
