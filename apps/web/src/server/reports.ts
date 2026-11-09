@@ -262,6 +262,9 @@ function totalsOfRow(row: MeasureRow, workspaceCurrency: string): ReportTotals {
     uncostedCount: Number(row.uncostedCount),
     profitMinor: own ? amount - cost : 0,
     profitExcludedCount: own ? 0 : entryCount,
+    // Expenses join only in the Profit tab (Phase 6c), from their own aggregate.
+    expenseMinor: 0,
+    billableExpenseMinor: 0,
   };
 }
 

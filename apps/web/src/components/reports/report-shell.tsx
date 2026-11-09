@@ -64,9 +64,11 @@ export function ReportShell({
           <>
             {actions}
             {attendance ? null : <RoundingToggle />}
-            {/* A shared report is for clients: Profit is never shared. */}
-            {kind === "attendance" || kind === "profit" ? null : <ShareDialog kind={kind} />}
-            <ExportMenu kind={kind} />
+            {/* A shared report is for clients: Profit and Expenses are never shared. */}
+            {kind === "attendance" || kind === "profit" || kind === "expenses" ? null : (
+              <ShareDialog kind={kind} />
+            )}
+            {kind === "expenses" ? null : <ExportMenu kind={kind} />}
           </>
         }
       />

@@ -167,6 +167,9 @@ async function defaultBuild(
   if (job.report === "project-status") {
     throw new Error("Project status exports stream; they never become jobs");
   }
+  if (job.report === "expenses" || job.report === "receipts") {
+    throw new Error("Expense exports are not built yet");
+  }
   const query = reportQuerySchema.parse(request.query);
   if (job.format === "pdf") {
     const ws = await db.query.workspace.findFirst({

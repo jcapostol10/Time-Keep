@@ -17,6 +17,7 @@ import {
   timesheetTemplate,
   userSettings,
 } from "./tracking";
+import { expense, expenseCategory } from "./expenses";
 import { exportJob, reportShareLink } from "./reports";
 import { taskGroup, userGroup, userGroupMember } from "./team";
 import { invitation, membership, workspace, workspaceSettings } from "./workspace";
@@ -30,6 +31,7 @@ export const userRelations = relations(user, ({ many, one }) => ({
   projectFavorites: many(projectFavorite),
   taskAssignments: many(taskAssignee),
   timesheetTemplates: many(timesheetTemplate),
+  expenses: many(expense),
   settings: one(userSettings, { fields: [user.id], references: [userSettings.userId] }),
 }));
 
@@ -54,6 +56,8 @@ export const workspaceRelations = relations(workspace, ({ many, one }) => ({
   tags: many(tag),
   timeEntries: many(timeEntry),
   timesheetTemplates: many(timesheetTemplate),
+  expenses: many(expense),
+  expenseCategories: many(expenseCategory),
   settings: one(workspaceSettings, {
     fields: [workspace.id],
     references: [workspaceSettings.workspaceId],
@@ -89,6 +93,7 @@ export const projectRelations = relations(project, ({ one, many }) => ({
   favorites: many(projectFavorite),
   tasks: many(task),
   timeEntries: many(timeEntry),
+  expenses: many(expense),
 }));
 
 export const projectMemberRelations = relations(projectMember, ({ one }) => ({
@@ -177,4 +182,19 @@ export const userGroupRelations = relations(userGroup, ({ one, many }) => ({
 export const userGroupMemberRelations = relations(userGroupMember, ({ one }) => ({
   group: one(userGroup, { fields: [userGroupMember.groupId], references: [userGroup.id] }),
   user: one(user, { fields: [userGroupMember.userId], references: [user.id] }),
+}));
+
+export const expenseCategoryRelations = relations(expenseCategory, ({ one, many }) => ({
+  workspace: one(workspace, { fields: [expenseCategory.workspaceId], references: [workspace.id] }),
+  expenses: many(expense),
+}));
+
+export const expenseRelations = relations(expense, ({ one }) => ({
+  workspace: one(workspace, { fields: [expense.workspaceId], references: [workspace.id] }),
+  user: one(user, { fields: [expense.userId], references: [user.id] }),
+  project: one(project, { fields: [expense.projectId], references: [project.id] }),
+  category: one(expenseCategory, {
+    fields: [expense.categoryId],
+    references: [expenseCategory.id],
+  }),
 }));

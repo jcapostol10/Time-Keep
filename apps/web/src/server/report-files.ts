@@ -69,6 +69,7 @@ export interface ExportRequest {
 const CONTENT_TYPES: Record<Exclude<ExportFormat, "pdf">, string> = {
   csv: "text/csv; charset=utf-8",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  zip: "application/zip",
 };
 
 /** "timekeep-summary-2026-03-09-2026-03-15.csv": the range's first and last local days. */

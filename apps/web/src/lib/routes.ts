@@ -7,7 +7,7 @@ export const workspaceRoutes = {
   dashboard: (slug: string) => `/w/${slug}/dashboard`,
   reports: (
     slug: string,
-    kind?: "summary" | "detailed" | "weekly" | "audit" | "attendance" | "profit",
+    kind?: "summary" | "detailed" | "weekly" | "audit" | "attendance" | "profit" | "expenses",
   ) => `/w/${slug}/reports${kind ? `/${kind}` : ""}`,
   projects: (slug: string) => `/w/${slug}/projects`,
   project: (

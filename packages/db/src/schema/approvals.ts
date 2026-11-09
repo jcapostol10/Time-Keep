@@ -37,6 +37,9 @@ export const approvalRequest = pgTable(
     workSeconds: bigint("work_seconds", { mode: "number" }).notNull().default(0),
     billableSeconds: bigint("billable_seconds", { mode: "number" }).notNull().default(0),
     entryCount: integer("entry_count").notNull().default(0),
+    /** The period's expenses when submitted (Phase 6c decision 17). */
+    expenseCount: integer("expense_count").notNull().default(0),
+    expenseMinor: bigint("expense_minor", { mode: "number" }).notNull().default(0),
     submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
     decidedBy: text("decided_by").references(() => user.id, { onDelete: "set null" }),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
@@ -72,6 +75,8 @@ export const approvalEvent = pgTable(
     note: text("note"),
     /** ADMIN_EDIT: the entry changed (no foreign key: the entry may be deleted later). */
     entryId: text("entry_id"),
+    /** ADMIN_EDIT of an expense (Phase 6c); no foreign key, like `entry_id`. */
+    expenseId: text("expense_id"),
     /** ADMIN_EDIT: `{ field: { from, to } }`. */
     changes: jsonb("changes").$type<Record<string, { from: unknown; to: unknown }>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

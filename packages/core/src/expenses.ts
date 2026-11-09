@@ -46,7 +46,7 @@ export function receiptExtension(type: ReceiptType): "jpg" | "png" | "webp" | "p
 
 /** round_half_up(quantity × unit price / 100), in minor units; the quantity is in hundredths. */
 export function expenseAmount(quantityCenti: number, unitPriceMinor: number): number {
-  return Number((BigInt(quantityCenti) * BigInt(unitPriceMinor) + 50n) / 100n);
+  return Number((BigInt(quantityCenti) * BigInt(unitPriceMinor) + BigInt(50)) / BigInt(100));
 }
 
 const QUANTITY = /^(\d+)(?:[.,](\d{1,2}))?$/;
