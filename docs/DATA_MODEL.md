@@ -2,7 +2,7 @@
 
 PostgreSQL (16 locally, Supabase in production) via Drizzle ORM. Schema source: `packages/db/src/schema/*.ts`; migrations in `packages/db/migrations/`. All timestamps are `timestamptz` in UTC. IDs are text (Better Auth generates its own; our code uses UUIDs).
 
-## Entity overview (Phases 0–6a)
+## Entity overview (Phases 0–6b)
 
 ```
 user ──< session            (activeWorkspaceId → workspace)
@@ -107,6 +107,7 @@ One row per workspace, created in the same transaction as the workspace.
 | lock_date | date? | FIXED: entries starting before this local date are locked |
 | lock_days | smallint? | ROLLING: entries starting before the local day this many days ago are locked |
 | managers_see_costs | boolean | `false`; managers see cost and profit in reports, for their scope (Phase 6a). Owners and admins always do; members never |
+| budget_thresholds | smallint[] | `{50,80,100}` (0017); the percents of an estimate at which the daily job emails a budget alert, up to five whole numbers from 1 to 200, stored sorted without duplicates (Phase 6b) |
 
 The Phase 4b rule columns (from `rounding_mode` down) default to the behaviour before the rule existed; `packages/core/src/workspace-rules.ts` reads them and ignores an unknown stored value. Rounding applies to reports, exports and share links only (decision 13).
 
@@ -168,7 +169,14 @@ A client can be deleted only while no project points at it (`ON DELETE RESTRICT`
 | note | text | default `''` |
 | archived | boolean | default false; archived projects keep their entries but take no new time |
 | is_template | boolean | default false; Phase 4 clones templates |
+| estimate_kind | `estimate_kind` | `NONE`, `TIME` or `MONEY` (0017, Phase 6b): the project's one estimate |
+| estimate_seconds | bigint? | TIME: seconds of work on the project, billable or not |
+| estimate_minor | bigint? | MONEY: minor units of the project's currency (its client's, else the workspace's); the billable amount rated in that currency |
+| estimate_reset | `estimate_reset` | `NONE` (the whole project) or `MONTHLY` (each calendar month in the workspace timezone) |
+| estimate_alerts | boolean | default true; the daily job emails the thresholds crossed |
 | created_at, updated_at | timestamptz | |
+
+Progress is computed, never stored (`apps/web/src/server/estimates.ts` `progressFor`): raw, stopped work entries of the current period, no rounding, no scope filter; who sees a bar is core `progressVisible`. An alert is sent once per project, threshold and period, the outbox `kind` `budget:<project>:<threshold>:<period>`.
 
 Rules (`packages/core/src/catalog.ts`): `canSeeProject` (admins always; otherwise PUBLIC or a member) and `trackingBlock` (archived project, done task, task of another project, archived tag) are applied by the entry service on every start, manual create, continue, duplicate and detail change. A private project the user is not on is reported as "Project not found.", never as forbidden.
 
@@ -185,6 +193,7 @@ Both `(project_id → project cascade, user_id → user cascade)` with a composi
 | project_id | text → project (cascade) | indexed |
 | name | text | unique per project (`task_project_name_uq`) |
 | status | `task_status` | `ACTIVE` or `DONE`; done tasks keep their entries but take no new time |
+| estimate_seconds | bigint? | an optional time estimate (0017, Phase 6b), shown on the Tasks and Budget tabs; tasks never add up into the project's estimate |
 | created_at, updated_at | timestamptz | |
 
 `task_assignee` `(task_id, user_id)` is **deprecated since 2026-10-29**: kept with its data and foreign keys, never read for access, no longer edited by the UI; a later contract migration drops it.
@@ -365,7 +374,7 @@ Every table enables RLS (`.enableRLS()` on each `pgTable`, migration `0003`) wit
 
 ## Enums
 
-`workspace_role`, `membership_status`, `time_format`, `duration_format`, `project_visibility`, `task_status` — values come from `packages/core` constants so TypeScript and Postgres agree.
+`workspace_role`, `membership_status`, `time_format`, `duration_format`, `project_visibility`, `task_status`, `estimate_kind`, `estimate_reset` (and the later phases' enums) — values come from `packages/core` constants so TypeScript and Postgres agree.
 
 ### report_share_link
 
@@ -628,6 +637,6 @@ Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf` after
 
 ## Planned (later phases)
 
-Phase 6b–6d: project and task estimates and `workspace_settings.budget_thresholds` (6b); `expense`, `expense_category` (6c); `invoice_settings`, `invoice`, `invoice_item`, `payment`, `recurring_invoice` (6d). See `docs/superpowers/specs/2026-11-05-phase-6-design.md`.
+Phase 6c–6d: `expense`, `expense_category` (6c); `invoice_settings`, `invoice`, `invoice_item`, `payment`, `recurring_invoice` (6d). See `docs/superpowers/specs/2026-11-05-phase-6-design.md`.
 Phase 7: `assignment`, `milestone`.
 Phase 8: `subscription`, `api_key`, `webhook`, `webhook_delivery`, `audit_log`, `sso_config`.
