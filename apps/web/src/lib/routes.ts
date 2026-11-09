@@ -10,6 +10,8 @@ export const workspaceRoutes = {
     kind?: "summary" | "detailed" | "weekly" | "audit" | "attendance" | "profit" | "expenses",
   ) => `/w/${slug}/reports${kind ? `/${kind}` : ""}`,
   projects: (slug: string) => `/w/${slug}/projects`,
+  /** The Expenses page (Phase 6c); the Categories tab for those who manage them. */
+  expenses: (slug: string, tab?: "categories") => `/w/${slug}/expenses${tab ? `?tab=${tab}` : ""}`,
   project: (
     slug: string,
     projectId: string,

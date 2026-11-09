@@ -45,6 +45,9 @@ const { inviteMembersAction } = await import("./actions/team");
 const { setRateAction } = await import("./actions/rates");
 const { createClientAction, updateClientAction } = await import("./actions/clients");
 const { updateWorkspaceSettingsAction } = await import("./actions/workspaces");
+const { createExpenseAction } = await import("./actions/expenses");
+const { createExpenseCategoryAction } = await import("./actions/expense-categories");
+const { createExpenseCategory } = await import("./expense-categories");
 const { createManualEntry } = await import("./time-entries");
 
 const handle = connectTestDb();
@@ -98,6 +101,7 @@ describe("server actions ask the permission matrix", () => {
       olga: olga.id,
       max: max.id,
       bob: bob.id,
+      carol: carol.id,
       managed: managed.id,
       other: other.id,
       carolsEntry: carolsEntry.id,
@@ -288,6 +292,42 @@ describe("server actions ask the permission matrix", () => {
       budgetThresholds: [250],
     });
     expect(refused.ok).toBe(false);
+  });
+
+  it("answers a member's expense for a colleague with not found, and a manager's category with forbidden (Phase 6c)", async () => {
+    const [ws] = await db.select().from(workspace).where(eq(workspace.slug, slug));
+    const owner = asViewer({ workspaceId: ws!.id, userId: ids.olga!, role: "owner" });
+    const travel = await createExpenseCategory(db, owner, {
+      name: "Travel",
+      kind: "FIXED",
+      unitName: null,
+      unitPriceMinor: null,
+      billableDefault: true,
+    });
+    const input = {
+      projectId: ids.other,
+      categoryId: travel.id,
+      date: "2026-03-02",
+      amountMinor: 1000,
+      billable: true,
+    };
+    signIn(users.bob!);
+    const forCarol = await createExpenseAction(slug, { ...input, userId: ids.carol });
+    expect(forCarol).toEqual({ ok: false, error: "Not found" });
+    const own = await createExpenseAction(slug, input);
+    expect(own).toMatchObject({ ok: true, data: { amountMinor: 1000, userId: ids.bob } });
+    signIn(users.max!);
+    expect(await createExpenseCategoryAction(slug, { name: "Meals", kind: "FIXED" })).toEqual({
+      ok: false,
+      error: "You don't have permission to do that.",
+    });
+    signIn({ id: ids.olga! });
+    expect(await createExpenseCategoryAction(slug, { name: "Meals", kind: "FIXED" })).toMatchObject(
+      {
+        ok: true,
+        data: { name: "Meals", kind: "FIXED", billableDefault: true },
+      },
+    );
   });
 
   it("lets a manager edit a project they manage, and not one they don't", async () => {

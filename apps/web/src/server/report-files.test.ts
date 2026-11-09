@@ -35,9 +35,10 @@ const NOW = new Date("2026-03-11T04:00:00.000Z");
 
 let viewer: Viewer;
 
+afterAll(async () => handle.close());
+
 describe("report files", () => {
   beforeAll(async () => truncateAll(db));
-  afterAll(async () => handle.close());
 
   beforeEach(async () => {
     await truncateAll(db);
@@ -165,5 +166,92 @@ describe("report files", () => {
     expect(
       await countExportRows(db, viewer, { report: "weekly", query: QUERY, prefs: PREFS, now: NOW }),
     ).toBe(2);
+  });
+});
+
+describe("the Expenses report export (Phase 6c)", () => {
+  beforeEach(async () => {
+    await truncateAll(db);
+    const alice = await createTestUser(db, "Alice A");
+    const ws = await createTestWorkspace(db, "Workspace A", alice.id);
+    viewer = asViewer({ workspaceId: ws.id, userId: alice.id, role: "owner" });
+    const web = await createProject(db, viewer, { name: "Web" });
+    const { createExpenseCategory } = await import("./expense-categories");
+    const { createExpense } = await import("./expenses");
+    const travel = await createExpenseCategory(db, viewer, {
+      name: "Travel",
+      kind: "FIXED",
+      unitName: null,
+      unitPriceMinor: null,
+      billableDefault: true,
+    });
+    const meals = await createExpenseCategory(db, viewer, {
+      name: "Meals",
+      kind: "FIXED",
+      unitName: null,
+      unitPriceMinor: null,
+      billableDefault: false,
+    });
+    const spend = (categoryId: string, amountMinor: number, billable: boolean) =>
+      createExpense(
+        db,
+        viewer,
+        {
+          projectId: web.id,
+          categoryId,
+          date: "2026-03-10",
+          amountMinor,
+          billable,
+          description: "",
+        },
+        { now: NOW },
+      );
+    await spend(travel.id, 12_550, true);
+    await spend(travel.id, 10_000, true);
+    await spend(meals.id, 2_000, false);
+  });
+
+  it("exports CSV and Excel with its four columns", async () => {
+    const csv = await buildExport(db, viewer, {
+      report: "expenses",
+      format: "csv",
+      query: QUERY,
+      prefs: PREFS,
+      now: NOW,
+    });
+    expect(csv.filename).toBe("timekeep-expenses-2026-03-09-2026-03-15.csv");
+    expect(csv.rowCount).toBe(2);
+    const lines = new TextDecoder().decode(csv.body).split("\r\n");
+    // TextDecoder consumes the BOM the file starts with.
+    expect(lines[0]).toBe("Category,Expenses,Amount (USD),Billable (USD)");
+    expect(lines[1]).toBe("Travel,2,225.50,225.50");
+    expect(lines[2]).toBe("Meals,1,20.00,0.00");
+    expect(
+      await countExportRows(db, viewer, {
+        report: "expenses",
+        query: QUERY,
+        prefs: PREFS,
+        now: NOW,
+      }),
+    ).toBe(2);
+
+    const byProject = await buildExport(db, viewer, {
+      report: "expenses",
+      format: "xlsx",
+      query: { ...QUERY, expenseBy: "project" },
+      prefs: PREFS,
+      now: NOW,
+    });
+    const book = new ExcelJS.Workbook();
+    await book.xlsx.load(Buffer.from(byProject.body) as never);
+    const sheet = book.worksheets[0]!;
+    expect(sheet.getRow(1).values).toEqual([
+      undefined,
+      "Project",
+      "Expenses",
+      "Amount (USD)",
+      "Billable (USD)",
+    ]);
+    expect(sheet.getRow(2).values).toEqual([undefined, "Web", 3, "245.50", "225.50"]);
   });
 });

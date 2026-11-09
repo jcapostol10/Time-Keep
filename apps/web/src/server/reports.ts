@@ -78,6 +78,7 @@ import { listPickerProjects } from "./catalog/projects";
 import { listTagOptions } from "./catalog/tags";
 import type { Viewer } from "./catalog/viewer";
 import { progressForProjects } from "./estimates";
+import { type ExpenseGroupTotals, expenseTotalsBy } from "./expense-report";
 import { listMembers } from "./queries/team";
 import { WorkspaceAccessError } from "./access-error";
 
@@ -634,10 +635,23 @@ async function progressOfGroups(
   return progress.size > 0 ? Object.fromEntries(progress) : null;
 }
 
+/** A group's totals with its expenses folded in (Phase 6c decision 19). */
+function withExpenses(t: ReportTotals, spent: ExpenseGroupTotals["totals"]): ReportTotals {
+  return {
+    ...t,
+    expenseMinor: spent.amountMinor,
+    billableExpenseMinor: spent.billableMinor,
+    // Billable expenses are revenue, every expense a cost; the workspace currency only.
+    profitMinor: t.profitMinor + spent.billableMinor - spent.amountMinor,
+  };
+}
+
 /**
  * The Profit tab (Phase 6a): the Summary engine over one grouping key
  * (project, client or person), its groups sorted by profit. Only for viewers
- * who may see cost; a share link never is one.
+ * who may see cost; a share link never is one. Expenses join each group
+ * (Phase 6c) unless the query filters by task, tag or description, which an
+ * expense has none of; a group with expenses and no time is appended.
  */
 export async function profitReport(
   db: Executor,
@@ -650,18 +664,36 @@ export async function profitReport(
   if (viewer.hideCosts || viewer.hideAmounts) {
     throw new WorkspaceAccessError(403, "You don't have permission to do that.");
   }
-  const report = await summaryReport(
-    db,
-    viewer,
-    { ...query, groupBy: [profitGroupKey(query)] },
-    prefs,
-    now,
-  );
+  const key = profitGroupKey(query);
+  const timeOnly =
+    query.taskIds.length > 0 || query.tagIds.length > 0 || query.description.trim() !== "";
+  const [report, spent] = await Promise.all([
+    summaryReport(db, viewer, { ...query, groupBy: [key] }, prefs, now),
+    timeOnly
+      ? new Map<string | null, ExpenseGroupTotals>()
+      : expenseTotalsBy(db, viewer, key, query, prefs, now),
+  ]);
+  const groups = report.groups.map((g) => {
+    const s = spent.get(g.id);
+    if (!s) return g;
+    spent.delete(g.id);
+    return { ...g, totals: withExpenses(g.totals, s.totals) };
+  });
+  for (const [id, s] of spent) {
+    groups.push({
+      key,
+      id,
+      label: s.label,
+      totals: withExpenses(EMPTY_TOTALS, s.totals),
+      children: [],
+    });
+  }
   return {
     ...report,
-    groups: [...report.groups].sort(
+    groups: groups.sort(
       (a, b) => b.totals.profitMinor - a.totals.profitMinor || a.label.localeCompare(b.label),
     ),
+    totals: groups.reduce((sum, g) => addTotals(sum, g.totals), EMPTY_TOTALS),
   };
 }
 

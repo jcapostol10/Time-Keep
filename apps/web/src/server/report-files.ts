@@ -4,6 +4,7 @@ import {
   addDaysInZone,
   attendanceColumns,
   detailedColumns,
+  expenseColumns,
   type ExportColumn,
   type ExportFormat,
   type ExportMoney,
@@ -29,6 +30,7 @@ import type { DetailedCursor, DetailedEntryDTO, ReportMoney } from "@/lib/report
 
 import { attendanceReport } from "./attendance";
 import type { Viewer } from "./catalog/viewer";
+import { expenseReport } from "./expense-report";
 import { detailedReport, profitReport, summaryReport, weeklyReport } from "./reports";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
@@ -42,9 +44,10 @@ export interface ExportFile {
 
 /**
  * The reports that export to a file: the three report tabs, Attendance
- * (Phase 5b) and Profit (Phase 6a).
+ * (Phase 5b), Profit (Phase 6a) and Expenses (Phase 6c). The receipts zip is
+ * `receipts-zip.ts`, always a job.
  */
-export type FileReport = ReportKind | "attendance" | "profit";
+export type FileReport = ReportKind | "attendance" | "profit" | "expenses";
 
 /**
  * What money an export's columns show: the report's, with a column for each
@@ -144,6 +147,10 @@ export async function countExportRows(
       const report = await profitReport(db, viewer, req.query, req.prefs, req.now);
       return report.groups.length;
     }
+    case "expenses": {
+      const report = await expenseReport(db, viewer, req.query, req.prefs, req.now);
+      return report.groups.length;
+    }
   }
 }
 
@@ -204,6 +211,13 @@ async function exportTable(
         rows: await attendanceRows(db, viewer, req),
         columns: attendanceColumns(req.prefs) as ExportColumn<unknown>[],
       };
+    case "expenses": {
+      const report = await expenseReport(db, viewer, req.query, req.prefs, req.now);
+      return {
+        rows: report.groups.map((g) => ({ label: g.label, totals: g.totals })),
+        columns: expenseColumns(report.by, report.currency) as ExportColumn<unknown>[],
+      };
+    }
   }
 }
 

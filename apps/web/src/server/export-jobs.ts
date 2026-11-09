@@ -29,6 +29,7 @@ import { loadViewer } from "./authz";
 import type { Viewer } from "./catalog/viewer";
 import { env } from "./env";
 import { sendEmail } from "./mail";
+import { buildReceiptsZip } from "./receipts-zip";
 import { buildExport, type ExportFile, type FileReport } from "./report-files";
 import { buildPdfExport } from "./report-pdf";
 import { deleteExport, presignedExportUrl, sweepExports, uploadExport } from "./storage";
@@ -45,8 +46,8 @@ const STUCK_MINUTES = 15;
 const DOWNLOAD_TTL_SECONDS = 15 * 60;
 
 export interface ExportJobInput {
-  /** Not Profit: one row per project, client or person, it always streams. */
-  report: Exclude<FileReport, "profit">;
+  /** Not Profit (one row per project, client or person, it always streams); receipts always are one. */
+  report: Exclude<FileReport, "profit"> | "receipts";
   format: ExportFormat;
   query: ReportQuery;
   prefs: ViewerPrefs;
@@ -138,7 +139,10 @@ async function notifyOwner(job: ExportJobDTO, db: Database) {
     to: row.email,
     subject: "Your TimeKeep export is ready",
     title: "Your export is ready",
-    intro: `Hi ${row.name}, the ${job.report} report you exported (${job.rowCount ?? 0} rows) is ready to download.`,
+    intro:
+      job.report === "receipts"
+        ? `Hi ${row.name}, the receipts you exported (${job.rowCount ?? 0} files) are ready to download.`
+        : `Hi ${row.name}, the ${job.report} report you exported (${job.rowCount ?? 0} rows) is ready to download.`,
     cta: {
       label: "Open exports",
       url: `${env().APP_URL}${workspaceRoutes.reports(row.slug)}/exports`,
@@ -167,10 +171,11 @@ async function defaultBuild(
   if (job.report === "project-status") {
     throw new Error("Project status exports stream; they never become jobs");
   }
-  if (job.report === "expenses" || job.report === "receipts") {
-    throw new Error("Expense exports are not built yet");
-  }
   const query = reportQuerySchema.parse(request.query);
+  if (job.report === "receipts") {
+    return buildReceiptsZip(db, viewer, { query, prefs: request.prefs });
+  }
+  if (job.format === "zip") throw new Error("Only receipts export as a zip");
   if (job.format === "pdf") {
     const ws = await db.query.workspace.findFirst({
       where: eq(workspace.id, job.workspaceId),

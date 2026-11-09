@@ -6,9 +6,11 @@ import { createRequire } from "node:module";
 import {
   attendanceColumns,
   detailedColumns,
+  expenseColumns,
   type ExportColumn,
   flattenGroups,
   formatDuration,
+  formatMoney,
   formatRangeLabel,
   NONE_ID,
   profitColumns,
@@ -25,6 +27,7 @@ import type { ReportMoney, SeriesPoint, SummaryReport } from "@/lib/report-types
 
 import type { Viewer } from "./catalog/viewer";
 import { env } from "./env";
+import { expenseReport } from "./expense-report";
 import {
   attendanceRows,
   type ExportFile,
@@ -197,6 +200,7 @@ const TITLES: Record<FileReport, string> = {
   weekly: "Weekly report",
   attendance: "Attendance report",
   profit: "Profit report",
+  expenses: "Expenses report",
 };
 
 /** The report as one self-contained HTML page, and how many rows its table has. */
@@ -238,6 +242,19 @@ export async function renderReportHtml(
       filters,
       total: fmt(report.totals.durationSeconds),
       body: table(rows, profitColumns(profitGroupKey(report), req.prefs, money)),
+    });
+    return { html, rowCount: rows.length };
+  }
+  if (req.report === "expenses") {
+    const report = await expenseReport(db, viewer, req.query, req.prefs, now);
+    const rows = report.groups.map((g) => ({ label: g.label, totals: g.totals }));
+    const html = page({
+      title,
+      workspaceName: req.workspaceName,
+      rangeLabel,
+      filters,
+      total: formatMoney(report.totals.amountMinor, report.currency),
+      body: table(rows, expenseColumns(report.by, report.currency)),
     });
     return { html, rowCount: rows.length };
   }

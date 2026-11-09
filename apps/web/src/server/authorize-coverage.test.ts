@@ -22,6 +22,7 @@ const SHARED: Record<string, string> = {
   scopeForUser: "server/authz.ts",
   targetScope: "server/authz.ts",
   scopesForEntries: "server/time-entries.ts",
+  expenseScope: "server/expenses.ts",
 };
 
 /** Exports that act on the session only, not on a workspace's data. */
