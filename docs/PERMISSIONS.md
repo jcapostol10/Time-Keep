@@ -170,3 +170,9 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 | Action | Owner | Admin | Manager | Member |
 | --- | --- | --- | --- | --- |
 | `expenseCategory.manage` | yes | yes | — | — |
+
+## Invoices
+
+| Action | Owner | Admin | Manager | Member |
+| --- | --- | --- | --- | --- |
+| `invoice.manage` | yes | yes | — | — |

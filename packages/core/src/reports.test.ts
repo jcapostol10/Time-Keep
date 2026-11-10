@@ -61,6 +61,14 @@ describe("report query", () => {
     expect(reportQueryToSearchParams(parseReportQuery(new URLSearchParams())).toString()).toBe("");
   });
 
+  it("carries the invoiced filter (Phase 6d) and omits its default", () => {
+    expect(parseReportQuery(new URLSearchParams()).invoiced).toBe("all");
+    const q = parseReportQuery(new URLSearchParams("invoiced=yes"));
+    expect(q.invoiced).toBe("yes");
+    expect(reportQueryToSearchParams(q).get("invoiced")).toBe("yes");
+    expect(reportQueryToSearchParams({ ...q, invoiced: "all" }).has("invoiced")).toBe(false);
+  });
+
   it("rejects a fourth or repeated group key and a custom range without dates, and falls back to defaults", () => {
     const base = { groupBy: ["client", "project", "user", "task"] };
     expect(reportQuerySchema.safeParse(base).success).toBe(false);

@@ -24,13 +24,20 @@ import {
   normalizeThresholds,
 } from "./estimates";
 import { EXPENSE_CATEGORY_KINDS, type ExpenseCategoryKind } from "./expenses";
+import { BPS_MAX, IMPORT_GROUPS, RECURRING_MODES, RECURRING_SCHEDULES } from "./invoices";
 import { KIOSK_ACTIONS } from "./kiosk";
 import { CREATOR_SETTINGS, PAGES, TASK_VISIBILITY } from "./permissions";
 import { REQUIRED_FIELDS } from "./required-fields";
 import { ROLES } from "./roles";
 import { ROUNDING_MODES, ROUNDING_STEPS } from "./rounding";
 import { TARGET_KINDS, TARGET_PERIODS } from "./targets";
-import { parseCenti, TIME_OFF_ACCRUALS, TIME_OFF_UNITS, type Capacity } from "./time-off";
+import {
+  END_BEFORE_START_MESSAGE,
+  parseCenti,
+  TIME_OFF_ACCRUALS,
+  TIME_OFF_UNITS,
+  type Capacity,
+} from "./time-off";
 
 // --- Enumerations shared by DB, server and UI ---------------------------------
 
@@ -945,3 +952,146 @@ export const expensePatchSchema = z
   })
   .extend(entryNoteInputSchema.shape);
 export type ExpensePatch = z.infer<typeof expensePatchSchema>;
+
+// ---------------------------------------------------------------------------
+// Invoices (Phase 6d, decisions 20–28)
+
+const TAX_NAME_REQUIRED = "Name the tax.";
+const TAX_RATE_REQUIRED = "Enter the tax rate.";
+const bpsSchema = z.int().min(0).max(BPS_MAX);
+const taxNameSchema = z.string().trim().max(40).nullable().default(null);
+const taxBpsSchema = bpsSchema.nullable().default(null);
+
+/** A tax name needs its rate and a rate its name, for both taxes. */
+function taxPairIssues(
+  v: {
+    tax1Name?: string | null;
+    tax1Bps?: number | null;
+    tax2Name?: string | null;
+    tax2Bps?: number | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  for (const n of [1, 2] as const) {
+    const name = v[`tax${n}Name`];
+    const bps = v[`tax${n}Bps`];
+    if (name === undefined && bps === undefined) continue;
+    const hasName = typeof name === "string" && name !== "";
+    const hasRate = typeof bps === "number";
+    if (hasName && !hasRate) {
+      ctx.addIssue({ code: "custom", path: [`tax${n}Bps`], message: TAX_RATE_REQUIRED });
+    }
+    if (hasRate && !hasName) {
+      ctx.addIssue({ code: "custom", path: [`tax${n}Name`], message: TAX_NAME_REQUIRED });
+    }
+  }
+}
+
+export const invoiceSettingsSchema = z
+  .object({
+    companyName: z.string().trim().max(120).default(""),
+    address: z.string().trim().max(500).default(""),
+    taxLine: z.string().trim().max(120).default(""),
+    notes: z.string().trim().max(2000).default(""),
+    paymentTermsDays: z.int().min(0).max(365).default(30),
+    numberPrefix: z.string().trim().max(10).default("INV-"),
+    nextNumber: z.int().min(1).default(1),
+    numberPadding: z.int().min(0).max(8).default(4),
+    tax1Name: taxNameSchema,
+    tax1Bps: taxBpsSchema,
+    tax2Name: taxNameSchema,
+    tax2Bps: taxBpsSchema,
+  })
+  .superRefine(taxPairIssues);
+export type InvoiceSettingsInput = z.infer<typeof invoiceSettingsSchema>;
+
+export const invoiceCreateSchema = z.object({
+  clientId: z.string().min(1),
+  issueDate: z.iso.date(),
+  dueDate: z.iso.date().optional(),
+});
+export type InvoiceCreateInput = z.infer<typeof invoiceCreateSchema>;
+
+export const DUE_BEFORE_ISSUE_MESSAGE = "The due date is before the issue date.";
+
+export const invoicePatchSchema = z
+  .object({
+    number: z.string().trim().min(1).max(40),
+    issueDate: z.iso.date(),
+    dueDate: z.iso.date(),
+    discountBps: bpsSchema,
+    tax1Name: z.string().trim().max(40).nullable(),
+    tax1Bps: bpsSchema.nullable(),
+    tax2Name: z.string().trim().max(40).nullable(),
+    tax2Bps: bpsSchema.nullable(),
+    notes: z.string().trim().max(2000),
+    externalRef: z.string().trim().max(120).nullable(),
+  })
+  .partial()
+  .superRefine((v, ctx) => {
+    taxPairIssues(v, ctx);
+    if (v.issueDate !== undefined && v.dueDate !== undefined && v.dueDate < v.issueDate) {
+      ctx.addIssue({ code: "custom", path: ["dueDate"], message: DUE_BEFORE_ISSUE_MESSAGE });
+    }
+  });
+export type InvoicePatch = z.infer<typeof invoicePatchSchema>;
+
+export const invoiceLineSchema = z.object({
+  description: z.string().trim().min(1).max(500),
+  quantityCenti: z.int().min(1).max(1_000_000_000),
+  unitPriceMinor: z.int().min(0).max(10_000_000_000_000),
+});
+export type InvoiceLineInput = z.infer<typeof invoiceLineSchema>;
+
+export const invoiceImportSchema = z
+  .object({
+    from: z.iso.date(),
+    to: z.iso.date(),
+    projectIds: idListSchema,
+    groupBy: z.enum(IMPORT_GROUPS).default("project"),
+    expenses: z.boolean().default(true),
+  })
+  .refine((v) => v.to >= v.from, { path: ["to"], message: END_BEFORE_START_MESSAGE });
+export type InvoiceImportInput = z.infer<typeof invoiceImportSchema>;
+
+export const paymentInputSchema = z.object({
+  date: z.iso.date(),
+  amountMinor: z.int().min(1).max(10_000_000_000_000),
+  note: z.string().trim().max(500).default(""),
+});
+export type PaymentInput = z.infer<typeof paymentInputSchema>;
+
+export const recurringInvoiceSchema = z
+  .object({
+    clientId: z.string().min(1),
+    name: z.string().trim().min(1).max(100),
+    schedule: z.enum(RECURRING_SCHEDULES),
+    weekday: z.int().min(0).max(6).nullable().default(null),
+    dayOfMonth: z.int().min(1).max(31).nullable().default(null),
+    startDate: z.iso.date(),
+    endDate: z.iso.date().nullable().default(null),
+    lines: z.array(invoiceLineSchema).max(50).default([]),
+    importPeriod: z.boolean().default(false),
+    importGroupBy: z.enum(IMPORT_GROUPS).default("project"),
+    mode: z.enum(RECURRING_MODES).default("DRAFT"),
+    active: z.boolean().default(true),
+  })
+  .superRefine((v, ctx) => {
+    if (v.schedule === "WEEKLY" && v.weekday === null) {
+      ctx.addIssue({ code: "custom", path: ["weekday"], message: "Pick a weekday." });
+    }
+    if (v.schedule === "MONTHLY" && v.dayOfMonth === null) {
+      ctx.addIssue({ code: "custom", path: ["dayOfMonth"], message: "Pick a day of the month." });
+    }
+    if (v.endDate !== null && v.endDate < v.startDate) {
+      ctx.addIssue({ code: "custom", path: ["endDate"], message: END_BEFORE_START_MESSAGE });
+    }
+    if (v.lines.length === 0 && !v.importPeriod) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["lines"],
+        message: "Add a line or import the period.",
+      });
+    }
+  });
+export type RecurringInvoiceInput = z.infer<typeof recurringInvoiceSchema>;

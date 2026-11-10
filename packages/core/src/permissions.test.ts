@@ -185,6 +185,8 @@ const TABLE: Row[] = [
   ["expense.write", entry(MANAGED), true, true, true, false],
   ["expense.write", entry(OTHER, MANAGED_PROJECT), true, true, false, false],
   ["expenseCategory.manage", NONE, true, true, false, false],
+  // Phase 6d: invoices are owners' and admins'.
+  ["invoice.manage", NONE, true, true, false, false],
 ];
 
 describe("can", () => {
@@ -400,6 +402,7 @@ describe("renderPermissionsMarkdown", () => {
     for (const action of ACTIONS) expect(md).toContain(`\`${action}\``);
     expect(md).toContain("## Expenses");
     expect(md).toContain("## Expense categories");
+    expect(md).toContain("## Invoices");
   });
 });
 

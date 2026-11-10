@@ -87,6 +87,8 @@ export const ACTIONS = [
   "expense.write",
   /** expense categories: owners and admins */
   "expenseCategory.manage",
+  /** invoices, payments, recurring templates and invoice settings (Phase 6d): owners and admins */
+  "invoice.manage",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -293,6 +295,7 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
   "expense.read": { owner: "yes", admin: "yes", manager: "scope", member: "own" },
   "expense.write": { owner: "yes", admin: "yes", manager: "managedPeople", member: "own" },
   "expenseCategory.manage": ADMINS,
+  "invoice.manage": ADMINS,
 };
 
 const CREATED: Partial<Record<Action, CatalogType>> = {
@@ -474,6 +477,7 @@ const SECTION_TITLES: Record<string, string> = {
   pin: "Kiosk PINs",
   expense: "Expenses",
   expenseCategory: "Expense categories",
+  invoice: "Invoices",
 };
 
 /** The matrix as markdown, for docs/PERMISSIONS.md. */
