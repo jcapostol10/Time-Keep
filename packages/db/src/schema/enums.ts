@@ -12,6 +12,10 @@ import {
   ESTIMATE_RESETS,
   EXPENSE_CATEGORY_KINDS,
   EXPORT_FORMATS,
+  INVOICE_LINE_KINDS,
+  INVOICE_STATUSES,
+  RECURRING_MODES,
+  RECURRING_SCHEDULES,
   EXPORT_REPORTS,
   EXPORT_STATUSES,
   KIOSK_ATTEMPT_METHODS,
@@ -66,3 +70,7 @@ export const kioskAttemptMethodEnum = pgEnum("kiosk_attempt_method", KIOSK_ATTEM
 export const estimateKindEnum = pgEnum("estimate_kind", ESTIMATE_KINDS);
 export const estimateResetEnum = pgEnum("estimate_reset", ESTIMATE_RESETS);
 export const expenseCategoryKindEnum = pgEnum("expense_category_kind", EXPENSE_CATEGORY_KINDS);
+export const invoiceStatusEnum = pgEnum("invoice_status", INVOICE_STATUSES);
+export const invoiceItemKindEnum = pgEnum("invoice_item_kind", INVOICE_LINE_KINDS);
+export const recurringScheduleEnum = pgEnum("recurring_schedule", RECURRING_SCHEDULES);
+export const recurringModeEnum = pgEnum("recurring_mode", RECURRING_MODES);

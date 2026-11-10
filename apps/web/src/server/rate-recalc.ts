@@ -185,6 +185,8 @@ function entriesFrom(workspaceId: string, from: Date) {
     isNull(timeEntry.deletedAt),
     eq(timeEntry.type, "work"),
     gte(timeEntry.start, from),
+    // An invoiced entry keeps the amount it was billed at (Phase 6d, decision 23).
+    isNull(timeEntry.invoiceId),
     notInApprovedPeriod(),
   );
 }

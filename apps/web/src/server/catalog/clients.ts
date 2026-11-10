@@ -11,6 +11,7 @@ import {
   type Database,
   eq,
   ilike,
+  invoice,
   isNotNull,
   project,
   sql,
@@ -151,7 +152,21 @@ export async function updateClient(
   if (patch.currency !== undefined && patch.currency !== before.currency) {
     const base = await workspaceCurrency(db, workspaceId);
     const to = entryCurrency(patch.currency, base);
-    if (to !== entryCurrency(before.currency, base)) {
+    const from = entryCurrency(before.currency, base);
+    if (to !== from) {
+      // An invoice keeps its currency for good (Phase 6d, decision 20): relabelling the
+      // client under it would make the invoice and its time disagree.
+      const [invoiced] = await db
+        .select({ id: invoice.id })
+        .from(invoice)
+        .where(and(eq(invoice.workspaceId, workspaceId), eq(invoice.clientId, id)))
+        .limit(1);
+      if (invoiced) {
+        throw new CatalogError(
+          "CONFLICT",
+          `This client has invoices in ${from}; its currency cannot change.`,
+        );
+      }
       const projects = await db
         .select({ id: project.id })
         .from(project)

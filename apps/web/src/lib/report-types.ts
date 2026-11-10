@@ -63,6 +63,8 @@ export interface DetailedEntryDTO extends DetailedEntry {
   timesEditable: boolean;
   /** A kiosk clock-in photo exists; only for viewers who manage kiosks (ruling R6). */
   photo: boolean;
+  /** The invoice it is billed on (Phase 6d); read-only while set. */
+  invoiceNumber: string | null;
 }
 
 export type DetailedSort = "start" | "duration";

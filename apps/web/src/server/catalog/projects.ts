@@ -687,6 +687,25 @@ export async function deleteProject(
     if (submitted) {
       throw new CatalogError("CONFLICT", SUBMITTED_TIME_MESSAGE);
     }
+    // Invoiced time is read-only until its invoice is voided (Phase 6d, decision 23).
+    const [invoiced] = await tx
+      .select({ id: timeEntry.id })
+      .from(timeEntry)
+      .where(
+        and(
+          eq(timeEntry.workspaceId, viewer.workspaceId),
+          eq(timeEntry.projectId, projectId),
+          isNull(timeEntry.deletedAt),
+          isNotNull(timeEntry.invoiceId),
+        ),
+      )
+      .limit(1);
+    if (invoiced) {
+      throw new CatalogError(
+        "CONFLICT",
+        "This project has invoiced time. Void the invoices first.",
+      );
+    }
     // Expenses stay on their project (Phase 6c): live ones block the delete with a message
     // the foreign key would not give; soft-deleted ones go with the project.
     const expenses = await countProjectExpenses(tx, viewer.workspaceId, projectId);

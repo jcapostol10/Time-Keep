@@ -17,9 +17,12 @@ import {
   approvalRequest,
   type DbExecutor,
   eq,
+  expense,
   gte,
   inArray,
+  invoice,
   lte,
+  timeEntry,
   workspaceSettings,
 } from "@timekeep/db";
 
@@ -206,11 +209,53 @@ export interface KeyedChange {
   changes?: Record<string, { from: unknown; to: unknown }>;
 }
 
+/** Phase 6d decision 23: what an invoiced entry or expense answers to every write. */
+export function INVOICED_MESSAGE(kind: "entry" | "expense", number: string): string {
+  return `This ${kind} is on invoice ${number}.`;
+}
+
+/** The lock line of an invoiced row in the editors' reads. */
+export function invoicedLockedReason(number: string): string {
+  return `On invoice ${number}`;
+}
+
 /**
- * The guard over date keys: refuses the lock and the submitted periods for
- * members and managers; asks owners and admins for a note and logs it.
- * Callers run inside a transaction and take the person's lock here, so this
- * write lands before a submission's totals or sees the request.
+ * Time and expenses on an invoice are read-only for everyone, a note or not
+ * (decision 23): the invoice service releases them by removing the line,
+ * deleting the draft or voiding the invoice.
+ */
+async function assertNotInvoiced(
+  db: Pick<DbExecutor, "select">,
+  items: KeyedChange[],
+): Promise<void> {
+  const entryIds = items.flatMap((i) => (i.entryId ? [i.entryId] : []));
+  if (entryIds.length > 0) {
+    const [hit] = await db
+      .select({ number: invoice.number })
+      .from(timeEntry)
+      .innerJoin(invoice, eq(invoice.id, timeEntry.invoiceId))
+      .where(inArray(timeEntry.id, entryIds))
+      .limit(1);
+    if (hit) throw new TimeEntryError("INVALID", INVOICED_MESSAGE("entry", hit.number));
+  }
+  const expenseIds = items.flatMap((i) => (i.expenseId ? [i.expenseId] : []));
+  if (expenseIds.length > 0) {
+    const [hit] = await db
+      .select({ number: invoice.number })
+      .from(expense)
+      .innerJoin(invoice, eq(invoice.id, expense.invoiceId))
+      .where(inArray(expense.id, expenseIds))
+      .limit(1);
+    if (hit) throw new TimeEntryError("INVALID", INVOICED_MESSAGE("expense", hit.number));
+  }
+}
+
+/**
+ * The guard over date keys: refuses anything on an invoice for everyone, then
+ * the lock and the submitted periods for members and managers; asks owners
+ * and admins for a note there and logs it. Callers run inside a transaction
+ * and take the person's lock here, so this write lands before a submission's
+ * totals or sees the request.
  */
 export async function assertKeysWritable(
   db: Pick<DbExecutor, "select" | "insert" | "execute">,
@@ -218,6 +263,7 @@ export async function assertKeysWritable(
   items: KeyedChange[],
   opts: { note?: string; now?: Date; rules?: WriteRules; noun: GuardedNoun },
 ): Promise<void> {
+  await assertNotInvoiced(db, items);
   const keys = items.flatMap((i) => i.keys);
   if (keys.length === 0) return;
   const now = opts.now ?? new Date();

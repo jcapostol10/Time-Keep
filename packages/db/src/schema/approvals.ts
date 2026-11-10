@@ -107,6 +107,9 @@ export const emailOutbox = pgTable(
     attempts: smallint("attempts").notNull().default(0),
     nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
     lastError: text("last_error"),
+    /** A file in the private export bucket to attach, and its name (Phase 6d: the invoice PDF). */
+    attachmentKey: text("attachment_key"),
+    attachmentName: text("attachment_name"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
   },

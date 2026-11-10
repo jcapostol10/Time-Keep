@@ -18,6 +18,7 @@ import { user } from "./auth";
 import { project, tag, task } from "./catalog";
 import { timestamps } from "./columns";
 import { entryTypeEnum, rateLevelEnum } from "./enums";
+import { invoice } from "./invoices";
 import { workspace } from "./workspace";
 
 /**
@@ -65,11 +66,16 @@ export const timeEntry = pgTable(
     costAmountMinor: bigint("cost_amount_minor", { mode: "number" }),
     /** A break has no project, task, tags, billing or amount (decision 6). Fixed at creation. */
     type: entryTypeEnum("type").notNull().default("work"),
+    /** The invoice that billed it (Phase 6d): read-only for everyone while set. */
+    invoiceId: text("invoice_id").references(() => invoice.id, { onDelete: "set null" }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
     index("time_entry_workspace_user_start_idx").on(t.workspaceId, t.userId, t.start.desc()),
+    index("time_entry_workspace_invoice_idx")
+      .on(t.workspaceId, t.invoiceId)
+      .where(sql`"invoice_id" IS NOT NULL`),
     index("time_entry_project_id_idx").on(t.projectId),
     index("time_entry_task_id_idx").on(t.taskId),
     // Team-wide report scans: every stopped, live entry of a workspace by start.

@@ -62,9 +62,11 @@ export interface TimeEntryDTO {
   end: string | null;
   durationSeconds: number | null;
   updatedAt: string;
+  /** The invoice it is billed on (Phase 6d): read-only for everyone while set. */
+  invoiceNumber: string | null;
   /**
    * Why the viewer may not change it (a lock date, a submitted or approved
-   * period: Phase 5a); set by the editor's reads, absent elsewhere.
+   * period: Phase 5a; an invoice: Phase 6d); set by the editor's reads, absent elsewhere.
    */
   lockedReason?: string | null;
 }

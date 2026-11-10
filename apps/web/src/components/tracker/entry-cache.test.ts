@@ -21,6 +21,7 @@ function dto(id: string, start: string, extra: Partial<TimeEntryDTO> = {}): Time
     end: start,
     durationSeconds: 60,
     updatedAt: start,
+    invoiceNumber: null,
     ...extra,
   };
 }
