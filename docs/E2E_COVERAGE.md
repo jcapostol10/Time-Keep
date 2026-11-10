@@ -281,13 +281,13 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Invoices
 
-- [ ] An invoice imported from this week's billable time equals the Summary report; the imported entries are locked in the tracker and badged in Detailed — `invoices.spec.ts` › "an invoice imported from this week's billable time equals the Summary report"
-- [ ] Sending freezes the invoice; the emailed public link shows it without a session and downloads its PDF once per 10 s; payments move it to Partially paid, then Paid — `invoices.spec.ts` › "sending freezes the invoice, the public link shows it, and a payment moves the balance"
-- [ ] A manager and a member see no Invoices link; the page is not found and the route forbidden — `invoices.spec.ts` › "a member and a manager see no Invoices page"
-- [ ] The sent email carries the invoice PDF as an attachment — `invoices-extra.spec.ts` › "the sent email carries the PDF"
-- [ ] A recurring invoice appears after the daily job on its day, and not twice — `invoices-extra.spec.ts` › "a recurring invoice appears after the daily job and not twice"
-- [ ] An overdue invoice emails the owner once — `invoices-extra.spec.ts` › "an overdue invoice emails the admins once"
-- [ ] Voiding a sent invoice releases its time, which can be edited again; the invoice reads Void — `invoices-extra.spec.ts` › "voiding releases the time and the number stays"
+- [x] An invoice imported from this week's billable time equals the Summary report; the imported entries are locked in the tracker and badged in Detailed — `invoices.spec.ts` › "an invoice imported from this week's billable time equals the Summary report"
+- [x] Sending freezes the invoice; the emailed public link shows it without a session and downloads its PDF once per 10 s; payments move it to Partially paid, then Paid — `invoices.spec.ts` › "sending freezes the invoice, the public link shows it, and a payment moves the balance"
+- [x] A manager and a member see no Invoices link; the page is not found and the route forbidden — `invoices.spec.ts` › "a member and a manager see no Invoices page"
+- [x] The sent email carries the invoice PDF as an attachment — `invoices-extra.spec.ts` › "the sent email carries the PDF"
+- [x] A recurring invoice appears after the daily job on its day, and not twice — `invoices-extra.spec.ts` › "a recurring invoice appears after the daily job and not twice"
+- [x] An overdue invoice emails the owner once — `invoices-extra.spec.ts` › "an overdue invoice emails the admins once"
+- [x] Voiding a sent invoice releases its time, which can be edited again; the invoice reads Void — `invoices-extra.spec.ts` › "voiding releases the time and the number stays"
 
 ## Permissions
 
