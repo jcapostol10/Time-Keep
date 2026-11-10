@@ -49,6 +49,9 @@ const { createExpenseAction } = await import("./actions/expenses");
 const { createExpenseCategoryAction } = await import("./actions/expense-categories");
 const { createExpenseCategory } = await import("./expense-categories");
 const { createManualEntry } = await import("./time-entries");
+const { createInvoiceAction } = await import("./actions/invoices");
+const { updateInvoiceSettingsAction } = await import("./actions/invoice-settings");
+const { createClient } = await import("./catalog/clients");
 
 const handle = connectTestDb();
 const db = handle.db;
@@ -328,6 +331,32 @@ describe("server actions ask the permission matrix", () => {
         data: { name: "Meals", kind: "FIXED", billableDefault: true },
       },
     );
+  });
+
+  it("refuses a manager and a member creating an invoice or changing its settings (Phase 6d)", async () => {
+    const [ws] = await db.select().from(workspace).where(eq(workspace.slug, slug));
+    const acme = await createClient(db, ws!.id, {
+      name: "Acme",
+      address: "",
+      email: "",
+      notes: "",
+      currency: null,
+    });
+    const input = { clientId: acme.id, issueDate: "2026-03-02" };
+    const forbidden = { ok: false, error: "You don't have permission to do that." };
+    for (const who of ["max", "bob"]) {
+      signIn({ id: ids[who]! });
+      expect(await createInvoiceAction(slug, input)).toEqual(forbidden);
+      expect(await updateInvoiceSettingsAction(slug, { companyName: "X" })).toEqual(forbidden);
+    }
+    signIn({ id: ids.olga! });
+    expect(await createInvoiceAction(slug, input)).toMatchObject({
+      ok: true,
+      data: { number: "INV-0001", clientName: "Acme", status: "DRAFT" },
+    });
+    expect(await createInvoiceAction(slug, { clientId: "", issueDate: "nope" })).toMatchObject({
+      ok: false,
+    });
   });
 
   it("lets a manager edit a project they manage, and not one they don't", async () => {

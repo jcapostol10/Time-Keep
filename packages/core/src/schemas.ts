@@ -1095,3 +1095,12 @@ export const recurringInvoiceSchema = z
     }
   });
 export type RecurringInvoiceInput = z.infer<typeof recurringInvoiceSchema>;
+
+/** Send with the client's email, or only mark as sent. */
+export const sendInvoiceSchema = z.object({ email: z.boolean() });
+export type SendInvoiceInput = z.infer<typeof sendInvoiceSchema>;
+
+export const reorderLinesSchema = z.object({
+  lineIds: z.array(z.string().min(1).max(64)).min(1).max(200),
+});
+export type ReorderLinesInput = z.infer<typeof reorderLinesSchema>;

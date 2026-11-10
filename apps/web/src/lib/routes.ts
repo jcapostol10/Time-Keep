@@ -17,6 +17,10 @@ export const workspaceRoutes = {
     projectId: string,
     tab?: "access" | "status" | "settings" | "budget" | "rates",
   ) => `/w/${slug}/projects/${projectId}${tab ? `/${tab}` : ""}`,
+  /** The Invoices page (Phase 6d) and its Recurring and Settings tabs. */
+  invoices: (slug: string, tab?: "recurring" | "settings") =>
+    `/w/${slug}/invoices${tab ? `?tab=${tab}` : ""}`,
+  invoice: (slug: string, invoiceId: string) => `/w/${slug}/invoices/${invoiceId}`,
   team: (slug: string) => `/w/${slug}/team`,
   clients: (slug: string) => `/w/${slug}/clients`,
   tags: (slug: string) => `/w/${slug}/tags`,
