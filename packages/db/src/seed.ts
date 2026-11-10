@@ -4,6 +4,7 @@ import {
   addDaysInZone,
   addDaysToKey,
   computeDurationSeconds,
+  invoiceTotals,
   localDateKey,
   localWeekday,
   periodBounds,
@@ -18,7 +19,7 @@ import {
 } from "@timekeep/core";
 import { datasetHolidays } from "@timekeep/core/holiday-import";
 import { hashPassword } from "better-auth/crypto";
-import { and, eq, inArray, like, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, like, lt, sql } from "drizzle-orm";
 
 import { createDb, type Database, type DbExecutor } from "./client";
 import { e2eOnlyWorkspaceIds, e2eUsersInCustomerWorkspaces } from "./e2e-tenant";
@@ -32,14 +33,19 @@ import {
   expense,
   expenseCategory,
   holiday,
+  invoice,
+  invoiceItem,
+  invoiceSettings,
   kiosk,
   kioskCredential,
   managedUser,
   membership,
+  payment,
   project,
   projectGroup,
   projectMember,
   rate,
+  recurringInvoice,
   tag,
   task,
   targetRule,
@@ -202,6 +208,7 @@ export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}
     await seedCostAndCurrency(tx, demo.id, ids, catalog);
     await seedEstimates(tx, catalog);
     await seedExpenses(tx, demo.id, ids, catalog);
+    await seedInvoices(tx, demo.id, ids, catalog);
     await seedApprovals(tx, demo.id, ids);
     await seedTimeOff(tx, demo.id, ids);
     const kioskToken = await seedKiosk(tx, demo.id, ids, catalog.taskIds);
@@ -1039,6 +1046,189 @@ async function seedExpenses(
       ];
     }),
   );
+}
+
+/**
+ * Invoicing (Phase 6d): the settings (VAT 12%, 30-day terms, the next number
+ * INV-0003); INV-0001 sent to Acme Corp for the owner's own billable Website
+ * time of the week before last (so no other demo person's entries are locked),
+ * half paid; INV-0002 a draft for Globex with two manual lines; and a monthly
+ * retainer template for Globex. Built here, not through the web service: the
+ * seed runs without the app.
+ */
+async function seedInvoices(
+  db: DbExecutor,
+  workspaceId: string,
+  ids: Map<string, string>,
+  catalog: { projectIds: string[] },
+) {
+  const tz = DEMO_WORKSPACE.timezone;
+  const owner = ids.get("owner@demo.test");
+  const website = catalog.projectIds[0];
+  if (!owner || !website) throw new Error("seed: owner or Website missing");
+  const clients = await db
+    .select({ id: client.id, name: client.name })
+    .from(client)
+    .where(eq(client.workspaceId, workspaceId));
+  const acme = clients.find((c) => c.name === "Acme Corp");
+  const globex = clients.find((c) => c.name === "Globex");
+  if (!acme || !globex) throw new Error("seed: Acme Corp or Globex missing");
+  const vat = 1200;
+  await db.insert(invoiceSettings).values({
+    workspaceId,
+    companyName: "Demo Workspace Inc.",
+    address: "1 Ayala Avenue\nMakati City, Metro Manila",
+    taxLine: "TIN 000-123-456-000",
+    notes: "Thank you for your business.",
+    paymentTermsDays: 30,
+    nextNumber: 3,
+    tax1Name: "VAT",
+    tax1Bps: vat,
+  });
+
+  const today = localDateKey(new Date(), tz);
+  const midnight = (key: string) => zonedDateTimeToInstant({ date: key, hours: 0, minutes: 0 }, tz);
+  const entries = await db
+    .select({
+      id: timeEntry.id,
+      seconds: timeEntry.durationSeconds,
+      amountMinor: timeEntry.amountMinor,
+      rateMinor: timeEntry.billableRateMinor,
+    })
+    .from(timeEntry)
+    .where(
+      and(
+        eq(timeEntry.workspaceId, workspaceId),
+        eq(timeEntry.projectId, website),
+        eq(timeEntry.userId, owner),
+        eq(timeEntry.billable, true),
+        eq(timeEntry.rateCurrency, "USD"),
+        isNotNull(timeEntry.amountMinor),
+        isNotNull(timeEntry.end),
+        isNull(timeEntry.deletedAt),
+        isNull(timeEntry.invoiceId),
+        gte(timeEntry.start, midnight(addDaysToKey(today, -14))),
+        lt(timeEntry.start, midnight(addDaysToKey(today, -7))),
+      ),
+    );
+  const rates = new Set(entries.map((e) => e.rateMinor));
+  const timeLine = {
+    kind: "TIME" as const,
+    description: "Website redesign",
+    quantityCenti: Math.round(entries.reduce((n, e) => n + (e.seconds ?? 0), 0) / 36),
+    unitPriceMinor: rates.size === 1 ? ([...rates][0] ?? null) : null,
+    amountMinor: entries.reduce((n, e) => n + (e.amountMinor ?? 0), 0),
+    entryIds: entries.map((e) => e.id),
+  };
+  // Without time in the window (a fresh database on an odd day), a manual line keeps the demo whole.
+  const sentLines =
+    entries.length > 0
+      ? [timeLine]
+      : [
+          {
+            kind: "MANUAL" as const,
+            description: "Website redesign",
+            quantityCenti: 1000,
+            unitPriceMinor: 10_000,
+            amountMinor: 100_000,
+            entryIds: [] as string[],
+          },
+        ];
+
+  const rows = [
+    {
+      number: "INV-0001",
+      clientId: acme.id,
+      status: "SENT" as const,
+      issueDate: addDaysToKey(today, -6),
+      lines: sentLines,
+    },
+    {
+      number: "INV-0002",
+      clientId: globex.id,
+      status: "DRAFT" as const,
+      issueDate: today,
+      lines: [
+        {
+          kind: "MANUAL" as const,
+          description: "Workshop facilitation (days)",
+          quantityCenti: 200,
+          unitPriceMinor: 60_000,
+          amountMinor: 120_000,
+          entryIds: [] as string[],
+        },
+        {
+          kind: "MANUAL" as const,
+          description: "Travel",
+          quantityCenti: 100,
+          unitPriceMinor: 25_000,
+          amountMinor: 25_000,
+          entryIds: [] as string[],
+        },
+      ],
+    },
+  ];
+  const sentId = randomUUID();
+  for (const [i, r] of rows.entries()) {
+    const id = i === 0 ? sentId : randomUUID();
+    const totals = invoiceTotals(r.lines, { discountBps: 0, tax1Bps: vat, tax2Bps: null });
+    await db.insert(invoice).values({
+      id,
+      workspaceId,
+      clientId: r.clientId,
+      number: r.number,
+      issueDate: r.issueDate,
+      dueDate: addDaysToKey(r.issueDate, 30),
+      currency: "USD",
+      status: r.status,
+      tax1Name: "VAT",
+      tax1Bps: vat,
+      notes: "Thank you for your business.",
+      subtotalMinor: totals.subtotalMinor,
+      totalMinor: totals.totalMinor,
+      sentAt: r.status === "SENT" ? midnight(r.issueDate) : null,
+      createdBy: owner,
+    });
+    await db
+      .insert(invoiceItem)
+      .values(
+        r.lines.map((l, position) => ({
+          id: randomUUID(),
+          invoiceId: id,
+          position: position + 1,
+          ...l,
+        })),
+      );
+    if (r.status === "SENT") {
+      if (timeLine.entryIds.length > 0 && r.lines[0] === timeLine) {
+        await db
+          .update(timeEntry)
+          .set({ invoiceId: id })
+          .where(inArray(timeEntry.id, timeLine.entryIds));
+      }
+      await db.insert(payment).values({
+        id: randomUUID(),
+        invoiceId: id,
+        date: addDaysToKey(today, -2),
+        amountMinor: Math.floor(totals.totalMinor / 2),
+        note: "Deposit",
+        createdBy: owner,
+      });
+    }
+  }
+
+  await db.insert(recurringInvoice).values({
+    id: randomUUID(),
+    workspaceId,
+    clientId: globex.id,
+    name: "Globex monthly retainer",
+    schedule: "MONTHLY",
+    dayOfMonth: 1,
+    startDate: `${today.slice(0, 8)}01`,
+    lines: [{ description: "Monthly retainer", quantityCenti: 100, unitPriceMinor: 150_000 }],
+    mode: "DRAFT",
+    createdBy: owner,
+  });
 }
 
 const isDirectRun = process.argv[1]?.endsWith("seed.ts") ?? false;
