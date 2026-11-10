@@ -270,6 +270,26 @@ export function groupExpenses(expenses: ExpenseRow[], groupBy: ImportGroup): Lin
     }));
 }
 
+/** The client's live projects, for the import dialog's project filter. */
+export async function clientProjects(
+  db: Executor,
+  viewer: Viewer,
+  clientId: string,
+): Promise<{ id: string; name: string }[]> {
+  requireManage(viewer);
+  return db
+    .select({ id: project.id, name: project.name })
+    .from(project)
+    .where(
+      and(
+        eq(project.workspaceId, viewer.workspaceId),
+        eq(project.clientId, clientId),
+        eq(project.isTemplate, false),
+      ),
+    )
+    .orderBy(asc(project.name));
+}
+
 /** What an import would take, and what it would leave out, without writing. */
 export async function previewImport(
   db: Executor,

@@ -4,6 +4,7 @@ import {
   Building2Icon,
   CalendarDaysIcon,
   CalendarOffIcon,
+  FileTextIcon,
   FolderKanbanIcon,
   LayoutDashboardIcon,
   type LucideIcon,
@@ -105,6 +106,13 @@ export const NAV_GROUPS: NavGroup[] = [
         href: workspaceRoutes.tags,
         icon: TagIcon,
         permission: { action: "tag.create", resource: { kind: "none" } },
+      },
+      {
+        // Phase 6d: owners and admins bill clients.
+        label: "Invoices",
+        href: (slug) => workspaceRoutes.invoices(slug),
+        icon: FileTextIcon,
+        permission: { action: "invoice.manage", resource: { kind: "none" } },
       },
       {
         label: "Kiosks",

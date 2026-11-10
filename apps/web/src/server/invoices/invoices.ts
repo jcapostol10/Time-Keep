@@ -204,8 +204,10 @@ export async function updateInvoice(
     if (dueDate < issueDate) throw new CatalogError("INVALID", DUE_BEFORE_ISSUE_MESSAGE);
     const tax = (name: string | null | undefined, bps: number | null | undefined) =>
       name && bps !== null && bps !== undefined ? { name, bps } : { name: null, bps: null };
-    const tax1 = tax(patch.tax1Name ?? row.tax1Name, patch.tax1Bps ?? row.tax1Bps);
-    const tax2 = tax(patch.tax2Name ?? row.tax2Name, patch.tax2Bps ?? row.tax2Bps);
+    // `null` clears a field; only an absent one keeps the stored value.
+    const pick = <T>(next: T | undefined, current: T) => (next === undefined ? current : next);
+    const tax1 = tax(pick(patch.tax1Name, row.tax1Name), pick(patch.tax1Bps, row.tax1Bps));
+    const tax2 = tax(pick(patch.tax2Name, row.tax2Name), pick(patch.tax2Bps, row.tax2Bps));
     try {
       await tx
         .update(invoice)

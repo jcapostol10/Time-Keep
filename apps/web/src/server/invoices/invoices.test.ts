@@ -172,6 +172,17 @@ describe("draft edits", () => {
       .where(eq(invoice.id, inv.id));
     expect(row).toEqual({ subtotal: 15001, total: 15290 });
 
+    // A tax is cleared by nulls, not kept.
+    const cleared = await updateInvoice(db, owner, inv.id, { tax2Name: null, tax2Bps: null });
+    expect(cleared).toMatchObject({
+      tax2Name: null,
+      tax2Bps: null,
+      tax2Minor: 0,
+      totalMinor: 15121,
+    });
+    dto = await updateInvoice(db, owner, inv.id, { tax2Name: "Local", tax2Bps: 125 });
+    expect(dto.totalMinor).toBe(15290);
+
     const [l1, l2] = dto.lines as [(typeof dto.lines)[0], (typeof dto.lines)[0]];
     dto = await updateLine(db, owner, inv.id, l2.id, {
       description: "Hosting x2",

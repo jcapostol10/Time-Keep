@@ -81,7 +81,13 @@ export async function runDailyJob(
   request: APIRequestContext,
   slug: string,
   now: Date,
-): Promise<{ reminders: number; targets: number; budgets: number; sent: number }> {
+): Promise<{
+  reminders: number;
+  targets: number;
+  budgets: number;
+  invoices: { created: number; sent: number; overdue: number };
+  sent: number;
+}> {
   const res = await request.get(
     `/api/test/run-daily?slug=${encodeURIComponent(slug)}&now=${encodeURIComponent(now.toISOString())}`,
     {

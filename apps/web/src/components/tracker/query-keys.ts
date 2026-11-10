@@ -83,6 +83,31 @@ export const expenseUrls = {
     `/api/w/${slug}/expenses/${expenseId}/receipt${thumb ? "?thumb=1" : ""}`,
 };
 
+/**
+ * Invoices (Phase 6d): their own prefix. An invoice write invalidates
+ * `invoiceKeys.all` and the tracker's entries (an import locks entries).
+ */
+export const invoiceKeys = {
+  all: (slug: string) => ["invoices", slug] as const,
+  list: (slug: string, params: string) => ["invoices", slug, "list", params] as const,
+  one: (slug: string, id: string) => ["invoices", slug, "one", id] as const,
+  settings: (slug: string) => ["invoices", slug, "settings"] as const,
+  recurring: (slug: string) => ["invoices", slug, "recurring"] as const,
+  importPreview: (slug: string, id: string, params: string) =>
+    ["invoices", slug, "import-preview", id, params] as const,
+};
+
+export const invoiceUrls = {
+  list: (slug: string, params: string, cursor?: string | null) =>
+    `/api/w/${slug}/invoices?${params}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+  one: (slug: string, id: string) => `/api/w/${slug}/invoices/${id}`,
+  pdf: (slug: string, id: string) => `/api/w/${slug}/invoices/${id}/pdf`,
+  importPreview: (slug: string, id: string, params: string) =>
+    `/api/w/${slug}/invoices/${id}/import-preview?${params}`,
+  settings: (slug: string) => `/api/w/${slug}/invoices/settings`,
+  recurring: (slug: string) => `/api/w/${slug}/invoices/recurring`,
+};
+
 export interface TrackerOptions {
   projects: PickerProject[];
   tags: EntryTag[];
