@@ -63,6 +63,26 @@ export function invoiceOverdueEmail(b: {
   };
 }
 
+/** To the owners and admins, once per template and period, when a recurring template could not run. */
+export function recurringFailedEmail(b: {
+  appUrl: string;
+  slug: string;
+  templateName: string;
+  clientName: string;
+  /** The service's message, or "Something went wrong." */
+  reason: string;
+}): Email {
+  return {
+    subject: `${b.templateName}: the recurring invoice could not be created`,
+    title: "A recurring invoice was not created",
+    intro: `The recurring invoice "${b.templateName}" for ${b.clientName} could not be created: ${b.reason} The daily job tries again for a week; fix the template or create the invoice by hand.`,
+    cta: {
+      label: "Open recurring invoices",
+      url: `${b.appUrl}/w/${b.slug}/invoices?tab=recurring`,
+    },
+  };
+}
+
 /** To the owners and admins when a recurring template set to send left a draft (decision 27). */
 export function recurringUnsentEmail(b: {
   appUrl: string;

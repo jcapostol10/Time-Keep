@@ -2,8 +2,10 @@ import "server-only";
 
 import { formatInvoiceNumber, type InvoiceSettingsInput, type WeekStartDay } from "@timekeep/core";
 import {
+  and,
   type DbExecutor,
   eq,
+  invoice,
   type InvoiceSettings,
   invoiceSettings,
   workspace,
@@ -152,9 +154,22 @@ export async function takeInvoiceNumber(tx: Executor, workspaceId: string): Prom
     .where(eq(invoiceSettings.workspaceId, workspaceId))
     .for("update");
   if (!row) throw new Error(`No invoice settings for ${workspaceId}`);
+  // A sequence wound back (an edited "Next number", a settings form saved from a stale tab)
+  // skips the numbers already used rather than fail on the unique key.
+  let n = row.next;
+  for (;;) {
+    const number = formatInvoiceNumber(row.prefix, n, row.padding);
+    const [used] = await tx
+      .select({ id: invoice.id })
+      .from(invoice)
+      .where(and(eq(invoice.workspaceId, workspaceId), eq(invoice.number, number)))
+      .limit(1);
+    if (!used) break;
+    n++;
+  }
   await tx
     .update(invoiceSettings)
-    .set({ nextNumber: row.next + 1 })
+    .set({ nextNumber: n + 1 })
     .where(eq(invoiceSettings.workspaceId, workspaceId));
-  return formatInvoiceNumber(row.prefix, row.next, row.padding);
+  return formatInvoiceNumber(row.prefix, n, row.padding);
 }

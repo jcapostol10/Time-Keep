@@ -96,47 +96,59 @@ export async function runDailyJobs(
         ),
         opts.workspaceIds ? inArray(workspace.id, opts.workspaceIds) : undefined,
       ),
-    );
+    )
+    .orderBy(workspace.createdAt, workspace.id);
 
   let reminders = 0;
   let targets = 0;
   let budgets = 0;
   const invoices = { created: 0, sent: 0, overdue: 0 };
   for (const ws of workspaces) {
-    const { enabled, period: rule } = approvalRulesOf(ws, ws);
-    const today = localDateKey(now, rule.timezone);
-    if (enabled && periodContaining(today, rule).start === today) {
-      const ended = previousPeriod(periodContaining(today, rule), rule);
-      reminders += await remindUnsubmitted(db, ws, ended);
-    }
-    targets += await evaluateTargets(
-      db,
-      { id: ws.id, slug: ws.slug, name: ws.name, timezone: rule.timezone, weekStart: ws.weekStart },
-      now,
-    );
-    budgets += await evaluateBudgets(
-      db,
-      {
+    // One workspace's failure is logged and never stops the others (Phase 6d review).
+    try {
+      const { enabled, period: rule } = approvalRulesOf(ws, ws);
+      const today = localDateKey(now, rule.timezone);
+      if (enabled && periodContaining(today, rule).start === today) {
+        const ended = previousPeriod(periodContaining(today, rule), rule);
+        reminders += await remindUnsubmitted(db, ws, ended);
+      }
+      targets += await evaluateTargets(
+        db,
+        {
+          id: ws.id,
+          slug: ws.slug,
+          name: ws.name,
+          timezone: rule.timezone,
+          weekStart: ws.weekStart,
+        },
+        now,
+      );
+      budgets += await evaluateBudgets(
+        db,
+        {
+          id: ws.id,
+          slug: ws.slug,
+          name: ws.name,
+          timezone: rule.timezone,
+          currency: ws.currency,
+          thresholds: budgetThresholdsOf(ws),
+        },
+        now,
+      );
+      const zone = {
         id: ws.id,
         slug: ws.slug,
         name: ws.name,
         timezone: rule.timezone,
         currency: ws.currency,
-        thresholds: budgetThresholdsOf(ws),
-      },
-      now,
-    );
-    const zone = {
-      id: ws.id,
-      slug: ws.slug,
-      name: ws.name,
-      timezone: rule.timezone,
-      currency: ws.currency,
-    };
-    const recurring = await runRecurringInvoices(db, zone, now);
-    invoices.created += recurring.created;
-    invoices.sent += recurring.sent;
-    invoices.overdue += await sendOverdueEmails(db, zone, now);
+      };
+      const recurring = await runRecurringInvoices(db, zone, now);
+      invoices.created += recurring.created;
+      invoices.sent += recurring.sent;
+      invoices.overdue += await sendOverdueEmails(db, zone, now);
+    } catch (error) {
+      console.error(`[daily] workspace ${ws.slug} failed`, error);
+    }
   }
   return { reminders, targets, budgets, invoices };
 }

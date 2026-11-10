@@ -24,9 +24,9 @@ export function invoiceStatusSql(todayKey: string): SQL<ComputedInvoiceStatus> {
   const paid = paidMinorSql();
   return sql<ComputedInvoiceStatus>`(case
     when "invoice"."status" <> 'SENT' then "invoice"."status"::text
-    when ${paid} >= "invoice"."total_minor" and ("invoice"."total_minor" > 0 or ${paid} > 0) then 'PAID'
-    when ${paid} > 0 then 'PARTIALLY_PAID'
+    when ${paid} >= "invoice"."total_minor" then 'PAID'
     when "invoice"."due_date" < ${todayKey}::date then 'OVERDUE'
+    when ${paid} > 0 then 'PARTIALLY_PAID'
     else 'SENT'
   end)`;
 }

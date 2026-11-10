@@ -18,7 +18,9 @@ import {
   invoice,
   invoiceItem,
   type InvoiceItem,
+  isNull,
   lt,
+  ne,
   or,
   type Payment,
   payment,
@@ -48,6 +50,31 @@ type Executor = Pick<DbExecutor, "select">;
 export const INVOICE_NOT_FOUND = "Invoice not found.";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
+
+/**
+ * A draft or sent invoice in `currency` for a client billed in the workspace
+ * currency: what a workspace currency change would relabel under it.
+ */
+export async function hasOpenInvoicesIn(
+  db: Executor,
+  workspaceId: string,
+  currency: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: invoice.id })
+    .from(invoice)
+    .innerJoin(client, eq(client.id, invoice.clientId))
+    .where(
+      and(
+        eq(invoice.workspaceId, workspaceId),
+        ne(invoice.status, "VOID"),
+        eq(invoice.currency, currency),
+        isNull(client.currency),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
 
 export function requireManage(viewer: Viewer): void {
   assertCan(viewer.actor, "invoice.manage", { kind: "none" });

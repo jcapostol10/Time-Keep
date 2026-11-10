@@ -167,6 +167,33 @@ describe("server actions ask the permission matrix", () => {
     expect(rates.map((r) => r.currency)).toEqual(["PHP"]);
   });
 
+  it("refuses a workspace currency change while invoices in it are open (Phase 6d)", async () => {
+    signIn({ id: ids.olga! });
+    const [ws] = await db.select().from(workspace).where(eq(workspace.slug, slug));
+    const acme = await createClient(db, ws!.id, {
+      name: "Acme",
+      address: "",
+      email: "",
+      notes: "",
+      currency: null,
+    });
+    const created = await createInvoiceAction(slug, { clientId: acme.id, issueDate: "2026-03-02" });
+    expect(created.ok).toBe(true);
+    const settings = { ...DEFAULT_WORKSPACE_SETTINGS, name: ws!.name, currency: "PHP" };
+    const message = "Invoices in USD are open. Void or delete them before changing the currency.";
+    expect(
+      await updateWorkspaceSettingsAction(slug, { ...settings, confirmCurrencyChange: true }),
+    ).toEqual({ ok: false, error: message, fieldErrors: { currency: [message] } });
+    // Once void (here, deleted as a draft) the change goes through.
+    if (created.ok) {
+      const { deleteInvoiceAction } = await import("./actions/invoices");
+      expect((await deleteInvoiceAction(slug, created.data.id)).ok).toBe(true);
+    }
+    expect(
+      (await updateWorkspaceSettingsAction(slug, { ...settings, confirmCurrencyChange: true })).ok,
+    ).toBe(true);
+  });
+
   it("asks before a client's currency change relabels its projects' rates", async () => {
     signIn({ id: ids.olga! });
     const made = await createClientAction(slug, { name: "Acme", currency: "USD" });

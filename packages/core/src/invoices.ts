@@ -42,9 +42,11 @@ export function invoiceStatus(
   todayKey: string,
 ): ComputedInvoiceStatus {
   if (inv.status !== "SENT") return inv.status;
-  if (inv.paidMinor >= inv.totalMinor && (inv.totalMinor > 0 || inv.paidMinor > 0)) return "PAID";
-  if (inv.paidMinor > 0) return "PARTIALLY_PAID";
+  // Nothing owed (a zero total included) is paid; a balance past its due date is overdue,
+  // part-paid or not: that is the invoice an admin chases.
+  if (inv.paidMinor >= inv.totalMinor) return "PAID";
   if (inv.dueDate < todayKey) return "OVERDUE";
+  if (inv.paidMinor > 0) return "PARTIALLY_PAID";
   return "SENT";
 }
 
@@ -178,7 +180,6 @@ export function monthStartKey(key: string): string {
  */
 export function recurringDue(s: RecurringSchedule, todayKey: string): RecurringPeriod | null {
   if (todayKey < s.startDate) return null;
-  if (s.endDate !== null && todayKey > s.endDate) return null;
   let period: { periodStart: string; periodEnd: string };
   if (s.kind === "WEEKLY") {
     if (s.weekday === null || weekdayOfKey(todayKey) !== s.weekday) return null;
@@ -191,5 +192,7 @@ export function recurringDue(s: RecurringSchedule, todayKey: string): RecurringP
     period = { periodStart: monthStartKey(periodEnd), periodEnd };
   }
   if (period.periodStart < s.startDate) return null;
+  // The period that ends on the end date is still billed (the day after); none past it.
+  if (s.endDate !== null && period.periodEnd > s.endDate) return null;
   return { periodKey: period.periodStart, ...period };
 }

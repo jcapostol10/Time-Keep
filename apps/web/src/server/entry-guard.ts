@@ -228,25 +228,39 @@ async function assertNotInvoiced(
   db: Pick<DbExecutor, "select">,
   items: KeyedChange[],
 ): Promise<void> {
-  const entryIds = items.flatMap((i) => (i.entryId ? [i.entryId] : []));
+  // The rows are locked for the rest of the caller's transaction, so an import cannot mark
+  // them between this check and the write, and a write waiting here sees an import's mark.
+  const numberOf = async (invoiceId: string) =>
+    (await db.select({ number: invoice.number }).from(invoice).where(eq(invoice.id, invoiceId)))[0]
+      ?.number ?? "";
+  const entryIds = [...new Set(items.flatMap((i) => (i.entryId ? [i.entryId] : [])))].sort();
   if (entryIds.length > 0) {
-    const [hit] = await db
-      .select({ number: invoice.number })
+    const rows = await db
+      .select({ invoiceId: timeEntry.invoiceId })
       .from(timeEntry)
-      .innerJoin(invoice, eq(invoice.id, timeEntry.invoiceId))
       .where(inArray(timeEntry.id, entryIds))
-      .limit(1);
-    if (hit) throw new TimeEntryError("INVALID", INVOICED_MESSAGE("entry", hit.number));
+      .orderBy(timeEntry.id)
+      .for("update");
+    const hit = rows.find((r) => r.invoiceId !== null);
+    if (hit?.invoiceId) {
+      throw new TimeEntryError("INVALID", INVOICED_MESSAGE("entry", await numberOf(hit.invoiceId)));
+    }
   }
-  const expenseIds = items.flatMap((i) => (i.expenseId ? [i.expenseId] : []));
+  const expenseIds = [...new Set(items.flatMap((i) => (i.expenseId ? [i.expenseId] : [])))].sort();
   if (expenseIds.length > 0) {
-    const [hit] = await db
-      .select({ number: invoice.number })
+    const rows = await db
+      .select({ invoiceId: expense.invoiceId })
       .from(expense)
-      .innerJoin(invoice, eq(invoice.id, expense.invoiceId))
       .where(inArray(expense.id, expenseIds))
-      .limit(1);
-    if (hit) throw new TimeEntryError("INVALID", INVOICED_MESSAGE("expense", hit.number));
+      .orderBy(expense.id)
+      .for("update");
+    const hit = rows.find((r) => r.invoiceId !== null);
+    if (hit?.invoiceId) {
+      throw new TimeEntryError(
+        "INVALID",
+        INVOICED_MESSAGE("expense", await numberOf(hit.invoiceId)),
+      );
+    }
   }
 }
 
@@ -263,9 +277,11 @@ export async function assertKeysWritable(
   items: KeyedChange[],
   opts: { note?: string; now?: Date; rules?: WriteRules; noun: GuardedNoun },
 ): Promise<void> {
-  await assertNotInvoiced(db, items);
   const keys = items.flatMap((i) => i.keys);
   if (keys.length === 0) return;
+  // The person's lock first, then the rows (as startTimer and the editors take them).
+  await db.execute(timerLock(scope.workspaceId, scope.userId));
+  await assertNotInvoiced(db, items);
   const now = opts.now ?? new Date();
   const rules = opts.rules ?? (await writeRulesOf(db, scope.workspaceId));
   const actor = scope.actedBy ?? scope.actor;
@@ -280,7 +296,6 @@ export async function assertKeysWritable(
     }
   }
 
-  await db.execute(timerLock(scope.workspaceId, scope.userId));
   const requests = await coveringRequests(db, scope, keys);
   if (requests.length === 0) return;
   const covering = (key: string) =>

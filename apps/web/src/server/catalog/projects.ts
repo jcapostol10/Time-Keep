@@ -31,6 +31,7 @@ import {
   client,
   type Database,
   eq,
+  expense,
   ilike,
   inArray,
   isNotNull,
@@ -579,6 +580,37 @@ export async function updateProject(
   if (patch.clientId) await requireClientName(db, viewer.workspaceId, patch.clientId);
   let relabelTo: string | null = null;
   if (patch.clientId !== undefined && patch.clientId !== before.clientId) {
+    // Invoiced time and expenses belong to their client's invoice (Phase 6d): they do not move.
+    const [invoicedTime] = await db
+      .select({ id: timeEntry.id })
+      .from(timeEntry)
+      .where(
+        and(
+          eq(timeEntry.workspaceId, viewer.workspaceId),
+          eq(timeEntry.projectId, projectId),
+          isNull(timeEntry.deletedAt),
+          isNotNull(timeEntry.invoiceId),
+        ),
+      )
+      .limit(1);
+    const [invoicedExpense] = await db
+      .select({ id: expense.id })
+      .from(expense)
+      .where(
+        and(
+          eq(expense.workspaceId, viewer.workspaceId),
+          eq(expense.projectId, projectId),
+          isNull(expense.deletedAt),
+          isNotNull(expense.invoiceId),
+        ),
+      )
+      .limit(1);
+    if (invoicedTime || invoicedExpense) {
+      throw new CatalogError(
+        "CONFLICT",
+        "This project has invoiced time. Void its invoices before moving it to another client.",
+      );
+    }
     const ws = viewer.workspaceId;
     const base = await workspaceCurrency(db, ws);
     let to = base;

@@ -119,6 +119,8 @@ export interface ImportPreviewDTO {
     otherCurrency: number;
     /** Billable entries without an amount. */
     unrated: number;
+    /** Billable expenses of a client billed in another currency: never imported (decision 23). */
+    expensesOtherCurrency: number;
   };
 }
 

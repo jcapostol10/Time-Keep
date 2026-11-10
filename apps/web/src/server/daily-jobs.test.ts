@@ -10,7 +10,7 @@ import {
   userSettings,
   workspaceSettings,
 } from "@timekeep/db";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   addMember,
@@ -23,7 +23,21 @@ import { submitPeriod } from "./approvals";
 import { loadViewer } from "./authz";
 import { createClient } from "./catalog/clients";
 import { e2eWorkspaceId, runDailyJobs } from "./daily-jobs";
+import type * as Recurring from "./invoices/recurring";
 import { createManualEntry } from "./time-entries";
+
+// One workspace's invoice step can be made to throw, to show the others still run.
+const failing = vi.hoisted(() => ({ workspaceId: null as string | null }));
+vi.mock("./invoices/recurring", async (original) => {
+  const real = await original<typeof Recurring>();
+  return {
+    ...real,
+    runRecurringInvoices: async (...args: Parameters<typeof real.runRecurringInvoices>) => {
+      if (args[1].id === failing.workspaceId) throw new Error("boom");
+      return real.runRecurringInvoices(...args);
+    },
+  };
+});
 
 const handle = connectTestDb();
 const db = handle.db;
@@ -66,6 +80,7 @@ async function remindersTo(userId: string) {
 }
 
 beforeEach(async () => {
+  failing.workspaceId = null;
   await truncateAll(db);
   const owner = await createTestUser(db, "Olga Owner");
   const tom = await createTestUser(db, "Tom Tracked");
@@ -217,6 +232,18 @@ describe("overdue invoices (Phase 6d)", () => {
       }),
     ).toMatchObject({ invoices: { overdue: 0 } });
     expect(await overdueRows()).toHaveLength(1);
+  });
+
+  it("one workspace failing does not stop the others", async () => {
+    const quiet = (await createTestWorkspace(db, "Quiet", ids.owner!)).id;
+    await settings(quiet, { timezone: "Asia/Manila", approvalEnabled: false });
+    const due = await sentInvoice(quiet, 5000);
+    failing.workspaceId = manila;
+    const result = await runDailyJobs(db, { now: MONDAY_MANILA });
+    expect(result.invoices.overdue).toBe(1);
+    expect((await overdueRows()).map((r) => r.kind)).toEqual([`invoice.overdue:${due}`]);
+    // Manila's own reminder, sent before its failure, stands.
+    expect(await remindersTo(ids.tom!)).toHaveLength(1);
   });
 
   it("a workspace with nothing but a sent invoice is still visited", async () => {

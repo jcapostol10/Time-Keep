@@ -220,6 +220,48 @@ describe("recurring invoices", () => {
   });
 });
 
+describe("recurring invoices, when something goes wrong", () => {
+  it("a day the job missed is caught up within the week", async () => {
+    await createRecurring(db, owner, template({ dayOfMonth: 1 }), NOW);
+    // The 1st was missed; the 4th still bills January, once.
+    expect(await run("2026-02-04")).toEqual({ created: 1, sent: 0 });
+    const [inv] = await invoices(noon("2026-02-04"));
+    expect(inv).toMatchObject({ periodKey: "2026-01-01", issueDate: "2026-02-04" });
+    expect(await run("2026-02-05")).toEqual({ created: 0, sent: 0 });
+    // Past the week, a missed period is not back-filled.
+    expect(await run("2026-03-09")).toEqual({ created: 0, sent: 0 });
+  });
+
+  it("a template that cannot run tells the admins once and does not stop the others", async () => {
+    const { client } = await import("@timekeep/db");
+    const broken = await createRecurring(
+      db,
+      owner,
+      template({ clientId: f.globexId, name: "Globex retainer" }),
+      NOW,
+    );
+    await createRecurring(db, owner, template({}), NOW);
+    await db.update(client).set({ archived: true }).where(eq(client.id, f.globexId));
+    expect(await run("2026-02-28")).toEqual({ created: 1, sent: 0 });
+    const failed = (await db.select().from(emailOutbox)).filter((m) =>
+      m.kind.startsWith("invoice.recurring-failed:"),
+    );
+    expect(failed.map((m) => [m.kind, m.toAddress]).sort()).toEqual(
+      [
+        [`invoice.recurring-failed:${broken.id}:2026-01-01`, await userEmail("ann")],
+        [`invoice.recurring-failed:${broken.id}:2026-01-01`, await userEmail("olga")],
+      ].sort(),
+    );
+    expect(failed[0]?.text).toContain("This client is archived.");
+    expect(await run("2026-03-01")).toEqual({ created: 0, sent: 0 });
+    expect(
+      (await db.select().from(emailOutbox)).filter((m) =>
+        m.kind.startsWith("invoice.recurring-failed:"),
+      ),
+    ).toHaveLength(2);
+  });
+});
+
 async function userEmail(who: string): Promise<string> {
   const u = await db.query.user.findFirst({ where: (t, { eq: e }) => e(t.id, f.ids[who]!) });
   return u!.email;

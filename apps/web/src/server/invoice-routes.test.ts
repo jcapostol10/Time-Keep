@@ -141,7 +141,7 @@ describe("the invoice routes", () => {
       amountMinor: 0,
       expenses: 0,
       expenseMinor: 0,
-      skipped: { otherCurrency: 0, unrated: 0 },
+      skipped: { otherCurrency: 0, unrated: 0, expensesOtherCurrency: 0 },
     });
     const bad = await previewGET(
       url(`/${inv.id}/import-preview?from=2026-13-01&to=x`),

@@ -21,6 +21,7 @@ import { createWorkspace } from "@/server/workspaces";
 import { checkApprovalSettings, withdrawPendingRequests } from "@/server/approvals";
 import { authorize } from "@/server/authz";
 import { countTasksWithoutGroup } from "@/server/catalog/tasks";
+import { hasOpenInvoicesIn } from "@/server/invoices/read";
 import { relabelWorkspaceCurrency, workspaceHasRates } from "@/server/rates";
 
 export async function createWorkspaceAction(
@@ -82,6 +83,12 @@ export async function updateWorkspaceSettingsAction(
 
     const db = getDb();
     const newCurrency = settings.currency !== ctx.settings.currency;
+    // Phase 6d: an open invoice in the workspace currency keeps it; relabelling its time
+    // and expenses would make them disagree with the invoice.
+    if (newCurrency && (await hasOpenInvoicesIn(db, ctx.workspace.id, ctx.settings.currency))) {
+      const message = `Invoices in ${ctx.settings.currency} are open. Void or delete them before changing the currency.`;
+      return fail(message, { currency: [message] });
+    }
     if (newCurrency && !confirmCurrencyChange && (await workspaceHasRates(db, ctx.workspace.id))) {
       const message = `Rates and amounts will show in ${settings.currency}; they are not converted.`;
       return fail(message, { confirmCurrencyChange: [message] });

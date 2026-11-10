@@ -63,6 +63,8 @@ export function renderInvoiceHtml(args: {
   invoice: InvoiceDTO;
   settings: InvoiceSettingsDTO;
   workspaceName: string;
+  /** The file frozen on send: no status line, which could only go stale. */
+  frozen?: boolean;
 }): string {
   const { invoice, settings } = args;
   const money = (minor: number) => formatMoney(minor, invoice.currency);
@@ -94,7 +96,7 @@ export function renderInvoiceHtml(args: {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(`Invoice ${invoice.number}`)}</title><style>${CSS}</style></head><body>
 <header>
   <div class="company">${settings.logoUrl ? `<img class="logo" src="${esc(settings.logoUrl)}" alt="">` : ""}<strong>${esc(company)}</strong>${esc(settings.address)}${settings.taxLine ? `\n${esc(settings.taxLine)}` : ""}</div>
-  <div><h1>Invoice ${esc(invoice.number)}</h1><div class="meta"><div>Status: ${esc(STATUS_TEXT[invoice.computedStatus])}</div><div>Issued ${date(invoice.issueDate)}</div><div>Due ${date(invoice.dueDate)}</div></div></div>
+  <div><h1>Invoice ${esc(invoice.number)}</h1><div class="meta">${args.frozen ? "" : `<div>Status: ${esc(STATUS_TEXT[invoice.computedStatus])}</div>`}<div>Issued ${date(invoice.issueDate)}</div><div>Due ${date(invoice.dueDate)}</div></div></div>
 </header>
 <section class="parties">
   <div><div class="label">Bill to</div><div class="client"><strong>${esc(invoice.clientName)}</strong>${invoice.clientAddress ? `\n${esc(invoice.clientAddress)}` : ""}${invoice.clientEmail ? `\n${esc(invoice.clientEmail)}` : ""}</div></div>
@@ -113,11 +115,14 @@ export async function buildInvoicePdf(
   viewer: Viewer,
   id: string,
   now: Date = new Date(),
+  opts: { frozen?: boolean } = {},
 ): Promise<Uint8Array> {
   const [invoice, settings, ws] = await Promise.all([
     getInvoice(db, viewer, id, now),
     getInvoiceSettings(db, viewer),
     invoiceWorkspace(db, viewer.workspaceId),
   ]);
-  return htmlToPdf(renderInvoiceHtml({ invoice, settings, workspaceName: ws.name }));
+  return htmlToPdf(
+    renderInvoiceHtml({ invoice, settings, workspaceName: ws.name, frozen: opts.frozen }),
+  );
 }

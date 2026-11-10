@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { DEFAULT_REPORT_QUERY, type ReportQuery, type ViewerPrefs } from "@timekeep/core";
-import { eq, expense, invoice, rate, timeEntry, workspaceSettings } from "@timekeep/db";
+import { eq, expense, invoice, rate, sql, timeEntry, workspaceSettings } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -12,8 +12,8 @@ import {
   truncateAll,
 } from "../../test/db";
 import { loadViewer, scopeForUser } from "./authz";
-import { createClient, updateClient } from "./catalog/clients";
-import { createProject, deleteProject } from "./catalog/projects";
+import { createClient, deleteClient, updateClient } from "./catalog/clients";
+import { createProject, deleteProject, updateProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { createExpenseCategory } from "./expense-categories";
 import {
@@ -47,8 +47,9 @@ import {
  */
 
 const handle = connectTestDb();
+const handle2 = connectTestDb();
 const db = handle.db;
-afterAll(() => handle.close());
+afterAll(() => Promise.all([handle.close(), handle2.close()]));
 
 // Asia/Manila; "now" is Wednesday 28 Oct 2026 12:00 local.
 const NOW = new Date("2026-10-28T04:00:00.000Z");
@@ -380,5 +381,123 @@ describe("a client with invoices", () => {
     });
     // A currency it already has is no change.
     await expect(updateClient(db, wsId, acmeId, { currency: null })).resolves.toBeTruthy();
+  });
+
+  it("may change its currency once its only invoice is void", async () => {
+    const inv = await invoiceRow("INV-0007", "SENT");
+    await db.update(invoice).set({ status: "VOID" }).where(eq(invoice.id, inv));
+    await expect(updateClient(db, wsId, acmeId, { currency: "EUR" })).resolves.toMatchObject({
+      currency: "EUR",
+    });
+  });
+
+  it("cannot be deleted while it has invoices, with a message", async () => {
+    const lone = await createClient(db, wsId, {
+      name: "Lone",
+      address: "",
+      email: "",
+      notes: "",
+      currency: null,
+    });
+    await db.insert(invoice).values({
+      id: randomUUID(),
+      workspaceId: wsId,
+      clientId: lone.id,
+      number: "INV-0099",
+      issueDate: "2026-10-27",
+      dueDate: "2026-11-26",
+      currency: "USD",
+    });
+    await expect(deleteClient(db, wsId, lone.id)).rejects.toMatchObject({
+      code: "IN_USE",
+      message: "This client has invoices or recurring invoices. Void or delete them first.",
+    });
+  });
+});
+
+describe("a project with invoiced time", () => {
+  it("cannot move to another client", async () => {
+    const e = await entry("bob");
+    await markInvoiced(db, wsId, [e.id], await invoiceRow());
+    const other = await createClient(db, wsId, {
+      name: "Other",
+      address: "",
+      email: "",
+      notes: "",
+      currency: null,
+    });
+    await expect(
+      updateProject(db, await viewer("olga"), webId, { clientId: other.id }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message:
+        "This project has invoiced time. Void its invoices before moving it to another client.",
+    });
+    await expect(
+      updateProject(db, await viewer("olga"), webId, { name: "Web 2" }),
+    ).resolves.toMatchObject({ name: "Web 2" });
+  });
+});
+
+describe("an invoice and a concurrent write", () => {
+  it("a write the guard let through finishes before an import takes the entry, which bills the new amount", async () => {
+    const { importIntoInvoice } = await import("./invoices/import");
+    const owner = await viewer("olga");
+    const e = await entry("bob");
+    const inv = await invoiceRow();
+    // A writer mid-flight: it holds the row and has changed the hours, not yet committed.
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const writer = handle2.db.transaction(async (tx) => {
+      await tx.execute(sql`select id from time_entry where id = ${e.id} for update`);
+      await tx
+        .update(timeEntry)
+        .set({
+          end: new Date(MON_9.getTime() + 2 * H),
+          durationSeconds: 7200,
+          amountMinor: 10000,
+        })
+        .where(eq(timeEntry.id, e.id));
+      await held;
+    });
+    await new Promise((r) => setTimeout(r, 200));
+    const importing = importIntoInvoice(
+      db,
+      owner,
+      inv,
+      { from: "2026-10-26", to: "2026-11-01", projectIds: [], groupBy: "project", expenses: false },
+      NOW,
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    release();
+    await writer;
+    const dto = await importing;
+    expect(dto.lines.map((l) => l.amountMinor)).toEqual([10000]);
+  });
+
+  it("a delete waiting on an import's mark is refused once the entry is invoiced", async () => {
+    const e = await entry("bob");
+    const inv = await invoiceRow();
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    // An import mid-flight: the entry is marked, not yet committed.
+    const importer = handle2.db.transaction(async (tx) => {
+      await tx.update(timeEntry).set({ invoiceId: inv }).where(eq(timeEntry.id, e.id));
+      await held;
+    });
+    await new Promise((r) => setTimeout(r, 200));
+    const deleting = deleteEntries(db, await as("bob"), [e.id]).then(
+      () => "deleted",
+      (error: Error) => error.message,
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    release();
+    await importer;
+    expect(await deleting).toBe(INVOICED);
+    const [row] = await db
+      .select({ deletedAt: timeEntry.deletedAt, invoiceId: timeEntry.invoiceId })
+      .from(timeEntry)
+      .where(eq(timeEntry.id, e.id));
+    expect(row).toEqual({ deletedAt: null, invoiceId: inv });
   });
 });

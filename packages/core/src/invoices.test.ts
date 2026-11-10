@@ -23,17 +23,17 @@ describe("invoiceStatus", () => {
     expect(invoiceStatus(sent, "2026-03-11")).toBe("OVERDUE");
   });
 
-  it("payments win over the due date", () => {
+  it("a part payment is PARTIALLY_PAID until the due date passes, then OVERDUE", () => {
     const partial = { ...sent, paidMinor: 4000 };
     expect(invoiceStatus(partial, "2026-03-10")).toBe("PARTIALLY_PAID");
-    expect(invoiceStatus(partial, "2026-03-11")).toBe("PARTIALLY_PAID");
+    expect(invoiceStatus(partial, "2026-03-11")).toBe("OVERDUE");
     expect(invoiceStatus({ ...sent, paidMinor: 10000 }, "2026-03-11")).toBe("PAID");
     expect(invoiceStatus({ ...sent, paidMinor: 12000 }, "2026-03-11")).toBe("PAID");
   });
 
-  it("a zero total is never PAID by itself", () => {
-    expect(invoiceStatus({ ...sent, totalMinor: 0 }, "2026-03-01")).toBe("SENT");
-    expect(invoiceStatus({ ...sent, totalMinor: 0 }, "2026-03-11")).toBe("OVERDUE");
+  it("a zero total owes nothing: PAID once sent, never OVERDUE", () => {
+    expect(invoiceStatus({ ...sent, totalMinor: 0 }, "2026-03-01")).toBe("PAID");
+    expect(invoiceStatus({ ...sent, totalMinor: 0 }, "2026-03-11")).toBe("PAID");
   });
 
   it("VOID and DRAFT stay what they are", () => {
@@ -198,7 +198,12 @@ describe("recurringDue", () => {
 
   it("stops before the start and after the end", () => {
     expect(recurringDue({ ...weeklyMonday, startDate: "2026-03-10" }, "2026-03-09")).toBeNull();
-    expect(recurringDue({ ...weeklyMonday, endDate: "2026-03-08" }, "2026-03-09")).toBeNull();
-    expect(recurringDue({ ...weeklyMonday, endDate: "2026-03-09" }, "2026-03-09")).not.toBeNull();
+    // The period that ends on the end date is still billed, the day after; one past it is not.
+    expect(recurringDue({ ...weeklyMonday, endDate: "2026-03-08" }, "2026-03-09")).not.toBeNull();
+    expect(recurringDue({ ...weeklyMonday, endDate: "2026-03-07" }, "2026-03-09")).toBeNull();
+    expect(recurringDue({ ...weeklyMonday, endDate: "2026-03-08" }, "2026-03-16")).toBeNull();
+    expect(recurringDue({ ...monthly31, endDate: "2026-01-31" }, "2026-02-28")?.periodKey).toBe(
+      "2026-01-01",
+    );
   });
 });

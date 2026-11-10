@@ -18,6 +18,7 @@ import {
   type Database,
   type DbExecutor,
   desc,
+  emailOutbox,
   eq,
   invoice,
   membership,
@@ -32,7 +33,7 @@ import { CatalogError, isUniqueViolation } from "../catalog/errors";
 import type { Viewer } from "../catalog/viewer";
 import { env } from "../env";
 import { enqueueEmail } from "../outbox";
-import { activeAdminEmails, recurringUnsentEmail } from "./emails";
+import { activeAdminEmails, recurringFailedEmail, recurringUnsentEmail } from "./emails";
 import { importInto } from "./import";
 import { createInvoiceRow, insertManualLines, recomputeTotals, sendInvoice } from "./invoices";
 import { requireManage } from "./read";
@@ -282,11 +283,55 @@ async function runAs(db: Database, workspaceId: string, createdBy: string | null
   throw new Error(`Workspace ${workspaceId} has no active owner to run recurring invoices as`);
 }
 
+/** A day the job missed is caught up for this many days (the cron runs once a day). */
+const CATCH_UP_DAYS = 7;
+
+/** The periods due over the last week up to today, oldest first, each once. */
+function duePeriods(t: RecurringInvoice, today: string) {
+  const schedule = scheduleOf(t);
+  const seen = new Map<string, NonNullable<ReturnType<typeof recurringDue>>>();
+  for (let i = CATCH_UP_DAYS - 1; i >= 0; i--) {
+    const due = recurringDue(schedule, addDaysToKey(today, -i));
+    if (due && !seen.has(due.periodKey)) seen.set(due.periodKey, due);
+  }
+  return [...seen.values()];
+}
+
+/** Tells the owners and admins once per template and period that it could not run. */
+async function reportFailure(
+  db: Database,
+  ws: RecurringZone,
+  t: RecurringInvoice,
+  periodKey: string,
+  error: unknown,
+): Promise<void> {
+  console.error(`[invoices] recurring ${t.id} failed for ${periodKey}`, error);
+  const kind = `invoice.recurring-failed:${t.id}:${periodKey}`;
+  const [already] = await db
+    .select({ id: emailOutbox.id })
+    .from(emailOutbox)
+    .where(and(eq(emailOutbox.workspaceId, ws.id), eq(emailOutbox.kind, kind)))
+    .limit(1);
+  if (already) return;
+  const [c] = await db.select({ name: client.name }).from(client).where(eq(client.id, t.clientId));
+  const content = recurringFailedEmail({
+    appUrl: env().APP_URL,
+    slug: ws.slug,
+    templateName: t.name,
+    clientName: c?.name ?? "",
+    reason: error instanceof CatalogError ? error.message : "Something went wrong.",
+  });
+  for (const to of await activeAdminEmails(db, ws.id)) {
+    await enqueueEmail(db, { workspaceId: ws.id, to, kind, ...content });
+  }
+}
+
 /**
- * The daily job's part: for each active template due today whose period has
- * no invoice yet, one invoice in one transaction (the fixed lines, then the
- * period's import); in SEND mode it is sent with the client's email, or left
- * as a draft while the owners and admins hear why.
+ * The daily job's part: for each active template, each period due over the
+ * last week that has no invoice yet gets one, in one transaction (the fixed
+ * lines, then the period's import); in SEND mode it is sent with the client's
+ * email, or left as a draft while the owners and admins hear why. A template
+ * that fails is reported to them once per period and never stops the others.
  */
 export async function runRecurringInvoices(
   db: Database,
@@ -302,73 +347,78 @@ export async function runRecurringInvoices(
   let created = 0;
   let sent = 0;
   for (const t of templates) {
-    const due = recurringDue(scheduleOf(t), today);
-    if (!due) continue;
-    const [exists] = await db
-      .select({ id: invoice.id })
-      .from(invoice)
-      .where(and(eq(invoice.recurringId, t.id), eq(invoice.periodKey, due.periodKey)))
-      .limit(1);
-    if (exists) continue;
-    const viewer = await runAs(db, ws.id, t.createdBy);
-    let invoiceId: string;
-    try {
-      invoiceId = await db.transaction(async (tx) => {
-        const id = await createInvoiceRow(tx, {
-          workspaceId: ws.id,
-          clientId: t.clientId,
-          createdBy: t.createdBy,
-          issueDate: today,
-          recurringId: t.id,
-          periodKey: due.periodKey,
+    for (const due of duePeriods(t, today)) {
+      const [exists] = await db
+        .select({ id: invoice.id })
+        .from(invoice)
+        .where(and(eq(invoice.recurringId, t.id), eq(invoice.periodKey, due.periodKey)))
+        .limit(1);
+      if (exists) continue;
+      let viewer: Viewer;
+      let invoiceId: string;
+      try {
+        viewer = await runAs(db, ws.id, t.createdBy);
+        invoiceId = await db.transaction(async (tx) => {
+          const id = await createInvoiceRow(tx, {
+            workspaceId: ws.id,
+            clientId: t.clientId,
+            createdBy: t.createdBy,
+            issueDate: today,
+            recurringId: t.id,
+            periodKey: due.periodKey,
+          });
+          await insertManualLines(tx, id, linesOf(t));
+          if (t.importPeriod) {
+            await importInto(tx, viewer, id, {
+              from: due.periodStart,
+              to: due.periodEnd,
+              projectIds: [],
+              groupBy: groupOf(t),
+              expenses: true,
+            });
+          }
+          await recomputeTotals(tx, id);
+          return id;
         });
-        await insertManualLines(tx, id, linesOf(t));
-        if (t.importPeriod) {
-          await importInto(tx, viewer, id, {
-            from: due.periodStart,
-            to: due.periodEnd,
-            projectIds: [],
-            groupBy: groupOf(t),
-            expenses: true,
+      } catch (error) {
+        // Another run of the same day got there first.
+        if (isUniqueViolation(error, "invoice_recurring_period_uq")) continue;
+        await reportFailure(db, ws, t, due.periodKey, error);
+        continue;
+      }
+      created++;
+      if (t.mode !== "SEND") continue;
+      try {
+        await sendInvoice(db, viewer, invoiceId, { email: true, now });
+        sent++;
+      } catch (error) {
+        if (!(error instanceof CatalogError)) {
+          await reportFailure(db, ws, t, due.periodKey, error);
+          continue;
+        }
+        const [row] = await db
+          .select({ number: invoice.number, clientName: client.name })
+          .from(invoice)
+          .innerJoin(client, eq(client.id, invoice.clientId))
+          .where(eq(invoice.id, invoiceId));
+        const reason = error.message.endsWith(".") ? error.message : `${error.message}.`;
+        const content = recurringUnsentEmail({
+          appUrl: env().APP_URL,
+          slug: ws.slug,
+          invoiceId,
+          number: row?.number ?? "",
+          templateName: t.name,
+          clientName: row?.clientName ?? "",
+          reason: reason.charAt(0).toLowerCase() + reason.slice(1),
+        });
+        for (const to of await activeAdminEmails(db, ws.id)) {
+          await enqueueEmail(db, {
+            workspaceId: ws.id,
+            to,
+            kind: `invoice.recurring-unsent:${t.id}:${due.periodKey}`,
+            ...content,
           });
         }
-        await recomputeTotals(tx, id);
-        return id;
-      });
-    } catch (error) {
-      // Another run of the same day got there first.
-      if (isUniqueViolation(error, "invoice_recurring_period_uq")) continue;
-      throw error;
-    }
-    created++;
-    if (t.mode !== "SEND") continue;
-    try {
-      await sendInvoice(db, viewer, invoiceId, { email: true, now });
-      sent++;
-    } catch (error) {
-      if (!(error instanceof CatalogError)) throw error;
-      const [row] = await db
-        .select({ number: invoice.number, clientName: client.name })
-        .from(invoice)
-        .innerJoin(client, eq(client.id, invoice.clientId))
-        .where(eq(invoice.id, invoiceId));
-      const reason = error.message.endsWith(".") ? error.message : `${error.message}.`;
-      const content = recurringUnsentEmail({
-        appUrl: env().APP_URL,
-        slug: ws.slug,
-        invoiceId,
-        number: row?.number ?? "",
-        templateName: t.name,
-        clientName: row?.clientName ?? "",
-        reason: reason.charAt(0).toLowerCase() + reason.slice(1),
-      });
-      for (const to of await activeAdminEmails(db, ws.id)) {
-        await enqueueEmail(db, {
-          workspaceId: ws.id,
-          to,
-          kind: `invoice.recurring-unsent:${t.id}:${due.periodKey}`,
-          ...content,
-        });
       }
     }
   }

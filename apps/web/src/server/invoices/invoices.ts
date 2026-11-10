@@ -445,7 +445,7 @@ export async function sendInvoice(
     const to = c?.email.trim() ?? "";
     if (opts.email && !to) throw new CatalogError("INVALID", "This client has no email address.");
 
-    const pdf = await buildInvoicePdf(tx, viewer, id, now);
+    const pdf = await buildInvoicePdf(tx, viewer, id, now, { frozen: true });
     const key = `invoices/${ws.id}/${id}.pdf`;
     await uploadExport({ key, body: pdf, contentType: "application/pdf" });
     const token = newInvoiceToken();

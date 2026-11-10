@@ -81,6 +81,16 @@ describe("the invoice template", () => {
     }
   });
 
+  it("the frozen PDF carries no status; the draft preview says Draft", async () => {
+    const invoice = await draft();
+    const settings = await getInvoiceSettings(db, owner);
+    const frozen = renderInvoiceHtml({ invoice, settings, workspaceName: "W", frozen: true });
+    expect(frozen).not.toContain("Status");
+    expect(frozen).not.toContain("Draft");
+    const preview = renderInvoiceHtml({ invoice, settings, workspaceName: "W" });
+    expect(preview).toContain("Draft");
+  });
+
   it.skipIf(!localChromePath())("prints a PDF", async () => {
     const invoice = await draft();
     const bytes = await buildInvoicePdf(db, owner, invoice.id);

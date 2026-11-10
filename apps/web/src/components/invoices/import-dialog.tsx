@@ -144,6 +144,9 @@ export function ImportDialog({
                   preview.skipped.otherCurrency + preview.skipped.unrated > 0
                     ? `skipped: ${preview.skipped.otherCurrency} in another currency, ${preview.skipped.unrated} unrated`
                     : null,
+                  preview.skipped.expensesOtherCurrency > 0
+                    ? `${preview.skipped.expensesOtherCurrency} expense${preview.skipped.expensesOtherCurrency === 1 ? "" : "s"} not importable: expenses are in the workspace currency, this invoice is in ${invoice.currency}`
+                    : null,
                 ]
                   .filter(Boolean)
                   .join("; ")}

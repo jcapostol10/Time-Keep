@@ -102,7 +102,7 @@ describe("importIntoInvoice", () => {
       amountMinor: 150_000,
       expenses: 0,
       expenseMinor: 0,
-      skipped: { otherCurrency: 1, unrated: 1 },
+      skipped: { otherCurrency: 1, unrated: 1, expensesOtherCurrency: 0 },
     });
     const dto = await importIntoInvoice(db, owner, inv.id, imp(), NOW);
     expect(dto.lines).toEqual([
@@ -148,7 +148,7 @@ describe("importIntoInvoice", () => {
     expect(await previewImport(db, owner, usd.id, imp())).toMatchObject({
       entries: 1,
       amountMinor: 4000,
-      skipped: { otherCurrency: 0, unrated: 0 },
+      skipped: { otherCurrency: 0, unrated: 0, expensesOtherCurrency: 0 },
     });
   });
 
@@ -318,6 +318,8 @@ describe("importIntoInvoice", () => {
     const abroad = await add("bob", f.portalId, 900);
 
     const usd = await create(f.globexId);
+    // Billable expenses on a client billed in another currency are counted, never imported.
+    expect((await previewImport(db, owner, usd.id, imp())).skipped.expensesOtherCurrency).toBe(1);
     const usdDto = await importIntoInvoice(db, owner, usd.id, imp(), NOW);
     expect(usdDto.lines.map((l) => l.kind)).toEqual(["TIME"]);
 

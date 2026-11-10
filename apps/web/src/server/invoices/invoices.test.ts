@@ -132,6 +132,13 @@ describe("createInvoice", () => {
     }
   });
 
+  it("a sequence wound back skips the numbers already used", async () => {
+    expect((await create(f.acmeId)).number).toBe("INV-0001");
+    await updateInvoiceSettings(db, owner, invoiceSettingsSchema.parse({ nextNumber: 1 }));
+    expect((await create(f.acmeId)).number).toBe("INV-0002");
+    expect((await getInvoiceSettings(db, owner)).nextNumberPreview).toBe("INV-0003");
+  });
+
   it("two concurrent creates take two numbers", async () => {
     const [a, b] = await Promise.all([
       createInvoice(h.db, owner, { clientId: f.acmeId, issueDate: "2026-10-28" }, NOW),

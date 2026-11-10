@@ -65,7 +65,7 @@ interface ExpenseRow {
 interface Selection {
   entries: InvoiceableEntry[];
   expenses: ExpenseRow[];
-  skipped: { otherCurrency: number; unrated: number };
+  skipped: { otherCurrency: number; unrated: number; expensesOtherCurrency: number };
 }
 
 interface LineDraft {
@@ -176,12 +176,33 @@ async function select(
           )
           .orderBy(asc(expense.date), asc(expense.createdAt), asc(expense.id))
       : [];
+  // Decision 23: billable expenses of a client billed in another currency are listed, not imported.
+  const [otherExpenses] =
+    input.expenses && inv.currency !== ws.currency
+      ? await db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(expense)
+          .innerJoin(project, eq(project.id, expense.projectId))
+          .where(
+            and(
+              eq(expense.workspaceId, ws.id),
+              isNull(expense.deletedAt),
+              eq(expense.billable, true),
+              isNull(expense.invoiceId),
+              eq(project.clientId, inv.clientId),
+              projectFilter,
+              gte(expense.date, input.from),
+              lte(expense.date, input.to),
+            ),
+          )
+      : [];
   return {
     entries,
     expenses,
     skipped: {
       otherCurrency: Number(skipped?.otherCurrency ?? 0),
       unrated: Number(skipped?.unrated ?? 0),
+      expensesOtherCurrency: Number(otherExpenses?.n ?? 0),
     },
   };
 }
@@ -313,6 +334,45 @@ export async function previewImport(
 }
 
 /**
+ * Locks every row the import might take, in id order, before the engine reads
+ * them: a write the guard already let through (it holds the row) finishes
+ * first, so the engine bills its new amount; a write that comes later waits
+ * here and then meets the invoice in the guard.
+ */
+async function lockCandidates(
+  tx: Executor,
+  ws: InvoiceWorkspace,
+  clientId: string,
+  input: InvoiceImportInput,
+): Promise<void> {
+  const midnight = (key: string) =>
+    zonedDateTimeToInstant({ date: key, hours: 0, minutes: 0 }, ws.timezone);
+  const projects =
+    input.projectIds.length > 0
+      ? sql`and p.id = any(${sql.param(input.projectIds)}::text[])`
+      : sql``;
+  await tx.execute(sql`
+    select te.id from time_entry te
+    join project p on p.id = te.project_id
+    where te.workspace_id = ${ws.id} and p.client_id = ${clientId} ${projects}
+      and te.deleted_at is null and te."end" is not null and te.billable and te.invoice_id is null
+      and te.start >= ${midnight(input.from).toISOString()}::timestamptz
+      and te.start < ${midnight(addDaysToKey(input.to, 1)).toISOString()}::timestamptz
+    order by te.id
+    for update of te`);
+  if (input.expenses) {
+    await tx.execute(sql`
+      select x.id from expense x
+      join project p on p.id = x.project_id
+      where x.workspace_id = ${ws.id} and p.client_id = ${clientId} ${projects}
+        and x.deleted_at is null and x.billable and x.invoice_id is null
+        and x.date >= ${input.from}::date and x.date <= ${input.to}::date
+      order by x.id
+      for update of x`);
+  }
+}
+
+/**
  * The import inside the caller's transaction (the action and the recurring
  * job): the client's lock, the selection, the lines, and the marks, whose
  * counts must equal the selection or the transaction fails.
@@ -328,6 +388,7 @@ export async function importInto(
   if (inv.status !== "DRAFT") throw new CatalogError("INVALID", DRAFT_ONLY);
   await assertClientProjects(tx, ws.id, inv.clientId, input.projectIds);
   await tx.execute(clientLock(inv.clientId));
+  await lockCandidates(tx, ws, inv.clientId, input);
   const sel = await select(tx, viewer, ws, inv, input);
   const lines = [
     ...groupEntries(sel.entries, input.groupBy, ws.timezone).map((l) => ({
