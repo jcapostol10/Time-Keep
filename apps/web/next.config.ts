@@ -29,6 +29,11 @@ const nextConfig: NextConfig = {
     "/api/w/*/reports/export": [chromiumBin],
     "/w/*/reports/exports": [chromiumBin],
     "/share/*/export": [chromiumBin],
+    // Invoices (Phase 6d): the draft preview, the send action, and the recurring job's auto-send.
+    "/api/w/*/invoices/*/pdf": [chromiumBin],
+    "/w/*/invoices/*": [chromiumBin],
+    "/api/cron/daily": [chromiumBin],
+    "/api/test/run-daily": [chromiumBin],
   },
   images: {
     remotePatterns: [
