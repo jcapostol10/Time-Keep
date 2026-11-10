@@ -1189,16 +1189,14 @@ async function seedInvoices(
       sentAt: r.status === "SENT" ? midnight(r.issueDate) : null,
       createdBy: owner,
     });
-    await db
-      .insert(invoiceItem)
-      .values(
-        r.lines.map((l, position) => ({
-          id: randomUUID(),
-          invoiceId: id,
-          position: position + 1,
-          ...l,
-        })),
-      );
+    await db.insert(invoiceItem).values(
+      r.lines.map((l, position) => ({
+        id: randomUUID(),
+        invoiceId: id,
+        position: position + 1,
+        ...l,
+      })),
+    );
     if (r.status === "SENT") {
       if (timeLine.entryIds.length > 0 && r.lines[0] === timeLine) {
         await db
