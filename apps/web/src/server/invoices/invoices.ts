@@ -233,6 +233,28 @@ export async function updateInvoice(
   return getInvoice(db, viewer, id, now);
 }
 
+/** Manual lines after the last one, each quantity × price rounded alone; the caller recomputes. */
+export async function insertManualLines(
+  tx: Executor,
+  invoiceId: string,
+  lines: InvoiceLineInput[],
+): Promise<void> {
+  if (lines.length === 0) return;
+  let position = await nextPosition(tx, invoiceId);
+  await tx.insert(invoiceItem).values(
+    lines.map((line) => ({
+      id: randomUUID(),
+      invoiceId,
+      position: position++,
+      kind: "MANUAL" as const,
+      description: line.description,
+      quantityCenti: line.quantityCenti,
+      unitPriceMinor: line.unitPriceMinor,
+      amountMinor: lineAmount(line.quantityCenti, line.unitPriceMinor),
+    })),
+  );
+}
+
 export async function addManualLine(
   db: Database,
   viewer: Viewer,
@@ -243,16 +265,7 @@ export async function addManualLine(
   requireManage(viewer);
   await db.transaction(async (tx) => {
     await lockDraft(tx, viewer.workspaceId, id);
-    await tx.insert(invoiceItem).values({
-      id: randomUUID(),
-      invoiceId: id,
-      position: await nextPosition(tx, id),
-      kind: "MANUAL",
-      description: line.description,
-      quantityCenti: line.quantityCenti,
-      unitPriceMinor: line.unitPriceMinor,
-      amountMinor: lineAmount(line.quantityCenti, line.unitPriceMinor),
-    });
+    await insertManualLines(tx, id, [line]);
     await recomputeTotals(tx, id);
   });
   return getInvoice(db, viewer, id, now);

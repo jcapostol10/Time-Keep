@@ -150,6 +150,11 @@ describe("budget alerts", () => {
     await setProjectEstimate(db, await cast.viewer("olga"), siteId, time(1));
     await work(siteId, "2026-11-06T02:00:00Z", 1);
     // One hour of one: 50, 80 and 100 crossed at once, to Olga and Ann.
-    expect(await run()).toEqual({ reminders: 0, targets: 0, budgets: 6 });
+    expect(await run()).toEqual({
+      reminders: 0,
+      targets: 0,
+      budgets: 6,
+      invoices: { created: 0, sent: 0, overdue: 0 },
+    });
   });
 });

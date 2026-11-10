@@ -16,12 +16,14 @@ import {
   eq,
   gte,
   inArray,
+  invoice,
   isNotNull,
   isNull,
   lt,
   membership,
   or,
   project,
+  recurringInvoice,
   sql,
   targetRule,
   timeEntry,
@@ -36,6 +38,8 @@ import { e2eOnlyWorkspaceIds } from "@timekeep/db/e2e-tenant";
 import { unsubmittedReminderEmail } from "./approval-emails";
 import { evaluateBudgets } from "./budget-alerts";
 import { env } from "./env";
+import { sendOverdueEmails } from "./invoices/overdue";
+import { runRecurringInvoices } from "./invoices/recurring";
 import { enqueueEmail } from "./outbox";
 import { evaluateTargets } from "./targets";
 
@@ -50,10 +54,18 @@ import { evaluateTargets } from "./targets";
  * row's kind names its period, or its rule, person and day, or its project,
  * threshold and period.
  */
+export interface DailyJobsResult {
+  reminders: number;
+  targets: number;
+  budgets: number;
+  /** Phase 6d: recurring invoices created and sent, overdue invoices announced. */
+  invoices: { created: number; sent: number; overdue: number };
+}
+
 export async function runDailyJobs(
   db: Database,
   opts: { now?: Date; workspaceIds?: string[] } = {},
-): Promise<{ reminders: number; targets: number; budgets: number }> {
+): Promise<DailyJobsResult> {
   const now = opts.now ?? new Date();
   const workspaces = await db
     .select({
@@ -78,6 +90,9 @@ export async function runDailyJobs(
           eq(workspaceSettings.approvalEnabled, true),
           sql`exists (select 1 from ${targetRule} where ${targetRule.workspaceId} = ${workspace.id} and ${targetRule.active})`,
           sql`exists (select 1 from ${project} where ${project.workspaceId} = ${workspace.id} and ${project.estimateKind} <> 'NONE' and ${project.estimateAlerts} and not ${project.archived} and not ${project.isTemplate})`,
+          // Phase 6d: a recurring template to run, or a sent invoice that may fall overdue.
+          sql`exists (select 1 from ${recurringInvoice} where ${recurringInvoice.workspaceId} = ${workspace.id} and ${recurringInvoice.active})`,
+          sql`exists (select 1 from ${invoice} where ${invoice.workspaceId} = ${workspace.id} and ${invoice.status} = 'SENT')`,
         ),
         opts.workspaceIds ? inArray(workspace.id, opts.workspaceIds) : undefined,
       ),
@@ -86,6 +101,7 @@ export async function runDailyJobs(
   let reminders = 0;
   let targets = 0;
   let budgets = 0;
+  const invoices = { created: 0, sent: 0, overdue: 0 };
   for (const ws of workspaces) {
     const { enabled, period: rule } = approvalRulesOf(ws, ws);
     const today = localDateKey(now, rule.timezone);
@@ -110,8 +126,19 @@ export async function runDailyJobs(
       },
       now,
     );
+    const zone = {
+      id: ws.id,
+      slug: ws.slug,
+      name: ws.name,
+      timezone: rule.timezone,
+      currency: ws.currency,
+    };
+    const recurring = await runRecurringInvoices(db, zone, now);
+    invoices.created += recurring.created;
+    invoices.sent += recurring.sent;
+    invoices.overdue += await sendOverdueEmails(db, zone, now);
   }
-  return { reminders, targets, budgets };
+  return { reminders, targets, budgets, invoices };
 }
 
 async function remindUnsubmitted(

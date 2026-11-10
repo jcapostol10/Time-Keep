@@ -1,4 +1,15 @@
-import { emailOutbox, eq, user, userSettings, workspaceSettings } from "@timekeep/db";
+import { randomUUID } from "node:crypto";
+
+import {
+  emailOutbox,
+  eq,
+  invoice,
+  like,
+  payment,
+  user,
+  userSettings,
+  workspaceSettings,
+} from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -10,6 +21,7 @@ import {
 } from "../../test/db";
 import { submitPeriod } from "./approvals";
 import { loadViewer } from "./authz";
+import { createClient } from "./catalog/clients";
 import { e2eWorkspaceId, runDailyJobs } from "./daily-jobs";
 import { createManualEntry } from "./time-entries";
 
@@ -96,6 +108,7 @@ describe("runDailyJobs", () => {
       reminders: 1,
       targets: 0,
       budgets: 0,
+      invoices: { created: 0, sent: 0, overdue: 0 },
     });
     const [reminder] = await remindersTo(ids.tom!);
     expect(reminder).toMatchObject({
@@ -115,6 +128,7 @@ describe("runDailyJobs", () => {
       reminders: 0,
       targets: 0,
       budgets: 0,
+      invoices: { created: 0, sent: 0, overdue: 0 },
     });
     expect(await remindersTo(ids.tom!)).toHaveLength(1);
   });
@@ -124,12 +138,14 @@ describe("runDailyJobs", () => {
       reminders: 0,
       targets: 0,
       budgets: 0,
+      invoices: { created: 0, sent: 0, overdue: 0 },
     });
     await settings(manila, { approvalEnabled: false });
     expect(await runDailyJobs(db, { now: MONDAY_MANILA })).toEqual({
       reminders: 0,
       targets: 0,
       budgets: 0,
+      invoices: { created: 0, sent: 0, overdue: 0 },
     });
   });
 
@@ -138,12 +154,82 @@ describe("runDailyJobs", () => {
       reminders: 0,
       targets: 0,
       budgets: 0,
+      invoices: { created: 0, sent: 0, overdue: 0 },
     });
     expect(await runDailyJobs(db, { now: MONDAY_MANILA, workspaceIds: [manila] })).toEqual({
       reminders: 1,
       targets: 0,
       budgets: 0,
+      invoices: { created: 0, sent: 0, overdue: 0 },
     });
+  });
+});
+
+describe("overdue invoices (Phase 6d)", () => {
+  const overdueRows = () =>
+    db.select().from(emailOutbox).where(like(emailOutbox.kind, "invoice.overdue:%"));
+
+  /** A sent invoice of `total` in `workspaceId`, due 24 Oct (yesterday in Manila on MONDAY_MANILA). */
+  async function sentInvoice(workspaceId: string, total: number, dueDate = "2026-10-24") {
+    const id = randomUUID();
+    const c = await createClient(db, workspaceId, {
+      name: `Client ${id.slice(0, 6)}`,
+      address: "",
+      email: "",
+      notes: "",
+      currency: null,
+    });
+    await db.insert(invoice).values({
+      id,
+      workspaceId,
+      clientId: c.id,
+      number: `INV-${id.slice(0, 6)}`,
+      issueDate: "2026-10-19",
+      dueDate,
+      currency: "USD",
+      status: "SENT",
+      subtotalMinor: total,
+      totalMinor: total,
+    });
+    return id;
+  }
+
+  it("the overdue email goes once per invoice, to the owners and admins", async () => {
+    const due = await sentInvoice(manila, 10000);
+    const paid = await sentInvoice(manila, 10000);
+    await db
+      .insert(payment)
+      .values({ id: randomUUID(), invoiceId: paid, date: "2026-10-20", amountMinor: 10000 });
+    await sentInvoice(manila, 10000, "2026-10-26"); // not due yet
+    expect(await runDailyJobs(db, { now: MONDAY_MANILA, workspaceIds: [manila] })).toMatchObject({
+      invoices: { created: 0, sent: 0, overdue: 1 },
+    });
+    const owner = await db.query.user.findFirst({ where: (t, { eq: e }) => e(t.id, ids.owner!) });
+    const rows = await overdueRows();
+    expect(rows.map((r) => [r.kind, r.toAddress, r.workspaceId])).toEqual([
+      [`invoice.overdue:${due}`, owner!.email, manila],
+    ]);
+    expect(rows[0]?.subject).toContain(`INV-${due.slice(0, 6)}`);
+    expect(
+      await runDailyJobs(db, {
+        now: new Date(MONDAY_MANILA.getTime() + 3_600_000),
+        workspaceIds: [manila],
+      }),
+    ).toMatchObject({ invoices: { overdue: 0 } });
+    expect(await overdueRows()).toHaveLength(1);
+  });
+
+  it("a workspace with nothing but a sent invoice is still visited", async () => {
+    const quiet = (await createTestWorkspace(db, "Quiet", ids.owner!)).id;
+    await settings(quiet, { timezone: "Asia/Manila", approvalEnabled: false });
+    const due = await sentInvoice(quiet, 5000);
+    expect(await runDailyJobs(db, { now: MONDAY_MANILA })).toEqual({
+      reminders: 1,
+      targets: 0,
+      budgets: 0,
+      invoices: { created: 0, sent: 0, overdue: 1 },
+    });
+    expect((await overdueRows()).map((r) => r.kind)).toEqual([`invoice.overdue:${due}`]);
   });
 });
 

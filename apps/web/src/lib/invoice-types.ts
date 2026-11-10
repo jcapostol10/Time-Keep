@@ -4,7 +4,20 @@ import type {
   InvoiceSettingsInput,
   InvoiceStatus,
   MoneyAmount,
+  RecurringInvoiceInput,
 } from "@timekeep/core";
+
+/** A recurring template (decision 27) as the Recurring tab lists it. */
+export interface RecurringInvoiceDTO extends RecurringInvoiceInput {
+  id: string;
+  clientName: string;
+  /** The latest invoice it made. */
+  lastInvoice: { id: string; number: string; periodKey: string } | null;
+  /** The next day the daily job will run it, from today; null when inactive or ended. */
+  nextRunDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /** What crosses the server boundary for invoices (Phase 6d): JSON with ISO strings and date keys. */
 
