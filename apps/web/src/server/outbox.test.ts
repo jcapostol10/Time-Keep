@@ -70,6 +70,33 @@ describe("enqueueEmail", () => {
 });
 
 describe("drainOutbox", () => {
+  it("loads an attachment from the bucket and hands it to the sender (Phase 6d)", async () => {
+    await enqueueEmail(db, {
+      ...mail("ann@test.local"),
+      attachment: { key: "invoices/ws/inv.pdf", name: "INV-0001.pdf" },
+    });
+    const [row] = await rows();
+    expect(row).toMatchObject({
+      attachmentKey: "invoices/ws/inv.pdf",
+      attachmentName: "INV-0001.pdf",
+    });
+    const bytes = new Uint8Array([37, 80, 68, 70]);
+    const loaded: string[] = [];
+    const { sent, send } = recorder();
+    const load = async (key: string) => {
+      loaded.push(key);
+      return bytes;
+    };
+    expect(await drainOutbox(db, { send, load, now: minutes(1) })).toEqual({ sent: 1, failed: 0 });
+    expect(loaded).toEqual(["invoices/ws/inv.pdf"]);
+    expect(sent[0]?.attachments).toEqual([{ filename: "INV-0001.pdf", content: bytes }]);
+    // A message without one carries no attachments.
+    await enqueueEmail(db, mail("bob@test.local"));
+    await drainOutbox(db, { send, load, now: minutes(2) });
+    expect(sent[1]?.attachments).toBeUndefined();
+    expect(loaded).toHaveLength(1);
+  });
+
   it("sends once and marks the row sent", async () => {
     await enqueueEmail(db, mail("ann@test.local"));
     const { sent, send } = recorder();

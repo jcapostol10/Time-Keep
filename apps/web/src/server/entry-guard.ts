@@ -17,9 +17,12 @@ import {
   approvalRequest,
   type DbExecutor,
   eq,
+  expense,
   gte,
   inArray,
+  invoice,
   lte,
+  timeEntry,
   workspaceSettings,
 } from "@timekeep/db";
 
@@ -206,11 +209,67 @@ export interface KeyedChange {
   changes?: Record<string, { from: unknown; to: unknown }>;
 }
 
+/** Phase 6d decision 23: what an invoiced entry or expense answers to every write. */
+export function INVOICED_MESSAGE(kind: "entry" | "expense", number: string): string {
+  return `This ${kind} is on invoice ${number}.`;
+}
+
+/** The lock line of an invoiced row in the editors' reads. */
+export function invoicedLockedReason(number: string): string {
+  return `On invoice ${number}`;
+}
+
 /**
- * The guard over date keys: refuses the lock and the submitted periods for
- * members and managers; asks owners and admins for a note and logs it.
- * Callers run inside a transaction and take the person's lock here, so this
- * write lands before a submission's totals or sees the request.
+ * Time and expenses on an invoice are read-only for everyone, a note or not
+ * (decision 23): the invoice service releases them by removing the line,
+ * deleting the draft or voiding the invoice.
+ */
+async function assertNotInvoiced(
+  db: Pick<DbExecutor, "select">,
+  items: KeyedChange[],
+): Promise<void> {
+  // The rows are locked for the rest of the caller's transaction, so an import cannot mark
+  // them between this check and the write, and a write waiting here sees an import's mark.
+  const numberOf = async (invoiceId: string) =>
+    (await db.select({ number: invoice.number }).from(invoice).where(eq(invoice.id, invoiceId)))[0]
+      ?.number ?? "";
+  const entryIds = [...new Set(items.flatMap((i) => (i.entryId ? [i.entryId] : [])))].sort();
+  if (entryIds.length > 0) {
+    const rows = await db
+      .select({ invoiceId: timeEntry.invoiceId })
+      .from(timeEntry)
+      .where(inArray(timeEntry.id, entryIds))
+      .orderBy(timeEntry.id)
+      .for("update");
+    const hit = rows.find((r) => r.invoiceId !== null);
+    if (hit?.invoiceId) {
+      throw new TimeEntryError("INVALID", INVOICED_MESSAGE("entry", await numberOf(hit.invoiceId)));
+    }
+  }
+  const expenseIds = [...new Set(items.flatMap((i) => (i.expenseId ? [i.expenseId] : [])))].sort();
+  if (expenseIds.length > 0) {
+    const rows = await db
+      .select({ invoiceId: expense.invoiceId })
+      .from(expense)
+      .where(inArray(expense.id, expenseIds))
+      .orderBy(expense.id)
+      .for("update");
+    const hit = rows.find((r) => r.invoiceId !== null);
+    if (hit?.invoiceId) {
+      throw new TimeEntryError(
+        "INVALID",
+        INVOICED_MESSAGE("expense", await numberOf(hit.invoiceId)),
+      );
+    }
+  }
+}
+
+/**
+ * The guard over date keys: refuses anything on an invoice for everyone, then
+ * the lock and the submitted periods for members and managers; asks owners
+ * and admins for a note there and logs it. Callers run inside a transaction
+ * and take the person's lock here, so this write lands before a submission's
+ * totals or sees the request.
  */
 export async function assertKeysWritable(
   db: Pick<DbExecutor, "select" | "insert" | "execute">,
@@ -220,6 +279,9 @@ export async function assertKeysWritable(
 ): Promise<void> {
   const keys = items.flatMap((i) => i.keys);
   if (keys.length === 0) return;
+  // The person's lock first, then the rows (as startTimer and the editors take them).
+  await db.execute(timerLock(scope.workspaceId, scope.userId));
+  await assertNotInvoiced(db, items);
   const now = opts.now ?? new Date();
   const rules = opts.rules ?? (await writeRulesOf(db, scope.workspaceId));
   const actor = scope.actedBy ?? scope.actor;
@@ -234,7 +296,6 @@ export async function assertKeysWritable(
     }
   }
 
-  await db.execute(timerLock(scope.workspaceId, scope.userId));
   const requests = await coveringRequests(db, scope, keys);
   if (requests.length === 0) return;
   const covering = (key: string) =>

@@ -2,12 +2,14 @@ import "server-only";
 
 import {
   addDaysInZone,
+  addDaysToKey,
   addTotals,
   bucketFor,
   bucketKeyOfDay,
   bucketKeys,
   buildWeekly,
   can,
+  DEFAULT_REPORT_QUERY,
   EMPTY_TOTALS,
   type GroupKey,
   groupRows,
@@ -25,6 +27,7 @@ import {
   roundingRuleOf,
   type ViewerPrefs,
   weekBounds,
+  zonedDateTimeToInstant,
 } from "@timekeep/core";
 import {
   and,
@@ -37,6 +40,7 @@ import {
   gte,
   ilike,
   inArray,
+  invoice,
   kioskPhoto,
   isNotNull,
   isNull,
@@ -192,6 +196,11 @@ function baseConditions(
   if (eff.taskIds.length > 0) conds.push(idFilter(timeEntry.taskId, eff.taskIds));
   if (eff.tagIds.length > 0) conds.push(tagFilter(eff.tagIds, eff.tagMode));
   if (eff.billable !== "all") conds.push(eq(timeEntry.billable, eff.billable === "yes"));
+  if (eff.invoiced !== "all") {
+    conds.push(
+      eff.invoiced === "yes" ? isNotNull(timeEntry.invoiceId) : isNull(timeEntry.invoiceId),
+    );
+  }
   if (eff.type !== "all") conds.push(eq(timeEntry.type, eff.type));
   const audit = auditConditions(eff);
   if (audit) conds.push(audit);
@@ -697,6 +706,90 @@ export async function profitReport(
   };
 }
 
+/** One entry an invoice may take (Phase 6d): rounded by the workspace rule, like the Summary. */
+export interface InvoiceableEntry {
+  id: string;
+  projectId: string;
+  projectName: string;
+  taskId: string | null;
+  taskName: string | null;
+  userId: string;
+  userName: string;
+  description: string;
+  /** ISO instant. */
+  start: string;
+  /** Seconds after the workspace rounding rule. */
+  seconds: number;
+  /** The entry's amount after the rule, in `currency`. */
+  amountMinor: number;
+  /** The rate it was saved with (minor units per hour). */
+  rateMinor: number | null;
+}
+
+/**
+ * What "Import time" selects (decision 22 and 23): the engine's conditions
+ * over the client's projects for `[from, to]` (local days of `prefs`), billable,
+ * rated in the invoice's currency, on no invoice, with the workspace rounding
+ * rule applied to each entry, so the invoice equals the Summary by construction.
+ */
+export async function invoiceableEntries(
+  db: Executor,
+  viewer: Viewer,
+  args: { clientId: string; currency: string; from: string; to: string; projectIds: string[] },
+  prefs: Pick<ViewerPrefs, "timezone" | "weekStart">,
+): Promise<InvoiceableEntry[]> {
+  assertCan(viewer.actor, "invoice.manage", { kind: "none" });
+  const midnight = (key: string) =>
+    zonedDateTimeToInstant({ date: key, hours: 0, minutes: 0 }, prefs.timezone);
+  const range = { from: midnight(args.from), to: midnight(addDaysToKey(args.to, 1)) };
+  const query: ReportQuery = {
+    ...DEFAULT_REPORT_QUERY,
+    preset: "custom",
+    from: range.from.toISOString(),
+    to: range.to.toISOString(),
+    clientIds: [args.clientId],
+    projectIds: args.projectIds,
+    billable: "yes",
+    invoiced: "no",
+  };
+  const settings = await reportSettings(db, viewer.workspaceId);
+  const rule = ruleFor(query, settings);
+  const rows = await db
+    .select({
+      id: timeEntry.id,
+      projectId: project.id,
+      projectName: project.name,
+      taskId: timeEntry.taskId,
+      taskName: task.name,
+      userId: timeEntry.userId,
+      userName: user.name,
+      description: timeEntry.description,
+      start: timeEntry.start,
+      seconds: sql`${rule ? roundedSecondsSql(rule) : timeEntry.durationSeconds}`.mapWith(Number),
+      amountMinor: sql`${rule ? roundedAmountSql(rule) : timeEntry.amountMinor}`.mapWith(Number),
+      rateMinor: timeEntry.billableRateMinor,
+    })
+    .from(timeEntry)
+    .innerJoin(project, eq(project.id, timeEntry.projectId))
+    .leftJoin(task, eq(task.id, timeEntry.taskId))
+    .innerJoin(user, eq(user.id, timeEntry.userId))
+    .where(
+      and(
+        ...baseConditions(viewer, query, range),
+        eq(timeEntry.type, "work"),
+        isNotNull(timeEntry.amountMinor),
+        eq(timeEntry.rateCurrency, args.currency),
+      ),
+    )
+    .orderBy(asc(timeEntry.start), asc(timeEntry.id));
+  return rows.map((r) => ({
+    ...r,
+    taskName: r.taskName ?? null,
+    start: r.start.toISOString(),
+    rateMinor: r.rateMinor ?? null,
+  }));
+}
+
 export async function detailedReport(
   db: Executor,
   viewer: Viewer,
@@ -754,11 +847,13 @@ export async function detailedReport(
       costMinor: sql`${rule ? roundedCostSql(rule) : timeEntry.costAmountMinor}`.mapWith(
         nullableNumber,
       ),
+      invoiceNumber: invoice.number,
     })
     .from(timeEntry)
     .leftJoin(project, eq(project.id, timeEntry.projectId))
     .leftJoin(client, eq(client.id, project.clientId))
     .leftJoin(task, eq(task.id, timeEntry.taskId))
+    .leftJoin(invoice, eq(invoice.id, timeEntry.invoiceId))
     .innerJoin(user, eq(user.id, timeEntry.userId))
     .leftJoin(
       membership,
@@ -799,8 +894,10 @@ export async function detailedReport(
   }
   const entries: DetailedEntryDTO[] = pageRows.map((r) => {
     const tags = tagsByEntry.get(r.id) ?? [];
+    // Invoiced time is read-only for everyone (Phase 6d, decision 23).
     const editable =
       r.ownerStatus === "ACTIVE" &&
+      r.invoiceNumber === null &&
       can(viewer.actor, "entry.write", { kind: "entry", userId: r.userId, projectId: r.projectId });
     // The currency its amount was rated in; unrated, its project's client's, else the workspace's.
     const currency = money ? (r.rateCurrency ?? r.clientCurrency ?? money.currency) : null;
@@ -842,6 +939,7 @@ export async function detailedReport(
           projectId: r.projectId,
         }),
       photo: withPhoto.has(r.id),
+      invoiceNumber: r.invoiceNumber ?? null,
     };
   });
   const last = pageRows[pageRows.length - 1];

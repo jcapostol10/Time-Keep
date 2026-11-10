@@ -59,6 +59,8 @@ export interface OutgoingMessage extends EmailContent {
   subject: string;
   /** What it is, e.g. "approval.submitted"; a reminder carries its period. */
   kind: string;
+  /** A file in the private export bucket to attach (Phase 6d: the invoice PDF), by key and name. */
+  attachment?: { key: string; name: string };
 }
 
 export async function enqueueEmail(
@@ -76,6 +78,8 @@ export async function enqueueEmail(
     html,
     text,
     kind: msg.kind,
+    attachmentKey: msg.attachment?.key ?? null,
+    attachmentName: msg.attachment?.name ?? null,
     // Mail this environment must not send stays as a record, never sent by anyone.
     status: isUndeliverable(msg.to) || !belongs(audience, msg.to) ? "SKIPPED" : "PENDING",
   });
@@ -87,6 +91,8 @@ export async function drainOutbox(
     limit?: number;
     now?: Date;
     send?: (msg: RenderedEmail) => Promise<unknown>;
+    /** Reads an attachment's bytes by key; the private export bucket by default. */
+    load?: (key: string) => Promise<Uint8Array>;
     audience?: OutboxAudience;
   } = {},
 ): Promise<{ sent: number; failed: number }> {
@@ -96,6 +102,7 @@ export async function drainOutbox(
   const later = (minutes: number) => sql`${now} + make_interval(mins => ${minutes})`;
   const audience = opts.audience ?? outboxAudience(env());
   const send = opts.send ?? sendRenderedEmail;
+  const load = opts.load ?? ((key: string) => import("./storage").then((m) => m.getExport(key)));
   // One statement claims the due rows: SKIP LOCKED lets a concurrent drain take
   // others, and the lease moves them out of "due" so nobody claims them again
   // until it ends (a crashed sender's rows come back then).
@@ -120,7 +127,21 @@ export async function drainOutbox(
   let failed = 0;
   for (const row of claimed) {
     try {
-      await send({ to: row.toAddress, subject: row.subject, html: row.html, text: row.text });
+      const message: RenderedEmail = {
+        to: row.toAddress,
+        subject: row.subject,
+        html: row.html,
+        text: row.text,
+      };
+      if (row.attachmentKey) {
+        message.attachments = [
+          {
+            filename: row.attachmentName ?? "attachment",
+            content: await load(row.attachmentKey),
+          },
+        ];
+      }
+      await send(message);
       await db
         .update(emailOutbox)
         .set({ status: "SENT", sentAt: now, lastError: null })

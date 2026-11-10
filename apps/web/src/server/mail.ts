@@ -89,6 +89,8 @@ export interface RenderedEmail {
   subject: string;
   html: string;
   text: string;
+  /** Files to attach (Phase 6d: the invoice PDF); the capture path records none. */
+  attachments?: { filename: string; content: Uint8Array }[];
 }
 
 /** Sends, or on a preview captures or drops the message; says which. */
@@ -121,6 +123,14 @@ export async function sendRenderedEmail(
     subject: args.subject,
     html,
     text,
+    ...(args.attachments
+      ? {
+          attachments: args.attachments.map((a) => ({
+            filename: a.filename,
+            content: Buffer.from(a.content),
+          })),
+        }
+      : {}),
   });
   return "sent";
 }

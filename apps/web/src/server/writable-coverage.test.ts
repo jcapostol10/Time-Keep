@@ -18,6 +18,10 @@ const EXEMPT: Record<string, string> = {
   stopTimer: "a stop is always allowed (decision 6), including an administrative one",
   reassignProjectEntries: "deleteProject refuses while the project has submitted time",
   softDeleteProjectEntries: "deleteProject refuses while the project has submitted time",
+  markInvoiced:
+    "the invoice service marks and releases; invoiced entries are read-only through the guard",
+  releaseInvoiced:
+    "the invoice service marks and releases; invoiced entries are read-only through the guard",
 };
 
 const WRITES = /\.(insert|update)\(timeEntry\)/;

@@ -59,7 +59,7 @@ import type {
 } from "@/lib/tracker-types";
 
 import { WorkspaceAccessError } from "./access-error";
-import { assertWritable, lockedReasons } from "./entry-guard";
+import { assertWritable, invoicedLockedReason, lockedReasons } from "./entry-guard";
 import { timerLock } from "./person-lock";
 import { TimeEntryError } from "./entry-error";
 import { CatalogError } from "./catalog/errors";
@@ -140,12 +140,14 @@ type EntryRow = TimeEntry & {
   project: (Project & { client: { name: string } | null }) | null;
   task: { id: string; name: string } | null;
   tags: { tag: Tag }[];
+  invoice: { number: string } | null;
 };
 
 const withRelations = {
   project: { with: { client: { columns: { name: true } } } },
   task: { columns: { id: true, name: true } },
   tags: { with: { tag: true } },
+  invoice: { columns: { number: true } },
 } as const;
 
 function scopeWhere(scope: Pick<EntryScope, "workspaceId" | "userId">) {
@@ -179,6 +181,7 @@ function toDTO(row: EntryRow): TimeEntryDTO {
     end: row.end ? row.end.toISOString() : null,
     durationSeconds: row.durationSeconds,
     updatedAt: row.updatedAt.toISOString(),
+    invoiceNumber: row.invoice?.number ?? null,
   };
 }
 
@@ -500,14 +503,22 @@ export async function listEntriesPage(
   };
 }
 
-/** The entries with `lockedReason` set for the scope's actor (Phase 5a). */
+/**
+ * The entries with `lockedReason` set for the scope's actor (Phase 5a); an
+ * invoiced entry is locked for everyone (Phase 6d), the invoice named.
+ */
 async function withLockedReasons(
   db: Executor,
   scope: EntryScope,
   entries: TimeEntryDTO[],
 ): Promise<TimeEntryDTO[]> {
   const reasons = await lockedReasons(db, scope, entries);
-  return entries.map((e) => ({ ...e, lockedReason: reasons.get(e.id) ?? null }));
+  return entries.map((e) => ({
+    ...e,
+    lockedReason: e.invoiceNumber
+      ? invoicedLockedReason(e.invoiceNumber)
+      : (reasons.get(e.id) ?? null),
+  }));
 }
 
 /** `listEntriesInRange` for the timesheet and calendar: entries the actor may not change say why. */
@@ -1365,6 +1376,62 @@ export async function reassignProjectEntries(
       rateEntriesSql(sql`${timeEntry.id} = any(${sql.param(rows.map((r) => r.id))}::text[])`),
     );
   }
+  return rows.length;
+}
+
+// --- Invoiced time (Phase 6d, decision 23) -------------------------------------------
+
+/**
+ * Puts entries on an invoice: only stopped, live, billable, rated entries of
+ * the workspace that are on no invoice yet are taken, and the count says how
+ * many were. The invoice service compares it with what it selected under the
+ * client's lock and rolls back on a difference. While set, the guard refuses
+ * every write to the entry.
+ */
+export async function markInvoiced(
+  db: Executor,
+  workspaceId: string,
+  ids: string[],
+  invoiceId: string,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const rows = await db
+    .update(timeEntry)
+    .set({ invoiceId })
+    .where(
+      and(
+        sql`${timeEntry.id} = any(${sql.param(ids)}::text[])`,
+        eq(timeEntry.workspaceId, workspaceId),
+        isNull(timeEntry.invoiceId),
+        isNull(timeEntry.deletedAt),
+        isNotNull(timeEntry.end),
+        eq(timeEntry.billable, true),
+        isNotNull(timeEntry.amountMinor),
+      ),
+    )
+    .returning({ id: timeEntry.id });
+  return rows.length;
+}
+
+/** Takes the invoice's entries (all, or the given ones) off it; the count released. */
+export async function releaseInvoiced(
+  db: Executor,
+  workspaceId: string,
+  invoiceId: string,
+  ids?: string[],
+): Promise<number> {
+  if (ids && ids.length === 0) return 0;
+  const rows = await db
+    .update(timeEntry)
+    .set({ invoiceId: null })
+    .where(
+      and(
+        eq(timeEntry.workspaceId, workspaceId),
+        eq(timeEntry.invoiceId, invoiceId),
+        ids ? sql`${timeEntry.id} = any(${sql.param(ids)}::text[])` : undefined,
+      ),
+    )
+    .returning({ id: timeEntry.id });
   return rows.length;
 }
 

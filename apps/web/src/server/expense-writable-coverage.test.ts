@@ -9,10 +9,18 @@ import { functions } from "../../test/source-functions";
  * Every exported writer of the expense service passes the Phase 6c guard
  * (decision 17): a function that writes `expense` (directly, or through a
  * function of the same file that does) must call `assertExpenseWritable`
- * (directly, or through a function that does). There are no exemptions.
+ * (directly, or through a function that does), or be listed below with the
+ * reason it may not.
  */
 
 const FILE = path.resolve(__dirname, "expenses.ts");
+
+const EXEMPT: Record<string, string> = {
+  markExpensesInvoiced:
+    "the invoice service marks and releases; invoiced expenses are read-only through the guard",
+  releaseExpensesInvoiced:
+    "the invoice service marks and releases; invoiced expenses are read-only through the guard",
+};
 
 const WRITES = /\.(insert|update)\(expense\)/;
 
@@ -51,8 +59,12 @@ describe("assertExpenseWritable coverage", () => {
   it("guards every exported writer", () => {
     const missing = [...fns]
       .filter(([name, f]) => f.exported && writers.has(name))
-      .filter(([name]) => !guarded.has(name))
+      .filter(([name]) => !guarded.has(name) && !(name in EXEMPT))
       .map(([name]) => name);
     expect(missing).toEqual([]);
+  });
+
+  it("lists only real exemptions", () => {
+    for (const name of Object.keys(EXEMPT)) expect(writers.has(name)).toBe(true);
   });
 });

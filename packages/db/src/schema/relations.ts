@@ -18,6 +18,7 @@ import {
   userSettings,
 } from "./tracking";
 import { expense, expenseCategory } from "./expenses";
+import { invoice, invoiceItem, invoiceSettings, payment, recurringInvoice } from "./invoices";
 import { exportJob, reportShareLink } from "./reports";
 import { taskGroup, userGroup, userGroupMember } from "./team";
 import { invitation, membership, workspace, workspaceSettings } from "./workspace";
@@ -58,9 +59,15 @@ export const workspaceRelations = relations(workspace, ({ many, one }) => ({
   timesheetTemplates: many(timesheetTemplate),
   expenses: many(expense),
   expenseCategories: many(expenseCategory),
+  invoices: many(invoice),
+  recurringInvoices: many(recurringInvoice),
   settings: one(workspaceSettings, {
     fields: [workspace.id],
     references: [workspaceSettings.workspaceId],
+  }),
+  invoiceSettings: one(invoiceSettings, {
+    fields: [workspace.id],
+    references: [invoiceSettings.workspaceId],
   }),
 }));
 
@@ -84,6 +91,7 @@ export const workspaceSettingsRelations = relations(workspaceSettings, ({ one })
 export const clientRelations = relations(client, ({ one, many }) => ({
   workspace: one(workspace, { fields: [client.workspaceId], references: [workspace.id] }),
   projects: many(project),
+  invoices: many(invoice),
 }));
 
 export const projectRelations = relations(project, ({ one, many }) => ({
@@ -135,6 +143,7 @@ export const timeEntryRelations = relations(timeEntry, ({ one, many }) => ({
   project: one(project, { fields: [timeEntry.projectId], references: [project.id] }),
   task: one(task, { fields: [timeEntry.taskId], references: [task.id] }),
   tags: many(timeEntryTag),
+  invoice: one(invoice, { fields: [timeEntry.invoiceId], references: [invoice.id] }),
 }));
 
 export const timeEntryTagRelations = relations(timeEntryTag, ({ one }) => ({
@@ -197,4 +206,43 @@ export const expenseRelations = relations(expense, ({ one }) => ({
     fields: [expense.categoryId],
     references: [expenseCategory.id],
   }),
+  invoice: one(invoice, { fields: [expense.invoiceId], references: [invoice.id] }),
+}));
+
+export const invoiceSettingsRelations = relations(invoiceSettings, ({ one }) => ({
+  workspace: one(workspace, {
+    fields: [invoiceSettings.workspaceId],
+    references: [workspace.id],
+  }),
+}));
+
+export const recurringInvoiceRelations = relations(recurringInvoice, ({ one, many }) => ({
+  workspace: one(workspace, {
+    fields: [recurringInvoice.workspaceId],
+    references: [workspace.id],
+  }),
+  client: one(client, { fields: [recurringInvoice.clientId], references: [client.id] }),
+  invoices: many(invoice),
+}));
+
+export const invoiceRelations = relations(invoice, ({ one, many }) => ({
+  workspace: one(workspace, { fields: [invoice.workspaceId], references: [workspace.id] }),
+  client: one(client, { fields: [invoice.clientId], references: [client.id] }),
+  recurring: one(recurringInvoice, {
+    fields: [invoice.recurringId],
+    references: [recurringInvoice.id],
+  }),
+  items: many(invoiceItem),
+  payments: many(payment),
+  timeEntries: many(timeEntry),
+  expenses: many(expense),
+}));
+
+export const invoiceItemRelations = relations(invoiceItem, ({ one }) => ({
+  invoice: one(invoice, { fields: [invoiceItem.invoiceId], references: [invoice.id] }),
+}));
+
+export const paymentRelations = relations(payment, ({ one }) => ({
+  invoice: one(invoice, { fields: [payment.invoiceId], references: [invoice.id] }),
+  creator: one(user, { fields: [payment.createdBy], references: [user.id] }),
 }));

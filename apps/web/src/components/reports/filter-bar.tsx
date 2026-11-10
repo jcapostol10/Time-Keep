@@ -24,6 +24,7 @@ import { useEffect, useState } from "react";
 import { useExpenseCategories } from "../expenses/use-expenses";
 import { useTracker } from "../tracker/tracker-provider";
 import { DatePresetMenu } from "./date-preset-menu";
+import { InvoicedSelect } from "./invoiced-select";
 import { MultiSelectFilter } from "./multi-select-filter";
 import { useReportQuery } from "./report-url";
 import { useReportOptions } from "./use-report";
@@ -67,6 +68,7 @@ export function FilterBar({
     query.taskIds.length > 0,
     query.tagIds.length > 0,
     query.billable !== "all",
+    query.invoiced !== "all",
     query.description !== "",
   ].filter(Boolean).length;
 
@@ -159,6 +161,7 @@ export function FilterBar({
               <SelectItem value="no">Non-billable only</SelectItem>
             </SelectContent>
           </Select>
+          <InvoicedSelect value={query.invoiced} onChange={(invoiced) => set({ invoiced })} />
           {expenses ? null : (
             <Select
               value={query.type}

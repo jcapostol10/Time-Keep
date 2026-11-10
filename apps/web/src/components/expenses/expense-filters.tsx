@@ -10,6 +10,7 @@ import {
 } from "@timekeep/ui/components/select";
 
 import { DatePresetMenu } from "../reports/date-preset-menu";
+import { InvoicedSelect } from "../reports/invoiced-select";
 import { MultiSelectFilter } from "../reports/multi-select-filter";
 import { useReportOptions } from "../reports/use-report";
 import { useTracker } from "../tracker/tracker-provider";
@@ -79,6 +80,7 @@ export function ExpenseFilters({
           <SelectItem value="no">Non-billable only</SelectItem>
         </SelectContent>
       </Select>
+      <InvoicedSelect value={query.invoiced} onChange={(invoiced) => onChange({ invoiced })} />
     </div>
   );
 }

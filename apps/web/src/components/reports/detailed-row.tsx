@@ -110,6 +110,15 @@ export function DetailedRow({
               {entryName(entry)}
             </span>
           )}
+          {entry.invoiceNumber ? (
+            <Badge
+              variant="outline"
+              className="shrink-0"
+              title={`On invoice ${entry.invoiceNumber}`}
+            >
+              Invoiced
+            </Badge>
+          ) : null}
           {entry.photo ? (
             <a
               href={`/api/w/${slug}/kiosk-photos/${entry.id}`}

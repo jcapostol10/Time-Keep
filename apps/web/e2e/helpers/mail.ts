@@ -96,3 +96,33 @@ export function extractAppLink(message: Message): string {
   if (!match) throw new Error(`No app link found in email "${message.Subject}"`);
   return match[0].replace(/&amp;/g, "&");
 }
+
+export interface MailAttachment {
+  FileName: string;
+  ContentType: string;
+  Size: number;
+}
+
+/**
+ * The attachments of the newest email to `to` matching `subject` (Phase 6d).
+ * Mailpit only: captured email on a preview keeps no attachments, so this
+ * runs in the nightly lane.
+ */
+export async function waitForEmailAttachments(
+  to: string,
+  subject: RegExp,
+  timeoutMs = 15_000,
+): Promise<MailAttachment[]> {
+  if (REMOTE_URL) throw new Error("Attachments are only readable through Mailpit");
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const hit = (await mailpitSearch(to)).find((m) => subject.test(m.Subject));
+    if (hit) {
+      const res = await fetch(`${MAILPIT_URL}/api/v1/message/${hit.ID}`);
+      if (!res.ok) throw new Error(`Mailpit message failed: ${res.status}`);
+      return ((await res.json()) as { Attachments?: MailAttachment[] }).Attachments ?? [];
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`No email to ${to} matching ${subject}`);
+}

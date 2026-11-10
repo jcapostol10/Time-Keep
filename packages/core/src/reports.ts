@@ -119,6 +119,8 @@ export const reportQuerySchema = z
     tagIds: idList,
     tagMode: z.enum(["and", "or"]).default("or"),
     billable: z.enum(["all", "yes", "no"]).default("all"),
+    /** Phase 6d: time on an invoice, time not yet invoiced, or everything. */
+    invoiced: z.enum(["all", "yes", "no"]).default("all"),
     /** Work entries by default (decision 6); breaks only, or everything. */
     type: z.enum(["work", "break", "all"]).default("work"),
     /** Apply the workspace rounding rule (decision 13); "off" shows raw time. */
@@ -177,6 +179,7 @@ const SCALAR_KEYS = [
   "to",
   "tagMode",
   "billable",
+  "invoiced",
   "type",
   "rounding",
   "shortMinutes",

@@ -34,8 +34,9 @@ export interface ExpenseDTO {
   billable: boolean;
   description: string;
   receipt: { mime: ReceiptType; thumb: boolean } | null;
-  /** On an invoice (Phase 6d). */
+  /** On an invoice (Phase 6d): read-only for everyone while set. */
   invoiced: boolean;
+  invoiceNumber: string | null;
   /** The viewer may change it (the matrix); a lock may still refuse (`lockedReason`). */
   editable: boolean;
   /** Why a member or manager cannot change it: the lock date or a submitted period. */

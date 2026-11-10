@@ -10,6 +10,7 @@ export * from "./entry-grouping";
 export * from "./entry-import";
 export * from "./estimates";
 export * from "./expenses";
+export * from "./invoices";
 export * from "./permissions";
 export * from "./money";
 export * from "./outbox";

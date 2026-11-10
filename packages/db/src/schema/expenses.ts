@@ -14,6 +14,7 @@ import { user } from "./auth";
 import { project } from "./catalog";
 import { timestamps } from "./columns";
 import { expenseCategoryKindEnum } from "./enums";
+import { invoice } from "./invoices";
 import { workspace } from "./workspace";
 
 /**
@@ -78,8 +79,8 @@ export const expense = pgTable(
     receiptKey: text("receipt_key"),
     receiptThumbKey: text("receipt_thumb_key"),
     receiptMime: text("receipt_mime"),
-    /** Set when an invoice takes the expense (Phase 6d). */
-    invoiceId: text("invoice_id"),
+    /** Set when an invoice takes the expense (Phase 6d): read-only while set. */
+    invoiceId: text("invoice_id").references(() => invoice.id, { onDelete: "set null" }),
     /** Who recorded it: the person, or an admin or manager adding for them. */
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),

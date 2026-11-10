@@ -11,4 +11,5 @@ export * from "./approvals";
 export * from "./time-off";
 export * from "./kiosk";
 export * from "./expenses";
+export * from "./invoices";
 export * from "./relations";

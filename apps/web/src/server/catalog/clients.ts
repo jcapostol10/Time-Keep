@@ -11,8 +11,11 @@ import {
   type Database,
   eq,
   ilike,
+  invoice,
   isNotNull,
+  ne,
   project,
+  recurringInvoice,
   sql,
   workspaceSettings,
 } from "@timekeep/db";
@@ -151,7 +154,27 @@ export async function updateClient(
   if (patch.currency !== undefined && patch.currency !== before.currency) {
     const base = await workspaceCurrency(db, workspaceId);
     const to = entryCurrency(patch.currency, base);
-    if (to !== entryCurrency(before.currency, base)) {
+    const from = entryCurrency(before.currency, base);
+    if (to !== from) {
+      // An invoice keeps its currency for good (Phase 6d, decision 20): relabelling the
+      // client under it would make the invoice and its time disagree.
+      const [invoiced] = await db
+        .select({ id: invoice.id })
+        .from(invoice)
+        .where(
+          and(
+            eq(invoice.workspaceId, workspaceId),
+            eq(invoice.clientId, id),
+            ne(invoice.status, "VOID"),
+          ),
+        )
+        .limit(1);
+      if (invoiced) {
+        throw new CatalogError(
+          "CONFLICT",
+          `This client has invoices in ${from}; its currency cannot change.`,
+        );
+      }
       const projects = await db
         .select({ id: project.id })
         .from(project)
@@ -198,6 +221,26 @@ export async function deleteClient(db: Executor, workspaceId: string, id: string
   const counts = await projectCounts(db, workspaceId);
   if ((counts.get(id) ?? 0) > 0) {
     throw new CatalogError("IN_USE", "Move or delete its projects first.");
+  }
+  // Invoices and templates keep their client (Phase 6d): say so rather than fail on the key.
+  const [billed] = await db
+    .select({ id: invoice.id })
+    .from(invoice)
+    .where(and(eq(invoice.workspaceId, workspaceId), eq(invoice.clientId, id)))
+    .union(
+      db
+        .select({ id: recurringInvoice.id })
+        .from(recurringInvoice)
+        .where(
+          and(eq(recurringInvoice.workspaceId, workspaceId), eq(recurringInvoice.clientId, id)),
+        ),
+    )
+    .limit(1);
+  if (billed) {
+    throw new CatalogError(
+      "IN_USE",
+      "This client has invoices or recurring invoices. Void or delete them first.",
+    );
   }
   await db.delete(client).where(and(eq(client.id, id), eq(client.workspaceId, workspaceId)));
 }

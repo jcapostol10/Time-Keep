@@ -29,6 +29,7 @@ import {
   expenseCategory,
   gte,
   inArray,
+  invoice,
   isNotNull,
   isNull,
   lt,
@@ -51,6 +52,7 @@ import { CatalogError } from "./catalog/errors";
 import { requireVisibleProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { TimeEntryError } from "./entry-error";
+import { invoicedLockedReason } from "./entry-guard";
 import { assertExpenseWritable, expenseLockedReasons } from "./expense-guard";
 import { timerLock } from "./person-lock";
 import type { EntryScope } from "./time-entries";
@@ -167,6 +169,9 @@ export function expenseConditions(
   }
   if (query.categoryIds.length > 0) conds.push(inArray(expense.categoryId, query.categoryIds));
   if (query.billable !== "all") conds.push(eq(expense.billable, query.billable === "yes"));
+  if (query.invoiced !== "all") {
+    conds.push(query.invoiced === "yes" ? isNotNull(expense.invoiceId) : isNull(expense.invoiceId));
+  }
   return conds;
 }
 
@@ -179,6 +184,7 @@ type ExpenseRow = {
   categoryName: string;
   categoryKind: Expense extends never ? never : "FIXED" | "UNIT";
   unitName: string | null;
+  invoiceNumber: string | null;
 };
 
 const ROW_SELECT = {
@@ -190,6 +196,7 @@ const ROW_SELECT = {
   categoryName: expenseCategory.name,
   categoryKind: expenseCategory.kind,
   unitName: expenseCategory.unitName,
+  invoiceNumber: invoice.number,
 };
 
 /** The list's select with its joins; conditions are the caller's. */
@@ -200,7 +207,8 @@ function selectRows(db: Executor) {
     .leftJoin(user, eq(user.id, expense.userId))
     .innerJoin(project, eq(project.id, expense.projectId))
     .leftJoin(client, eq(client.id, project.clientId))
-    .innerJoin(expenseCategory, eq(expenseCategory.id, expense.categoryId));
+    .innerJoin(expenseCategory, eq(expenseCategory.id, expense.categoryId))
+    .leftJoin(invoice, eq(invoice.id, expense.invoiceId));
 }
 
 export function toExpenseDTO(
@@ -231,8 +239,10 @@ export function toExpenseDTO(
         ? { mime: e.receiptMime as ReceiptType, thumb: e.receiptThumbKey !== null }
         : null,
     invoiced: e.invoiceId !== null,
-    editable: flags.editable,
-    lockedReason: flags.lockedReason,
+    invoiceNumber: row.invoiceNumber,
+    // On an invoice it is read-only for everyone (Phase 6d, decision 23).
+    editable: flags.editable && e.invoiceId === null,
+    lockedReason: row.invoiceNumber ? invoicedLockedReason(row.invoiceNumber) : flags.lockedReason,
     updatedAt: e.updatedAt.toISOString(),
   };
 }
@@ -692,6 +702,58 @@ export async function restoreExpense(
     }
     return loadDTO(tx, scope, expenseId, now);
   });
+}
+
+// --- Invoiced expenses (Phase 6d, decision 23) ---------------------------------------
+
+/**
+ * Puts expenses on an invoice: only live, billable expenses of the workspace
+ * on no invoice yet are taken; the count says how many were, for the invoice
+ * service's check under the client's lock. While set, the guard refuses every write.
+ */
+export async function markExpensesInvoiced(
+  db: Executor,
+  workspaceId: string,
+  ids: string[],
+  invoiceId: string,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const rows = await db
+    .update(expense)
+    .set({ invoiceId })
+    .where(
+      and(
+        sql`${expense.id} = any(${sql.param(ids)}::text[])`,
+        eq(expense.workspaceId, workspaceId),
+        isNull(expense.invoiceId),
+        isNull(expense.deletedAt),
+        eq(expense.billable, true),
+      ),
+    )
+    .returning({ id: expense.id });
+  return rows.length;
+}
+
+/** Takes the invoice's expenses (all, or the given ones) off it; the count released. */
+export async function releaseExpensesInvoiced(
+  db: Executor,
+  workspaceId: string,
+  invoiceId: string,
+  ids?: string[],
+): Promise<number> {
+  if (ids && ids.length === 0) return 0;
+  const rows = await db
+    .update(expense)
+    .set({ invoiceId: null })
+    .where(
+      and(
+        eq(expense.workspaceId, workspaceId),
+        eq(expense.invoiceId, invoiceId),
+        ids ? sql`${expense.id} = any(${sql.param(ids)}::text[])` : undefined,
+      ),
+    )
+    .returning({ id: expense.id });
+  return rows.length;
 }
 
 export interface ReceiptRef {

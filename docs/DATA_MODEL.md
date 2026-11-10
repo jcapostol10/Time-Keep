@@ -245,6 +245,7 @@ A group a task belongs to (decision 11 of the Phase 4 design, "tasks by group", 
 | cost_amount_minor | bigint? | `round(cost rate × duration_seconds / 3600)` half up; `NULL` while running or without a cost rate |
 | deleted_at | timestamptz? | soft delete (Undo restores it) |
 | type | enum `entry_type` (`work`, `break`) | `work`; a break has no project, task, tags, billing or amount and is fixed at creation (decision 6) |
+| invoice_id | text? → invoice (set null) | Phase 6d: the invoice that billed it; while set the entry is read-only for everyone ("This entry is on invoice INV-0001.") and the rate job skips it. Written only by `markInvoiced` / `releaseInvoiced` |
 | created_at, updated_at | timestamptz | |
 
 Indexes:
@@ -253,6 +254,7 @@ Indexes:
 - `time_entry_project_id_idx` on `project_id`; `time_entry_task_id_idx` on `task_id`.
 - `time_entry_workspace_start_idx` on `(workspace_id, start) WHERE deleted_at IS NULL AND "end" IS NOT NULL`: team-wide report scans (Phase 3); a member's own report uses the user index above.
 - `time_entry_one_running_uq`: `UNIQUE (workspace_id, user_id) WHERE "end" IS NULL AND "deleted_at" IS NULL`. This enforces invariant 4. Soft-deleted rows are excluded so they can never block a new timer.
+- `time_entry_workspace_invoice_idx` on `(workspace_id, invoice_id) WHERE invoice_id IS NOT NULL` (Phase 6d): an invoice's entries. Built by migration 0019 (`IF NOT EXISTS`): the shared database's `time_entry` held only demo and e2e rows.
 
 Rules (enforced in `apps/web/src/server/time-entries.ts`, the only write path):
 
@@ -376,7 +378,7 @@ Every table enables RLS (`.enableRLS()` on each `pgTable`, migration `0003`) wit
 
 ## Enums
 
-`workspace_role`, `membership_status`, `time_format`, `duration_format`, `project_visibility`, `task_status`, `estimate_kind`, `estimate_reset`, `expense_category_kind` (and the later phases' enums) — values come from `packages/core` constants so TypeScript and Postgres agree.
+`workspace_role`, `membership_status`, `time_format`, `duration_format`, `project_visibility`, `task_status`, `estimate_kind`, `estimate_reset`, `expense_category_kind`, `invoice_status`, `invoice_item_kind`, `recurring_schedule`, `recurring_mode` (and the later phases' enums) — values come from `packages/core` constants so TypeScript and Postgres agree.
 
 ### report_share_link
 
@@ -516,6 +518,7 @@ Every email the app sends. A row is written in the same transaction as its cause
 | attempts | smallint | |
 | next_attempt_at | timestamptz | due time, or the lease's end while a sender holds it |
 | last_error | text? | |
+| attachment_key, attachment_name | text? | Phase 6d: a file in the private export bucket attached when sending (the invoice PDF), read by the sender; `captured_email` keeps no attachment |
 | created_at, sent_at | timestamptz | |
 
 ### time_off_policy (Phase 5b)
@@ -650,12 +653,102 @@ Money a person spent on a project on a local date, always in the workspace curre
 | billable | boolean | |
 | description | text | default `''` (the approval note is not stored here: it goes to `approval_event`) |
 | receipt_key, receipt_thumb_key, receipt_mime | text? | the receipt in the private `S3_EXPORT_BUCKET` (`receipts/<workspace>/<expense>`, `….thumb.jpg`; JPEG, PNG, WebP or PDF, 4 MB, typed by its bytes) |
-| invoice_id | text? | set when an invoice takes it (Phase 6d adds the foreign key) |
+| invoice_id | text? → invoice (set null) | set when an invoice takes it (Phase 6d); read-only for everyone while set. Written only by `markExpensesInvoiced` / `releaseExpensesInvoiced` |
 | created_by | text? → user (set null) | the person, or the admin or manager who added it for them |
 | deleted_at | timestamptz? | soft delete, with Undo |
 | created_at, updated_at | timestamptz | |
 
 Indexes: `(workspace_id, user_id, date)` for a person's list and the approval period; `(workspace_id, project_id, date)` for a project's.
+
+### invoice_settings (Phase 6d)
+
+Numbering and branding, one row per workspace, created with the defaults on first use (decisions 20 and 24).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| workspace_id | text PK → workspace (cascade) | |
+| company_name, address, tax_line, notes | text | default `''`; the PDF's company block, the tax number line, a new invoice's notes. The logo is `workspace.logo` |
+| payment_terms_days | smallint | default 30: a new invoice's due date is the issue date plus these days |
+| number_prefix, next_number, number_padding | text, integer, smallint | defaults `INV-`, 1, 4 → `INV-0001`; the next number is taken under `SELECT … FOR UPDATE` of this row |
+| tax1_name, tax1_bps, tax2_name, tax2_bps | text?, integer? | default taxes; bps are hundredths of a percent (0–10000) |
+| created_at, updated_at | timestamptz | |
+
+### invoice (Phase 6d)
+
+One client, that client's currency when created (`client.currency`, else the workspace's), fixed. Written only by `apps/web/src/server/invoices/*`. Stored status is `DRAFT`, `SENT` or `VOID`; `PAID`, `PARTIALLY_PAID` and `OVERDUE` are computed from the total, the payments and today in the workspace timezone by core `invoiceStatus` and its SQL twin `invoiceStatusSql` (decision 21), never stored.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| client_id | text → client (restrict) | a client with invoices cannot be deleted, nor its currency changed |
+| number | text | unique per workspace (`invoice_workspace_number_uq`); editable on a draft; never reused |
+| issue_date, due_date | date | `due_date ≥ issue_date` |
+| currency | char(3) | |
+| status | enum `invoice_status` (`DRAFT`, `SENT`, `VOID`) | |
+| discount_bps | integer | default 0; a percent of the subtotal |
+| tax1_name, tax1_bps, tax2_name, tax2_bps | text?, integer? | each tax is a percent of (subtotal − discount), not compounded |
+| notes | text | editable after sending too |
+| subtotal_minor, total_minor | bigint | cached from the lines by `recomputeTotals` (core `invoiceTotals`) |
+| sent_at | timestamptz? | |
+| pdf_key | text? | the frozen PDF in `S3_EXPORT_BUCKET` (`invoices/<workspace>/<invoice>.pdf`), written on send and kept on void |
+| public_token_hash | text? | sha256 of the public link's token (`/invoice/<token>`), unique where set; the token is shown once |
+| last_download_at | timestamptz? | the public page's last PDF download: one per 10 s |
+| recurring_id | text? → recurring_invoice (set null) | the template that made it |
+| period_key | text? | the period it billed; `invoice_recurring_period_uq` on `(recurring_id, period_key) WHERE recurring_id IS NOT NULL` makes one invoice per template and period |
+| external_ref | text? | the accounting system's reference (decision 28); nothing sets it yet |
+| created_by | text? → user (set null) | |
+| created_at, updated_at | timestamptz | |
+
+Index: `(workspace_id, status, due_date)` for the list and the overdue job.
+
+### invoice_item (Phase 6d)
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| invoice_id | text → invoice (cascade) | |
+| position | integer | 1, 2, …; index `(invoice_id, position)` |
+| kind | enum `invoice_item_kind` (`TIME`, `EXPENSE`, `MANUAL`) | |
+| description | text | |
+| quantity_centi | integer | hundredths: hours for time, a count for expenses, the typed quantity |
+| unit_price_minor | bigint? | null when an imported line's entries have different rates |
+| amount_minor | bigint | the engine's sum for an imported line; `round_half_up(quantity × price / 100)` for a manual one |
+| entry_ids, expense_ids | text[] | what an imported line took; removing the line releases exactly these |
+
+### payment (Phase 6d)
+
+A date, an amount and a note on a sent invoice; the payments never exceed the total (decision 26).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| invoice_id | text → invoice (cascade) | index |
+| date | date | |
+| amount_minor | bigint | > 0, in the invoice's currency |
+| note | text | |
+| created_by | text? → user (set null) | |
+| created_at | timestamptz | |
+
+### recurring_invoice (Phase 6d)
+
+A template the daily job runs (decision 27): weekly on a weekday for the seven days before, or monthly on a day 1–31 (clamped to the month's last day) for the previous month; never for a period that began before `start_date`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | index |
+| client_id | text → client (restrict) | |
+| name | text | |
+| schedule | enum `recurring_schedule` (`WEEKLY`, `MONTHLY`) | |
+| weekday, day_of_month | smallint? | 0 = Sunday … 6; 1–31 |
+| start_date, end_date | date, date? | |
+| lines | jsonb | fixed manual lines (`InvoiceLineInput[]`) |
+| import_period, import_group_by | boolean, text | also import the period just ended, grouped by project, task, user or entry |
+| mode | enum `recurring_mode` (`DRAFT`, `SEND`) | SEND without a client email leaves the draft and emails the owners and admins |
+| active | boolean | |
+| created_by | text? → user (set null) | the job runs as them while they manage invoices, else as the workspace owner |
+| created_at, updated_at | timestamptz | |
 
 ## Rules at scale (Phase 4b)
 
@@ -682,6 +775,5 @@ Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf` after
 
 ## Planned (later phases)
 
-Phase 6d: `invoice_settings`, `invoice`, `invoice_item`, `payment`, `recurring_invoice`, and the foreign key from `expense.invoice_id`. See `docs/superpowers/specs/2026-11-05-phase-6-design.md`.
 Phase 7: `assignment`, `milestone`.
 Phase 8: `subscription`, `api_key`, `webhook`, `webhook_delivery`, `audit_log`, `sso_config`.
