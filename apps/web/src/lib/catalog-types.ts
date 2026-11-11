@@ -1,4 +1,4 @@
-import type { Estimate, MoneyAmount, Progress } from "@timekeep/core";
+import type { Estimate, Forecast, MoneyAmount, Progress } from "@timekeep/core";
 
 /**
  * Isomorphic DTOs for clients, projects, tasks and tags. Like the tracker
@@ -48,6 +48,8 @@ export interface ProjectDetail extends ProjectListItem {
 export interface BudgetDTO {
   estimate: Estimate;
   currency: string;
+  /** Phase 7b: tracked plus the published plan against the estimate; null without one. */
+  forecast: Forecast | null;
   /** The workspace's alert thresholds, whole percents ascending. */
   thresholds: number[];
   progress: Progress | null;

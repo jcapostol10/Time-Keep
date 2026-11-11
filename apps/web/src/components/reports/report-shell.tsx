@@ -26,6 +26,8 @@ const VIEWS: { kind: ReportView; label: string }[] = [
   { kind: "expenses", label: "Expenses" },
   { kind: "audit", label: "Audit" },
   { kind: "attendance", label: "Attendance" },
+  // The published plan against tracked time (Phase 7b).
+  { kind: "assignments", label: "Assignments" },
 ];
 
 /** The query another view opens with: the Audit tab adds its default criteria; the others drop them. */
@@ -55,6 +57,8 @@ export function ReportShell({
   const kind = view === "audit" ? "detailed" : view;
   // Attendance is raw time per person: no share link, no rounding, only the people filters.
   const attendance = view === "attendance";
+  // A plan is raw hours and internal: no rounding, no share link.
+  const assignments = view === "assignments";
   // Expenses are money, not time: no rounding, no share link, their own filters.
   const expenses = view === "expenses";
   const { slug, canSeeCosts } = useTracker();
@@ -67,9 +71,12 @@ export function ReportShell({
         actions={
           <>
             {actions}
-            {attendance || expenses ? null : <RoundingToggle />}
+            {attendance || expenses || assignments ? null : <RoundingToggle />}
             {/* A shared report is for clients: Profit and Expenses are never shared. */}
-            {kind === "attendance" || kind === "profit" || kind === "expenses" ? null : (
+            {kind === "attendance" ||
+            kind === "profit" ||
+            kind === "expenses" ||
+            kind === "assignments" ? null : (
               <ShareDialog kind={kind} />
             )}
             <ExportMenu kind={kind} />
@@ -112,6 +119,7 @@ export function ReportShell({
         extra={view === "audit" ? <AuditFilter /> : null}
         peopleOnly={attendance}
         expenses={expenses}
+        plan={assignments}
       />
       {children}
     </div>

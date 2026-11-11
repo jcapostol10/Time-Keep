@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { ASSIGNMENT_GROUP_KEYS } from "./assignments-report";
 import { EXPENSE_GROUP_KEYS } from "./expenses";
 import type { ViewerPrefs } from "./prefs";
 import { MAX_DATE_RANGE_DAYS } from "./schemas";
@@ -58,7 +59,8 @@ export type ReportKind = (typeof REPORT_KINDS)[number];
  * The report tabs; Attendance (Phase 5b) reads its own engine, not the entry groupings,
  * and Expenses (Phase 6c) reads the expense aggregate.
  */
-export type ReportView = ReportKind | "audit" | "attendance" | "profit" | "expenses";
+export type ReportView =
+  ReportKind | "audit" | "attendance" | "profit" | "expenses" | "assignments";
 
 /** What the Profit tab groups by (Phase 6a): one level, sorted by profit. */
 export const PROFIT_GROUP_KEYS = [
@@ -147,6 +149,8 @@ export const reportQuerySchema = z
     categoryIds: idList,
     /** What the Expenses report groups by. */
     expenseBy: z.enum(EXPENSE_GROUP_KEYS).default("category"),
+    /** What the Assignments report groups by (Phase 7b). */
+    assignmentsBy: z.enum(ASSIGNMENT_GROUP_KEYS).default("user"),
   })
   .superRefine((q, ctx) => {
     if (q.preset !== "custom") return;
@@ -188,6 +192,7 @@ const SCALAR_KEYS = [
   "bucket",
   "weeklyBy",
   "expenseBy",
+  "assignmentsBy",
 ] as const;
 
 export const DEFAULT_REPORT_QUERY: ReportQuery = reportQuerySchema.parse({});

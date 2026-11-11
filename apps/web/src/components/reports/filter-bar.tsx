@@ -33,12 +33,20 @@ import { useReportOptions } from "./use-report";
  * Every filter writes to the URL; below md they sit in a sheet behind a "Filters" button.
  * `peopleOnly`: the range and Users / Groups (the Attendance tab has no entry filters).
  * `expenses`: the Expenses tab's filters: no tasks, tags, type or text; categories instead.
+ * `plan`: the Assignments tab's: people, groups, clients and projects only (a plan has no
+ * tasks, tags, billing or text).
  */
 export function FilterBar({
   extra,
   peopleOnly = false,
   expenses = false,
-}: { extra?: React.ReactNode; peopleOnly?: boolean; expenses?: boolean } = {}) {
+  plan = false,
+}: {
+  extra?: React.ReactNode;
+  peopleOnly?: boolean;
+  expenses?: boolean;
+  plan?: boolean;
+} = {}) {
   const { slug, viewer } = useTracker();
   const { query, set } = useReportQuery();
   const { data: options } = useReportOptions(slug);
@@ -97,14 +105,14 @@ export function FilterBar({
             options={options?.clients ?? []}
             value={query.clientIds}
             onChange={(clientIds) => set({ clientIds })}
-            none={{ id: NONE_ID, name: "Without client" }}
+            none={plan ? undefined : { id: NONE_ID, name: "Without client" }}
           />
           <MultiSelectFilter
             label="Projects"
             options={(options?.projects ?? []).map((p) => ({ id: p.id, name: p.name }))}
             value={query.projectIds}
             onChange={(projectIds) => set({ projectIds })}
-            none={expenses ? undefined : { id: NONE_ID, name: "Without project" }}
+            none={expenses || plan ? undefined : { id: NONE_ID, name: "Without project" }}
           />
           {expenses ? (
             <MultiSelectFilter
@@ -114,7 +122,7 @@ export function FilterBar({
               onChange={(categoryIds) => set({ categoryIds })}
             />
           ) : null}
-          {expenses ? null : (
+          {expenses || plan ? null : (
             <MultiSelectFilter
               label="Tasks"
               options={options?.tasks ?? []}
@@ -123,7 +131,7 @@ export function FilterBar({
               none={{ id: NONE_ID, name: "Without task" }}
             />
           )}
-          {expenses ? null : (
+          {expenses || plan ? null : (
             <MultiSelectFilter
               label="Tags"
               options={options?.tags ?? []}
@@ -132,7 +140,7 @@ export function FilterBar({
               none={{ id: NONE_ID, name: "Without tag" }}
             />
           )}
-          {!expenses && query.tagIds.filter((id) => id !== NONE_ID).length > 1 ? (
+          {!expenses && !plan && query.tagIds.filter((id) => id !== NONE_ID).length > 1 ? (
             <Select
               value={query.tagMode}
               onValueChange={(v) => set({ tagMode: v === "and" ? "and" : "or" })}
@@ -146,23 +154,27 @@ export function FilterBar({
               </SelectContent>
             </Select>
           ) : null}
-          <Select
-            value={query.billable}
-            onValueChange={(v) =>
-              set({ billable: v === "yes" ? "yes" : v === "no" ? "no" : "all" })
-            }
-          >
-            <SelectTrigger size="sm" aria-label="Billable" className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Billable: all</SelectItem>
-              <SelectItem value="yes">Billable only</SelectItem>
-              <SelectItem value="no">Non-billable only</SelectItem>
-            </SelectContent>
-          </Select>
-          <InvoicedSelect value={query.invoiced} onChange={(invoiced) => set({ invoiced })} />
-          {expenses ? null : (
+          {plan ? null : (
+            <>
+              <Select
+                value={query.billable}
+                onValueChange={(v) =>
+                  set({ billable: v === "yes" ? "yes" : v === "no" ? "no" : "all" })
+                }
+              >
+                <SelectTrigger size="sm" aria-label="Billable" className="w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Billable: all</SelectItem>
+                  <SelectItem value="yes">Billable only</SelectItem>
+                  <SelectItem value="no">Non-billable only</SelectItem>
+                </SelectContent>
+              </Select>
+              <InvoicedSelect value={query.invoiced} onChange={(invoiced) => set({ invoiced })} />
+            </>
+          )}
+          {expenses || plan ? null : (
             <Select
               value={query.type}
               onValueChange={(v) =>
@@ -180,7 +192,7 @@ export function FilterBar({
             </Select>
           )}
           {extra}
-          {expenses ? null : (
+          {expenses || plan ? null : (
             <Input
               type="search"
               aria-label="Description contains"

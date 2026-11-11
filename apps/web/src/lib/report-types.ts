@@ -1,4 +1,6 @@
 import type {
+  AssignmentGroupKey,
+  AssignmentsRow,
   AttendanceDay,
   AttendanceWeek,
   Bucket,
@@ -152,4 +154,14 @@ export interface ExpenseReport {
   /** Sorted by amount, then label. */
   groups: { id: string | null; label: string; totals: ExpenseTotals }[];
   totals: ExpenseTotals;
+}
+
+/** The Assignments report (Phase 7b): the published plan against tracked work. */
+export interface AssignmentsReport {
+  from: string;
+  to: string;
+  label: string;
+  by: AssignmentGroupKey;
+  rows: AssignmentsRow[];
+  totals: AssignmentsRow;
 }

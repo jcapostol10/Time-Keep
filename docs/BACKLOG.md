@@ -116,6 +116,19 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
   - The Calendar band shows the viewer's own plan only, never the person shown by add-for-others.
   - A removed or deactivated member's assignments stay in the table with no row on the grid.
   - The Team tab has no group or project filters yet (the route takes `groupIds` and `projectIds`), and Previous / Next do not prefetch the adjacent range (design decisions 14 and 15).
+- [ ] **Phase 7b deferred** (2026-11-11):
+  - The forecast reads the published plan only; a what-if forecast over drafts is not offered.
+  - Scheduled money uses the rate in force on each day as of today's rate rows; a future-dated rate row counts from its date, but a rate change entered later does not re-forecast history (nothing is stored, so it simply moves).
+  - Observed once (2026-11-11, a local production run of four specs on three workers): `schedule.spec.ts` › "a draft is hidden from the member until Publish…" did not get the publish email within the 15 s wait and passed on retry. Not reproduced in six isolated runs, two full local suites or two preview runs; the outbox rows were cleaned up before they could be read. If it recurs, read the row's `status`, `attempts` and `last_error` before the cleanup (CI fails on a flaky test).
+  - The Assignments report has no chart and no share link (a plan is internal); its export always streams, so a very large range answers 413 instead of becoming a job.
+- [ ] **Phase 7b review minors** (final review, 2026-11-11):
+  - The forecast's tracked side counts the whole period, so a manual entry dated after today is counted with the plan for that day too (and "Reached on" can be a future date).
+  - The Assignments PDF header lists the shared query's task, tag, billable and description filters, which the report ignores, and omits groups.
+  - The Assignments XLSX writes durations (with U+2212) and the percent as text; a typed seconds or percent column would let Excel sum them.
+  - The tracked window is a day either side of the viewer's range: an owner more than 24 hours from the viewer can lose an entry near midnight (widen to two days).
+  - The Budget tab scans the project's entries three times per load (progress, the chart, the forecast); the forecast could reuse the chart's daily rows.
+  - The chart's caption does not mention the scheduled projection; the totals row's Variance % is not coloured.
+  - A removed member's rows keep their name rather than "(former member)" (as the Summary does).
 - [ ] **Phase 7a review minors** (final review, 2026-11-11):
   - Writers do not take the `schedule:` lock and `draftsInScope` does not lock its rows: a draft edited out of the publisher's scope mid-publish is still applied, and an edit racing a publish can deadlock (opposite lock order).
   - `draftCount` counts drafts that Publish skips (an out-of-scope original), so the bar can show a change that never publishes.
@@ -136,6 +149,7 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] The suite runs spec files with 3 workers to stay under 10 minutes on a preview; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). If a new spec writes to the demo tenant, check it against the others or give it its own project in the Playwright config.
 - [ ] Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
 - [ ] Re-prove the 26 coverage ticks carried over from Phases 0–1: break each guarded behaviour once and watch its test fail.
+- [ ] `projects.spec.ts` "filter, search and sort the projects list" was flaky once on the local full run of 2026-11-11 (the Name Z–A sort still read A–Z after 10 s; passed on retry). Phase 7 does not touch the projects list; watch for a recurrence.
 - [ ] `settings.spec.ts` "a required project blocks Stop until it is picked" was flaky once on the preview run of 2026-10-29 (Start pressed, no Stop within 20 s; passed on retry). Not reproduced locally; watch for a recurrence before adding a wait.
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)

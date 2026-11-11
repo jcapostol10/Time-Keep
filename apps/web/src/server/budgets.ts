@@ -35,6 +35,7 @@ import { listTasks } from "./catalog/tasks";
 import type { Viewer } from "./catalog/viewer";
 import { estimateOf, progressFor, workspaceZone } from "./estimates";
 import { projectCurrency } from "./rates";
+import { projectForecast } from "./schedule/forecast";
 
 /**
  * The Budget tab (Phase 6b, decision 12): a project's estimate, its bar,
@@ -205,9 +206,19 @@ export async function getProjectBudget(
     series = sampled.map((p) => ({ key: p.key, label: formatDateKey(p.key), value: p.value }));
   }
 
+  const forecast = await projectForecast(
+    db,
+    viewer.workspaceId,
+    { id: projectId, billable: row.billable },
+    estimate,
+    currency,
+    now,
+  );
+
   return {
     estimate,
     currency,
+    forecast,
     thresholds: budgetThresholdsOf({ budgetThresholds: settings[0]?.budgetThresholds }),
     progress,
     hasRates: await hasBillableRate(db, viewer.workspaceId, projectId, currency, now),

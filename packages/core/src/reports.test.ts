@@ -646,3 +646,14 @@ describe("audit criteria in the query", () => {
     expect(params.get("longHours")).toBe("8");
   });
 });
+
+describe("assignmentsBy (Phase 7b)", () => {
+  it("reads assignmentsBy from the URL and writes back only a non-default", () => {
+    const q = parseReportQuery(new URLSearchParams("assignmentsBy=week"));
+    expect(q.assignmentsBy).toBe("week");
+    expect(reportQueryToSearchParams(q).get("assignmentsBy")).toBe("week");
+    const d = parseReportQuery(new URLSearchParams(""));
+    expect(d.assignmentsBy).toBe("user");
+    expect(reportQueryToSearchParams(d).has("assignmentsBy")).toBe(false);
+  });
+});

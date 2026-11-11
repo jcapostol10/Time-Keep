@@ -46,8 +46,8 @@ const STUCK_MINUTES = 15;
 const DOWNLOAD_TTL_SECONDS = 15 * 60;
 
 export interface ExportJobInput {
-  /** Not Profit (one row per project, client or person, it always streams); receipts always are one. */
-  report: Exclude<FileReport, "profit"> | "receipts";
+  /** Not Profit or Assignments (one row per group, they always stream); receipts always are one. */
+  report: Exclude<FileReport, "profit" | "assignments"> | "receipts";
   format: ExportFormat;
   query: ReportQuery;
   prefs: ViewerPrefs;

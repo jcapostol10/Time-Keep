@@ -45,7 +45,11 @@ async function save(res: Response, fallback: string) {
  * Downloads the current report, with its filters; a large one becomes an export job.
  * The Expenses tab also offers its receipts as a zip (Phase 6c), always a job.
  */
-export function ExportMenu({ kind }: { kind: ReportKind | "attendance" | "profit" | "expenses" }) {
+export function ExportMenu({
+  kind,
+}: {
+  kind: ReportKind | "attendance" | "profit" | "expenses" | "assignments";
+}) {
   const { slug } = useTracker();
   const { params } = useReportQuery();
   const [busy, setBusy] = useState(false);

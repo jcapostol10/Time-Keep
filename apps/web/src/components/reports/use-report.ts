@@ -8,6 +8,7 @@ import {
   type DetailedPage,
   type DetailedPaging,
   detailedKey,
+  type AssignmentsReport,
   type ExpenseReport,
   type ReportFilterOptions,
   type SummaryReport,
@@ -44,6 +45,17 @@ export function useExpensesReport(slug: string, params: string) {
   return useQuery({
     queryKey: trackerKeys.report(slug, "expenses", params),
     queryFn: () => fetchJson<ExpenseReport>(trackerUrls.report(slug, "expenses", params)),
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** The Assignments tab (Phase 7b): the published plan against tracked work. */
+export function useAssignmentsReport(slug: string, params: string) {
+  return useQuery({
+    queryKey: trackerKeys.report(slug, "assignments", params),
+    queryFn: () => fetchJson<AssignmentsReport>(trackerUrls.report(slug, "assignments", params)),
     staleTime: 10_000,
     refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,

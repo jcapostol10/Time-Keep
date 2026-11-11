@@ -341,7 +341,7 @@ The final review (2026-11-10) found one critical and ten important defects, all 
 Design: `docs/superpowers/specs/2026-11-11-phase-7-design.md` (written without an interview; the 22 decisions are the builder's). Two branches: 7a the schedule, 7b the forecast and the Assignments report.
 
 - [x] Assignments, team and project schedules, publishing (7a)
-- [ ] Forecasting on the Budget tab, the Assignments report (7b)
+- [x] Forecasting on the Budget tab, the Assignments report (7b)
 
 ### Phase 7a — schedule (migration 0020; plan `docs/superpowers/plans/2026-11-11-phase-7a.md`)
 
@@ -357,6 +357,17 @@ Gate on the branch (2026-11-11): the six Schedule tests each seen to fail with t
 
 The final review (2026-11-11) found no cross-tenant or cross-scope leak and three defects, fixed with tests that failed first: a refused drag, copy or split snapped back with no message (gestures now toast every refusal); a click on a bar's actions button or on a read-only bar opened Add assignment over it (bars now stop their pointer events, and read-only bars open nothing); Discard deleted other planners' drafts in one click (it now drops only the actor's own, after a confirmation). The Team tab's group and project filters and the range prefetch are deferred (BACKLOG). After the fixes: `pnpm test` core 681, web 912; the whole suite 222 tests in 9.5 minutes on a production build.
 
+
+### Phase 7b — forecast and Assignments report (no migration; plan `docs/superpowers/plans/2026-11-11-phase-7b.md`)
+
+- The Budget tab's Forecast (owners, admins and the project's managers): what was tracked in the estimate's period, the published plan from tomorrow (to the month's end for a monthly estimate, otherwise to the last scheduled day, two years at most), and their sum; the projected completion date (the first scheduled day the projection reaches the estimate, "Reached on <date>" when tracking already did, or "Not reached by the published plan"); and the projected overrun in hours and money. The overrun is measured in the estimate's own unit; the other unit is the same share of its projection. Scheduled money is each day's minutes at the billable rate an entry would get that day (the rate hierarchy, in the project's currency, only on a billable project); a day with no rate is counted and named. The chart continues the tracked area with a dashed scheduled one.
+- Reports › Assignments: the published plan against raw tracked work (rounding never applies), by person, project, day or week, with the variance (tracked − scheduled) and its percent of the plan, CSV, Excel and PDF. A tracked entry falls on its owner's own local day. Owners and admins see everyone, a manager their scope, a member only their own whatever "members see the team's time" says; projects the viewer cannot see are left out. Its export always streams (no export job), so the phase needs no migration.
+
+Rulings made while building 7b, beyond the design: tracked time on no project is listed as "(no project)" (it is the person's time); a hidden Reports page is a 403 from the JSON route (the plan said 404; JSON routes answer 403 for a hidden page); a negative duration is printed with a minus sign (U+2212) so the CSV formula guard does not prefix it with an apostrophe; the forecast panel shows once the published plan holds anything in the period, or the estimate was reached.
+
+Gate on the branch (2026-11-11): the two Forecast and Assignments tests each seen to fail with their behaviour broken on a production build, one break per test, before the lines were ticked; the whole suite 224 tests in 11.8 minutes on a production build (223 passed and one pre-existing projects-list test flaky on retry, in BACKLOG), the preview lane 155 in 5.7 minutes, so no spec moved lanes; `pnpm test` (core 692, web 923), lint, typecheck, format and the coverage check green; no migration, so `docs/DATA_MODEL.md` is unchanged.
+
+The final review (2026-11-11) found no cross-tenant or cross-scope leak and two important defects, fixed with tests that failed first, with one minor raised: "Without project" or "Without client" carried over from another tab emptied the Assignments report (they now mean what they mean in the engine); the overrun's "about" figure was a share of the whole projection, so unrated and non-billable hours diluted it (now a share over the rated work only, replacing decision 21's literal formula); and every non-billable project with a plan showed a "no billable rate" note (nothing is unrated where money is not a concept). After the fixes: `pnpm test` core 693, web 924; the whole suite 224 tests in 8.9 minutes on a production build.
 
 ## Phase 8 — Platform
 
