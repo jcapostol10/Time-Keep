@@ -108,6 +108,22 @@ export const invoiceUrls = {
   recurring: (slug: string) => `/api/w/${slug}/invoices/recurring`,
 };
 
+/**
+ * The schedule (Phase 7a): its own prefix. Entry writes never change a plan;
+ * every schedule write invalidates `scheduleKeys.all`.
+ */
+export const scheduleKeys = {
+  all: (slug: string) => ["schedule", slug] as const,
+  team: (slug: string, params: string) => ["schedule", slug, "team", params] as const,
+  mine: (slug: string, from: string, to: string) => ["schedule", slug, "mine", from, to] as const,
+};
+
+export const scheduleUrls = {
+  team: (slug: string, params: string) => `/api/w/${slug}/schedule?${params}`,
+  mine: (slug: string, from: string, to: string) =>
+    `/api/w/${slug}/schedule/mine?from=${from}&to=${to}`,
+};
+
 export interface TrackerOptions {
   projects: PickerProject[];
   tags: EntryTag[];

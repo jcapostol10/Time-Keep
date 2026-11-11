@@ -3,6 +3,7 @@ import "server-only";
 import { APIError } from "better-auth/api";
 
 import { CatalogError } from "@/server/catalog/errors";
+import { ScheduleError } from "@/server/schedule/assignments";
 import { TimeEntryError } from "@/server/time-entries";
 import { WorkspaceAccessError } from "@/server/workspace-access";
 import { type ActionResult, fail } from "@/lib/action-result";
@@ -18,6 +19,7 @@ export function userErrorMessage(error: unknown): string {
     error instanceof WorkspaceAccessError ||
     error instanceof CatalogError ||
     error instanceof TimeEntryError ||
+    error instanceof ScheduleError ||
     error instanceof APIError
   ) {
     return error.message;
@@ -38,6 +40,9 @@ export function actionFailure(error: unknown): ActionResult<never> {
   }
   if (error instanceof TimeEntryError && error.field)
     return fail(message, { [error.field]: [message] });
+  if (error instanceof ScheduleError && error.field) {
+    return fail(message, { [error.field]: [message] });
+  }
   return fail(message);
 }
 
