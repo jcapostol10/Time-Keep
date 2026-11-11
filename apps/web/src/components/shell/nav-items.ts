@@ -4,6 +4,7 @@ import {
   Building2Icon,
   CalendarDaysIcon,
   CalendarOffIcon,
+  CalendarRangeIcon,
   FileTextIcon,
   FolderKanbanIcon,
   LayoutDashboardIcon,
@@ -54,6 +55,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Time Tracker", href: workspaceRoutes.tracker, icon: TimerIcon },
       { label: "Timesheet", href: workspaceRoutes.timesheet, icon: TableIcon },
       { label: "Calendar", href: workspaceRoutes.calendar, icon: CalendarDaysIcon },
+      // Phase 7a: planners see the team's plan inside; everyone sees their own.
+      {
+        label: "Schedule",
+        href: (slug) => workspaceRoutes.schedule(slug),
+        icon: CalendarRangeIcon,
+      },
       // Everyone records their own expenses (Phase 6c); admins and managers see their people's.
       { label: "Expenses", href: (slug) => workspaceRoutes.expenses(slug), icon: ReceiptIcon },
       // Everyone: their own requests and balances; reviewers and admins see more inside.

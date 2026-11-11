@@ -261,7 +261,14 @@ export async function readSchedule(
     });
   }
 
-  const milestones = working ? await listMilestones(db, viewer, { from, to }, opts.projectIds) : [];
+  const milestones = working
+    ? await listMilestones(
+        db,
+        viewer,
+        { from, to },
+        opts.projectIds?.length ? opts.projectIds : undefined,
+      )
+    : [];
   const projectIds = [
     ...new Set([
       ...assignments.flatMap((a) => (a.project ? [a.project.id] : [])),

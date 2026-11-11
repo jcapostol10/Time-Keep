@@ -88,6 +88,19 @@ describe("schedule routes", () => {
     expect((await ok.json()).plan).toBe("working");
   });
 
+  it("the team route returns milestones when no project filter is given", async () => {
+    signIn("olga");
+    const { createMilestoneAction } = await import("./actions/schedule");
+    await createMilestoneAction(slug, {
+      projectId: cast.projects.website,
+      date: "2026-11-20",
+      name: "Launch",
+    });
+    const res = await teamRoute(get("schedule?from=2026-11-16&to=2026-11-22"), params(slug));
+    const body = await res.json();
+    expect(body.milestones.map((m: { name: string }) => m.name)).toEqual(["Launch"]);
+  });
+
   it("the mine route is everyone's own published plan", async () => {
     signIn("bob");
     const res = await mineRoute(get("schedule/mine?from=2026-11-16&to=2026-11-22"), params(slug));

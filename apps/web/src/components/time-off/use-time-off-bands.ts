@@ -16,6 +16,8 @@ export interface TimeOffBand {
   label: string;
   /** dateKey → what the cell shows (hours of time off, or "Holiday"). */
   days: Record<string, string>;
+  /** Phase 7a: the viewer's published assignments, drawn faint and dashed. */
+  variant?: "scheduled";
 }
 
 /**

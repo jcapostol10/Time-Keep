@@ -113,3 +113,25 @@ export async function listMilestones(
     editable: can(viewer.actor, "milestone.manage", { kind: "project", projectId: r.projectId }),
   }));
 }
+
+/** Live projects the viewer may add milestones to, by name (the Add milestone dialog). */
+export async function manageableProjects(
+  db: DbExecutor,
+  viewer: Viewer,
+): Promise<{ id: string; name: string }[]> {
+  const rows = await db
+    .select({ id: project.id, name: project.name })
+    .from(project)
+    .where(
+      and(
+        eq(project.workspaceId, viewer.workspaceId),
+        eq(project.archived, false),
+        eq(project.isTemplate, false),
+        visibleProjectFilter(viewer),
+      ),
+    )
+    .orderBy(asc(project.name));
+  return rows.filter((p) =>
+    can(viewer.actor, "milestone.manage", { kind: "project", projectId: p.id }),
+  );
+}
