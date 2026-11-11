@@ -1,3 +1,4 @@
+import type { AssignmentGroupKey, AssignmentsRow } from "./assignments-report";
 import type { AttendanceDay, AttendanceWeek } from "./attendance";
 import type { EntryType } from "./schemas";
 import { formatDuration } from "./duration";
@@ -459,4 +460,33 @@ export function toCsv<T>(rows: T[], columns: ExportColumn<T>[]): string {
   const lines = [columns.map((c) => csvCell(c.header)).join(",")];
   for (const row of rows) lines.push(columns.map((c) => csvCell(c.value(row))).join(","));
   return `﻿${lines.join("\r\n")}\r\n`;
+}
+
+const ASSIGNMENT_HEADERS: Record<AssignmentGroupKey, string> = {
+  user: "Person",
+  project: "Project",
+  day: "Date",
+  week: "Week",
+};
+
+/** The Assignments report (Phase 7b): the group, scheduled, tracked, variance and its percent. */
+export function assignmentsColumns(
+  by: AssignmentGroupKey,
+  prefs: Pick<ViewerPrefs, "durationFormat">,
+): ExportColumn<AssignmentsRow>[] {
+  const span = (seconds: number) =>
+    seconds < 0
+      ? `-${formatDuration(-seconds, prefs.durationFormat)}`
+      : formatDuration(seconds, prefs.durationFormat);
+  return [
+    { key: "label", header: ASSIGNMENT_HEADERS[by], value: (r) => r.label },
+    { key: "scheduled", header: "Scheduled", value: (r) => span(r.scheduledSeconds) },
+    { key: "tracked", header: "Tracked", value: (r) => span(r.trackedSeconds) },
+    { key: "variance", header: "Variance", value: (r) => span(r.varianceSeconds) },
+    {
+      key: "variancePercent",
+      header: "Variance %",
+      value: (r) => (r.variancePercent === null ? "" : r.variancePercent.toFixed(1)),
+    },
+  ];
 }

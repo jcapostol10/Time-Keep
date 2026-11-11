@@ -15,6 +15,7 @@ import {
   summaryColumns,
   toCsv,
   weeklyColumns,
+  assignmentsColumns,
 } from "./report-export";
 import {
   EMPTY_TOTALS,
@@ -534,5 +535,37 @@ describe("attendance export", () => {
       "Bob,Week of 2026-11-02,,,9:00:00,0:00:00,0:00:00,32:00:00,0:00:00,23:00:00,",
     );
     expect(lines.at(-1)).toBe("Bob,Total,,,9:00:00,0:00:00,0:00:00,32:00:00,0:00:00,23:00:00,");
+  });
+});
+
+describe("assignmentsColumns (Phase 7b)", () => {
+  const prefs = { durationFormat: "hh:mm:ss" } as ViewerPrefs;
+  it("names the grouping and prints durations, a negative variance and the percent", () => {
+    expect(assignmentsColumns("user", prefs).map((c) => c.header)).toEqual([
+      "Person",
+      "Scheduled",
+      "Tracked",
+      "Variance",
+      "Variance %",
+    ]);
+    expect(assignmentsColumns("week", prefs)[0]!.header).toBe("Week");
+    expect(assignmentsColumns("day", prefs)[0]!.header).toBe("Date");
+    expect(assignmentsColumns("project", prefs)[0]!.header).toBe("Project");
+    const row = {
+      key: "u1",
+      label: "Bob",
+      scheduledSeconds: 7_200,
+      trackedSeconds: 5_400,
+      varianceSeconds: -1_800,
+      variancePercent: -25,
+    };
+    expect(assignmentsColumns("user", prefs).map((c) => c.value(row))).toEqual([
+      "Bob",
+      "2:00:00",
+      "1:30:00",
+      "-0:30:00",
+      "-25.0",
+    ]);
+    expect(assignmentsColumns("user", prefs)[4]!.value({ ...row, variancePercent: null })).toBe("");
   });
 });
