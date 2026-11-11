@@ -107,6 +107,27 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
 - [ ] Rounding rounds each entry before summing (Clockify's rule); a workspace that wants the total rounded instead has no setting for it.
 - [ ] Phase 4b review: `stopTimer` with an explicit end stays ungated under force timer (Task 5 ruling, for the idle dialog's discard), so a member can trim a running timer to any end after its start. Accepted; a known soft spot.
 
+- [ ] **Review the Phase 7 decisions.** The design (`docs/superpowers/specs/2026-11-11-phase-7-design.md`) was written without an interview; its 22 decisions and the 7a rulings in `docs/PROGRESS.md` are the builder's. The ones that shape 7a: a published assignment is never edited in place (drafts replace it at Publish), members see only their own published plan, and approved time off lowers capacity rather than removing an assignment's day.
+- [ ] **Phase 7a deferred** (2026-11-11):
+  - A series is one row: moving, resizing or deleting one occurrence moves the whole series (no per-occurrence exceptions), and a series cannot be split.
+  - Split is a right-click on the team grid only; keyboard and touch users edit the dates and copy instead.
+  - The project schedule's bars open the dialog but cannot be dragged; drags are on the team grid, with a mouse.
+  - Columns are not windowed: fine up to the month zoom (31 days); a quarter zoom would need it.
+  - The Calendar band shows the viewer's own plan only, never the person shown by add-for-others.
+  - A removed or deactivated member's assignments stay in the table with no row on the grid.
+  - The Team tab has no group or project filters yet (the route takes `groupIds` and `projectIds`), and Previous / Next do not prefetch the adjacent range (design decisions 14 and 15).
+- [ ] **Phase 7a review minors** (final review, 2026-11-11):
+  - Writers do not take the `schedule:` lock and `draftsInScope` does not lock its rows: a draft edited out of the publisher's scope mid-publish is still applied, and an edit racing a publish can deadlock (opposite lock order).
+  - `draftCount` counts drafts that Publish skips (an out-of-scope original), so the bar can show a change that never publishes.
+  - Splitting a tiny total can store a `0:00 total` part, and a first part with no working day fails with zod's default text.
+  - The publish bar's "Published …" time uses the browser's locale and zone, not the viewer's preference (and differs between server and client render).
+  - A `projectIds` filter naming a private project confirms it has assignments (grey rows); intersect the filter with visible projects.
+  - `copyAssignment` checks only the destination, so a copy by a published id can duplicate another planner's out-of-scope draft.
+  - Saving an unchanged published assignment makes an identical draft (a change, and an email at Publish).
+  - Drags have no `pointercancel` / Escape handling, and every pointer move re-renders the grid even when the column did not change.
+  - The grid has no arrow-key navigation, bars sit outside gridcells, the resize handles are keyboard tab stops that do nothing, and the project rows' "Expand" buttons share one label.
+  - The schedule read's perf test asserts 2 s where the design said 500 ms (measured 138 ms).
+
 ## E2E suite
 
 - [ ] `others.spec.ts` "the timer bar stays the viewer's own" is a weak test: it passed with the entry list keyed to the viewer, and no single break models a timer for someone else (timers have no target at all), so its coverage line stays unticked.

@@ -23,6 +23,10 @@ const ALLOWED: Record<string, string> = {
   "reports.ts":
     "joins task for names and the Audit noTask criterion; its options come from listPickerProjects",
   "actions/tasks.ts": "finds a task's project for authorize",
+  "schedule/assignments.ts":
+    "loads one task by id to validate an assignment; the person's list comes from visibleTasksFor",
+  "schedule/read.ts": "joins task for the names on bars the viewer may see",
+  "schedule/publish.ts": "joins task for the names in the person's schedule email",
 };
 
 function files(dir: string): string[] {

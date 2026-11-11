@@ -97,7 +97,13 @@ export function CalendarGrid({
                   .map((b) => (
                     <div
                       key={b.key}
-                      className="bg-accent text-accent-foreground truncate rounded px-1.5 py-0.5 text-xs"
+                      data-variant={b.variant}
+                      className={cn(
+                        "truncate rounded px-1.5 py-0.5 text-xs",
+                        b.variant === "scheduled"
+                          ? "text-muted-foreground border border-dashed opacity-70"
+                          : "bg-accent text-accent-foreground",
+                      )}
                       title={b.label}
                     >
                       {b.label}

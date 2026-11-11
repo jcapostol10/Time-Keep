@@ -20,6 +20,7 @@ import {
 import { expense, expenseCategory } from "./expenses";
 import { invoice, invoiceItem, invoiceSettings, payment, recurringInvoice } from "./invoices";
 import { exportJob, reportShareLink } from "./reports";
+import { assignment, milestone } from "./schedule";
 import { taskGroup, userGroup, userGroupMember } from "./team";
 import { invitation, membership, workspace, workspaceSettings } from "./workspace";
 
@@ -61,6 +62,7 @@ export const workspaceRelations = relations(workspace, ({ many, one }) => ({
   expenseCategories: many(expenseCategory),
   invoices: many(invoice),
   recurringInvoices: many(recurringInvoice),
+  assignments: many(assignment),
   settings: one(workspaceSettings, {
     fields: [workspace.id],
     references: [workspaceSettings.workspaceId],
@@ -102,6 +104,8 @@ export const projectRelations = relations(project, ({ one, many }) => ({
   tasks: many(task),
   timeEntries: many(timeEntry),
   expenses: many(expense),
+  assignments: many(assignment),
+  milestones: many(milestone),
 }));
 
 export const projectMemberRelations = relations(projectMember, ({ one }) => ({
@@ -245,4 +249,16 @@ export const invoiceItemRelations = relations(invoiceItem, ({ one }) => ({
 export const paymentRelations = relations(payment, ({ one }) => ({
   invoice: one(invoice, { fields: [payment.invoiceId], references: [invoice.id] }),
   creator: one(user, { fields: [payment.createdBy], references: [user.id] }),
+}));
+
+export const assignmentRelations = relations(assignment, ({ one }) => ({
+  workspace: one(workspace, { fields: [assignment.workspaceId], references: [workspace.id] }),
+  user: one(user, { fields: [assignment.userId], references: [user.id] }),
+  project: one(project, { fields: [assignment.projectId], references: [project.id] }),
+  task: one(task, { fields: [assignment.taskId], references: [task.id] }),
+}));
+
+export const milestoneRelations = relations(milestone, ({ one }) => ({
+  workspace: one(workspace, { fields: [milestone.workspaceId], references: [workspace.id] }),
+  project: one(project, { fields: [milestone.projectId], references: [project.id] }),
 }));

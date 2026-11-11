@@ -25,6 +25,7 @@ import { PersonPicker } from "../tracker/person-picker";
 import { useTarget } from "../tracker/target-context";
 import { useCanWriteTimes, useTracker } from "../tracker/tracker-provider";
 import { useEntryWrites } from "../tracker/use-entry-writes";
+import { useScheduleBands } from "../schedule/use-schedule-bands";
 import { useTimeOffBands } from "../time-off/use-time-off-bands";
 import { CalendarGrid } from "./calendar-grid";
 import { EntryDialog, type EntryDialogMode } from "./entry-dialog";
@@ -68,7 +69,20 @@ export function CalendarPageClient({
   );
 
   const { data: entries = [] } = useRangeEntries(slug, from, to, true, targetKey);
-  const bands = useTimeOffBands(slug, days[0] ?? null, days[days.length - 1] ?? null, targetKey);
+  const timeOffBands = useTimeOffBands(
+    slug,
+    days[0] ?? null,
+    days[days.length - 1] ?? null,
+    targetKey,
+  );
+  // Phase 7a: the viewer's own published plan, never someone else's shown for add-for-others.
+  const scheduleBands = useScheduleBands(
+    slug,
+    days[0] ?? null,
+    days[days.length - 1] ?? null,
+    targetKey === "me",
+  );
+  const bands = useMemo(() => [...timeOffBands, ...scheduleBands], [timeOffBands, scheduleBands]);
   const writes = useEntryWrites();
   const [dialog, setDialog] = useState<EntryDialogMode | null>(null);
 

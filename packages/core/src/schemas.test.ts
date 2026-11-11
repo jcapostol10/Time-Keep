@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assignmentInputSchema,
+  assignmentPatchSchema,
+  milestoneInputSchema,
+  scheduleRangeSchema,
   clientInputSchema,
   estimateInputSchema,
   taskInputSchema,
@@ -240,5 +244,65 @@ describe("estimates (Phase 6b)", () => {
       workspaceSettingsSchema.safeParse({ ...settings, budgetThresholds: [201] }).success,
     ).toBe(false);
     expect(DEFAULT_WORKSPACE_SETTINGS.budgetThresholds).toEqual([50, 80, 100]);
+  });
+});
+
+describe("schedule (Phase 7a)", () => {
+  const base = {
+    userId: "u1",
+    projectId: "p1",
+    startDate: "2026-11-16",
+    endDate: "2026-11-20",
+    mode: "PER_DAY",
+    minutesPerDay: 480,
+  };
+  const issue = (input: unknown) => {
+    const r = assignmentInputSchema.safeParse(input);
+    expect(r.success).toBe(false);
+    return r.error!.issues.map((i) => `${i.path.join(".")}: ${i.message}`);
+  };
+
+  it("an assignment needs its dates in order, within a year", () => {
+    expect(assignmentInputSchema.parse(base).note).toBe("");
+    expect(issue({ ...base, endDate: "2026-11-15" })).toContain(
+      "endDate: The end date is before the start date.",
+    );
+    expect(issue({ ...base, endDate: "2027-11-20" })).toContain(
+      "endDate: An assignment spans a year at most.",
+    );
+  });
+
+  it("an assignment needs the amount of its mode", () => {
+    expect(issue({ ...base, minutesPerDay: null })).toContain(
+      "minutesPerDay: Enter the hours per day.",
+    );
+    expect(issue({ ...base, mode: "TOTAL", minutesPerDay: null })).toContain(
+      "totalMinutes: Enter the total hours.",
+    );
+  });
+
+  it("a repeat needs its end, within a year", () => {
+    expect(issue({ ...base, repeatWeeks: 2 })).toContain("repeatUntil: Pick when the repeat ends.");
+    expect(issue({ ...base, repeatWeeks: 2, repeatUntil: "2027-12-01" })).toContain(
+      "repeatUntil: A repeat ends within a year.",
+    );
+    expect(issue({ ...base, repeatWeeks: 2, repeatUntil: "2026-11-01" })).toContain(
+      "repeatUntil: A repeat ends within a year.",
+    );
+  });
+
+  it("the patch schema keeps no defaults, and a range is 13 weeks at most", () => {
+    expect(assignmentPatchSchema.parse({})).toEqual({});
+    expect(scheduleRangeSchema.safeParse({ from: "2026-11-01", to: "2027-01-30" }).success).toBe(
+      true,
+    );
+    expect(
+      JSON.stringify(
+        scheduleRangeSchema.safeParse({ from: "2026-11-01", to: "2027-01-31" }).error?.issues,
+      ),
+    ).toContain("Show 13 weeks at most.");
+    expect(
+      milestoneInputSchema.safeParse({ projectId: "p", date: "2026-11-20", name: " " }).success,
+    ).toBe(false);
   });
 });

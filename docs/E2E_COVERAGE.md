@@ -289,6 +289,16 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] An overdue invoice emails the owner once — `invoices-extra.spec.ts` › "an overdue invoice emails the admins once"
 - [x] Voiding a sent invoice releases its time, which can be edited again; the invoice reads Void — `invoices-extra.spec.ts` › "voiding releases the time and the number stays"
 
+## Schedule
+
+- [x] Assigning someone 10 hours a day shows that day over capacity in red, the next day under — `schedule.spec.ts` › "assigning 10 hours a day shows the day over capacity"
+- [x] Dragging across days creates an assignment for them; dragging a bar moves it and its edge resizes it — `schedule.spec.ts` › "drag to create, move and resize on the team grid"
+- [x] A draft is hidden from the member until Publish; then it shows in their My schedule, on their Calendar's all-day band, and in an email — `schedule.spec.ts` › "a draft is hidden from the member until Publish; then My schedule, the Calendar and an email show it"
+- [x] A member has only My schedule: no Team or Projects tab, no way to add, and the team page is not found — `schedule.spec.ts` › "members have only My schedule and cannot edit"
+- [x] The project schedule shows a project's assigned hours for the range and its milestones, and expands to its people's bars — `schedule.spec.ts` › "the project schedule shows total hours and milestones"
+- [x] A bar's actions menu opens without starting a new assignment, and its Edit opens the assignment — `schedule.spec.ts` › "the bar's menu opens without starting a new assignment"
+- [x] Right-clicking a day of an assignment splits it there into two — `schedule.spec.ts` › "split an assignment from its menu"
+
 ## Permissions
 
 - [x] A manager opens a project they manage, with its Budget tab and without its Rates tab — `permissions.spec.ts` › "a manager opens a project they manage, without its Rates tab"

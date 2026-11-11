@@ -4,6 +4,9 @@ export const workspaceRoutes = {
   tracker: (slug: string) => `/w/${slug}/tracker`,
   timesheet: (slug: string) => `/w/${slug}/timesheet`,
   calendar: (slug: string) => `/w/${slug}/calendar`,
+  /** The schedule (Phase 7a): Team and Projects for planners, My schedule for everyone. */
+  schedule: (slug: string, tab?: "team" | "projects" | "mine") =>
+    `/w/${slug}/schedule${tab ? `/${tab}` : ""}`,
   dashboard: (slug: string) => `/w/${slug}/dashboard`,
   reports: (
     slug: string,

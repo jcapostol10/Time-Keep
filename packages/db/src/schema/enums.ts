@@ -10,6 +10,7 @@ import {
   ENTRY_TYPES,
   ESTIMATE_KINDS,
   ESTIMATE_RESETS,
+  HOURS_MODES,
   EXPENSE_CATEGORY_KINDS,
   EXPORT_FORMATS,
   INVOICE_LINE_KINDS,
@@ -74,3 +75,4 @@ export const invoiceStatusEnum = pgEnum("invoice_status", INVOICE_STATUSES);
 export const invoiceItemKindEnum = pgEnum("invoice_item_kind", INVOICE_LINE_KINDS);
 export const recurringScheduleEnum = pgEnum("recurring_schedule", RECURRING_SCHEDULES);
 export const recurringModeEnum = pgEnum("recurring_mode", RECURRING_MODES);
+export const hoursModeEnum = pgEnum("hours_mode", HOURS_MODES);

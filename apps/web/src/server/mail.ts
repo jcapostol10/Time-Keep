@@ -29,6 +29,8 @@ export interface EmailContent {
   title: string;
   /** One or two short sentences. */
   intro: string;
+  /** A short list under the intro (Phase 7a: a schedule's lines). */
+  items?: string[];
   cta?: { label: string; url: string };
   outro?: string;
 }
@@ -47,6 +49,9 @@ export function renderEmail(content: EmailContent): { html: string; text: string
     ? `<p style="margin:24px 0"><a href="${escapeHtml(content.cta.url)}" style="display:inline-block;background:#1f8a8a;color:#fff;text-decoration:none;padding:12px 20px;border-radius:6px;font-weight:600">${escapeHtml(content.cta.label)}</a></p>
        <p style="font-size:13px;color:#667">If the button does not work, open this link:<br><a href="${escapeHtml(content.cta.url)}" style="color:#1f8a8a">${escapeHtml(content.cta.url)}</a></p>`
     : "";
+  const items = content.items?.length
+    ? `<ul style="font-size:15px;line-height:1.5;margin:12px 0 0;padding-left:20px">${content.items.map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul>`
+    : "";
   const outro = content.outro
     ? `<p style="font-size:13px;color:#667">${escapeHtml(content.outro)}</p>`
     : "";
@@ -57,6 +62,7 @@ export function renderEmail(content: EmailContent): { html: string; text: string
     <p style="margin:0 0 16px;font-weight:700;letter-spacing:.02em;color:#1f8a8a">TimeKeep</p>
     <h1 style="font-size:20px;margin:0 0 12px">${escapeHtml(content.title)}</h1>
     <p style="font-size:15px;line-height:1.5;margin:0">${escapeHtml(content.intro)}</p>
+    ${items}
     ${cta}
     ${outro}
   </div>
@@ -66,6 +72,7 @@ export function renderEmail(content: EmailContent): { html: string; text: string
     content.title,
     "",
     content.intro,
+    ...(content.items?.length ? ["", ...content.items.map((i) => `- ${i}`)] : []),
     content.cta ? `\n${content.cta.label}: ${content.cta.url}` : "",
     content.outro ? `\n${content.outro}` : "",
   ]

@@ -27,6 +27,7 @@ import { type JournalEntry, listPendingMigrations } from "./migrations-status";
 import { rateEntriesSql } from "./rates-sql";
 import {
   account,
+  assignment,
   approvalEvent,
   approvalRequest,
   client,
@@ -40,6 +41,7 @@ import {
   kioskCredential,
   managedUser,
   membership,
+  milestone,
   payment,
   project,
   projectGroup,
@@ -209,6 +211,7 @@ export async function seed(db: Database, opts: { journal?: JournalEntry[] } = {}
     await seedEstimates(tx, catalog);
     await seedExpenses(tx, demo.id, ids, catalog);
     await seedInvoices(tx, demo.id, ids, catalog);
+    await seedSchedule(tx, demo.id, ids, catalog);
     await seedApprovals(tx, demo.id, ids);
     await seedTimeOff(tx, demo.id, ids);
     const kioskToken = await seedKiosk(tx, demo.id, ids, catalog.taskIds);
@@ -1251,4 +1254,63 @@ if (isDirectRun) {
       process.exitCode = 1;
     })
     .finally(() => handle.close());
+}
+
+/**
+ * The demo schedule (Phase 7a): the next three weeks, published, for two
+ * members and the manager on Website and Mobile; member1 over capacity on one
+ * day (10 hours against 8), one unpublished draft, and a launch milestone.
+ */
+async function seedSchedule(
+  db: DbExecutor,
+  workspaceId: string,
+  ids: Map<string, string>,
+  catalog: { projectIds: string[] },
+) {
+  const [website, mobile] = catalog.projectIds;
+  const member1 = ids.get("member1@demo.test");
+  const member2 = ids.get("member2@demo.test");
+  const manager = ids.get("manager@demo.test");
+  const owner = ids.get("owner@demo.test") ?? null;
+  if (!website || !mobile || !member1 || !member2 || !manager) return;
+  const today = localDateKey(new Date(), DEMO_WORKSPACE.timezone);
+  // Next Monday, so the plan reads as the coming weeks.
+  const monday = addDaysToKey(today, (8 - weekdayOfKey(today)) % 7 || 7);
+  const day = (n: number) => addDaysToKey(monday, n);
+  const row = (
+    userId: string,
+    projectId: string,
+    start: number,
+    end: number,
+    minutesPerDay: number,
+    published = true,
+  ) => ({
+    id: randomUUID(),
+    workspaceId,
+    userId,
+    projectId,
+    startDate: day(start),
+    endDate: day(end),
+    mode: "PER_DAY" as const,
+    minutesPerDay,
+    published,
+    createdBy: owner,
+  });
+  await db
+    .insert(assignment)
+    .values([
+      row(member1, website, 0, 4, 360),
+      row(member1, mobile, 2, 2, 240),
+      row(member2, mobile, 0, 11, 480),
+      row(manager, website, 7, 11, 240),
+      row(manager, mobile, 14, 18, 240, false),
+    ]);
+  await db.insert(milestone).values({
+    id: randomUUID(),
+    workspaceId,
+    projectId: website,
+    date: day(11),
+    name: "Website launch",
+    createdBy: owner,
+  });
 }

@@ -15,6 +15,14 @@ import { PROJECT_VISIBILITIES, TASK_STATUSES } from "./catalog";
 import { hexColorSchema } from "./colors";
 import { isCurrencyCode } from "./money";
 import { parseDuration } from "./duration";
+import {
+  ASSIGNMENT_SPAN_MAX_DAYS,
+  daysBetweenKeys,
+  HOURS_MODES,
+  MINUTES_PER_DAY_MAX,
+  REPEAT_WEEKS_MAX,
+  SCHEDULE_RANGE_MAX_DAYS,
+} from "./schedule";
 import { IMPORT_COLUMNS } from "./entry-import";
 import {
   BUDGET_THRESHOLD_MAX,
@@ -1104,3 +1112,107 @@ export const reorderLinesSchema = z.object({
   lineIds: z.array(z.string().min(1).max(64)).min(1).max(200),
 });
 export type ReorderLinesInput = z.infer<typeof reorderLinesSchema>;
+
+// Phase 7a: assignments and milestones (decisions 1–4, 16).
+
+const yearAfter = (key: string) => `${Number(key.slice(0, 4)) + 1}${key.slice(4)}`;
+
+export const assignmentInputSchema = z
+  .object({
+    userId: z.string().min(1),
+    projectId: z.string().min(1),
+    taskId: z.string().min(1).nullable().default(null),
+    startDate: z.iso.date(),
+    endDate: z.iso.date(),
+    mode: z.enum(HOURS_MODES),
+    minutesPerDay: z.int().min(1).max(MINUTES_PER_DAY_MAX).nullable().default(null),
+    totalMinutes: z
+      .int()
+      .min(1)
+      .max(MINUTES_PER_DAY_MAX * ASSIGNMENT_SPAN_MAX_DAYS)
+      .nullable()
+      .default(null),
+    includeNonWorking: z.boolean().default(false),
+    note: z.string().trim().max(1000).default(""),
+    repeatWeeks: z.int().min(1).max(REPEAT_WEEKS_MAX).nullable().default(null),
+    repeatUntil: z.iso.date().nullable().default(null),
+  })
+  .superRefine((v, ctx) => {
+    if (v.endDate < v.startDate) {
+      ctx.addIssue({ code: "custom", path: ["endDate"], message: END_BEFORE_START_MESSAGE });
+    } else if (daysBetweenKeys(v.startDate, v.endDate) >= ASSIGNMENT_SPAN_MAX_DAYS) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["endDate"],
+        message: "An assignment spans a year at most.",
+      });
+    }
+    if (v.mode === "PER_DAY" && v.minutesPerDay === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["minutesPerDay"],
+        message: "Enter the hours per day.",
+      });
+    }
+    if (v.mode === "TOTAL" && v.totalMinutes === null) {
+      ctx.addIssue({ code: "custom", path: ["totalMinutes"], message: "Enter the total hours." });
+    }
+    if (v.repeatWeeks !== null && v.repeatUntil === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["repeatUntil"],
+        message: "Pick when the repeat ends.",
+      });
+    }
+    if (
+      v.repeatUntil !== null &&
+      (v.repeatUntil < v.startDate || v.repeatUntil > yearAfter(v.startDate))
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["repeatUntil"],
+        message: "A repeat ends within a year.",
+      });
+    }
+  });
+export type AssignmentInput = z.infer<typeof assignmentInputSchema>;
+
+/** Explicit, so an untouched field keeps its stored value (zod 4 `.partial()` keeps defaults). */
+export const assignmentPatchSchema = z.object({
+  userId: z.string().min(1).optional(),
+  projectId: z.string().min(1).optional(),
+  taskId: z.string().min(1).nullable().optional(),
+  startDate: z.iso.date().optional(),
+  endDate: z.iso.date().optional(),
+  mode: z.enum(HOURS_MODES).optional(),
+  minutesPerDay: z.int().min(1).max(MINUTES_PER_DAY_MAX).nullable().optional(),
+  totalMinutes: z
+    .int()
+    .min(1)
+    .max(MINUTES_PER_DAY_MAX * ASSIGNMENT_SPAN_MAX_DAYS)
+    .nullable()
+    .optional(),
+  includeNonWorking: z.boolean().optional(),
+  note: z.string().trim().max(1000).optional(),
+  repeatWeeks: z.int().min(1).max(REPEAT_WEEKS_MAX).nullable().optional(),
+  repeatUntil: z.iso.date().nullable().optional(),
+});
+export type AssignmentPatch = z.infer<typeof assignmentPatchSchema>;
+
+export const milestoneInputSchema = z.object({
+  projectId: z.string().min(1),
+  date: z.iso.date(),
+  name: z.string().trim().min(1).max(100),
+});
+export type MilestoneInput = z.infer<typeof milestoneInputSchema>;
+
+export const scheduleRangeSchema = z
+  .object({ from: z.iso.date(), to: z.iso.date() })
+  .superRefine((v, ctx) => {
+    if (v.to < v.from) {
+      ctx.addIssue({ code: "custom", path: ["to"], message: END_BEFORE_START_MESSAGE });
+    } else if (daysBetweenKeys(v.from, v.to) >= SCHEDULE_RANGE_MAX_DAYS) {
+      ctx.addIssue({ code: "custom", path: ["to"], message: "Show 13 weeks at most." });
+    }
+  });
+export type ScheduleRange = z.infer<typeof scheduleRangeSchema>;

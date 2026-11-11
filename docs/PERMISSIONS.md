@@ -176,3 +176,22 @@ resource (outside the scope, a private project) is a 404, so its existence is no
 | Action | Owner | Admin | Manager | Member |
 | --- | --- | --- | --- | --- |
 | `invoice.manage` | yes | yes | — | — |
+
+## Schedule
+
+| Action | Owner | Admin | Manager | Member |
+| --- | --- | --- | --- | --- |
+| `schedule.viewTeam` | yes | yes | yes | — |
+| `schedule.publish` | yes | yes | yes | — |
+
+## Assignments
+
+| Action | Owner | Admin | Manager | Member |
+| --- | --- | --- | --- | --- |
+| `assignment.write` | yes | yes | their scope | — |
+
+## Milestones
+
+| Action | Owner | Admin | Manager | Member |
+| --- | --- | --- | --- | --- |
+| `milestone.manage` | yes | yes | projects they manage | — |

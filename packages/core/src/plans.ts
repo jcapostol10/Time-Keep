@@ -11,7 +11,8 @@ export type PlanFeature =
   | "multiCurrency"
   | "budgets"
   | "expenses"
-  | "invoicing";
+  | "invoicing"
+  | "scheduling";
 
 export function planAllows(_workspace: { id: string }, _feature: PlanFeature): boolean {
   return true;
