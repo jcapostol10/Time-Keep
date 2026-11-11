@@ -750,6 +750,63 @@ A template the daily job runs (decision 27): weekly on a weekday for the seven d
 | created_by | text? → user (set null) | the job runs as them while they manage invoices, else as the workspace owner |
 | created_at, updated_at | timestamptz | |
 
+### assignment (Phase 7a)
+
+A person planned on a project over local dates (design decisions 1–4, 9). Minutes fall on the person's working days that are not their holidays (or every day with `include_non_working`); a total is spread in whole minutes, the remainder to the earliest days; a weekly series repeats the span every `repeat_weeks` weeks while its start is on or before `repeat_until`. Approved time off never removes a day: it lowers capacity. Written only by `server/schedule/assignments.ts` and `publish.ts` (`schedule-writers-coverage.test.ts`).
+
+A row is published or a draft. Members read published rows; planners read the working plan (drafts that are not tombstones, plus published rows no draft replaces: `workingPlanWhere`). Editing a published row makes a draft naming it (`replaces_id`, one per row); deleting one makes a tombstone draft (`deleted`); Publish deletes the replaced rows and publishes the drafts under `pg_advisory_xact_lock(hashtext('schedule:' || workspace))`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | |
+| user_id | text → user (cascade) | |
+| project_id | text → project (cascade) | |
+| task_id | text? → task (set null) | |
+| start_date, end_date | date, date | inclusive; check `end_date >= start_date`; a span of 366 days at most |
+| mode | enum `hours_mode` (`PER_DAY`, `TOTAL`) | check: `minutes_per_day` for PER_DAY, `total_minutes` for TOTAL |
+| minutes_per_day, total_minutes | integer? | 1–1440 a day; a total at most 1440 × the days it falls on |
+| include_non_working | boolean | default false |
+| note | text | |
+| repeat_weeks, repeat_until | smallint?, date? | 1–4 weeks; both or neither (check); within a year of the start |
+| published | boolean | default false |
+| replaces_id | text? → assignment (cascade) | a draft's published original; unique where not null |
+| deleted | boolean | a tombstone; only on an unpublished draft with `replaces_id` (check) |
+| created_by | text? → user (set null) | |
+| created_at, updated_at | timestamptz | |
+
+Indexes: `(workspace_id, user_id, start_date)`, `(workspace_id, project_id, start_date)`, unique partial `(replaces_id) WHERE replaces_id IS NOT NULL`.
+
+### milestone (Phase 7a)
+
+A date on a project's timeline: a diamond on the project schedule, managed by owners, admins and the project's managers.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | index `(workspace_id, date)` |
+| project_id | text → project (cascade) | |
+| date | date | |
+| name | text | |
+| created_by | text? → user (set null) | |
+| created_at, updated_at | timestamptz | |
+
+### assignment_publish (Phase 7a)
+
+One row per Publish that changed something: the outbox key of its emails (`schedule.published:<id>:<user>`) and the "last published" line.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| id | text PK | UUID |
+| workspace_id | text → workspace (cascade) | index `(workspace_id, published_at)` |
+| published_by | text? → user (set null) | |
+| published_at | timestamptz | |
+| changed_count | integer | the drafts applied |
+
+## Schedule at scale (Phase 7a, 2026-11-11)
+
+`readSchedule` over 104 people and 600 assignments (100 with a weekly series) for 13 weeks, with capacity, holidays and approved time off: 138 ms on the local test database (`read.test.ts` asserts under 2 s). The grid renders only the rows in view plus five on each side; the widest zoom is a month (31 columns), so columns are not windowed.
+
 ## Rules at scale (Phase 4b)
 
 Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf`, 2026-10-28, after the rule columns, `time_entry.type` and the work-only rating:
@@ -775,5 +832,4 @@ Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf` after
 
 ## Planned (later phases)
 
-Phase 7: `assignment`, `milestone`.
 Phase 8: `subscription`, `api_key`, `webhook`, `webhook_delivery`, `audit_log`, `sso_config`.

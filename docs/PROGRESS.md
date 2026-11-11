@@ -338,7 +338,23 @@ The final review (2026-11-10) found one critical and ten important defects, all 
 
 ## Phase 7 — Scheduling and forecasting
 
-- [ ] Assignments, team and project schedules, publishing, forecasting, assignments report
+Design: `docs/superpowers/specs/2026-11-11-phase-7-design.md` (written without an interview; the 22 decisions are the builder's). Two branches: 7a the schedule, 7b the forecast and the Assignments report.
+
+- [x] Assignments, team and project schedules, publishing (7a)
+- [ ] Forecasting on the Budget tab, the Assignments report (7b)
+
+### Phase 7a — schedule (migration 0020; plan `docs/superpowers/plans/2026-11-11-phase-7a.md`)
+
+- Track › Schedule. An assignment is a person on a project over local dates: hours per day or a total spread over the days it falls on (the person's working days less their holidays, or every day), optionally repeating every 1–4 weeks until a date, with a note and an optional task. Approved time off lowers capacity and never removes a day, so a clash shows.
+- Team tab (owners, admins and managers): a row per person the planner may schedule (a manager: themselves, their people and their projects' members), a column per day over a week, two weeks or a month, and each day's heat under its bars: red when more is scheduled than the capacity (daily capacity less holidays and approved time off), green when it fills the day, amber with room. Drag across empty days to create, drag a bar to move it (to another person too), drag its edges to resize, Alt-drag to copy, right-click to split at a day; every gesture also has the dialog. Hours on a project the planner cannot see show as "Another project", without its name or note.
+- Drafts and publishing: every change is a draft (a published assignment is never edited in place; a draft replaces it, a delete is a tombstone) until Publish, which applies the drafts in the planner's scope and emails each person whose plan changed their next four weeks. Discard drops the drafts.
+- Projects tab: a row per project with assignments or milestones in the range, its assigned hours, milestones as diamonds (owners, admins and the project's managers add them), expanding to its people's bars.
+- My schedule (everyone): their own published plan, day by day; the Calendar's all-day band shows it dashed.
+
+Rulings made while building 7a, beyond the design: an assignment must fall on at least one day ("include non-working days" otherwise); moving an assignment to another project without naming a task clears the task; split is a right-click on the team grid only, and the project schedule's bars open the dialog without dragging; the email lists each occurrence of a series in the four weeks; a Publish with nothing to apply writes no publish row and sends nothing; the Review Focus total example in the plan counted six working days where there are five.
+
+Gate on the branch (2026-11-11): the six Schedule tests each seen to fail with their behaviour broken on a production build, one break per test, before the lines were ticked; the whole suite 221 tests in 11.4 minutes against a production build, the preview lane 152 in 5.7 minutes of wall time on three workers, so no spec moved lanes; `pnpm test` (core 681, web 910), lint, typecheck and format green; `readSchedule` over 104 people and 600 assignments for 13 weeks in 138 ms; migration 0020 applied to the shared database before the preview.
+
 
 ## Phase 8 — Platform
 
