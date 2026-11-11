@@ -36,12 +36,11 @@ describe("readSchedule", () => {
     const draft = await updateAssignment(db, olga, id, { minutesPerDay: 120 });
     await createAssignment(db, olga, cast.input("ann", cast.projects.mobile));
     const working = await readSchedule(db, olga, { ...WEEK, plan: "working" });
-    expect(working.assignments.map((a) => [a.id, a.draft]).sort()).toEqual(
-      [
-        [draft, true],
-        [expect.any(String), true],
-      ].sort(),
-    );
+    // The published original is replaced by its draft: two rows, both drafts, never the original.
+    expect(working.assignments).toHaveLength(2);
+    expect(working.assignments.every((a) => a.draft)).toBe(true);
+    expect(working.assignments.map((a) => a.id)).toContain(draft);
+    expect(working.assignments.map((a) => a.id)).not.toContain(id);
     expect(working.assignments.find((a) => a.id === draft)!.days["2026-11-16"]).toBe(120);
     expect(working.draftCount).toBe(2);
     const bob = await cast.viewer("bob");
@@ -184,7 +183,7 @@ describe("readSchedule", () => {
       plan: "working",
     });
     const ms = performance.now() - t0;
-    console.log(
+    console.info(
       `readSchedule: ${s.people.length} people, ${s.assignments.length} assignments, ${ms.toFixed(0)} ms`,
     );
     expect(s.people.length).toBeGreaterThanOrEqual(100);
