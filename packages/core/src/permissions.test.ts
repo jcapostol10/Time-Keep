@@ -187,6 +187,15 @@ const TABLE: Row[] = [
   ["expenseCategory.manage", NONE, true, true, false, false],
   // Phase 6d: invoices are owners' and admins'.
   ["invoice.manage", NONE, true, true, false, false],
+  // Phase 7a: planners schedule; members only read their own published plan.
+  ["schedule.viewTeam", NONE, true, true, true, false],
+  ["schedule.publish", NONE, true, true, true, false],
+  ["assignment.write", entry(ME), true, true, true, false],
+  ["assignment.write", entry(MANAGED), true, true, true, false],
+  ["assignment.write", entry(OTHER, MANAGED_PROJECT), true, true, true, false],
+  ["assignment.write", entry(OTHER), true, true, false, false],
+  ["milestone.manage", project(MANAGED_PROJECT), true, true, true, false],
+  ["milestone.manage", project(OTHER_PROJECT), true, true, false, false],
 ];
 
 describe("can", () => {
@@ -403,6 +412,31 @@ describe("renderPermissionsMarkdown", () => {
     expect(md).toContain("## Expenses");
     expect(md).toContain("## Expense categories");
     expect(md).toContain("## Invoices");
+    expect(md).toContain("## Schedule");
+  });
+});
+
+describe("schedule (Phase 7a)", () => {
+  it("a member cannot see the team schedule, write assignments, publish or manage milestones", () => {
+    const m = actor("member");
+    expect(denial(m, "schedule.viewTeam", NONE)).toBe(403);
+    expect(denial(m, "schedule.publish", NONE)).toBe(403);
+    expect(denial(m, "assignment.write", entry(ME))).toBe(403);
+    expect(denial(m, "milestone.manage", project(MANAGED_PROJECT))).toBe(403);
+  });
+
+  it("a manager writes for their people on any project and for anyone on their projects", () => {
+    const mgr = actor("manager");
+    expect(can(mgr, "assignment.write", entry(MANAGED, OTHER_PROJECT))).toBe(true);
+    expect(can(mgr, "assignment.write", entry(OTHER, MANAGED_PROJECT))).toBe(true);
+    expect(denial(mgr, "assignment.write", entry(OTHER, OTHER_PROJECT))).toBe(404);
+    expect(can(actor("admin"), "assignment.write", entry(OTHER, OTHER_PROJECT))).toBe(true);
+  });
+
+  it("milestones are a manager's on the projects they manage only", () => {
+    const mgr = actor("manager");
+    expect(can(mgr, "milestone.manage", project(MANAGED_PROJECT))).toBe(true);
+    expect(denial(mgr, "milestone.manage", project(OTHER_PROJECT))).toBe(404);
   });
 });
 

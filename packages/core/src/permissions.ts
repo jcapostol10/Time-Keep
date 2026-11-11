@@ -89,6 +89,14 @@ export const ACTIONS = [
   "expenseCategory.manage",
   /** invoices, payments, recurring templates and invoice settings (Phase 6d): owners and admins */
   "invoice.manage",
+  /** the team and project schedules' working plan, drafts included (Phase 7a) */
+  "schedule.viewTeam",
+  /** publish or discard the drafts inside one's scope */
+  "schedule.publish",
+  /** create, edit, move, split, copy and delete assignments: a person on a project */
+  "assignment.write",
+  /** a project's milestones on the project schedule */
+  "milestone.manage",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -296,6 +304,11 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
   "expense.write": { owner: "yes", admin: "yes", manager: "managedPeople", member: "own" },
   "expenseCategory.manage": ADMINS,
   "invoice.manage": ADMINS,
+  // Phase 7a: planners are owners, admins and managers; members read only their own published plan.
+  "schedule.viewTeam": { owner: "yes", admin: "yes", manager: "yes", member: "no" },
+  "schedule.publish": { owner: "yes", admin: "yes", manager: "yes", member: "no" },
+  "assignment.write": { owner: "yes", admin: "yes", manager: "scope", member: "no" },
+  "milestone.manage": PROJECT_MANAGERS,
 };
 
 const CREATED: Partial<Record<Action, CatalogType>> = {
@@ -478,6 +491,9 @@ const SECTION_TITLES: Record<string, string> = {
   expense: "Expenses",
   expenseCategory: "Expense categories",
   invoice: "Invoices",
+  schedule: "Schedule",
+  assignment: "Assignments",
+  milestone: "Milestones",
 };
 
 /** The matrix as markdown, for docs/PERMISSIONS.md. */

@@ -20,6 +20,7 @@ export * from "./rates";
 export * from "./required-fields";
 export * from "./roles";
 export * from "./rounding";
+export * from "./schedule";
 export * from "./schemas";
 export * from "./workspace-rules";
 export * from "./slug";
