@@ -1,6 +1,6 @@
 "use client";
 
-import { type DurationFormat, formatDuration, formatMoney } from "@timekeep/core";
+import { type DurationFormat, formatDateKey, formatDuration, formatMoney } from "@timekeep/core";
 import {
   Table,
   TableBody,
@@ -23,6 +23,7 @@ import {
 import type { BudgetDTO } from "@/lib/catalog-types";
 
 import { EstimateForm } from "./estimate-form";
+import { ForecastPanel } from "./forecast-panel";
 import { ProgressBar } from "./progress-bar";
 
 /**
@@ -43,7 +44,21 @@ export function BudgetTab({
   durationFormat: DurationFormat;
   settingsHref: string;
 }) {
-  const { progress } = budget;
+  const { progress, forecast } = budget;
+  // The forecast shows once the published plan holds something in the period, or the estimate is reached.
+  const showForecast = forecast && (forecast.scheduledSeconds > 0 || forecast.reachedOn !== null);
+  // The chart: tracked to today, then the plan's cumulative projection as a dashed area.
+  const chart: { label: string; value?: number; scheduled?: number }[] = budget.series.map((p) => ({
+    label: p.label,
+    value: p.value,
+  }));
+  if (showForecast && forecast.scheduledSeconds > 0 && chart.length > 0) {
+    const last = chart[chart.length - 1]!;
+    last.scheduled = last.value;
+    for (const p of forecast.series) {
+      if (p.dateKey) chart.push({ label: formatDateKey(p.dateKey), scheduled: p.value });
+    }
+  }
   const fmt = (value: number) =>
     progress?.kind === "MONEY"
       ? formatMoney(value, budget.currency)
@@ -87,11 +102,19 @@ export function BudgetTab({
         ) : null}
       </section>
 
-      {progress && budget.series.length > 1 ? (
+      {showForecast ? (
+        <ForecastPanel
+          forecast={forecast}
+          currency={budget.currency}
+          durationFormat={durationFormat}
+        />
+      ) : null}
+
+      {progress && chart.length > 1 ? (
         <figure className="bg-card h-56 rounded-lg border p-3" data-testid="budget-chart">
           <figcaption className="sr-only">Tracked against the estimate</figcaption>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={budget.series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <AreaChart data={chart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <XAxis
                 dataKey="label"
                 tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
@@ -115,7 +138,10 @@ export function BudgetTab({
                   borderRadius: 8,
                   fontSize: 12,
                 }}
-                formatter={(v) => [fmt(Number(v ?? 0)), "Tracked"]}
+                formatter={(v, name) => [
+                  fmt(Number(v ?? 0)),
+                  name === "scheduled" ? "Scheduled" : "Tracked",
+                ]}
               />
               <ReferenceLine
                 y={progress.estimate}
@@ -129,6 +155,15 @@ export function BudgetTab({
                 stroke="var(--chart-1)"
                 fill="var(--chart-1)"
                 fillOpacity={0.2}
+              />
+              <Area
+                type="monotone"
+                dataKey="scheduled"
+                stroke="var(--chart-2)"
+                strokeDasharray="5 4"
+                fill="var(--chart-2)"
+                fillOpacity={0.1}
+                connectNulls={false}
               />
             </AreaChart>
           </ResponsiveContainer>

@@ -299,6 +299,11 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A bar's actions menu opens without starting a new assignment, and its Edit opens the assignment — `schedule.spec.ts` › "the bar's menu opens without starting a new assignment"
 - [x] Right-clicking a day of an assignment splits it there into two — `schedule.spec.ts` › "split an assignment from its menu"
 
+## Forecast and Assignments report
+
+- [x] The Budget tab forecasts an overrun when tracked plus the published plan exceeds the estimate, and the day the plan reaches it — `forecast.spec.ts` › "the forecast predicts an overrun when scheduled plus tracked exceeds the estimate"
+- [x] The Assignments report shows a person's scheduled and tracked time with the variance, and exports it as a CSV — `forecast.spec.ts` › "the Assignments report shows scheduled against tracked with the variance, and its CSV"
+
 ## Permissions
 
 - [x] A manager opens a project they manage, with its Budget tab and without its Rates tab — `permissions.spec.ts` › "a manager opens a project they manage, without its Rates tab"

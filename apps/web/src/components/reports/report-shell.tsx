@@ -119,6 +119,7 @@ export function ReportShell({
         extra={view === "audit" ? <AuditFilter /> : null}
         peopleOnly={attendance}
         expenses={expenses}
+        plan={assignments}
       />
       {children}
     </div>

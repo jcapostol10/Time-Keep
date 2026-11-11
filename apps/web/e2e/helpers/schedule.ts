@@ -82,6 +82,8 @@ export async function addAssignmentViaUi(
     perDay?: string;
     total?: string;
     open?: boolean;
+    /** Switch "Include non-working days" on (a day that may be a weekend). */
+    nonWorking?: boolean;
   },
 ) {
   if (opts.open !== false) await page.getByRole("button", { name: "Add assignment" }).click();
@@ -98,6 +100,9 @@ export async function addAssignmentViaUi(
     await dialog.getByRole("textbox", { name: "Total hours" }).fill(opts.total);
   } else {
     await dialog.getByRole("textbox", { name: "Hours per day" }).fill(opts.perDay ?? "8");
+  }
+  if (opts.nonWorking) {
+    await dialog.getByRole("switch", { name: "Include non-working days" }).click();
   }
   await dialog.getByRole("button", { name: "Save assignment" }).click();
   await expect(dialog).toBeHidden();
@@ -122,4 +127,15 @@ export async function dragBetween(
   await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 4 });
   await page.mouse.move(to.x, to.y, { steps: 4 });
   await page.mouse.up();
+}
+
+/** Today's date key in the person's zone. */
+export function todayKey(tz: string, now = new Date()): string {
+  return keyIn(tz, now);
+}
+
+/** Publishes the drafts from the team grid. */
+export async function publishSchedule(page: Page) {
+  await page.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByText("Schedule published")).toBeVisible();
 }
