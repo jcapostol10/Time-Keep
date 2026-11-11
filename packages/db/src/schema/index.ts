@@ -12,4 +12,5 @@ export * from "./time-off";
 export * from "./kiosk";
 export * from "./expenses";
 export * from "./invoices";
+export * from "./schedule";
 export * from "./relations";
