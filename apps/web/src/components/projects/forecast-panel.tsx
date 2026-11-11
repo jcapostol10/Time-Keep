@@ -80,7 +80,7 @@ export function ForecastPanel({
         </div>
       </dl>
       {forecast.unratedSeconds > 0 ? (
-        <p role="status" className="bg-muted text-muted-foreground rounded-md px-3 py-2 text-sm">
+        <p className="bg-muted text-muted-foreground rounded-md px-3 py-2 text-sm">
           {hours(forecast.unratedSeconds)} of the plan has no billable rate, so it adds no money.
         </p>
       ) : null}

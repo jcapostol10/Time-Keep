@@ -4,6 +4,7 @@ import {
   addDaysInZone,
   assignmentsRows,
   localDateKey,
+  NONE_ID,
   type PlanRow,
   type ReportQuery,
   resolveReportRange,
@@ -72,16 +73,36 @@ export async function assignmentsReport(
     ).map((r) => r.userId);
     userIds = userIds ? userIds.filter((u) => inGroups.includes(u)) : inGroups;
   }
-  const projectFilter: SQL[] = [];
-  if (query.projectIds.length) projectFilter.push(inArray(project.id, query.projectIds));
-  if (query.clientIds.length) projectFilter.push(inArray(project.clientId, query.clientIds));
+  // The URL is shared with the other tabs: "none" means "Without project" / "Without client".
+  // A plan always names a project, so "Without project" keeps only tracked time on none.
+  const projectIds = query.projectIds.filter((id) => id !== NONE_ID);
+  const withoutProject = query.projectIds.includes(NONE_ID);
+  const clientIds = query.clientIds.filter((id) => id !== NONE_ID);
+  const withoutClient = query.clientIds.includes(NONE_ID);
+  const planFilter: SQL[] = [];
+  const entryFilter: SQL[] = [];
+  if (query.projectIds.length) {
+    planFilter.push(projectIds.length ? inArray(project.id, projectIds) : sql`false`);
+    const parts: SQL[] = [];
+    if (projectIds.length) parts.push(inArray(timeEntry.projectId, projectIds));
+    if (withoutProject) parts.push(isNull(timeEntry.projectId));
+    entryFilter.push(or(...parts)!);
+  }
+  if (query.clientIds.length) {
+    // An entry on no project has no client either, as in the report engine.
+    const parts: SQL[] = [];
+    if (clientIds.length) parts.push(inArray(project.clientId, clientIds));
+    if (withoutClient) parts.push(isNull(project.clientId));
+    planFilter.push(or(...parts)!);
+    entryFilter.push(or(...parts)!);
+  }
 
   const visible = visibleProjectFilter(viewer);
   const scheduled = await publishedPlanDays(db, viewer.workspaceId, {
     from,
     to,
     userIds,
-    where: and(assignmentScopeFilter(viewer.actor), visible, ...projectFilter),
+    where: and(assignmentScopeFilter(viewer.actor), visible, ...planFilter),
   });
 
   // Tracked: stopped live work, on each owner's own local day, a day either side of the range.
@@ -113,7 +134,7 @@ export async function assignmentsReport(
               userIds ? inArray(timeEntry.userId, userIds) : undefined,
               // Time on no project has no plan to compare with, but it is the person's time.
               visible ? or(isNull(timeEntry.projectId), visible) : undefined,
-              ...projectFilter,
+              ...entryFilter,
             ),
           )
           .groupBy(sql.raw("1"), sql.raw("2"), sql.raw("3"));

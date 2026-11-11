@@ -64,6 +64,10 @@ export async function projectForecast(
         sql<number>`coalesce(sum(case when ${timeEntry.billable} and ${timeEntry.rateCurrency} = ${currency} then ${timeEntry.amountMinor} else 0 end), 0)::bigint`.mapWith(
           Number,
         ),
+      ratedSeconds:
+        sql<number>`coalesce(sum(case when ${timeEntry.billable} and ${timeEntry.rateCurrency} = ${currency} then ${timeEntry.durationSeconds} else 0 end), 0)::bigint`.mapWith(
+          Number,
+        ),
     })
     .from(timeEntry)
     .where(
@@ -81,10 +85,12 @@ export async function projectForecast(
     .orderBy(sql.raw("1"));
   let trackedSeconds = 0;
   let trackedMinor = 0;
+  let trackedRatedSeconds = 0;
   let trackedReachedOn: string | null = null;
   for (const d of tracked) {
     trackedSeconds += d.seconds;
     trackedMinor += d.minor;
+    trackedRatedSeconds += d.ratedSeconds;
     const so = kind === "TIME" ? trackedSeconds : trackedMinor;
     if (!trackedReachedOn && so >= value) trackedReachedOn = d.day;
   }
@@ -142,7 +148,8 @@ export async function projectForecast(
         })
       : null;
     const minor = resolved ? amountFor(resolved.amountMinor, seconds) : 0;
-    if (!resolved) unratedSeconds += seconds;
+    // On a non-billable project money is not a concept: nothing there is "unrated".
+    if (target.billable && !resolved) unratedSeconds += seconds;
     const cur = byDay.get(d.dateKey) ?? { seconds: 0, minor: 0 };
     byDay.set(d.dateKey, { seconds: cur.seconds + seconds, minor: cur.minor + minor });
   }
@@ -152,6 +159,7 @@ export async function projectForecast(
     estimate: value,
     trackedSeconds,
     trackedMinor,
+    trackedRatedSeconds,
     trackedReachedOn,
     scheduled: [...byDay].map(([dateKey, v]) => ({ dateKey, ...v })),
     unratedSeconds,

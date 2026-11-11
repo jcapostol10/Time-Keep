@@ -367,6 +367,8 @@ Rulings made while building 7b, beyond the design: tracked time on no project is
 
 Gate on the branch (2026-11-11): the two Forecast and Assignments tests each seen to fail with their behaviour broken on a production build, one break per test, before the lines were ticked; the whole suite 224 tests in 11.8 minutes on a production build (223 passed and one pre-existing projects-list test flaky on retry, in BACKLOG), the preview lane 155 in 5.7 minutes, so no spec moved lanes; `pnpm test` (core 692, web 923), lint, typecheck, format and the coverage check green; no migration, so `docs/DATA_MODEL.md` is unchanged.
 
+The final review (2026-11-11) found no cross-tenant or cross-scope leak and two important defects, fixed with tests that failed first, with one minor raised: "Without project" or "Without client" carried over from another tab emptied the Assignments report (they now mean what they mean in the engine); the overrun's "about" figure was a share of the whole projection, so unrated and non-billable hours diluted it (now a share over the rated work only, replacing decision 21's literal formula); and every non-billable project with a plan showed a "no billable rate" note (nothing is unrated where money is not a concept). After the fixes: `pnpm test` core 693, web 924; the whole suite 224 tests in 8.9 minutes on a production build.
+
 ## Phase 8 — Platform
 
 - [ ] Plans and feature flags, billing, public API + OpenAPI, webhooks, SSO/SCIM, audit log, ops

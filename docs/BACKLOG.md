@@ -121,6 +121,14 @@ Known gaps and deferred fixes that are not part of a phase checklist. When an it
   - Scheduled money uses the rate in force on each day as of today's rate rows; a future-dated rate row counts from its date, but a rate change entered later does not re-forecast history (nothing is stored, so it simply moves).
   - Observed once (2026-11-11, a local production run of four specs on three workers): `schedule.spec.ts` › "a draft is hidden from the member until Publish…" did not get the publish email within the 15 s wait and passed on retry. Not reproduced in six isolated runs, two full local suites or two preview runs; the outbox rows were cleaned up before they could be read. If it recurs, read the row's `status`, `attempts` and `last_error` before the cleanup (CI fails on a flaky test).
   - The Assignments report has no chart and no share link (a plan is internal); its export always streams, so a very large range answers 413 instead of becoming a job.
+- [ ] **Phase 7b review minors** (final review, 2026-11-11):
+  - The forecast's tracked side counts the whole period, so a manual entry dated after today is counted with the plan for that day too (and "Reached on" can be a future date).
+  - The Assignments PDF header lists the shared query's task, tag, billable and description filters, which the report ignores, and omits groups.
+  - The Assignments XLSX writes durations (with U+2212) and the percent as text; a typed seconds or percent column would let Excel sum them.
+  - The tracked window is a day either side of the viewer's range: an owner more than 24 hours from the viewer can lose an entry near midnight (widen to two days).
+  - The Budget tab scans the project's entries three times per load (progress, the chart, the forecast); the forecast could reuse the chart's daily rows.
+  - The chart's caption does not mention the scheduled projection; the totals row's Variance % is not coloured.
+  - A removed member's rows keep their name rather than "(former member)" (as the Summary does).
 - [ ] **Phase 7a review minors** (final review, 2026-11-11):
   - Writers do not take the `schedule:` lock and `draftsInScope` does not lock its rows: a draft edited out of the publisher's scope mid-publish is still applied, and an edit racing a publish can deadlock (opposite lock order).
   - `draftCount` counts drafts that Publish skips (an out-of-scope original), so the bar can show a change that never publishes.

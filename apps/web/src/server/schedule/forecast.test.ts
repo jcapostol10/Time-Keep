@@ -88,7 +88,8 @@ describe("projectForecast", () => {
       "PHP",
       NOW,
     ))!;
-    expect([nb.scheduledMinor, nb.unratedSeconds]).toEqual([0, 14_400]);
+    // Money is not a concept on a non-billable project: nothing is unrated there.
+    expect([nb.scheduledMinor, nb.unratedSeconds]).toEqual([0, 0]);
   });
 
   it("a monthly estimate stops at the month's end; none is null", async () => {

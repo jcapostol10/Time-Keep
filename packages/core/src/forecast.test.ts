@@ -12,6 +12,7 @@ describe("forecast", () => {
       estimate: 36_000,
       trackedSeconds: 14_400,
       trackedMinor: 400_000,
+      trackedRatedSeconds: 14_400,
       trackedReachedOn: null,
       scheduled: [
         { dateKey: MON, seconds: 28_800, minor: 800_000 },
@@ -33,6 +34,7 @@ describe("forecast", () => {
       estimate: 3_600,
       trackedSeconds: 7_200,
       trackedMinor: 0,
+      trackedRatedSeconds: 0,
       trackedReachedOn: "2026-11-10",
       scheduled: [{ dateKey: MON, seconds: 3_600, minor: 0 }],
       unratedSeconds: 3_600,
@@ -49,6 +51,7 @@ describe("forecast", () => {
       estimate: 100_000,
       trackedSeconds: 3_600,
       trackedMinor: 100,
+      trackedRatedSeconds: 3_600,
       trackedReachedOn: null,
       scheduled: [{ dateKey: MON, seconds: 3_600, minor: 100 }],
       unratedSeconds: 0,
@@ -67,6 +70,7 @@ describe("forecast", () => {
       estimate: 1_000_000,
       trackedSeconds: 18_000,
       trackedMinor: 500_000,
+      trackedRatedSeconds: 18_000,
       trackedReachedOn: null,
       scheduled: [{ dateKey: MON, seconds: 36_000, minor: 1_000_000 }],
       unratedSeconds: 0,
@@ -74,6 +78,39 @@ describe("forecast", () => {
     expect(f.completionDate).toBe(MON);
     expect([f.overrunMinor, f.overrunSeconds]).toEqual([500_000, 18_000]);
     expect(f.series.map((p) => p.value)).toEqual([500_000, 1_500_000]);
+  });
+});
+
+describe("forecast over a partly rated plan", () => {
+  it("the overrun's other unit is a share of the rated part only", () => {
+    // ₱10,000 estimate; 10 h tracked for ₱8,000; plan 10 h rated (₱8,000) and 100 h unrated.
+    const f = forecast({
+      kind: "MONEY",
+      estimate: 1_000_000,
+      trackedSeconds: 36_000,
+      trackedMinor: 800_000,
+      trackedRatedSeconds: 36_000,
+      trackedReachedOn: null,
+      scheduled: [
+        { dateKey: MON, seconds: 36_000, minor: 800_000 },
+        { dateKey: TUE, seconds: 360_000, minor: 0 },
+      ],
+      unratedSeconds: 360_000,
+    });
+    // ₱6,000 over, at the rated work's ₱800 an hour: about 7:30, not 45:00.
+    expect([f.overrunMinor, f.overrunSeconds]).toEqual([600_000, 27_000]);
+    const t = forecast({
+      kind: "TIME",
+      estimate: 36_000,
+      trackedSeconds: 36_000,
+      trackedMinor: 800_000,
+      trackedRatedSeconds: 36_000,
+      trackedReachedOn: "2026-11-10",
+      scheduled: [{ dateKey: MON, seconds: 36_000, minor: 0 }],
+      unratedSeconds: 36_000,
+    });
+    // 10 h over, valued at the rated ₱800 an hour.
+    expect([t.overrunSeconds, t.overrunMinor]).toEqual([36_000, 800_000]);
   });
 });
 

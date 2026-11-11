@@ -85,6 +85,34 @@ describe("assignmentsReport", () => {
     expect(own.totals.scheduledSeconds).toBe(28_800);
   });
 
+  it("Without project and Without client filters keep their meaning", async () => {
+    const olga = await cast.viewer("olga");
+    await createManualEntry(db, await cast.viewer("bob"), {
+      description: "Email",
+      projectId: null,
+      taskId: null,
+      tagIds: [],
+      billable: false,
+      start: new Date("2026-11-09T05:00:00Z"),
+      end: new Date("2026-11-09T05:20:00Z"),
+    });
+    const none = await assignmentsReport(db, olga, query("&projectIds=none"), PREFS, NOW);
+    expect([none.totals.scheduledSeconds, none.totals.trackedSeconds]).toEqual([0, 1_200]);
+    // No project has a client here: "Without client" is everything, no-project time included.
+    const noClient = await assignmentsReport(db, olga, query("&clientIds=none"), PREFS, NOW);
+    expect([noClient.totals.scheduledSeconds, noClient.totals.trackedSeconds]).toEqual([
+      43_200, 10_200,
+    ]);
+    const mixed = await assignmentsReport(
+      db,
+      olga,
+      query(`&projectIds=none&projectIds=${cast.projects.website}`),
+      PREFS,
+      NOW,
+    );
+    expect([mixed.totals.scheduledSeconds, mixed.totals.trackedSeconds]).toEqual([14_400, 6_600]);
+  });
+
   it("a project the viewer cannot see is left out", async () => {
     const max = await cast.viewer("max");
     const r = await assignmentsReport(db, max, query("&assignmentsBy=project"), PREFS, NOW);

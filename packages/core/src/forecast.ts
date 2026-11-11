@@ -2,7 +2,9 @@
  * The forecast on the Budget tab (Phase 7 design, decisions 19–21): what was
  * tracked in the estimate's period plus the published plan from tomorrow,
  * against the estimate. The overrun is measured in the estimate's own unit;
- * the other unit is the same share of its projection (integers, half up).
+ * the other unit is its value at the rated work's average: a share over the
+ * rated part of the projection only (integers, half up), so unrated or
+ * non-billable hours never dilute it.
  */
 
 export interface ForecastDay {
@@ -47,6 +49,8 @@ export function forecast(input: {
   estimate: number;
   trackedSeconds: number;
   trackedMinor: number;
+  /** Tracked seconds whose amount counts (billable, rated in the project's currency). */
+  trackedRatedSeconds: number;
   trackedReachedOn: string | null;
   scheduled: readonly ForecastDay[];
   unratedSeconds: number;
@@ -70,6 +74,7 @@ export function forecast(input: {
       completionDate = d.dateKey;
   }
 
+  const ratedSeconds = input.trackedRatedSeconds + scheduledSeconds - input.unratedSeconds;
   const projected = time ? projectedSeconds : projectedMinor;
   const overrun = Math.max(0, projected - input.estimate);
   return {
@@ -84,8 +89,8 @@ export function forecast(input: {
     projectedMinor,
     reachedOn: reached ? input.trackedReachedOn : null,
     completionDate,
-    overrunSeconds: time ? overrun : proportion(projectedSeconds, overrun, projectedMinor),
-    overrunMinor: time ? proportion(projectedMinor, overrun, projectedSeconds) : overrun,
+    overrunSeconds: time ? overrun : proportion(ratedSeconds, overrun, projectedMinor),
+    overrunMinor: time ? proportion(projectedMinor, overrun, ratedSeconds) : overrun,
     series,
   };
 }
