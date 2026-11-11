@@ -71,6 +71,8 @@ export function AssignmentBar({
         height: BAR_PX,
       }}
       onContextMenu={editable ? menu?.onContextMenu : undefined}
+      // Nothing on a bar (its menu button, a read-only bar) may reach the row and start a new one.
+      onPointerDown={(e) => e.stopPropagation()}
     >
       <button
         type="button"

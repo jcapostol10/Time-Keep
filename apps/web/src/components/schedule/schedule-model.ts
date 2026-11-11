@@ -7,6 +7,8 @@ import {
   weekStartKey,
 } from "@timekeep/core";
 
+import type { ActionResult } from "@/lib/action-result";
+
 /**
  * The schedule's pure UI maths (Phase 7a): zoom ranges, the pointer's day
  * column, what a drag produces (through core's date edits, the same the
@@ -20,6 +22,17 @@ export const ZOOM_LABELS: Record<Zoom, string> = {
   "2weeks": "2 weeks",
   month: "Month",
 };
+
+/**
+ * What to toast for an action's result: nothing on success; a form shows its
+ * field errors under the fields, so only a refusal without one is toasted; a
+ * gesture (a drag, Copy, Split) has no fields, so every refusal is.
+ */
+export function refusalToast(result: ActionResult<unknown>, form: boolean): string | null {
+  if (result.ok) return null;
+  if (form && result.fieldErrors && Object.keys(result.fieldErrors).length > 0) return null;
+  return result.error;
+}
 
 /** The query string of a range: the team route's and the query key's. */
 export function scheduleParams(range: { from: string; to: string }): string {

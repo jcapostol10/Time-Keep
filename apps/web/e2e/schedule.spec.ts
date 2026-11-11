@@ -179,6 +179,26 @@ test.describe("schedule", () => {
     await expect(bar(website, "Website")).toHaveCount(2);
   });
 
+  test("the bar's menu opens without starting a new assignment", async ({ page, freshUser }) => {
+    const { slug, timezone, name } = freshUser;
+    const week = nextWeekDays(timezone);
+    await createProjectViaUi(page, slug, "Website");
+    await openSchedule(page, slug, "team", week.mon);
+    await addAssignmentViaUi(page, {
+      project: "Website",
+      start: week.mon,
+      end: week.wed,
+      perDay: "1",
+    });
+    const row = teamRow(page, name);
+    await bar(row, "Website").hover();
+    await row.getByRole("button", { name: "Assignment actions" }).click();
+    await expect(page.getByRole("menuitem", { name: "Edit" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Add assignment" })).toHaveCount(0);
+    await page.getByRole("menuitem", { name: "Edit" }).click();
+    await expect(page.getByRole("dialog", { name: "Edit assignment" })).toBeVisible();
+  });
+
   test("split an assignment from its menu", async ({ page, freshUser }) => {
     const { slug, timezone, name } = freshUser;
     const week = nextWeekDays(timezone);

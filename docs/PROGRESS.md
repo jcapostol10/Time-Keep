@@ -355,6 +355,8 @@ Rulings made while building 7a, beyond the design: an assignment must fall on at
 
 Gate on the branch (2026-11-11): the six Schedule tests each seen to fail with their behaviour broken on a production build, one break per test, before the lines were ticked; the whole suite 221 tests in 11.4 minutes against a production build, the preview lane 152 in 5.7 minutes of wall time on three workers, so no spec moved lanes; `pnpm test` (core 681, web 910), lint, typecheck and format green; `readSchedule` over 104 people and 600 assignments for 13 weeks in 138 ms; migration 0020 applied to the shared database before the preview.
 
+The final review (2026-11-11) found no cross-tenant or cross-scope leak and three defects, fixed with tests that failed first: a refused drag, copy or split snapped back with no message (gestures now toast every refusal); a click on a bar's actions button or on a read-only bar opened Add assignment over it (bars now stop their pointer events, and read-only bars open nothing); Discard deleted other planners' drafts in one click (it now drops only the actor's own, after a confirmation). The Team tab's group and project filters and the range prefetch are deferred (BACKLOG). After the fixes: `pnpm test` core 681, web 912; the whole suite 222 tests in 9.5 minutes on a production build.
+
 
 ## Phase 8 — Platform
 

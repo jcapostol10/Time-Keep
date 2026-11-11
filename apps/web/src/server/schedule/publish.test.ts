@@ -124,6 +124,15 @@ describe("publishSchedule", () => {
     expect(last?.text).toContain("You have nothing scheduled in Workspace in the next four weeks.");
   });
 
+  it("discard drops only the drafts the actor made", async () => {
+    const olga = await cast.viewer("olga");
+    const max = await cast.viewer("max");
+    const theirs = await createAssignment(db, olga, cast.input("bob", cast.projects.website));
+    await createAssignment(db, max, cast.input("bob", cast.projects.mobile));
+    expect(await discardDrafts(db, max)).toBe(1);
+    expect((await rows()).map((r) => r.id)).toEqual([theirs]);
+  });
+
   it("discard restores the published plan", async () => {
     const olga = await cast.viewer("olga");
     const id = await createAssignment(db, olga, cast.input("bob", cast.projects.website));

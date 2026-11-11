@@ -63,7 +63,7 @@ export function AssignmentDialog({
   people: { userId: string; name: string }[];
   onClose: () => void;
 }) {
-  const writes = useScheduleWrites(slug);
+  const writes = useScheduleWrites(slug, { form: true });
   const a = mode.kind === "edit" ? mode.assignment : null;
   const [userId, setUserId] = useState(a?.userId ?? (mode.kind === "new" ? mode.userId : ""));
   const [selection, setSelection] = useState({

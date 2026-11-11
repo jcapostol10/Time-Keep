@@ -45,7 +45,8 @@ export function TeamSchedule({
   const handlers: GridHandlers = {
     onCreate: (userId, startDate, endDate) =>
       setDialog({ kind: "new", userId, startDate, endDate }),
-    onEdit: (a: AssignmentDTO) => setDialog({ kind: "edit", assignment: a }),
+    onEdit: (a: AssignmentDTO) =>
+      a.editable ? setDialog({ kind: "edit", assignment: a }) : undefined,
     onChange: (a, change, copy) => {
       if (copy) void writes.copy(a.id, { userId: change.userId, startDate: change.startDate });
       else void writes.update(a.id, change, "Assignment moved");

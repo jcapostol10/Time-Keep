@@ -37,7 +37,7 @@ export function MilestoneDialog({
   defaultDate: string;
   onClose: () => void;
 }) {
-  const writes = useScheduleWrites(slug);
+  const writes = useScheduleWrites(slug, { form: true });
   const [projectId, setProjectId] = useState(milestone?.projectId ?? "");
   const [date, setDate] = useState(milestone?.date ?? defaultDate);
   const [name, setName] = useState(milestone?.name ?? "");

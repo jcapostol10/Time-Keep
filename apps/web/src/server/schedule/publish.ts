@@ -53,6 +53,7 @@ async function draftsInScope(db: DbExecutor, viewer: Viewer) {
       projectId: assignment.projectId,
       replacesId: assignment.replacesId,
       deleted: assignment.deleted,
+      createdBy: assignment.createdBy,
       originalUserId: original.userId,
       originalProjectId: original.projectId,
     })
@@ -187,12 +188,13 @@ export async function publishSchedule(
   });
 }
 
-/** Deletes the drafts the actor would publish, restoring the published plan. */
+/** Deletes the drafts the actor made (and would publish), restoring the published plan there. */
 export async function discardDrafts(db: Database, viewer: Viewer): Promise<number> {
   assertCan(viewer.actor, "schedule.publish", { kind: "none" });
   return db.transaction(async (tx) => {
     await tx.execute(scheduleLock(viewer.workspaceId));
-    const drafts = await draftsInScope(tx, viewer);
+    // Only the actor's own drafts: another planner's pending edits are theirs to drop.
+    const drafts = (await draftsInScope(tx, viewer)).filter((d) => d.createdBy === viewer.userId);
     if (drafts.length === 0) return 0;
     await tx.delete(assignment).where(
       inArray(

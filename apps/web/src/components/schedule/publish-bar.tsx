@@ -1,5 +1,16 @@
 "use client";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@timekeep/ui/components/alert-dialog";
 import { Button } from "@timekeep/ui/components/button";
 
 import { useScheduleWrites } from "./use-schedule";
@@ -35,14 +46,26 @@ export function PublishBar({
       <Button size="sm" disabled={writes.busy} onClick={() => void writes.publish()}>
         Publish
       </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={writes.busy}
-        onClick={() => void writes.discard()}
-      >
-        Discard
-      </Button>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button size="sm" variant="outline" disabled={writes.busy}>
+            Discard
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard your unpublished changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The changes you made go back to the published schedule. Changes other planners made
+              stay until they publish or discard them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep them</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void writes.discard()}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

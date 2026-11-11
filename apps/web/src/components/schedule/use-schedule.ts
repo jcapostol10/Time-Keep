@@ -22,7 +22,7 @@ import {
 } from "@/server/actions/schedule";
 
 import { scheduleKeys, scheduleUrls } from "../tracker/query-keys";
-import { scheduleParams } from "./schedule-model";
+import { refusalToast, scheduleParams } from "./schedule-model";
 
 /** The working plan for a range (planners). */
 export function useTeamSchedule(slug: string, range: { from: string; to: string }) {
@@ -47,7 +47,7 @@ export function useMySchedule(slug: string, from: string | null, to: string | nu
  * The schedule's writes: each runs its action, toasts a refusal and
  * refetches every schedule view. A form gets the field errors back.
  */
-export function useScheduleWrites(slug: string) {
+export function useScheduleWrites(slug: string, opts: { form?: boolean } = {}) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
 
@@ -58,10 +58,9 @@ export function useScheduleWrites(slug: string) {
     setBusy(true);
     try {
       const result = await call();
-      if (!result.ok) {
-        if (!result.fieldErrors) toast.error(result.error);
-        return { ok: false, fieldErrors: result.fieldErrors ?? {} };
-      }
+      const refusal = refusalToast(result, opts.form ?? false);
+      if (refusal) toast.error(refusal);
+      if (!result.ok) return { ok: false, fieldErrors: result.fieldErrors ?? {} };
       await qc.invalidateQueries({ queryKey: scheduleKeys.all(slug) });
       if (done) toast.success(done);
       return { ok: true, data: result.data };

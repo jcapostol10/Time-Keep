@@ -1,7 +1,15 @@
 import type { AssignmentShape } from "@timekeep/core";
 import { describe, expect, it } from "vitest";
 
-import { dayIndexAt, dragResult, rangeFor, rowWindow, shiftFrom, startFor } from "./schedule-model";
+import {
+  dayIndexAt,
+  dragResult,
+  rangeFor,
+  refusalToast,
+  rowWindow,
+  shiftFrom,
+  startFor,
+} from "./schedule-model";
 
 const A: AssignmentShape = {
   startDate: "2026-11-16",
@@ -71,5 +79,19 @@ describe("rowWindow", () => {
     expect(w.before).toBe(320);
     expect(w.after).toBe(4000 - 17 * 40);
     expect(rowWindow([40, 40], 0, 500, 5)).toMatchObject({ start: 0, end: 2, before: 0, after: 0 });
+  });
+});
+
+describe("refusalToast", () => {
+  it("a gesture's refusal is always shown; a form's field errors stay under the fields", () => {
+    const refused = {
+      ok: false as const,
+      error: "Add Mia to the project first.",
+      fieldErrors: { projectId: ["Add Mia to the project first."] },
+    };
+    expect(refusalToast(refused, false)).toBe("Add Mia to the project first.");
+    expect(refusalToast(refused, true)).toBeNull();
+    expect(refusalToast({ ok: false, error: "Not found" }, true)).toBe("Not found");
+    expect(refusalToast({ ok: true, data: 1 }, false)).toBeNull();
   });
 });

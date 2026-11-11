@@ -296,6 +296,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A draft is hidden from the member until Publish; then it shows in their My schedule, on their Calendar's all-day band, and in an email — `schedule.spec.ts` › "a draft is hidden from the member until Publish; then My schedule, the Calendar and an email show it"
 - [x] A member has only My schedule: no Team or Projects tab, no way to add, and the team page is not found — `schedule.spec.ts` › "members have only My schedule and cannot edit"
 - [x] The project schedule shows a project's assigned hours for the range and its milestones, and expands to its people's bars — `schedule.spec.ts` › "the project schedule shows total hours and milestones"
+- [x] A bar's actions menu opens without starting a new assignment, and its Edit opens the assignment — `schedule.spec.ts` › "the bar's menu opens without starting a new assignment"
 - [x] Right-clicking a day of an assignment splits it there into two — `schedule.spec.ts` › "split an assignment from its menu"
 
 ## Permissions
