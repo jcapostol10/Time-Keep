@@ -37,8 +37,9 @@ export interface Forecast {
 /** `value × part / whole`, half up, in integers; 0 when `whole` is 0. */
 export function proportion(value: number, part: number, whole: number): number {
   if (whole === 0) return 0;
-  const n = BigInt(value) * BigInt(part) * 2n + BigInt(whole);
-  return Number(n / (2n * BigInt(whole)));
+  const two = BigInt(2);
+  const n = BigInt(value) * BigInt(part) * two + BigInt(whole);
+  return Number(n / (two * BigInt(whole)));
 }
 
 export function forecast(input: {

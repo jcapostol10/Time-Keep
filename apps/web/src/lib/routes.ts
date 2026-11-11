@@ -10,7 +10,15 @@ export const workspaceRoutes = {
   dashboard: (slug: string) => `/w/${slug}/dashboard`,
   reports: (
     slug: string,
-    kind?: "summary" | "detailed" | "weekly" | "audit" | "attendance" | "profit" | "expenses",
+    kind?:
+      | "summary"
+      | "detailed"
+      | "weekly"
+      | "audit"
+      | "attendance"
+      | "profit"
+      | "expenses"
+      | "assignments",
   ) => `/w/${slug}/reports${kind ? `/${kind}` : ""}`,
   projects: (slug: string) => `/w/${slug}/projects`,
   /** The Expenses page (Phase 6c); the Categories tab for those who manage them. */

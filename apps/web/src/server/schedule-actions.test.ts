@@ -24,6 +24,8 @@ vi.mock("next/server", async (original) => ({
 const { createAssignmentAction, publishScheduleAction } = await import("./actions/schedule");
 const { GET: teamRoute } = await import("../app/api/w/[workspaceSlug]/schedule/route");
 const { GET: mineRoute } = await import("../app/api/w/[workspaceSlug]/schedule/mine/route");
+const { GET: assignmentsRoute } =
+  await import("../app/api/w/[workspaceSlug]/reports/assignments/route");
 
 const handle = connectTestDb();
 const db = handle.db;
@@ -99,6 +101,16 @@ describe("schedule routes", () => {
     const res = await teamRoute(get("schedule?from=2026-11-16&to=2026-11-22"), params(slug));
     const body = await res.json();
     expect(body.milestones.map((m: { name: string }) => m.name)).toEqual(["Launch"]);
+  });
+
+  it("the Assignments report route is open to members unless Reports are hidden", async () => {
+    signIn("bob");
+    const ok = await assignmentsRoute(get("reports/assignments?preset=this-week"), params(slug));
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).by).toBe("user");
+    await cast.setRules({ hiddenPages: ["reports"] });
+    const hidden = await assignmentsRoute(get("reports/assignments"), params(slug));
+    expect(hidden.status).toBe(403);
   });
 
   it("the mine route is everyone's own published plan", async () => {

@@ -563,7 +563,7 @@ describe("assignmentsColumns (Phase 7b)", () => {
       "Bob",
       "2:00:00",
       "1:30:00",
-      "-0:30:00",
+      "\u22120:30:00",
       "-25.0",
     ]);
     expect(assignmentsColumns("user", prefs)[4]!.value({ ...row, variancePercent: null })).toBe("");

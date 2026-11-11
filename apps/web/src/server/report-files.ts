@@ -2,6 +2,7 @@ import "server-only";
 
 import {
   addDaysInZone,
+  assignmentsColumns,
   attendanceColumns,
   detailedColumns,
   expenseColumns,
@@ -29,6 +30,7 @@ import ExcelJS from "exceljs";
 import type { DetailedCursor, DetailedEntryDTO, ReportMoney } from "@/lib/report-types";
 
 import { attendanceReport } from "./attendance";
+import { assignmentsReport } from "./schedule/report";
 import type { Viewer } from "./catalog/viewer";
 import { expenseReport } from "./expense-report";
 import { detailedReport, profitReport, summaryReport, weeklyReport } from "./reports";
@@ -47,7 +49,7 @@ export interface ExportFile {
  * (Phase 5b), Profit (Phase 6a) and Expenses (Phase 6c). The receipts zip is
  * `receipts-zip.ts`, always a job.
  */
-export type FileReport = ReportKind | "attendance" | "profit" | "expenses";
+export type FileReport = ReportKind | "attendance" | "profit" | "expenses" | "assignments";
 
 /**
  * What money an export's columns show: the report's, with a column for each
@@ -151,6 +153,10 @@ export async function countExportRows(
       const report = await expenseReport(db, viewer, req.query, req.prefs, req.now);
       return report.groups.length;
     }
+    case "assignments": {
+      const report = await assignmentsReport(db, viewer, req.query, req.prefs, req.now);
+      return report.rows.length + 1;
+    }
   }
 }
 
@@ -216,6 +222,13 @@ async function exportTable(
       return {
         rows: report.groups.map((g) => ({ label: g.label, totals: g.totals })),
         columns: expenseColumns(report.by, report.currency) as ExportColumn<unknown>[],
+      };
+    }
+    case "assignments": {
+      const report = await assignmentsReport(db, viewer, req.query, req.prefs, req.now);
+      return {
+        rows: [...report.rows, report.totals],
+        columns: assignmentsColumns(report.by, req.prefs) as ExportColumn<unknown>[],
       };
     }
   }

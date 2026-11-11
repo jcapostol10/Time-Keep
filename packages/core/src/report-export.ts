@@ -469,14 +469,17 @@ const ASSIGNMENT_HEADERS: Record<AssignmentGroupKey, string> = {
   week: "Week",
 };
 
-/** The Assignments report (Phase 7b): the group, scheduled, tracked, variance and its percent. */
+/**
+ * The Assignments report (Phase 7b): the group, scheduled, tracked, variance and its percent.
+ * A negative duration takes a minus sign (U+2212), so the CSV formula guard leaves it alone.
+ */
 export function assignmentsColumns(
   by: AssignmentGroupKey,
   prefs: Pick<ViewerPrefs, "durationFormat">,
 ): ExportColumn<AssignmentsRow>[] {
   const span = (seconds: number) =>
     seconds < 0
-      ? `-${formatDuration(-seconds, prefs.durationFormat)}`
+      ? `\u2212${formatDuration(-seconds, prefs.durationFormat)}`
       : formatDuration(seconds, prefs.durationFormat);
   return [
     { key: "label", header: ASSIGNMENT_HEADERS[by], value: (r) => r.label },

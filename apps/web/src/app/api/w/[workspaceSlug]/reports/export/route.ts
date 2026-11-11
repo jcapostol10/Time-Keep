@@ -11,7 +11,7 @@ import { requireWorkspaceAccess, routeErrorResponse } from "@/server/workspace-a
 import { authorize } from "@/server/authz";
 
 const requestSchema = z.object({
-  report: z.enum([...REPORT_KINDS, "attendance", "profit", "expenses", "receipts"]),
+  report: z.enum([...REPORT_KINDS, "attendance", "profit", "expenses", "receipts", "assignments"]),
   format: z.enum(["csv", "xlsx", "pdf", "zip"]),
 });
 
@@ -63,7 +63,10 @@ export async function GET(
     const query = parseReportQuery(params);
     const prefs = resolveViewerPrefs(access.user, access.settings);
 
-    const queue = async (jobReport: Exclude<typeof report, "profit">, jobFormat: typeof format) => {
+    const queue = async (
+      jobReport: Exclude<typeof report, "profit" | "assignments">,
+      jobFormat: typeof format,
+    ) => {
       const job = await createExportJob(db, viewer, {
         report: jobReport,
         format: jobFormat,
@@ -80,8 +83,9 @@ export async function GET(
     if (format === "zip") return Response.json({ error: "Invalid export" }, { status: 400 });
 
     const req = { report, format, query, prefs };
-    // A Profit export is one row per project, client or person: it always streams.
-    const queued = report === "profit" ? null : () => queue(report, format);
+    // A Profit or Assignments export is one row per group: it always streams (no export job).
+    const queued =
+      report === "profit" || report === "assignments" ? null : () => queue(report, format);
     if (queued && (await countExportRows(db, viewer, req)) > env().EXPORT_JOB_THRESHOLD) {
       return queued();
     }

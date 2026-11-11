@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 
 import {
+  assignmentsColumns,
   attendanceColumns,
   detailedColumns,
   expenseColumns,
@@ -35,6 +36,7 @@ import {
   exportMoney,
   type FileReport,
 } from "./report-files";
+import { assignmentsReport } from "./schedule/report";
 import { detailedReport, profitReport, summaryReport, weeklyReport } from "./reports";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
@@ -201,6 +203,7 @@ const TITLES: Record<FileReport, string> = {
   attendance: "Attendance report",
   profit: "Profit report",
   expenses: "Expenses report",
+  assignments: "Assignments report",
 };
 
 /** The report as one self-contained HTML page, and how many rows its table has. */
@@ -255,6 +258,19 @@ export async function renderReportHtml(
       filters,
       total: formatMoney(report.totals.amountMinor, report.currency),
       body: table(rows, expenseColumns(report.by, report.currency)),
+    });
+    return { html, rowCount: rows.length };
+  }
+  if (req.report === "assignments") {
+    const report = await assignmentsReport(db, viewer, req.query, req.prefs, now);
+    const rows = [...report.rows, report.totals];
+    const html = page({
+      title,
+      workspaceName: req.workspaceName,
+      rangeLabel,
+      filters,
+      total: fmt(report.totals.trackedSeconds),
+      body: table(rows, assignmentsColumns(report.by, req.prefs)),
     });
     return { html, rowCount: rows.length };
   }
