@@ -39,7 +39,6 @@ import {
 } from "@timekeep/ui/components/select";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -70,7 +69,6 @@ export function WorkspaceSettingsForm({
   defaultValues: Values;
   readOnly: boolean;
 }) {
-  const router = useRouter();
   const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues });
 
   // Changes the server asks about first: a new currency relabels existing rates
@@ -107,7 +105,6 @@ export function WorkspaceSettingsForm({
     }
     toast.success("Workspace settings saved");
     form.reset(values);
-    router.refresh();
   }
 
   const dialog = confirm ? CONFIRM_COPY[confirm.field] : null;

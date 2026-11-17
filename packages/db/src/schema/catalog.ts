@@ -151,23 +151,6 @@ export const task = pgTable(
   ],
 ).enableRLS();
 
-/** Informational in Phase 2; Phase 4 may restrict tracking to assignees. */
-export const taskAssignee = pgTable(
-  "task_assignee",
-  {
-    taskId: text("task_id")
-      .notNull()
-      .references(() => task.id, { onDelete: "cascade" }),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-  },
-  (t) => [
-    primaryKey({ columns: [t.taskId, t.userId] }),
-    index("task_assignee_user_id_idx").on(t.userId),
-  ],
-).enableRLS();
-
 /** Labels on entries. Archived tags stay on entries but cannot be added. */
 export const tag = pgTable(
   "tag",
@@ -192,5 +175,4 @@ export type Project = typeof project.$inferSelect;
 export type ProjectMember = typeof projectMember.$inferSelect;
 export type ProjectFavorite = typeof projectFavorite.$inferSelect;
 export type Task = typeof task.$inferSelect;
-export type TaskAssignee = typeof taskAssignee.$inferSelect;
 export type Tag = typeof tag.$inferSelect;

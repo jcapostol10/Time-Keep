@@ -12,3 +12,16 @@ export class TimeEntryError extends Error {
     this.name = "TimeEntryError";
   }
 }
+
+/**
+ * An entry's details can no longer take new time (a missing, archived or
+ * unavailable project, task or tag). Still an INVALID TimeEntryError for every
+ * caller; a batch that copies entries one by one (copy week) skips the entry
+ * instead of failing.
+ */
+export class DetailUnusableError extends TimeEntryError {
+  constructor(message: string) {
+    super("INVALID", message);
+    this.name = "DetailUnusableError";
+  }
+}

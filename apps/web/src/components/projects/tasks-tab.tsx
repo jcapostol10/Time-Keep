@@ -31,7 +31,6 @@ import {
   TableRow,
 } from "@timekeep/ui/components/table";
 import { ListChecksIcon, MoreHorizontalIcon, PlusIcon, UsersIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -62,7 +61,6 @@ export function TasksTab({
   taskVisibility: TaskVisibility;
   projectVisibility: "PUBLIC" | "PRIVATE";
 }) {
-  const router = useRouter();
   const filterId = useId();
   const [, startTransition] = useTransition();
   const [creating, setCreating] = useState(false);
@@ -82,7 +80,6 @@ export function TasksTab({
       if (!result.ok) toast.error(result.error ?? "Something went wrong.");
       else {
         toast.success(success);
-        router.refresh();
       }
     });
   }
@@ -328,7 +325,6 @@ export function TasksTab({
             toast.success(mode === "add" ? "Groups added" : "Groups removed");
             setGroupsDialog(null);
             setSelected(new Set());
-            router.refresh();
             return true;
           }}
         />

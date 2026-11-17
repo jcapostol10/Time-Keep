@@ -17,25 +17,17 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 
 ### b1 — tracker, timesheet, calendar, catalog, auth, CI
 
-- [ ] **b1** `sign-up-form.tsx` maps `USER_ALREADY_EXISTS` to the email field, but Better Auth 1.7.7 emits `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; moot while `requireEmailVerification` answers a duplicate sign-up with a generic success. (A refused password-reset send also looks like success, by Better Auth's design, which keeps account existence private: unchanged.)
-- [ ] **b1** After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
-- [ ] **b1** Timesheet rows added by hand live only for the page visit (templates persist); keep them per week in local storage.
-- [ ] **b1** Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands. Timesheet cells likewise show the old value until the refetch lands. Patch the range query before the write.
-- [ ] **b1** Calendar blocks have `role=button` and `tabIndex=0` but no Enter/Space handler, so they cannot be opened from the keyboard.
-- [ ] **b1** The calendar loads entries whose start falls in the week, so an entry begun late on the previous week's last day is not drawn on the first day. Fetch from one day earlier; `blockOnDay` already clips.
-- [ ] **b1** Members see every client name in the projects-page filter, including archived clients and clients whose projects are all private to them.
-- [ ] **b1** ArrowLeft and ArrowRight move between timesheet cells even mid-text, so the caret cannot move within "1:30". Move between cells only when the caret is at the edge.
-- [ ] **b1** Copy last week has no duplicate guard (copying twice doubles every entry) and one archived project or done task aborts the whole copy without saying which entry.
-- [ ] **b1** The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; install Playwright's Chromium in the CI job.
-- [ ] **b1** The Detailed report's sort is per visit, not in the URL.
-- [ ] **b1** `workspace_settings.task_creators` and `task_assignee` are unread since tasks by group (2026-10-29): drop them in a contract migration.
-- [ ] **b1** Tasks by group follow-ups: a member's report filters (built from the picker) no longer offer a project whose tasks are all hidden from them even when their old entries are on it; making a public project private after its tasks were grouped does not give those groups access (rule 9 applies at assignment time); a manager allowed to create projects cannot create a new project's tasks in one import (rule 5: they are not the new project's manager).
-- [ ] **b1** `time-entries.test.ts` › "reassignProjectEntries moves entries and clears their task" failed once in the 5a gate (the moved entry's `updated_at` read 156 ms earlier than its creation's) and passed on two reruns; both stamps come from Postgres `now()`, so look at the Docker clock or the test's ordering.
-- [ ] **b1** `ci.yml` skips its pull_request job for same-repository PRs (the push already ran). GitHub counts a skipped job as a passing required check, so if branch protection is ever added, require the push run's check explicitly. Move this note into CLAUDE.md's Deployment section.
-- [ ] **b1** The suite runs spec files with 3 workers; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). Move the "a new spec that writes to the demo tenant needs checking" note into CLAUDE.md's e2e bullets.
+
+
+- [ ] **b1 review minors** (final review, 2026-11-17):
+  - Add row does nothing when localStorage throws (blocked site data); fall back to component state for the visit.
+  - `copyWeek` collapses two identical source entries into one, and reads the target week outside its transaction and the person's lock, so two tabs copying at once can still duplicate.
+  - Back after a filter change gives a URL without `sort=` while the Detailed view keeps its sort until a reload.
+  - A member's report filters still come from the picker: archived projects with their old entries are missing, and a client whose only visible projects are archived is still listed.
 
 ### b2 — approvals, time off, attendance, targets, kiosks, the daily cron
 
+- [ ] **b2** Drop `task_assignee` and `workspace_settings.task_creators` (the contract half): branch 1 took them out of the Drizzle schema and stopped reading and writing them (2026-11-17); once that is live everywhere, a migration drops them and `test/db.ts` stops truncating the table.
 - [ ] **b2** Kiosk default tag (ruling 8): with a required tag, nobody can clock out on a kiosk, because a kiosk adds no tags; add `kiosk.tag_id` (additive migration) and a picker.
 - [ ] **b2** Phase 5c review minors:
   - The QR path of `identify` treats any error from `allowedPerson` as "not allowed", so a database error counts as a QR failure; catch only `WorkspaceAccessError`.
@@ -169,6 +161,21 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] PDF tests in CI, done 2026-11-17 (backlog cleanup b1): the CI job installs Playwright's Chromium and lifts Ubuntu 24.04's user-namespace restriction, so `report-pdf.test.ts` and `invoices/pdf.test.ts` print PDFs in CI (run 44080024987: both passed, not skipped).
+- [x] Detailed sort in the URL, done 2026-11-17 (backlog cleanup b1): `sort` and `dir` sit beside the report query (unknown values read as start, descending), survive a reload and a filter change, and stay out of share links.
+- [x] Timesheet rows added by hand, done 2026-11-17 (backlog cleanup b1): kept in local storage per workspace, person shown and week; a row on a project no longer offered is dropped.
+- [x] Calendar's first day, done 2026-11-17 (backlog cleanup b1): the calendar reads entries from a day before the week, so one begun the evening before is drawn on the first day.
+- [x] Calendar keyboard, done 2026-11-17 (backlog cleanup b1): Enter and Space on a focused block open the editor.
+- [x] Optimistic calendar and timesheet writes, done 2026-11-17 (backlog cleanup b1): moves, resizes, cell edits and deletes patch the person's loaded ranges before the write and go back if it is refused, cancelled at the note prompt, or fails to send; a created entry goes into the range when it lands.
+- [x] The three-workers note, done 2026-11-17 (backlog cleanup b1): it lives in CLAUDE.md's e2e bullets (a spec that writes to the demo tenant must be checked against the read-mostly demo specs).
+- [x] `ci.yml`'s skipped pull_request job, done 2026-11-17 (backlog cleanup b1): the note lives in CLAUDE.md's Deployment section (require the push run's check if branch protection is added).
+- [x] Tasks by group follow-ups, done 2026-11-17 (backlog cleanup b1): the report filters keep a project whose tasks are all hidden from the member (rule 8 is about tracking, not reading); a project that turns private gives its tasks' groups access in the same transaction (`grantTaskGroupsAccess`, rule 9); the CSV import lets a manager who may create projects add tasks to the projects that same import creates, for that request only (`withManagedProject`). Ruling (final review): creating a project does not make a manager its manager, because that would widen their own reach (other people's amounts and member rates, schedules, approvals) beyond what an owner granted.
+- [x] Client filters, done 2026-11-17 (backlog cleanup b1): `listFilterClients` gives the projects toolbar and every report's filters the live clients of projects the viewer can see (owners and admins every live client); the create and edit dialogs keep the full list.
+- [x] Flaky reassign test, done 2026-11-17 (backlog cleanup b1): the test stamps the entry an hour back before the reassign, so a database clock that steps back a little between transactions cannot fail it; it still fails if the reassign leaves `updated_at` alone.
+- [x] One render per revalidating action, done 2026-11-17 (backlog cleanup b1): the client no longer calls `router.refresh()` after the 30 actions that already revalidate (the action's response re-renders the page). Kept where the action does not revalidate: the project and tag dialogs (their actions also serve the pickers' inline create, which must not re-render the tracker), targets, periods, share-link revoke, the project access tab's failure path and the once-a-session timezone detector. `rowAction` keeps its retry: tracker rows and expense categories need it too.
+- [x] Timesheet arrows, done 2026-11-17 (backlog cleanup b1): Left and Right leave a cell only at the text's edge or with the whole value selected (`movesHorizontally`), so the caret moves within "1:30".
+- [x] Copy last week, done 2026-11-17 (backlog cleanup b1): an entry already in the target week with the same times and details is not copied again, an entry whose details can no longer take time is skipped with its reason (the toast names the first), and a break stays a break (it was copied as work). A period refusal still fails the whole copy.
+- [x] Sign-up error codes, done 2026-11-17 (backlog cleanup b1): `signUpErrorField` puts Better Auth's `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL` (and `INVALID_EMAIL`) on the email field. A duplicate still gets the generic success while email verification is on.
 - [x] Closed by ruling in the backlog cleanup, 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-design.md`):
   - "Should cost follow the report rounding rule?" Yes (ruling 1): profit is amount less cost over the same hours.
   - "With approvals on, approved time can never be costed after the fact." Kept (ruling 2): approval freezes the period, money included.

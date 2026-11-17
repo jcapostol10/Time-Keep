@@ -23,7 +23,6 @@ import { Switch } from "@timekeep/ui/components/switch";
 import { cn } from "@timekeep/ui/lib/utils";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -54,7 +53,6 @@ async function askNotifications() {
 }
 
 export function TrackerSettingsForm({ defaultValues }: { defaultValues: TrackerSettingsInput }) {
-  const router = useRouter();
   const form = useForm<TrackerSettingsInput>({
     resolver: zodResolver(trackerSettingsSchema),
     defaultValues,
@@ -71,7 +69,6 @@ export function TrackerSettingsForm({ defaultValues }: { defaultValues: TrackerS
     }
     toast.success("Timer settings saved");
     form.reset(result.data);
-    router.refresh();
   }
 
   return (

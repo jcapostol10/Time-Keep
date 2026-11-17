@@ -69,7 +69,7 @@ async function group(name: string, members: string[]): Promise<string> {
 }
 
 async function task(projectId: string, name: string, groupIds: string[]): Promise<string> {
-  const t = await createTask(db, await viewer("olga"), projectId, { name, assigneeIds: [] });
+  const t = await createTask(db, await viewer("olga"), projectId, { name });
   if (groupIds.length > 0) {
     await db.insert(taskGroup).values(groupIds.map((groupId) => ({ taskId: t.id, groupId })));
   }

@@ -35,7 +35,6 @@ import {
   TableRow,
 } from "@timekeep/ui/components/table";
 import { MoreHorizontalIcon, PlusIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 
@@ -56,7 +55,6 @@ type Open = { group: GroupDTO; dialog: "rename" | "members" | "tasks" | "delete"
 
 /** Groups: named sets of people for private projects, report filters and manager scope. */
 export function GroupsTab({ ctx }: { ctx: TeamContext }) {
-  const router = useRouter();
   const [open, setOpen] = useState<Open>(null);
   const names = new Map(ctx.people.map((p) => [p.id, p.name]));
 
@@ -68,7 +66,6 @@ export function GroupsTab({ ctx }: { ctx: TeamContext }) {
     }
     toast.success(done);
     setOpen(null);
-    router.refresh();
     return true;
   }
 

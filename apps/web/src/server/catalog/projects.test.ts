@@ -221,7 +221,7 @@ describe("projects service", () => {
   it("deletes a project by moving or deleting its entries", async () => {
     const web = await createProject(db, owner, { name: "Web" });
     const app = await createProject(db, owner, { name: "App" });
-    const design = await createTask(db, owner, web.id, { name: "Design", assigneeIds: [] });
+    const design = await createTask(db, owner, web.id, { name: "Design" });
     await entry(owner, web.id, 60, { taskId: design.id });
     await entry(member, web.id, 30);
     const range = { from: at(-60), to: at(600) };
@@ -266,7 +266,7 @@ describe("projects service", () => {
 
   it("sums status by task and member for a range", async () => {
     const web = await createProject(db, owner, { name: "Web" });
-    const design = await createTask(db, owner, web.id, { name: "Design", assigneeIds: [] });
+    const design = await createTask(db, owner, web.id, { name: "Design" });
     await entry(owner, web.id, 60, { taskId: design.id, billable: true });
     await entry(owner, web.id, 30, { billable: false, startOffset: 90 });
     await entry(member, web.id, 45, { taskId: design.id, billable: true, startOffset: 180 });

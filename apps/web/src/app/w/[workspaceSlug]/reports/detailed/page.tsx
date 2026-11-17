@@ -1,4 +1,9 @@
-import { parseReportQuery, reportQueryToSearchParams, resolveViewerPrefs } from "@timekeep/core";
+import {
+  parseDetailedSort,
+  parseReportQuery,
+  reportQueryToSearchParams,
+  resolveViewerPrefs,
+} from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 import { dehydrate, HydrationBoundary, QueryClient } from "@tanstack/react-query";
 import type { Metadata } from "next";
@@ -38,8 +43,7 @@ export default async function DetailedReportPage({
   // Rows per page; also how the e2e suite exercises "Load more" without fifty entries.
   const requested = Number(search.get("limit"));
   const paging: DetailedPaging = {
-    sort: "start",
-    dir: "desc",
+    ...parseDetailedSort(search),
     limit:
       Number.isInteger(requested) && requested >= 1 && requested <= 200 ? requested : DEFAULT_LIMIT,
   };

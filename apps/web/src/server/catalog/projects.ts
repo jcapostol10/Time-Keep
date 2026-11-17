@@ -60,7 +60,7 @@ import { inSubmittedPeriodSql, SUBMITTED_TIME_MESSAGE } from "../approval-sql";
 import { scopeFilter } from "../authz";
 import { projectCurrency, projectsHaveRates, relabelProjectsCurrency } from "../rates";
 import { workspaceCurrency } from "./clients";
-import { visibleTasksFor } from "./tasks";
+import { grantTaskGroupsAccess, visibleTasksFor } from "./tasks";
 import { type Viewer, visibleProjectFilter } from "./viewer";
 import { countProjectExpenses, purgeDeletedProjectExpenses } from "../expenses";
 import { type EntryScope, reassignProjectEntries, softDeleteProjectEntries } from "../time-entries";
@@ -435,7 +435,7 @@ export async function copyProject(
         })),
       );
     }
-    // Decision 11: a copy carries the tasks' groups (task_assignee is unread).
+    // Decision 11: a copy carries the tasks' groups.
     if (taskGroups.length > 0) {
       await tx.insert(taskGroup).values(
         taskGroups.map((g) => ({
@@ -657,6 +657,11 @@ export async function updateProject(
         .where(eq(project.id, projectId));
       if (relabelTo) {
         await relabelProjectsCurrency(tx, viewer.workspaceId, [projectId], relabelTo);
+      }
+      // Rule 9 at the moment a project turns private: the groups its tasks
+      // were given keep seeing it.
+      if (patch.visibility === "PRIVATE" && before.visibility !== "PRIVATE") {
+        await grantTaskGroupsAccess(tx, projectId);
       }
     });
   } catch (error) {

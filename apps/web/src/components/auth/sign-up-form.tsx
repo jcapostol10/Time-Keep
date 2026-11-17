@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 
 import { authClient, authErrorMessage } from "@/lib/auth-client";
+import { signUpErrorField } from "@/lib/sign-up-errors";
 
 import { GoogleButton } from "./google-button";
 
@@ -37,8 +38,7 @@ export function SignUpForm({ googleEnabled, next }: { googleEnabled: boolean; ne
       callbackURL: next,
     });
     if (error) {
-      const field = error.code === "USER_ALREADY_EXISTS" ? "email" : "password";
-      form.setError(field, { message: authErrorMessage(error) });
+      form.setError(signUpErrorField(error.code), { message: authErrorMessage(error) });
       return;
     }
     router.push(`/check-email?type=verify&email=${encodeURIComponent(values.email)}`);

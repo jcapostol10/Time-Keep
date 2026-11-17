@@ -129,7 +129,6 @@ export const workspaceSettings = pgTable(
     membersSeeTeamTime: boolean("members_see_team_time").notNull().default(false),
     projectCreators: creatorSettingEnum("project_creators").notNull().default("admins"),
     clientCreators: creatorSettingEnum("client_creators").notNull().default("admins"),
-    taskCreators: creatorSettingEnum("task_creators").notNull().default("admins"),
     tagCreators: creatorSettingEnum("tag_creators").notNull().default("admins"),
     /** Fields an entry needs before it is stopped or saved: project | task | tag | description. */
     requiredFields: text("required_fields")

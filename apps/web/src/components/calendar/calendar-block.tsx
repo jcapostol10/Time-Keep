@@ -23,11 +23,14 @@ export function CalendarBlock({
   geometry,
   layout,
   durationFormat,
+  onEdit,
 }: {
   entry: TimeEntryDTO;
   geometry: DayBlock;
   layout: { column: number; columns: number };
   durationFormat: DurationFormat;
+  /** Enter or Space opens the editor, as a click does. */
+  onEdit: (entry: TimeEntryDTO) => void;
 }) {
   const color = entry.type === "break" ? "#64748b" : (entry.project?.color ?? "#64748b");
   const duration = formatDuration(entry.durationSeconds ?? 0, durationFormat);
@@ -39,6 +42,12 @@ export function CalendarBlock({
       role="button"
       tabIndex={0}
       aria-label={name}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        // Space would scroll the calendar.
+        event.preventDefault();
+        onEdit(entry);
+      }}
       data-entry-id={entry.id}
       data-color={color}
       data-column={layout.column}

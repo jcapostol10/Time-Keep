@@ -2,6 +2,7 @@ import type { ClientInput } from "@timekeep/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  addMember,
   connectTestDb,
   createTestUser,
   createTestWorkspace,
@@ -13,6 +14,7 @@ import {
   deleteClient,
   listClientOptions,
   listClients,
+  listFilterClients,
   updateClient,
 } from "./clients";
 import { createProject } from "./projects";
@@ -135,5 +137,21 @@ describe("clients service", () => {
     await expect(deleteClient(db, other.workspaceId, acme.id)).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
+  });
+
+  it("a member's filter clients are the clients of projects they can see", async () => {
+    const carol = await createTestUser(db, "Carol C");
+    await addMember(db, viewer.workspaceId, carol.id, "member");
+    const member = asViewer({ workspaceId: viewer.workspaceId, userId: carol.id, role: "member" });
+    const a = await createClient(db, viewer.workspaceId, input("A"));
+    const b = await createClient(db, viewer.workspaceId, input("B"));
+    const c = await createClient(db, viewer.workspaceId, input("C"));
+    await createProject(db, viewer, { name: "Public", clientId: a.id });
+    await createProject(db, viewer, { name: "Secret", clientId: b.id, visibility: "PRIVATE" });
+    await createProject(db, viewer, { name: "Old", clientId: c.id });
+    await updateClient(db, viewer.workspaceId, c.id, { archived: true });
+
+    expect((await listFilterClients(db, member)).map((x) => x.name)).toEqual(["A"]);
+    expect((await listFilterClients(db, viewer)).map((x) => x.name)).toEqual(["A", "B"]);
   });
 });

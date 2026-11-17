@@ -1,10 +1,12 @@
 "use client";
 
 import {
+  parseDetailedSort,
   parseReportQuery,
   type ReportQuery,
   reportQueryToSearchParams,
   type ReportView,
+  writeDetailedSort,
 } from "@timekeep/core";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
@@ -38,7 +40,13 @@ export function useReportQuery(): {
     (patch: Partial<ReportQuery>, options?: { replace?: boolean }) => {
       const nextQuery = { ...query, ...patch };
       setPending({ base: current, query: nextQuery });
-      const next = reportQueryToSearchParams(nextQuery).toString();
+      const nextParams = reportQueryToSearchParams(nextQuery);
+      // The Detailed report's sort and page size live beside the query; a filter change keeps them.
+      const here = new URLSearchParams(current);
+      writeDetailedSort(nextParams, parseDetailedSort(here));
+      const limit = here.get("limit");
+      if (limit) nextParams.set("limit", limit);
+      const next = nextParams.toString();
       // History API, not router.replace: Next keeps useSearchParams in step without a
       // server render of the page; react-query fetches the new report on its own.
       const url = next ? `${pathname}?${next}` : pathname;

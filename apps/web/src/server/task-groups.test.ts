@@ -4,6 +4,7 @@ import {
   and,
   eq,
   project,
+  projectGroup,
   projectMember,
   taskGroup,
   userGroup,
@@ -20,7 +21,7 @@ import {
   truncateAll,
 } from "../../test/db";
 import { loadViewer } from "./authz";
-import { createProject, listPickerProjects } from "./catalog/projects";
+import { createProject, listPickerProjects, updateProject } from "./catalog/projects";
 import {
   countTasksWithoutGroup,
   createTask,
@@ -62,7 +63,7 @@ async function task(projectId: string, name: string, groupIds: string[]): Promis
     ...olga,
     actor: { ...olga.actor, settings: { ...olga.actor.settings, taskVisibility: "EVERYONE" } },
   };
-  const t = await createTask(db, seeding, projectId, { name, assigneeIds: [] });
+  const t = await createTask(db, seeding, projectId, { name });
   if (groupIds.length > 0) {
     await db.insert(taskGroup).values(groupIds.map((groupId) => ({ taskId: t.id, groupId })));
   }
@@ -217,8 +218,30 @@ describe("tasks by group: reads", () => {
     });
 
     it("the reports' filter options follow the member's tasks", async () => {
+      // A project whose tasks are all hidden from the member still filters
+      // their old entries on it (rule 8 is about tracking, not reading).
+      const hidden = await createProject(db, await viewer("olga"), { name: "Hidden" });
+      await task(hidden.id, "Wiring", [ids.engineering!]);
+
       const options = await reportFilterOptions(db, await viewer("bob"));
       expect(names(options.tasks)).toEqual(["Books", "Design", "Ledger"]);
+      expect(names(options.projects)).toEqual(["Hidden", "Ops", "Web"]);
+    });
+
+    it("making a project private gives its task groups access (rule 9)", async () => {
+      const owner = await viewer("olga");
+      const open = await createProject(db, owner, { name: "Open" });
+      await task(open.id, "Wiring", [ids.engineering!]);
+
+      await updateProject(db, owner, open.id, { visibility: "PRIVATE" });
+
+      const access = await db
+        .select({ groupId: projectGroup.groupId })
+        .from(projectGroup)
+        .where(eq(projectGroup.projectId, open.id));
+      expect(access).toEqual([{ groupId: ids.engineering }]);
+      const max = await listPickerProjects(db, await viewer("max"));
+      expect(max.map((p) => p.name)).toContain("Open");
     });
 
     it("listTasks shows an admin every task with its groups", async () => {

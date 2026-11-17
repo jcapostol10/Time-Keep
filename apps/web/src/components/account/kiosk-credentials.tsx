@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@timekeep/ui/components/button";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -16,7 +15,6 @@ import { ownQrAction, setOwnPinAction } from "@/server/actions/kiosk-credential"
  * a kiosk the person may use (ruling R8).
  */
 export function KioskCredentials({ statuses }: { statuses: CredentialStatus[] }) {
-  const router = useRouter();
   const hydrated = useHydrated();
   const [open, setOpen] = useState<{
     kind: "pin" | "qr";
@@ -26,7 +24,6 @@ export function KioskCredentials({ statuses }: { statuses: CredentialStatus[] })
 
   function close() {
     setOpen(null);
-    router.refresh();
   }
 
   /** A first code is issued at once; replacing one asks first, in the dialog. */

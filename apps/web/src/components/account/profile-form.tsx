@@ -28,7 +28,6 @@ import {
 } from "@timekeep/ui/components/select";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -44,7 +43,6 @@ export function ProfileForm({
   email: string;
   defaultValues: UpdateProfileInput;
 }) {
-  const router = useRouter();
   const form = useForm<UpdateProfileInput>({
     resolver: zodResolver(updateProfileSchema),
     defaultValues,
@@ -58,7 +56,6 @@ export function ProfileForm({
     }
     toast.success("Profile saved");
     form.reset(values);
-    router.refresh();
   }
 
   return (

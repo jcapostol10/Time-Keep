@@ -92,11 +92,9 @@ describe("project templates", () => {
     templateId = base.id;
     groupId = randomUUID();
     await db.insert(userGroup).values({ id: groupId, workspaceId: wsId, name: "Design" });
-    setupTaskId = (
-      await createTask(db, olga, base.id, { name: "Setup", assigneeIds: [], groupIds: [groupId] })
-    ).id;
-    await createTask(db, olga, base.id, { name: "Review", assigneeIds: [] });
-    const done = await createTask(db, olga, base.id, { name: "Old step", assigneeIds: [] });
+    setupTaskId = (await createTask(db, olga, base.id, { name: "Setup", groupIds: [groupId] })).id;
+    await createTask(db, olga, base.id, { name: "Review" });
+    const done = await createTask(db, olga, base.id, { name: "Old step" });
     await db.update(task).set({ status: "DONE" }).where(eq(task.id, done.id));
     await db.insert(projectMember).values([
       { projectId: base.id, userId: max.id, isManager: true },

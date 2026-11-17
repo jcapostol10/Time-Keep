@@ -21,7 +21,6 @@ import {
 } from "@timekeep/ui/components/select";
 import { Textarea } from "@timekeep/ui/components/textarea";
 import { Loader2Icon, UserPlusIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 
@@ -41,7 +40,6 @@ export const INVITE_RESULT_LABELS: Record<InviteResult["result"], string> = {
 
 /** One or many addresses, one role and optional groups for all of them. */
 export function InviteDialog({ slug, groups }: { slug: string; groups: GroupDTO[] }) {
-  const router = useRouter();
   const id = useId();
   const [open, setOpen] = useState(false);
   const [emails, setEmails] = useState("");
@@ -54,7 +52,6 @@ export function InviteDialog({ slug, groups }: { slug: string; groups: GroupDTO[
   function onOpenChange(next: boolean) {
     setOpen(next);
     if (!next) {
-      if (results) router.refresh();
       setEmails("");
       setRole("member");
       setGroupIds(new Set());

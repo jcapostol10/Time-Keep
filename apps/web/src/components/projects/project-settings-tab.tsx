@@ -65,7 +65,6 @@ export function ProjectSettingsTab({
       return;
     }
     toast.success("Project updated");
-    router.refresh();
   }
 
   function patch(input: Record<string, unknown>, success: string) {
@@ -74,7 +73,6 @@ export function ProjectSettingsTab({
       if (!result.ok) toast.error(result.error);
       else {
         toast.success(success);
-        router.refresh();
       }
     });
   }

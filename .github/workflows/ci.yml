@@ -75,5 +75,16 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # The PDF tests (reports, invoices) print through headless Chromium and
+      # skip without it; the full browser, so playwright-core's executablePath()
+      # resolves.
+      # Ubuntu 24.04 restricts unprivileged user namespaces (AppArmor), which
+      # Chromium's sandbox needs; Puppeteer launches it sandboxed ("No usable
+      # sandbox!"). Lift the restriction for this job only.
+      - name: Install Chromium for the PDF tests
+        run: |
+          pnpm --filter @timekeep/web exec playwright install --with-deps chromium
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Unit and integration tests
         run: pnpm test

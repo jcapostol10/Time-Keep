@@ -6,6 +6,7 @@ import type {
   Bucket,
   Capacity,
   DetailedEntry,
+  DetailedSortKey,
   ExpenseGroupKey,
   ExpenseTotals,
   GroupKey,
@@ -69,7 +70,8 @@ export interface DetailedEntryDTO extends DetailedEntry {
   invoiceNumber: string | null;
 }
 
-export type DetailedSort = "start" | "duration";
+/** The Detailed report's sort columns (core `DETAILED_SORTS`). */
+export type DetailedSort = DetailedSortKey;
 
 export interface DetailedCursor {
   /** The sort column's value of the last row (ISO start or duration seconds as text). */

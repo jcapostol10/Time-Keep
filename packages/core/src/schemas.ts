@@ -151,7 +151,7 @@ export const workspaceSettingsSchema = z.object({
   requiredFields: z.array(z.enum(REQUIRED_FIELDS)).max(REQUIRED_FIELDS.length),
   forceTimer: z.boolean(),
   allowBreaks: z.boolean(),
-  // Tasks by group (decision 11). `taskCreators` left the form: tasks are admins' and project managers'.
+  // Tasks by group (decision 11). Tasks are created by admins and project managers.
   taskVisibility: z.enum(TASK_VISIBILITY),
   // Phase 5a: approvals and lock dates. The lock's own check is `lockSettingsCheck`,
   // applied after `.extend` (zod refuses to extend a refined object).
@@ -529,8 +529,6 @@ const groupIdsSchema = z.array(z.string().min(1)).max(100);
 
 export const taskInputSchema = z.object({
   name: catalogNameSchema,
-  /** Kept for the data; the UI no longer edits assignees (decision 11). */
-  assigneeIds: z.array(z.string().min(1)).max(100).default([]),
   /** The groups whose members see and track on the task when tasks are by group. */
   groupIds: groupIdsSchema.default([]),
   /** An optional time estimate (Phase 6b); tasks never add up into the project's. */
@@ -541,7 +539,6 @@ export type TaskInput = z.infer<typeof taskInputSchema>;
 export const taskPatchSchema = z.object({
   name: catalogNameSchema.optional(),
   status: z.enum(TASK_STATUSES).optional(),
-  assigneeIds: z.array(z.string().min(1)).max(100).optional(),
   groupIds: groupIdsSchema.optional(),
   estimateSeconds: estimateSecondsSchema.nullable().optional(),
 });

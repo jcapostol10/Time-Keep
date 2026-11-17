@@ -28,7 +28,7 @@ import { createClient, listClientOptions } from "./catalog/clients";
 import { createProject, listPickerProjects } from "./catalog/projects";
 import { createTag, listTags } from "./catalog/tags";
 import { createTask, visibleTasksFor } from "./catalog/tasks";
-import { type Viewer, visibleProjectFilter } from "./catalog/viewer";
+import { type Viewer, visibleProjectFilter, withManagedProject } from "./catalog/viewer";
 import { listMembers } from "./queries/team";
 import { createManualEntries, type EntryScope } from "./time-entries";
 
@@ -214,8 +214,11 @@ async function resolve(
     client: can(viewer.actor, "client.create", { kind: "none" }),
     project: can(viewer.actor, "project.create", { kind: "project", projectId: null }),
     tag: can(viewer.actor, "tag.create", { kind: "none" }),
-    // A task on a project the import creates: only roles that add tasks anywhere (decision 11).
-    taskOnNewProject: can(viewer.actor, "task.create", { kind: "task", projectId: "new" }),
+    // A task on a project the import creates: roles that add tasks anywhere
+    // (decision 11), and a manager, for the projects this import creates.
+    taskOnNewProject:
+      can(viewer.actor, "task.create", { kind: "task", projectId: "new" }) ||
+      viewer.role === "manager",
   };
   const byGroup = viewer.actor.settings.taskVisibility === "BY_GROUP";
   const newTaskGroupIds = options.newTaskGroupIds ?? [];
@@ -502,14 +505,19 @@ export async function commitEntryImport(
       // A project just created is visible to everyone it was created for.
       for (const scoped of lookup.projectsByUser.values()) scoped.push(created);
     }
+    const createdIds = new Set([...createdProjects.values()].map((p) => p.id));
     for (const r of resolution.ready) {
       if (!r.project || !r.task) continue;
       const project = lookup.project(await lookup.projectsFor(r.scope), r.project, r.client);
       if (!project) throw new ImportError(`Project "${r.project}" could not be found.`);
       if (project.tasks.some((t) => lower(t.name) === lower(r.task!))) continue;
-      const created = await createTask(tx, viewer, project.id, {
+      // A manager may add tasks to a project this import just created (this request only).
+      const creator =
+        viewer.role === "manager" && createdIds.has(project.id)
+          ? withManagedProject(viewer, project.id)
+          : viewer;
+      const created = await createTask(tx, creator, project.id, {
         name: r.task,
-        assigneeIds: [],
         groupIds: options.newTaskGroupIds ?? [],
       });
       project.tasks.push({ id: created.id, name: created.name });

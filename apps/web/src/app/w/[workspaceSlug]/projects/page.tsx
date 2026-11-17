@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { NewProjectButton } from "@/components/projects/project-dialog";
 import { ProjectsTable } from "@/components/projects/projects-table";
 import { ProjectsToolbar } from "@/components/projects/projects-toolbar";
-import { listClientOptions } from "@/server/catalog/clients";
+import { listClientOptions, listFilterClients } from "@/server/catalog/clients";
 import { listProjects } from "@/server/catalog/projects";
 import { requireWorkspacePage } from "@/server/workspace-access";
 import { viewerFor } from "@/server/authz";
@@ -42,9 +42,11 @@ export default async function ProjectsPage({
   const query = parsed.success ? parsed.data : projectListQuerySchema.parse({});
 
   const db = getDb();
-  const [projects, clients, templates] = await Promise.all([
+  const [projects, clients, filterClients, templates] = await Promise.all([
     listProjects(db, viewer, query),
+    // Every client for the dialogs; the filter only names clients of projects the viewer sees.
     listClientOptions(db, ctx.workspace.id),
+    listFilterClients(db, viewer),
     // "Start from template" lists every template the viewer can see.
     listProjects(db, viewer, {
       ...query,
@@ -70,7 +72,7 @@ export default async function ProjectsPage({
           ) : null
         }
       />
-      <ProjectsToolbar query={query} clients={clients} />
+      <ProjectsToolbar query={query} clients={filterClients} />
       <ProjectsTable
         slug={workspaceSlug}
         projects={projects}

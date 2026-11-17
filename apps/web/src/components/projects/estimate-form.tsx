@@ -20,7 +20,6 @@ import {
 } from "@timekeep/ui/components/select";
 import { Switch } from "@timekeep/ui/components/switch";
 import { Loader2Icon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -47,7 +46,6 @@ export function EstimateForm({
   currency: string;
   thresholds: number[];
 }) {
-  const router = useRouter();
   const id = useId();
   const [pending, startTransition] = useTransition();
   const [kind, setKind] = useState<EstimateKind>(estimate.kind);
@@ -80,7 +78,6 @@ export function EstimateForm({
         return;
       }
       toast.success("Estimate saved");
-      router.refresh();
     });
   }
 

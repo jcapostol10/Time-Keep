@@ -21,7 +21,6 @@ import {
 } from "@timekeep/ui/components/table";
 import { FolderKanbanIcon, MoreHorizontalIcon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -56,7 +55,6 @@ export function ProjectsTable({
   /** Projects the viewer manages without being an admin: their names link to the detail page. */
   editableIds?: string[];
 }) {
-  const router = useRouter();
   const [, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<ProjectListItem | null>(null);
@@ -68,7 +66,6 @@ export function ProjectsTable({
       if (!result.ok) toast.error(result.error ?? "Something went wrong.");
       else {
         toast.success(success);
-        router.refresh();
       }
     });
   }
@@ -291,7 +288,6 @@ export function ProjectsTable({
         onClose={() => setDeleting(null)}
         onDeleted={() => {
           setDeleting(null);
-          router.refresh();
         }}
       />
     </>

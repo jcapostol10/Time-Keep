@@ -39,7 +39,6 @@ import {
   TableRow,
 } from "@timekeep/ui/components/table";
 import { CopyIcon, MonitorSmartphoneIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -96,7 +95,6 @@ export function KiosksPageClient({
   photoAllowed: boolean;
   requiredFields: RequiredField[];
 }) {
-  const router = useRouter();
   const [editing, setEditing] = useState<KioskDTO | "new" | null>(null);
   const [rotating, setRotating] = useState<KioskDTO | null>(null);
   const [deviceUrl, setDeviceUrl] = useState<string | null>(null);
@@ -120,7 +118,6 @@ export function KiosksPageClient({
       return;
     }
     toast.success(disabled ? `${kiosk.name} disabled` : `${kiosk.name} enabled`);
-    router.refresh();
   }
 
   return (
@@ -285,7 +282,6 @@ function KioskDialog({
   onClose: () => void;
   onCreated: (url: string) => void;
 }) {
-  const router = useRouter();
   const { data: options } = useTrackerOptions(slug, useTargetKey());
   const [name, setName] = useState(kiosk?.name ?? "");
   const [selection, setSelection] = useState<ProjectSelection>({
@@ -329,7 +325,6 @@ function KioskDialog({
     }
     if ("url" in result.data) onCreated(result.data.url);
     onClose();
-    router.refresh();
   }
 
   return (

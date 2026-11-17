@@ -5,9 +5,8 @@ import { getDb } from "@timekeep/db";
 
 import { type ActionResult, fail, fromZodError, ok } from "@/lib/action-result";
 import type { TimesheetTemplateDTO } from "@/lib/catalog-types";
-import type { TimeEntryDTO } from "@/lib/tracker-types";
 import { actionFailure, userErrorMessage } from "@/server/actions/errors";
-import { copyWeek, deleteTemplate, saveTemplate } from "@/server/timesheet";
+import { copyWeek, type CopyWeekResult, deleteTemplate, saveTemplate } from "@/server/timesheet";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
 import { authorize } from "@/server/authz";
 
@@ -50,7 +49,7 @@ export async function deleteTemplateAction(
 export async function copyWeekAction(
   slug: string,
   input: unknown,
-): Promise<ActionResult<TimeEntryDTO[]>> {
+): Promise<ActionResult<CopyWeekResult>> {
   try {
     const ctx = await requireWorkspaceAccess(slug);
     const parsed = copyWeekSchema.safeParse(input);

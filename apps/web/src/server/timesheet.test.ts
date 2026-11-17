@@ -1,3 +1,4 @@
+import { eq, workspaceSettings } from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -81,7 +82,7 @@ describe("timesheet templates and copy week", () => {
     await entry(scope, "2026-03-09T01:00:00.000Z", 30, { description: "already" }); // this week
     await entry(other, "2026-03-02T01:00:00.000Z", 60, { description: "theirs" });
 
-    const copied = await copyWeek(db, scope, {
+    const { created: copied } = await copyWeek(db, scope, {
       fromWeekStart: LAST_WEEK,
       toWeekStart: THIS_WEEK,
       tz: TZ,
@@ -100,19 +101,77 @@ describe("timesheet templates and copy week", () => {
     expect(thisWeek.map((e) => e.description).sort()).toEqual(["a", "already", "b"]);
   });
 
-  it("copies nothing when a copied detail is no longer usable", async () => {
+  it("an archived project skips its entry and copies the rest", async () => {
     const old = await createProject(db, scope, { name: "Old" });
     await entry(scope, "2026-03-02T01:00:00.000Z", 60, { description: "fine" });
     await entry(scope, "2026-03-03T01:00:00.000Z", 60, { projectId: old.id, description: "stale" });
     await updateProject(db, scope, old.id, { archived: true });
 
-    await expect(
-      copyWeek(db, scope, { fromWeekStart: LAST_WEEK, toWeekStart: THIS_WEEK, tz: TZ }),
-    ).rejects.toMatchObject({ code: "INVALID", message: "This project is archived." });
+    const result = await copyWeek(db, scope, {
+      fromWeekStart: LAST_WEEK,
+      toWeekStart: THIS_WEEK,
+      tz: TZ,
+    });
+    expect(result.created.map((e) => e.description)).toEqual(["fine"]);
+    expect(result.skipped.unusable).toEqual([
+      { description: "stale", reason: "This project is archived." },
+    ]);
     const thisWeek = await listEntriesInRange(db, scope, {
       from: THIS_WEEK,
       to: new Date("2026-03-15T16:00:00.000Z"),
     });
-    expect(thisWeek).toEqual([]);
+    expect(thisWeek.map((e) => e.description)).toEqual(["fine"]);
+  });
+
+  it("copying twice copies nothing the second time", async () => {
+    await entry(scope, "2026-03-02T01:00:00.000Z", 60, { description: "a" });
+    await entry(scope, "2026-03-04T06:30:00.000Z", 45, { description: "b" });
+    const args = { fromWeekStart: LAST_WEEK, toWeekStart: THIS_WEEK, tz: TZ };
+
+    const first = await copyWeek(db, scope, args);
+    expect(first.created).toHaveLength(2);
+    const second = await copyWeek(db, scope, args);
+    expect(second.created).toEqual([]);
+    expect(second.skipped.duplicates).toBe(2);
+  });
+
+  it("a break is skipped, not fatal, once breaks are turned off", async () => {
+    const setBreaks = (allowBreaks: boolean) =>
+      db
+        .update(workspaceSettings)
+        .set({ allowBreaks })
+        .where(eq(workspaceSettings.workspaceId, scope.workspaceId));
+    await setBreaks(true);
+    await entry(scope, "2026-03-02T04:00:00.000Z", 30, { description: "", type: "break" });
+    await entry(scope, "2026-03-02T01:00:00.000Z", 60, { description: "work" });
+    await setBreaks(false);
+
+    const result = await copyWeek(db, scope, {
+      fromWeekStart: LAST_WEEK,
+      toWeekStart: THIS_WEEK,
+      tz: TZ,
+    });
+    expect(result.created.map((e) => e.description)).toEqual(["work"]);
+    expect(result.skipped.unusable).toEqual([
+      { description: "", reason: "Breaks are not enabled." },
+    ]);
+  });
+
+  it("a break stays a break", async () => {
+    await db
+      .update(workspaceSettings)
+      .set({ allowBreaks: true })
+      .where(eq(workspaceSettings.workspaceId, scope.workspaceId));
+    await entry(scope, "2026-03-02T04:00:00.000Z", 30, {
+      description: "",
+      type: "break",
+    });
+
+    const result = await copyWeek(db, scope, {
+      fromWeekStart: LAST_WEEK,
+      toWeekStart: THIS_WEEK,
+      tz: TZ,
+    });
+    expect(result.created.map((e) => e.type)).toEqual(["break"]);
   });
 });

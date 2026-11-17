@@ -28,7 +28,6 @@ import {
   TableRow,
 } from "@timekeep/ui/components/table";
 import { MoreHorizontalIcon, TagIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -50,7 +49,6 @@ export function TagsTable({
   /** Rename, archive and delete (admins); creators without it see the list only. */
   canManage: boolean;
 }) {
-  const router = useRouter();
   const [, startTransition] = useTransition();
   const [editing, setEditing] = useState<TagDTO | null>(null);
   const [deleting, setDeleting] = useState<TagDTO | null>(null);
@@ -61,7 +59,6 @@ export function TagsTable({
       if (!result.ok) toast.error(result.error ?? "Something went wrong.");
       else {
         toast.success(success);
-        router.refresh();
       }
     });
   }

@@ -10,6 +10,8 @@ import {
   bucketKeys,
   clampRangeToYear,
   DEFAULT_REPORT_QUERY,
+  parseDetailedSort,
+  writeDetailedSort,
   drillDownQuery,
   buildWeekly,
   type GroupKey,
@@ -84,6 +86,31 @@ describe("report query", () => {
     expect(parseReportQuery(new URLSearchParams("groupBy=nonsense&preset=never")).preset).toBe(
       "this-week",
     );
+  });
+});
+
+describe("detailed sort in the URL", () => {
+  it("parseDetailedSort reads duration asc", () => {
+    expect(parseDetailedSort(new URLSearchParams("sort=duration&dir=asc"))).toEqual({
+      sort: "duration",
+      dir: "asc",
+    });
+  });
+
+  it("falls back to start desc on garbage", () => {
+    expect(parseDetailedSort(new URLSearchParams("sort=price&dir=sideways"))).toEqual({
+      sort: "start",
+      dir: "desc",
+    });
+    expect(parseDetailedSort(new URLSearchParams())).toEqual({ sort: "start", dir: "desc" });
+  });
+
+  it("writeDetailedSort omits the default and replaces an old value", () => {
+    const params = new URLSearchParams("preset=thisWeek&sort=duration&dir=asc");
+    writeDetailedSort(params, { sort: "start", dir: "desc" });
+    expect(params.toString()).toBe("preset=thisWeek");
+    writeDetailedSort(params, { sort: "duration", dir: "desc" });
+    expect(params.toString()).toBe("preset=thisWeek&sort=duration");
   });
 });
 

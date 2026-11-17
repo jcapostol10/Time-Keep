@@ -12,7 +12,14 @@ import {
 } from "./helpers/calendar";
 import { createProjectViaUi } from "./helpers/catalog";
 import { dateKey } from "./helpers/timesheet";
-import { addManualEntry, entry, pickProject, timer, waitForSaves } from "./helpers/tracker";
+import {
+  addManualEntry,
+  addManualEntryOn,
+  entry,
+  pickProject,
+  timer,
+  waitForSaves,
+} from "./helpers/tracker";
 
 /** Day and week views: entries as blocks, drag to create, move and resize. */
 
@@ -84,6 +91,117 @@ test.describe("calendar", () => {
     const row = entry(page, "Site work");
     await expect(row.getByRole("textbox", { name: "Start time" })).toHaveValue("13:00");
     await expect(row.getByRole("textbox", { name: "End time" })).toHaveValue("14:30");
+  });
+
+  test("a moved block stays where it was dropped while saving", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Slow save", start: "09:00", duration: "1" });
+    await openCalendar(page, freshUser.slug, "day");
+    await scrollToMinutes(page, 8 * 60);
+    // Hold every server action for 2.5 s: the block must not wait for it.
+    await page.route("**/*", async (route) => {
+      const action = await route.request().headerValue("next-action");
+      if (route.request().method() === "POST" && action) {
+        await new Promise((resolve) => setTimeout(resolve, 2_500));
+      }
+      await route.fallback();
+    });
+
+    await dragBlock(page, block(page, "Slow save, No project, 1:00:00"), 0, 4 * 4 * SLOT_PX);
+    // 13:00 is 832px down the column, shown before the save lands.
+    await expect(block(page, "Slow save, No project, 1:00:00")).toHaveCSS("top", "832px", {
+      timeout: 1_500,
+    });
+    await waitForSaves(page);
+    await expect(block(page, "Slow save, No project, 1:00:00")).toHaveCSS("top", "832px");
+  });
+
+  test("a refused move goes back", async ({ page, freshUser, trackerPage }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Refused", start: "09:00", duration: "1" });
+    await openCalendar(page, freshUser.slug, "day");
+    await scrollToMinutes(page, 8 * 60);
+    await page.route("**/*", async (route) => {
+      const action = await route.request().headerValue("next-action");
+      if (route.request().method() === "POST" && action) await route.abort();
+      else await route.fallback();
+    });
+
+    await dragBlock(page, block(page, "Refused, No project, 1:00:00"), 0, 4 * 4 * SLOT_PX);
+    await expect(page.getByText("The change could not be saved.")).toBeVisible();
+    // 09:00 is 576px down the column.
+    await expect(block(page, "Refused, No project, 1:00:00")).toHaveCSS("top", "576px");
+  });
+
+  test("a refused move puts back only its own block", async ({ page, freshUser, trackerPage }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "First", start: "09:00", duration: "1" });
+    await addManualEntry(page, { description: "Second", start: "11:00", duration: "1" });
+    await openCalendar(page, freshUser.slug, "day");
+    await scrollToMinutes(page, 8 * 60);
+    // The first save is held, then refused; the second (queued behind it) is held, then saved.
+    let actions = 0;
+    await page.route("**/*", async (route) => {
+      const action = await route.request().headerValue("next-action");
+      if (route.request().method() !== "POST" || !action) return route.fallback();
+      const nth = ++actions;
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      if (nth === 1) await route.abort();
+      else await route.fallback();
+    });
+
+    await dragBlock(page, block(page, "First, No project, 1:00:00"), 0, 4 * SLOT_PX);
+    await dragBlock(page, block(page, "Second, No project, 1:00:00"), 0, 3 * 4 * SLOT_PX);
+    await expect(page.getByText("The change could not be saved.")).toBeVisible();
+    // Undoing the first move leaves the second where it was dropped, while its save is held.
+    await expect(block(page, "Second, No project, 1:00:00")).toHaveCSS("top", "896px", {
+      timeout: 1_000,
+    });
+    await waitForSaves(page);
+    // 09:00 is 576px down the column; 14:00 is 896px.
+    await expect(block(page, "First, No project, 1:00:00")).toHaveCSS("top", "576px");
+    await expect(block(page, "Second, No project, 1:00:00")).toHaveCSS("top", "896px");
+  });
+
+  test("open a block with the keyboard", async ({ page, freshUser, trackerPage }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Keyboard entry", start: "09:00", duration: "1" });
+    await openCalendar(page, freshUser.slug, "day");
+    await scrollToMinutes(page, 8 * 60);
+    const b = block(page, "Keyboard entry, No project, 1:00:00");
+    const dialog = page.getByRole("dialog", { name: "Edit entry" });
+
+    await b.focus();
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await b.focus();
+    await page.keyboard.press("Space");
+    await expect(dialog).toBeVisible();
+  });
+
+  test("an entry that crosses into the week is drawn on its first day", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    // Sunday 23:00 to Monday 01:00; the week starts on Monday.
+    await addManualEntryOn(page, {
+      description: "Late shift",
+      date: "2026-03-08",
+      start: "23:00",
+      duration: "2",
+    });
+    await page.goto(`/w/${freshUser.slug}/calendar?view=day&date=2026-03-09`);
+    await expect(calendar(page)).toBeVisible();
+    await expect(dayColumn(page, "2026-03-09")).toBeVisible();
+    await expect(block(page, "Late shift, No project, 2:00:00")).toBeVisible();
   });
 
   test("click a block to edit it", async ({ page, freshUser, trackerPage }) => {

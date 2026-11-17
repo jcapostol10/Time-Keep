@@ -17,7 +17,6 @@ import {
   projectGroup,
   sql,
   task,
-  taskAssignee,
   taskGroup,
   timeEntry,
   userGroup,
@@ -37,12 +36,10 @@ type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delet
 const DUPLICATE_NAME = "A task with this name already exists in this project.";
 
 type TaskRow = typeof task.$inferSelect & {
-  assignees: { userId: string }[];
   groups: { groupId: string }[];
 };
 
 const taskRelations = {
-  assignees: { columns: { userId: true } },
   groups: { columns: { groupId: true } },
 } as const;
 
@@ -151,7 +148,6 @@ function toDTO(row: TaskRow, usage: { seconds: number; entries: number } | undef
     projectId: row.projectId,
     name: row.name,
     status: row.status,
-    assigneeIds: row.assignees.map((a) => a.userId).sort(),
     groupIds: row.groups.map((g) => g.groupId).sort(),
     trackedSeconds: usage?.seconds ?? 0,
     entryCount: usage?.entries ?? 0,
@@ -172,30 +168,6 @@ async function requireVisibleTask(db: Executor, viewer: Viewer, taskId: string):
     throw new CatalogError("NOT_FOUND", "Task not found.");
   }
   return row;
-}
-
-async function assertMembers(db: Executor, workspaceId: string, userIds: string[]): Promise<void> {
-  if (userIds.length === 0) return;
-  const rows = await db
-    .select({ userId: membership.userId })
-    .from(membership)
-    .where(
-      and(
-        eq(membership.workspaceId, workspaceId),
-        inArray(membership.userId, userIds),
-        eq(membership.status, "ACTIVE"),
-      ),
-    );
-  if (rows.length !== userIds.length) {
-    throw new CatalogError("INVALID", "Only workspace members can be assigned.");
-  }
-}
-
-async function replaceAssignees(db: Executor, taskId: string, userIds: string[]): Promise<void> {
-  await db.delete(taskAssignee).where(eq(taskAssignee.taskId, taskId));
-  if (userIds.length > 0) {
-    await db.insert(taskAssignee).values(userIds.map((userId) => ({ taskId, userId })));
-  }
 }
 
 /** The groups must be this workspace's. */
@@ -229,6 +201,19 @@ async function grantProjectAccess(
       privateProjects.flatMap((p) => groupIds.map((groupId) => ({ projectId: p.id, groupId }))),
     )
     .onConflictDoNothing();
+}
+
+/**
+ * Rule 9 for a project that turns PRIVATE: every group given one of its tasks
+ * gets the project's access (`updateProject`, in its transaction).
+ */
+export async function grantTaskGroupsAccess(db: Executor, projectId: string): Promise<void> {
+  const rows = await db
+    .select({ groupId: taskGroup.groupId })
+    .from(taskGroup)
+    .innerJoin(task, eq(task.id, taskGroup.taskId))
+    .where(eq(task.projectId, projectId));
+  await grantProjectAccess(db, [projectId], [...new Set(rows.map((r) => r.groupId))]);
 }
 
 /**
@@ -420,8 +405,6 @@ export async function createTask(
 ): Promise<TaskDTO> {
   await requireVisibleProject(db, viewer, projectId);
   assertCan(viewer.actor, "task.create", { kind: "task", projectId });
-  const assigneeIds = [...new Set(input.assigneeIds)];
-  await assertMembers(db, viewer.workspaceId, assigneeIds);
   const groupIds = [...new Set(input.groupIds ?? [])];
   // With tasks by group a task is never created without one (ruling R2 of the plan).
   if (viewer.actor.settings.taskVisibility === "BY_GROUP" && groupIds.length === 0) {
@@ -429,7 +412,7 @@ export async function createTask(
   }
   await assertGroups(db, viewer.workspaceId, groupIds);
   const id = randomUUID();
-  // The task, its assignees and its groups land together or not at all.
+  // The task and its groups land together or not at all.
   return db.transaction(async (tx) => {
     try {
       await tx.insert(task).values({
@@ -445,7 +428,6 @@ export async function createTask(
       }
       throw error;
     }
-    await replaceAssignees(tx, id, assigneeIds);
     if (groupIds.length > 0) {
       await tx
         .insert(taskGroup)
@@ -463,16 +445,13 @@ export async function updateTask(
   patch: TaskPatch,
 ): Promise<TaskDTO> {
   const row = await requireVisibleTask(db, viewer, taskId);
-  const assigneeIds = patch.assigneeIds === undefined ? undefined : [...new Set(patch.assigneeIds)];
-  if (assigneeIds) await assertMembers(db, viewer.workspaceId, assigneeIds);
   const groupIds = patch.groupIds === undefined ? undefined : [...new Set(patch.groupIds)];
   if (groupIds) {
     assertCan(viewer.actor, "task.assignGroups", { kind: "task", projectId: row.projectId });
     await assertGroups(db, viewer.workspaceId, groupIds);
   }
-  // Assignees, groups and the rename land together: a refused name must not leave new ones behind.
+  // Groups and the rename land together: a refused name must not leave new groups behind.
   await db.transaction(async (tx) => {
-    if (assigneeIds) await replaceAssignees(tx, taskId, assigneeIds);
     const current = row.groups.map((g) => g.groupId).sort();
     const changed =
       groupIds !== undefined &&

@@ -1,5 +1,15 @@
 import { autoMapColumns } from "@timekeep/core";
-import { eq, managedUser, project, tag, timeEntry, workspaceSettings } from "@timekeep/db";
+import {
+  and,
+  eq,
+  managedUser,
+  project,
+  projectMember,
+  tag,
+  task,
+  timeEntry,
+  workspaceSettings,
+} from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -54,7 +64,7 @@ describe("entry import", () => {
     await db.insert(managedUser).values({ workspaceId: wsId, managerId: max.id, userId: bob.id });
     const owner = await viewer("olga");
     const web = await createProject(db, owner, { name: "Web" });
-    await createTask(db, owner, web.id, { name: "Setup", assigneeIds: [] });
+    await createTask(db, owner, web.id, { name: "Setup" });
     await createTag(db, wsId, { name: "t1" });
   });
 
@@ -87,6 +97,35 @@ describe("entry import", () => {
     const review = rows.find((r) => r.description === "Design review")!;
     expect(review).toMatchObject({ billable: true, userId: ids.olga, durationSeconds: 5400 });
     expect(review.start.toISOString()).toBe("2026-03-09T01:00:00.000Z");
+  });
+
+  it("a manager who may create projects creates a new project's tasks in one import", async () => {
+    await db
+      .update(workspaceSettings)
+      .set({ projectCreators: "managers" })
+      .where(eq(workspaceSettings.workspaceId, wsId));
+    const text = csv("2026-03-09,09:00,10:00,Kickoff,Launch,Planning,,no,");
+    const max = await viewer("max");
+    const plan = await planEntryImport(db, max, text, OPTIONS);
+    expect(plan).toMatchObject({
+      ok: 1,
+      errors: 0,
+      creates: { projects: ["Launch"], tasks: ["Launch › Planning"] },
+    });
+
+    const { imported } = await commitEntryImport(db, max, text, OPTIONS, plan.fingerprint);
+    expect(imported).toBe(1);
+    const [launch] = await db.select().from(project).where(eq(project.name, "Launch"));
+    expect(
+      (await db.select().from(task).where(eq(task.projectId, launch!.id))).map((x) => x.name),
+    ).toEqual(["Planning"]);
+    // The right to add the task lasts for the import only: creating a project
+    // does not make a manager its manager (that would widen their reach).
+    const members = await db
+      .select()
+      .from(projectMember)
+      .where(and(eq(projectMember.projectId, launch!.id), eq(projectMember.userId, ids.max!)));
+    expect(members).toEqual([]);
   });
 
   it("a changed fingerprint refuses the commit", async () => {
