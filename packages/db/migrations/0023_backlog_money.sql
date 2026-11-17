@@ -1,0 +1,2 @@
+ALTER TABLE "captured_email" ADD COLUMN "attachments" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "rate_recalc_job" ADD COLUMN "kinds" text[] DEFAULT '{billable,cost}'::text[] NOT NULL;

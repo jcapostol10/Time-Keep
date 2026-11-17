@@ -29,6 +29,7 @@ export interface RateKinds {
   cost?: boolean;
 }
 
+export const BOTH_RATE_KINDS: RateKinds = { billable: true, cost: true };
 const BOTH: RateKinds = { billable: true, cost: true };
 
 /** The entry's currency: its project's client's, else the workspace's (core `entryCurrency`). */

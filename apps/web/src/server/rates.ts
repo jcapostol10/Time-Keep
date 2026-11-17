@@ -251,7 +251,11 @@ export async function setRate(
   const jobId =
     input.apply === "new"
       ? null
-      : (await requestRateRecalc(db, viewer.workspaceId, viewer.userId, effectiveFrom)).jobId;
+      : (
+          await requestRateRecalc(db, viewer.workspaceId, viewer.userId, effectiveFrom, {
+            [kind]: true,
+          })
+        ).jobId;
   return { rate: toDTO(row, null), jobId };
 }
 

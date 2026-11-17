@@ -265,6 +265,90 @@ describe("the apply-to-past-entries job", () => {
     expect(jobs[0]?.from.toISOString()).toBe("2026-03-01T00:00:00.000Z");
   });
 
+  async function addCostRate(amountMinor: number, effectiveFrom: Date) {
+    await db.insert(rate).values({
+      id: randomUUID(),
+      workspaceId: me.workspaceId,
+      kind: "cost",
+      level: "member",
+      userId: me.userId,
+      amountMinor,
+      currency: "USD",
+      effectiveFrom,
+    });
+  }
+  const costs = async () =>
+    (
+      await db
+        .select({ cost: timeEntry.costAmountMinor })
+        .from(timeEntry)
+        .where(eq(timeEntry.workspaceId, me.workspaceId))
+        .orderBy(timeEntry.start)
+    ).map((r) => r.cost);
+
+  it("a cost-only job leaves billable snapshots alone, and the reverse", async () => {
+    await entries(3);
+    await addRate(5000, new Date(0));
+    await addCostRate(2000, new Date(0));
+    const first = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0));
+    await runRateRecalcJob(db, first.jobId);
+    expect(await amounts()).toEqual(Array(3).fill(5000));
+    expect(await costs()).toEqual(Array(3).fill(2000));
+
+    // Both rates change for new entries only; then cost alone is applied to the past.
+    await addRate(7000, new Date(1));
+    await addCostRate(3000, new Date(1));
+    const cost = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0), {
+      cost: true,
+    });
+    await runRateRecalcJob(db, cost.jobId);
+    expect(await costs()).toEqual(Array(3).fill(3000));
+    expect(await amounts()).toEqual(Array(3).fill(5000));
+
+    await addCostRate(4000, new Date(2));
+    const billable = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0), {
+      billable: true,
+    });
+    await runRateRecalcJob(db, billable.jobId);
+    expect(await amounts()).toEqual(Array(3).fill(7000));
+    expect(await costs()).toEqual(Array(3).fill(3000));
+  });
+
+  it("a cost request merged into a waiting billable job re-rates both", async () => {
+    await entries(3);
+    await addRate(5000, new Date(0));
+    await addCostRate(2000, new Date(0));
+    const first = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0), {
+      billable: true,
+    });
+    const second = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0), {
+      cost: true,
+    });
+    expect(second).toEqual({ jobId: first.jobId, merged: true });
+    await runRateRecalcJob(db, first.jobId);
+    expect(await amounts()).toEqual(Array(3).fill(5000));
+    expect(await costs()).toEqual(Array(3).fill(2000));
+  });
+
+  it("a failed job's kinds fold into the request that replaces it", async () => {
+    await entries(3);
+    await addRate(5000, new Date(0));
+    await addCostRate(2000, new Date(0));
+    const first = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0), {
+      billable: true,
+    });
+    await db
+      .update(rateRecalcJob)
+      .set({ status: "failed" })
+      .where(eq(rateRecalcJob.id, first.jobId));
+    const second = await requestRateRecalc(db, me.workspaceId, me.userId, new Date(0), {
+      cost: true,
+    });
+    await runRateRecalcJob(db, second.jobId);
+    expect(await amounts()).toEqual(Array(3).fill(5000));
+    expect(await costs()).toEqual(Array(3).fill(2000));
+  });
+
   it("runs the next waiting job when one finishes", async () => {
     await entries(3);
     await addRate(5000, new Date(0));
