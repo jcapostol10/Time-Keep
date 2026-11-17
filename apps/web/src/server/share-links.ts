@@ -138,6 +138,7 @@ export async function resolveShareLink(
     hideAmounts: !link.includeAmounts,
     // A shared report is for clients: never cost or profit, whoever made it.
     hideCosts: true,
+    shared: true,
   };
   return {
     id: link.id,

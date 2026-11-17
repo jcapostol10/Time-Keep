@@ -316,6 +316,15 @@ describe("PIN throttles", () => {
     expect((await identify(db, k, { qr: payload }, at(11))).person.userId).toBe(cast.ids.bob);
   });
 
+  it("do not count unknown QR codes toward the kiosk's pause", async () => {
+    for (let i = 0; i < 31; i++) {
+      await expect(
+        identify(db, k, { qr: `tkq1.${"z".repeat(40)}${String(i).padStart(3, "0")}` }, at(i / 10)),
+      ).rejects.toMatchObject({ code: "QR_INVALID" });
+    }
+    expect((await bobPin("0042", at(4))).person.userId).toBe(cast.ids.bob);
+  });
+
   it("record at most five failures for ten parallel wrong PINs (Review Focus 4)", async () => {
     const results = await Promise.allSettled(
       Array.from({ length: 10 }, (_, i) =>

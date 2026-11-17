@@ -877,7 +877,7 @@ export async function detailedReport(
           .where(inArray(timeEntryTag.timeEntryId, ids))
       : [];
   const withPhoto = new Set(
-    ids.length > 0 && can(viewer.actor, "kiosk.manage", { kind: "none" })
+    ids.length > 0 && !viewer.shared && can(viewer.actor, "kiosk.manage", { kind: "none" })
       ? (
           await db
             .select({ entryId: kioskPhoto.entryId })

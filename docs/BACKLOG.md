@@ -27,15 +27,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 
 ### b2 — approvals, time off, attendance, targets, kiosks, the daily cron
 
-- [ ] **b2** Phase 5c review minors:
-  - The QR path of `identify` treats any error from `allowedPerson` as "not allowed", so a database error counts as a QR failure; catch only `WorkspaceAccessError`.
-  - An unknown QR payload costs nothing to send and counts toward the kiosk's 30-failure pause, so whoever has the URL can pause PIN entry; stop counting failures with no person toward the pause.
-  - `savePunchPhoto` uploads before it inserts the row, so an insert failure leaves an object the purge never finds.
-  - `photo: true` reaches a public share page's payload when the link's creator manages kiosks (not rendered, existence only); strip it on the share path.
-  - `removeMember` keeps `kiosk_assignee` rows, so re-inviting someone silently re-allows them on that kiosk.
-  - The device URL's Copy has no failure toast (insecure contexts), and an emptied timeout field shows a raw validation message.
-  - The session timeout can fire while a punch is in flight (the photo capture waits for the camera); clear it while busy.
-  - `credentialStatuses` returns `pinSetAt`, which no UI reads.
 - [ ] **b2** Phase 5a review minors: `approversFor` uses the root pool inside the submit transaction (pass `tx`); the guard runs three statements per write (load the rules once per bulk edit or import); an owner's or admin's timer started with a note in a pending period can still be running when the period is approved; the settings check counts pending requests outside the update transaction; `deleteProject`'s submitted-time check takes no person lock; the daily reminder fires only on the first local day after a period and its dedupe is read-then-insert; `email_outbox` keeps full HTML forever (add retention, keep the reminder rows); `lock.manage` and core `transition()` are unused; the note prompt cancels an open prompt when a second write asks, Undo after a delete asks again, and a cancelled multi-owner delete restores rows already deleted; decision emails link to the timesheet, not the period; the Approvals tables lack billable totals; no web-level test with the viewer's zone different from the workspace's; Detailed report rows are not marked read-only for locked time.
 - [ ] **b2** Phase 5a: a workspace timezone change while periods are APPROVED is allowed (ruling 5 keeps it); the settings page says what it moves before saving.
 - [ ] **b2** Phase 5b: the request dialog offers an owner or admin only the policies assigned to them, but only the Policies tab shows assignment; an admin asking for time off on an unassigned policy gets "Not found".
@@ -159,6 +150,7 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] Phase 5c review minors, done 2026-11-17 (backlog cleanup b2): the QR path counts only "not allowed here" as a failed code; the kiosk's 30-failure pause counts failed PINs only, so unknown QR codes cannot pause it; a clock-in photo's row is written before the upload and taken back if the upload fails; share links never carry the photo flag (`Viewer.shared`); removing a member clears their kiosk, policy, holiday and target assignments; the device URL's Copy says when it cannot copy; the timeout field says what it accepts; the session timeout waits while a punch is in flight; `credentialStatuses` no longer returns `pinSetAt`.
 - [x] Kiosk default tag, done 2026-11-17 (backlog cleanup b2): `kiosk.tag_id` (0022), a Default tag select in the kiosk dialog, every punch carries it, and an archived or foreign tag is refused at save; the dialog warns about a required tag only without a default tag.
 - [x] Dropped `task_assignee` and `workspace_settings.task_creators`, done 2026-11-17 (backlog cleanup b2, migration 0021): the contract half, after branch 1's code (which no longer reads or writes them) reached production.
 - [x] PDF tests in CI, done 2026-11-17 (backlog cleanup b1): the CI job installs Playwright's Chromium and lifts Ubuntu 24.04's user-namespace restriction, so `report-pdf.test.ts` and `invoices/pdf.test.ts` print PDFs in CI (run 44080024987: both passed, not skipped).

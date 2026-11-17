@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 
-import { eq, kiosk, tag } from "@timekeep/db";
+import { eq, kiosk, kioskAssignee, tag } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb } from "../../../test/db";
 import { frontDesk, type KioskCast, setUpKioskCast } from "../../../test/kiosk-fixtures";
 import { createKiosk, listKiosks, rotateKioskToken, setKioskDisabled, updateKiosk } from "./kiosks";
+import { removeMember } from "../team";
 
 const handle = connectTestDb();
 const db = handle.db;
@@ -73,6 +74,19 @@ describe("kiosks", () => {
     );
     await expect(createKiosk(db, ann, frontDesk(cast, { tagId: "tag-nowhere" }))).rejects.toThrow(
       /tag/i,
+    );
+  });
+
+  it("forget a removed member, so re-inviting them does not silently re-allow them", async () => {
+    const ann = await cast.viewer("ann");
+    const { kiosk: k } = await createKiosk(
+      db,
+      ann,
+      frontDesk(cast, { everyone: false, userIds: [cast.ids.bob] }),
+    );
+    await removeMember(db, ann, cast.ids.bob);
+    expect(await db.select().from(kioskAssignee).where(eq(kioskAssignee.kioskId, k.id))).toEqual(
+      [],
     );
   });
 

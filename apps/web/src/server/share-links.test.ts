@@ -72,6 +72,7 @@ describe("share links", () => {
     expect(JSON.stringify(row)).not.toContain(created.token);
 
     const resolved = await resolveShareLink(db, created.token, NOW);
+    expect(resolved?.viewer.shared).toBe(true);
     expect(resolved).toMatchObject({
       kind: "summary",
       title: "This week",

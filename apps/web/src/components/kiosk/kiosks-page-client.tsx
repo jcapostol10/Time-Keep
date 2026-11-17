@@ -245,8 +245,13 @@ export function KiosksPageClient({
 function DeviceUrlDialog({ url, onClose }: { url: string | null; onClose: () => void }) {
   async function copy() {
     if (!url) return;
-    await navigator.clipboard.writeText(url);
-    toast.success("Device URL copied");
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Device URL copied");
+    } catch {
+      // No clipboard on an insecure page or when the browser refuses.
+      toast.error("Could not copy: select the URL and copy it.");
+    }
   }
   return (
     <Dialog open={url !== null} onOpenChange={(open) => !open && onClose()}>
@@ -317,6 +322,11 @@ function KioskDialog({
   });
 
   async function save() {
+    const seconds = Number(timeout);
+    if (!Number.isInteger(seconds) || seconds < 5 || seconds > 300) {
+      toast.error("Enter between 5 and 300 seconds.");
+      return;
+    }
     setSaving(true);
     const input = {
       name,
@@ -324,7 +334,7 @@ function KioskDialog({
       taskId: selection.taskId,
       tagId,
       ...assignees,
-      sessionTimeoutSeconds: Number(timeout),
+      sessionTimeoutSeconds: seconds,
       showLogo,
       photo,
     };

@@ -273,6 +273,11 @@ const LOOKBACK_MS = KIOSK_LOCK_MS * 2;
 const PERSON_RULE = { max: PERSON_MAX_FAILURES, windowMs: KIOSK_LOCK_MS, lockMs: KIOSK_LOCK_MS };
 const KIOSK_RULE = { max: KIOSK_MAX_FAILURES, windowMs: KIOSK_LOCK_MS, lockMs: KIOSK_LOCK_MS };
 
+/**
+ * Failed checks on a kiosk since `since`: a person's (the person rule), or
+ * every failed PIN (the kiosk rule pauses PIN entry, so a stream of unknown QR
+ * codes, which costs nothing to send, never pauses it).
+ */
 async function failuresSince(db: DbExecutor, kioskId: string, since: Date, userId?: string) {
   const rows = await db
     .select({ at: kioskAttempt.createdAt })
@@ -282,7 +287,7 @@ async function failuresSince(db: DbExecutor, kioskId: string, since: Date, userI
         eq(kioskAttempt.kioskId, kioskId),
         eq(kioskAttempt.success, false),
         gt(kioskAttempt.createdAt, since),
-        userId === undefined ? undefined : eq(kioskAttempt.userId, userId),
+        userId === undefined ? eq(kioskAttempt.method, "PIN") : eq(kioskAttempt.userId, userId),
       ),
     )
     .orderBy(desc(kioskAttempt.createdAt))
@@ -386,10 +391,14 @@ export async function identify(
           eq(kioskCredential.workspaceId, k.workspaceId),
         ),
       );
+    // Only "not allowed here" is a failed code; a database error is not.
     const allowed = cred
       ? await allowedPerson(db, k, cred.userId).then(
           () => true,
-          () => false,
+          (error: unknown) => {
+            if (error instanceof WorkspaceAccessError) return false;
+            throw error;
+          },
         )
       : false;
     await record(db, k.id, allowed && cred ? cred.userId : null, "QR", allowed, now);

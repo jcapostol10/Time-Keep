@@ -101,10 +101,12 @@ export function KioskScreen({ token, initial }: { token: string; initial: KioskS
   const timedOut = useEffectEvent(() => void backToPeople());
   const timeoutMs = screen.sessionTimeoutSeconds * 1000;
   useEffect(() => {
-    if (view.kind === "people") return;
+    // Not while a punch is in flight (the photo waits for the camera): the
+    // screen would go back to the list and then show the punch's result.
+    if (view.kind === "people" || busy) return;
     const timer = setTimeout(timedOut, timeoutMs);
     return () => clearTimeout(timer);
-  }, [view, pin, timeoutMs]);
+  }, [view, pin, timeoutMs, busy]);
 
   async function identify(input: { userId: string; pin: string } | { qr: string }) {
     setBusy(true);
