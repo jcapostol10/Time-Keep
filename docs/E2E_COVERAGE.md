@@ -286,6 +286,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A fixed expense with a receipt is listed with its amount, Billable and the receipt thumbnail; the footer totals it — `expenses.spec.ts` › "a fixed expense with a receipt is listed with its thumbnail"
 - [x] A per-unit category computes the amount from the quantity, snapshotting the price so a later price change leaves the expense alone — `expenses.spec.ts` › "a unit category computes the amount from the quantity"
 - [x] A submitted period locks the member's expenses; an owner edits one with a note, which the period page shows beside the expense — `expenses.spec.ts` › "a submitted period locks the member's expenses, and an admin edits with a note"
+- [x] An owner changing a submitted expense and its receipt is asked for a note once, and the period page says the expenses changed since submission — `expenses.spec.ts` › "a submitted period locks the member's expenses, and an admin edits with a note"
+- [x] Adding an expense for someone else offers that person's projects, not the viewer's — `expenses.spec.ts` › "adding an expense for someone else offers that person's projects"
 - [x] The Expenses report totals by category or project and exports a CSV with its four columns — `expenses.spec.ts` › "the Expenses report totals by category and exports a CSV"
 - [x] A member sees only their own expenses on the page and in the report; an owner sees everyone's — `expenses.spec.ts` › "a member sees only their own expenses"
 - [x] The Profit tab counts expenses: billable ones as revenue, all of them as cost — `profit.spec.ts` › "the Profit tab counts expenses"

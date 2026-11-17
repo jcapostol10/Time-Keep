@@ -16,6 +16,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/page-header";
+import { periodChanged } from "@/lib/period-changed";
 import type { ApprovalEventDTO, PeriodViewDTO } from "@/lib/approval-types";
 import { reopenRequestAction, reviewRequestsAction } from "@/server/actions/approvals";
 
@@ -49,7 +50,7 @@ export function PeriodView({ slug, view }: { slug: string; view: PeriodViewDTO }
   const { request } = view;
   const name = formatPeriod(view.period);
   const fmt = (s: number) => formatDuration(s, viewer.durationFormat);
-  const changed = view.live.workSeconds !== view.totals.workSeconds;
+  const changed = periodChanged(view.live, view.totals);
 
   async function run(
     call: () => Promise<{ ok: true } | { ok: false; error: string }>,
@@ -103,7 +104,18 @@ export function PeriodView({ slug, view }: { slug: string; view: PeriodViewDTO }
         </span>
         {changed ? (
           <span className="text-muted-foreground text-sm">
-            Now <span className="tabular-nums">{fmt(view.live.workSeconds)}</span> after changes
+            Now <span className="tabular-nums">{fmt(view.live.workSeconds)}</span>
+            {view.live.expenseCount > 0 || view.totals.expenseCount > 0 ? (
+              <>
+                {" · "}
+                {view.live.expenseCount} {view.live.expenseCount === 1 ? "expense" : "expenses"}
+                {" · "}
+                <span className="tabular-nums">
+                  {formatMoney(view.live.expenseMinor, view.currency)}
+                </span>
+              </>
+            ) : null}{" "}
+            after changes
           </span>
         ) : null}
         <div className="ml-auto flex gap-2">

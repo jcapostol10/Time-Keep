@@ -446,6 +446,39 @@ describe("listApprovals", () => {
     ]);
   });
 
+  it("lists a closed period that holds only expenses as unsubmitted", async () => {
+    await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
+    const travel = await createExpenseCategory(db, await viewer("olga"), {
+      name: "Trips",
+      kind: "FIXED",
+      unitName: null,
+      unitPriceMinor: null,
+      billableDefault: true,
+    });
+    await createExpense(
+      db,
+      await viewer("max"),
+      {
+        projectId: webId,
+        categoryId: travel.id,
+        date: "2026-10-21",
+        amountMinor: 2_500,
+        billable: true,
+        description: "Taxi",
+      },
+      { now: NOW },
+    );
+    const rows = (await listApprovals(db, await viewer("ann"), { tab: "unsubmitted" }, NOW)) as {
+      userName: string;
+      workSeconds: number;
+      expenseCount: number;
+    }[];
+    expect(rows.map((r) => [r.userName, r.workSeconds, r.expenseCount])).toEqual([
+      ["Carol Member", 7200, 0],
+      ["Max Manager", 0, 1],
+    ]);
+  });
+
   it("shows a project manager the people whose closed period is all on their projects", async () => {
     await setRules({ approvalReviewers: "PROJECT_MANAGERS" });
     const rows = (await listApprovals(db, await viewer("pat"), { tab: "unsubmitted" }, NOW)) as {

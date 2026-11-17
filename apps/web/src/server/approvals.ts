@@ -746,6 +746,27 @@ async function listUnsubmitted(
       ),
     )
     .groupBy(timeEntry.userId, sql.raw("2"), timeEntry.projectId);
+  // Expenses belong to the period of their date; a period with only expenses is
+  // unsubmitted as well.
+  const spent = await db
+    .select({
+      userId: expense.userId,
+      day: expense.date,
+      projectId: expense.projectId,
+      minor: sql<number>`sum(${expense.amountMinor})::bigint`.mapWith(Number),
+      count: sql<number>`count(*)::int`,
+    })
+    .from(expense)
+    .where(
+      and(
+        eq(expense.workspaceId, viewer.workspaceId),
+        inArray(expense.userId, [...names.keys()]),
+        isNull(expense.deletedAt),
+        gte(expense.date, first.start),
+        lte(expense.date, last.end),
+      ),
+    )
+    .groupBy(expense.userId, expense.date, expense.projectId);
   const requests = await db
     .select({
       userId: approvalRequest.userId,
@@ -773,9 +794,18 @@ async function listUnsubmitted(
         (s) => s.userId === userId && s.day >= period.start && s.day <= period.end,
       );
       const workSeconds = inPeriod.reduce((n, s) => n + s.seconds, 0);
-      if (workSeconds === 0) continue;
+      const spentInPeriod = spent.filter(
+        (s) => s.userId === userId && s.day >= period.start && s.day <= period.end,
+      );
+      const expenseCount = spentInPeriod.reduce((n, s) => n + s.count, 0);
+      if (workSeconds === 0 && expenseCount === 0) continue;
       // Time on no project is never all on a manager's projects.
-      const projectIds = [...new Set(inPeriod.map((s) => s.projectId ?? ""))];
+      const projectIds = [
+        ...new Set([
+          ...inPeriod.map((s) => s.projectId ?? ""),
+          ...spentInPeriod.map((s) => s.projectId),
+        ]),
+      ];
       if (!reviewable(userId, []) && !reviewable(userId, projectIds)) continue;
       out.push({
         userId,
@@ -784,6 +814,8 @@ async function listUnsubmitted(
         periodEnd: period.end,
         workSeconds,
         entryCount: inPeriod.reduce((n, s) => n + s.count, 0),
+        expenseCount,
+        expenseMinor: spentInPeriod.reduce((n, s) => n + s.minor, 0),
       });
     }
   }

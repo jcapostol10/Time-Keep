@@ -35,6 +35,9 @@ export interface UnsubmittedPeriodDTO {
   periodEnd: string;
   workSeconds: number;
   entryCount: number;
+  /** Live expenses dated in the period: a period with only these is unsubmitted too. */
+  expenseCount: number;
+  expenseMinor: number;
 }
 
 export interface ApprovalEventDTO {

@@ -45,11 +45,25 @@ export async function withNoteRetry<T>(
   call: (note?: string) => Promise<ActionResult<T>>,
   note?: string,
 ): Promise<ActionResult<T>> {
+  return (await withNote(call, note)).result;
+}
+
+/**
+ * `withNoteRetry` that also hands back the note it sent, so the writes that
+ * follow in the same save (an expense, then its receipt) send it from the
+ * start and the person is asked once.
+ */
+export async function withNote<T>(
+  call: (note?: string) => Promise<ActionResult<T>>,
+  note?: string,
+): Promise<{ result: ActionResult<T>; note: string | undefined }> {
   const first = await call(note);
-  if (!needsNote(first)) return first;
+  if (!needsNote(first)) return { result: first, note };
   const asked = await askForNote();
-  if (asked === null) return { ok: false, error: "Not changed: no reason was given." };
-  return call(asked);
+  if (asked === null) {
+    return { result: { ok: false, error: "Not changed: no reason was given." }, note };
+  }
+  return { result: await call(asked), note: asked };
 }
 
 const MIN_NOTE = 3;

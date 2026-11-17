@@ -33,6 +33,7 @@ import type { ExpenseCategoryDTO, ExpenseDTO } from "@/lib/expense-types";
 
 import { ProjectPicker } from "../tracker/project-picker";
 import { expenseUrls } from "../tracker/query-keys";
+import { TargetProvider } from "../tracker/target-context";
 import { useTracker } from "../tracker/tracker-provider";
 import type { PreparedReceipt } from "./receipt-image";
 import { ReceiptInput } from "./receipt-input";
@@ -85,6 +86,7 @@ export function ExpenseDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
+  const ownerId = expense?.userId ?? userId;
   const active = (categories ?? []).filter((c) => !c.archived || c.id === expense?.categoryId);
   const category: ExpenseCategoryDTO | undefined = active.find((c) => c.id === categoryId);
   const unit = category?.kind === "UNIT";
@@ -125,10 +127,12 @@ export function ExpenseDialog({
         billable,
         description,
       };
-      if (expense && removeReceipt && !receipt) {
-        if (!(await writes.removeReceipt(expense.id))) return;
-      }
-      const saved = await writes.save(input, expense?.id ?? null, receipt);
+      const saved = await writes.save(
+        input,
+        expense?.id ?? null,
+        receipt,
+        Boolean(expense) && removeReceipt,
+      );
       if (saved) onClose();
     } finally {
       setBusy(false);
@@ -159,7 +163,14 @@ export function ExpenseDialog({
           {!expense && people.length > 1 ? (
             <div className="space-y-2">
               <Label htmlFor="expense-person">Person</Label>
-              <Select value={userId} onValueChange={setUserId}>
+              <Select
+                value={userId}
+                onValueChange={(id) => {
+                  setUserId(id);
+                  // Another person, other projects: theirs to pick from.
+                  setProjectId(null);
+                }}
+              >
                 <SelectTrigger id="expense-person" aria-label="Person" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -176,20 +187,33 @@ export function ExpenseDialog({
           <div className="space-y-2">
             <Label>Project</Label>
             <div>
-              <ProjectPicker
-                slug={slug}
-                value={{ projectId, taskId: null }}
-                onChange={(s) => setProjectId(s.projectId)}
-                invalid={Boolean(errors.project)}
-                current={
-                  expense && expense.projectId === projectId
+              {/* The owner's projects, not the viewer's, when adding or editing for someone else. */}
+              <TargetProvider
+                target={
+                  ownerId && ownerId !== people[0]?.id
                     ? {
-                        project: { name: expense.projectName, color: expense.projectColor },
-                        task: null,
+                        userId: ownerId,
+                        name: expense?.userName ?? people.find((p) => p.id === ownerId)?.name ?? "",
+                        canWriteTimes: true,
                       }
                     : null
                 }
-              />
+              >
+                <ProjectPicker
+                  slug={slug}
+                  value={{ projectId, taskId: null }}
+                  onChange={(s) => setProjectId(s.projectId)}
+                  invalid={Boolean(errors.project)}
+                  current={
+                    expense && expense.projectId === projectId
+                      ? {
+                          project: { name: expense.projectName, color: expense.projectColor },
+                          task: null,
+                        }
+                      : null
+                  }
+                />
+              </TargetProvider>
             </div>
             {errors.project ? <p className="text-destructive text-sm">{errors.project}</p> : null}
           </div>
