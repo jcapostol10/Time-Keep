@@ -17,7 +17,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 
 ### b1 — tracker, timesheet, calendar, catalog, auth, CI
 
-- [ ] **b1** The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; install Playwright's Chromium in the CI job.
 
 
 - [ ] **b1 review minors** (final review, 2026-11-17):
@@ -162,6 +161,7 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] PDF tests in CI, done 2026-11-17 (backlog cleanup b1): the CI job installs Playwright's Chromium and lifts Ubuntu 24.04's user-namespace restriction, so `report-pdf.test.ts` and `invoices/pdf.test.ts` print PDFs in CI (run 44080024987: both passed, not skipped).
 - [x] Detailed sort in the URL, done 2026-11-17 (backlog cleanup b1): `sort` and `dir` sit beside the report query (unknown values read as start, descending), survive a reload and a filter change, and stay out of share links.
 - [x] Timesheet rows added by hand, done 2026-11-17 (backlog cleanup b1): kept in local storage per workspace, person shown and week; a row on a project no longer offered is dropped.
 - [x] Calendar's first day, done 2026-11-17 (backlog cleanup b1): the calendar reads entries from a day before the week, so one begun the evening before is drawn on the first day.
