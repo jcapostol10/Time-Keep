@@ -8,7 +8,17 @@ import {
   OUTBOX_LEASE_MINUTES,
   OUTBOX_MAX_ATTEMPTS,
 } from "@timekeep/core";
-import { type Database, type DbExecutor, emailOutbox, eq, sql } from "@timekeep/db";
+import {
+  and,
+  type Database,
+  type DbExecutor,
+  emailOutbox,
+  eq,
+  inArray,
+  lt,
+  ne,
+  sql,
+} from "@timekeep/db";
 import type { SQL } from "drizzle-orm";
 import { isE2eEmail } from "@timekeep/db/e2e-tenant";
 
@@ -181,4 +191,30 @@ export async function drainAll(
     total.failed += batch.failed;
     if (batch.sent + batch.failed < limit || Date.now() > deadline) return total;
   }
+}
+
+/** How long a settled email keeps its body. */
+const BODY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Blanks the HTML and text of emails settled more than 30 days ago (backlog
+ * ruling R4). The rows stay: their kinds are the dedupe keys of reminders,
+ * targets, budget alerts and invoice emails. Run by the hourly cron.
+ */
+export async function blankOldBodies(
+  db: Pick<Database, "update">,
+  now = new Date(),
+): Promise<number> {
+  const rows = await db
+    .update(emailOutbox)
+    .set({ html: "", text: "" })
+    .where(
+      and(
+        inArray(emailOutbox.status, ["SENT", "SKIPPED", "FAILED"]),
+        lt(emailOutbox.createdAt, new Date(now.getTime() - BODY_RETENTION_MS)),
+        ne(emailOutbox.html, ""),
+      ),
+    )
+    .returning({ id: emailOutbox.id });
+  return rows.length;
 }

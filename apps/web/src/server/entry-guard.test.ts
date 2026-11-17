@@ -6,12 +6,14 @@ import {
   approvalEvent,
   approvalRequest,
   eq,
+  inArray,
+  isNull,
   managedUser,
   rate,
   timeEntry,
   workspaceSettings,
 } from "@timekeep/db";
-import { taskInputSchema } from "@timekeep/core";
+import { DEFAULT_REPORT_QUERY, taskInputSchema, type ViewerPrefs } from "@timekeep/core";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -22,7 +24,9 @@ import {
   truncateAll,
 } from "../../test/db";
 import { loadViewer, scopeForUser } from "./authz";
+import { APPROVED_MESSAGE, lockedDays, PENDING_MESSAGE } from "./entry-guard";
 import { timerLock } from "./person-lock";
+import { detailedReport } from "./reports";
 import { createProject, deleteProject, updateProject } from "./catalog/projects";
 import { createTag, deleteTag } from "./catalog/tags";
 import { createTask, deleteTask } from "./catalog/tasks";
@@ -32,6 +36,7 @@ import {
   createManualEntries,
   createManualEntry,
   deleteEntries,
+  deleteEntriesOfOwners,
   duplicateEntry,
   type EntryScope,
   restoreEntries,
@@ -213,11 +218,119 @@ describe.each(["PENDING", "APPROVED"] as const)("a %s week", (status) => {
     expect(events[0]?.requestId).not.toBeNull();
   });
 
+  it("a delete across people that needs a note for one deletes nothing without it", async () => {
+    const maxEntry = await createManualEntry(
+      db,
+      await loadViewer(db, wsId, ids.max!),
+      {
+        ...details,
+        ...IN,
+      },
+      NOW,
+    );
+    const groups = await scopesForEntries(db, await loadViewer(db, wsId, ids.ann!), [
+      maxEntry.id,
+      inId,
+    ]);
+    await expect(deleteEntriesOfOwners(db, groups)).rejects.toMatchObject({
+      code: "NOTE_REQUIRED",
+    });
+    const live = await db
+      .select({ id: timeEntry.id })
+      .from(timeEntry)
+      .where(and(inArray(timeEntry.id, [maxEntry.id, inId]), isNull(timeEntry.deletedAt)));
+    expect(live).toHaveLength(2);
+    await expect(deleteEntriesOfOwners(db, groups, { note: NOTE })).resolves.toMatchObject({
+      deleted: expect.arrayContaining([maxEntry.id, inId]),
+    });
+  });
+
+  it("lockedDays gives a member the reason of each day, empty ones included", async () => {
+    const reason = status === "PENDING" ? PENDING_MESSAGE : APPROVED_MESSAGE;
+    const days = await lockedDays(
+      db,
+      await as("bob"),
+      { from: new Date("2026-10-18T16:00:00.000Z"), to: new Date("2026-10-27T16:00:00.000Z") },
+      "Asia/Manila",
+      NOW,
+    );
+    expect(days["2026-10-19"]).toBeDefined();
+    expect(Object.keys(days).sort()).toEqual([
+      "2026-10-19",
+      "2026-10-20",
+      "2026-10-21",
+      "2026-10-22",
+      "2026-10-23",
+      "2026-10-24",
+      "2026-10-25",
+    ]);
+    expect(new Set(Object.values(days))).toEqual(new Set([reason]));
+    expect(
+      await lockedDays(db, await as("ann"), { from: IN.start, to: IN.end }, "Asia/Manila"),
+    ).toEqual({});
+  });
+
+  it("marks the entry read-only, with why, in a manager's Detailed report", async () => {
+    const reason = status === "PENDING" ? PENDING_MESSAGE : APPROVED_MESSAGE;
+    const query = {
+      ...DEFAULT_REPORT_QUERY,
+      preset: "custom" as const,
+      from: "2026-10-18T16:00:00.000Z",
+      to: "2026-10-25T16:00:00.000Z",
+    };
+    const prefs: ViewerPrefs = {
+      timezone: "Asia/Manila",
+      timeFormat: "24h",
+      dateFormat: "yyyy-MM-dd",
+      weekStart: 1,
+      durationFormat: "hh:mm:ss",
+    };
+    const rows = async (who: string, shared = false) =>
+      (
+        await detailedReport(
+          db,
+          { ...(await loadViewer(db, wsId, ids[who]!)), shared },
+          query,
+          prefs,
+          { sort: "start", dir: "asc" },
+          NOW,
+        )
+      ).entries.filter((e) => e.id === inId);
+    expect(await rows("max")).toMatchObject([{ editable: false, lockedReason: reason }]);
+    expect(await rows("ann")).toMatchObject([{ editable: true, lockedReason: null }]);
+    // A share link's rows are public: no one's submission status in them.
+    expect(await rows("max", true)).toMatchObject([{ lockedReason: null }]);
+  });
+
   it("logs which entry changed and how", async () => {
     await updateEntry(db, await as("ann"), inId, { description: "Changed", note: NOTE }, NOW);
     const [event] = await adminEdits();
     expect(event?.entryId).toBe(inId);
     expect(event?.changes).toEqual({ description: { from: "Work", to: "Changed" } });
+  });
+
+  it("logs an import into it once, with the number of entries added", async () => {
+    const hour = (n: number) => ({
+      start: new Date(IN.start.getTime() + n * 3_600_000),
+      end: new Date(IN.end.getTime() + n * 3_600_000),
+    });
+    const s = await as("ann");
+    await db.transaction((tx) =>
+      createManualEntries(
+        tx,
+        s,
+        [1, 2, 3].map((n) => ({ ...details, ...hour(n) })),
+        NOW,
+        { note: NOTE },
+      ),
+    );
+    const events = await adminEdits();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      entryId: null,
+      note: NOTE,
+      changes: { entriesAdded: { from: 0, to: 3 } },
+    });
   });
 
   it("leaves the weeks around it alone", async () => {
@@ -375,6 +488,33 @@ describe("lock order", () => {
         await tx.execute(sql`select id from time_entry where id = ${inId} for update`);
       });
       await expect(edit).resolves.toMatchObject({ description: "edited" });
+    } finally {
+      await other.close();
+    }
+  });
+
+  it("deleting a project waits for its people's locks, so a submit in flight wins", async () => {
+    const other = connectTestDb();
+    try {
+      const owner = await loadViewer(db, wsId, ids.olga!);
+      const web = await createProject(db, owner, { name: "Web" });
+      await updateEntry(db, await as("bob"), inId, { projectId: web.id }, NOW);
+      let removal: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // Bob's submit holds his lock while it writes the request.
+        await tx.execute(timerLock(wsId, ids.bob!));
+        removal = deleteProject(other.db, owner, web.id, { mode: "delete" });
+        await new Promise((r) => setTimeout(r, 400));
+        await tx.insert(approvalRequest).values({
+          id: randomUUID(),
+          workspaceId: wsId,
+          userId: ids.bob!,
+          periodStart: SUBMITTED.start,
+          periodEnd: SUBMITTED.end,
+          status: "PENDING",
+        });
+      });
+      await expect(removal).rejects.toThrow("Archive it instead");
     } finally {
       await other.close();
     }

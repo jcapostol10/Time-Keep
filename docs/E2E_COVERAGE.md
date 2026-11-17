@@ -362,10 +362,15 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Approvals and locks
 
 - [x] An approved week cannot be edited by its member (tracker row, timesheet cell, an import) — `approvals.spec.ts` › "an approved week cannot be edited by its member"
+- [x] An empty cell in an approved week is read-only too — `approvals.spec.ts` › "an approved week cannot be edited by its member"
+- [x] A locked row's menu disables Duplicate, Split and Delete and says why — `approvals.spec.ts` › "an approved week cannot be edited by its member"
 - [x] Submit a week, withdraw it, and resubmit it after a rejection whose note is shown — `approvals.spec.ts` › "submit, withdraw and resubmit after a rejection"
 - [x] Approve several periods at once from the Pending tab; they move to the Archive — `approvals.spec.ts` › "bulk approve from the Pending tab"
 - [x] Approvers get the "submitted" email and the member the decision — `approvals.spec.ts` › "approval emails reach approvers and the member"
 - [x] An owner or admin changes approved time only with a note, which the period's history shows — `approvals.spec.ts` › "an admin edits approved time with a note"
+- [x] Changing the workspace timezone with approved periods asks first — `approvals.spec.ts` › "changing the timezone with approved periods asks first"
+- [ ] A member whose own time zone is half a day from the workspace's submits the workspace's week, and it counts their entry — `approvals.spec.ts` › "a member in another time zone submits the workspace's week" (regression test; no single break of the period code models the viewer's zone, so the line stays unticked)
+- [x] Undo after a delete in approved time restores it without asking for the note again — `approvals.spec.ts` › "Undo after a delete in approved time does not ask for the note again"
 - [x] A rolling lock blocks a member's entry in the locked days, not an admin's — `approvals.spec.ts` › "a rolling lock blocks a member, not an admin"
 - [x] The daily job emails a reminder for a closed period with time and no submission — `approvals.spec.ts` › "the daily job reminds an unsubmitted period"
 
@@ -388,6 +393,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 - [x] A kiosk PIN punch creates a normal entry visible in the Detailed report, and the kiosk sets no cookie — `kiosk.spec.ts` › "a kiosk PIN punch creates a normal entry visible in the Detailed report"
 - [x] Clock in, start and end a break, and clock out on a kiosk — `kiosk-extra.spec.ts` › "clock in, break and clock out on a kiosk"
+- [x] A kiosk with a default tag clocks out where a tag is required — `kiosk-extra.spec.ts` › "a kiosk with a default tag clocks out under a required tag"
 - [x] Five wrong PINs lock the person on the kiosk, even with the right PIN — `kiosk-extra.spec.ts` › "five wrong PINs lock the person for 15 minutes"
 - [x] A personal QR code scanned by the kiosk camera identifies the person — `kiosk-extra.spec.ts` › "a QR code punch through the camera"
 - [x] A limited user is added on the Team page ("Kiosk only"), gets a PIN and punches on a kiosk — `kiosk-extra.spec.ts` › "a limited user punches on a kiosk and shows on the Team page"

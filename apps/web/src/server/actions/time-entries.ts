@@ -19,7 +19,7 @@ import {
   bulkUpdateEntries,
   continueEntry,
   createManualEntry,
-  deleteEntries,
+  deleteEntriesOfOwners,
   duplicateEntry,
   type EntryScope,
   restoreEntries,
@@ -127,13 +127,8 @@ export async function deleteEntriesAction(
     const parsed = entryIdsSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
     const db = getDb();
-    const deleted: string[] = [];
-    for (const g of await scopesForEntries(db, await viewerFor(ctx), parsed.data.ids)) {
-      deleted.push(
-        ...(await deleteEntries(db, g.scope, g.ids, { note: parsed.data.note })).deleted,
-      );
-    }
-    return ok({ deleted });
+    const groups = await scopesForEntries(db, await viewerFor(ctx), parsed.data.ids);
+    return ok(await deleteEntriesOfOwners(db, groups, { note: parsed.data.note }));
   } catch (error) {
     return actionFailure(error);
   }

@@ -36,7 +36,7 @@ async function takeDeviceUrl(page: Page): Promise<string> {
 export async function createKioskViaUi(
   page: Page,
   slug: string,
-  opts: { name: string; project?: string; photo?: boolean },
+  opts: { name: string; project?: string; tag?: string; photo?: boolean },
 ): Promise<string> {
   await page.goto(`/w/${slug}/kiosks`);
   await waitForApp(page);
@@ -47,6 +47,10 @@ export async function createKioskViaUi(
     await dialog.getByRole("button", { name: /^Project:/ }).click();
     await page.getByRole("combobox", { name: "Search projects" }).fill(opts.project);
     await page.getByRole("option", { name: opts.project, exact: true }).click();
+  }
+  if (opts.tag) {
+    await dialog.getByRole("combobox", { name: "Default tag" }).click();
+    await page.getByRole("option", { name: opts.tag, exact: true }).click();
   }
   if (opts.photo) await dialog.getByRole("switch", { name: "Take a photo at clock in" }).click();
   await dialog.getByRole("button", { name: "Create kiosk" }).click();

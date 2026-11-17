@@ -172,6 +172,7 @@ function RequestsTable({
               <TableHead>Person</TableHead>
               <TableHead>Period</TableHead>
               <TableHead className="text-right">Time</TableHead>
+              <TableHead className="text-right">Billable</TableHead>
               <TableHead>{pending ? "Submitted" : "Status"}</TableHead>
             </TableRow>
           </TableHeader>
@@ -207,6 +208,9 @@ function RequestsTable({
                   <TableCell>{period}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {formatDuration(r.workSeconds, viewer.durationFormat)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatDuration(r.billableSeconds, viewer.durationFormat)}
                   </TableCell>
                   <TableCell>
                     {pending ? (

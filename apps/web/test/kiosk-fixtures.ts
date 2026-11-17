@@ -34,6 +34,7 @@ export function frontDesk(cast: KioskCast, patch: Partial<KioskInput> = {}): Kio
     name: "Front desk",
     projectId: cast.projectP,
     taskId: null,
+    tagId: null,
     everyone: true,
     userIds: [],
     groupIds: [],

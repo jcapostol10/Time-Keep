@@ -36,6 +36,7 @@ export function TimesheetCell({
   cell,
   billableDefault,
   onKeepRow,
+  dayLockedReason,
 }: {
   row: TimesheetRow;
   day: string;
@@ -47,6 +48,8 @@ export function TimesheetCell({
   billableDefault: boolean;
   /** Called before a delete that may empty the row, so the row stays for the visit. */
   onKeepRow?: (row: TimesheetRowKey) => void;
+  /** The day is closed to new time (an empty cell is read-only too). */
+  dayLockedReason?: string | null;
 }) {
   const { viewer } = useTracker();
   const canWriteTimes = useCanWriteTimes();
@@ -61,7 +64,9 @@ export function TimesheetCell({
   const [choosing, setChoosing] = useState<TimesheetEntry[] | null>(null);
   // An entry in a locked day or a submitted period makes the cell read-only (Phase 5a).
   const lockedReason =
-    entries.find((e) => cell.entryIds.includes(e.id) && e.lockedReason)?.lockedReason ?? null;
+    entries.find((e) => cell.entryIds.includes(e.id) && e.lockedReason)?.lockedReason ??
+    dayLockedReason ??
+    null;
   const readOnly = !canWriteTimes || lockedReason !== null;
 
   async function commit(raw: string) {

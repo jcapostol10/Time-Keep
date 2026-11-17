@@ -841,6 +841,8 @@ export const kioskSchema = z
     name: z.string().trim().min(1, "Name is required").max(80),
     projectId: z.string().min(1).max(64).nullable(),
     taskId: z.string().min(1).max(64).nullable(),
+    /** A tag every punch carries (backlog ruling 8). */
+    tagId: z.string().min(1).max(64).nullable().default(null),
     everyone: z.boolean(),
     userIds: idListSchema,
     groupIds: idListSchema,

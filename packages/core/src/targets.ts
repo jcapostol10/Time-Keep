@@ -1,4 +1,4 @@
-import { holidayApplies, type HolidayPerson } from "./holidays";
+import type { HolidayPerson } from "./holidays";
 
 /**
  * Target rules (Phase 5b, decision 14): UNDER reminds the person who tracked
@@ -18,14 +18,17 @@ export interface TargetRule {
   period: TargetPeriod;
   thresholdMinutes: number;
   active: boolean;
-  /** No users and no groups → everyone. */
+  /** For everyone; otherwise for `userIds` and `groupIds` only (none left → nobody). */
+  everyone: boolean;
   userIds: readonly string[];
   groupIds: readonly string[];
 }
 
 export function targetApplies(rule: TargetRule, person: HolidayPerson): boolean {
   if (!rule.active) return false;
-  return holidayApplies({ ...rule, date: "", name: "", repeatsYearly: false }, person);
+  if (rule.everyone) return true;
+  // Not "no assignees means everyone": a rule whose people were all removed applies to nobody.
+  return rule.userIds.includes(person.userId) || rule.groupIds.some((g) => person.groupIds.has(g));
 }
 
 export function targetBreached(rule: TargetRule, workSeconds: number): boolean {

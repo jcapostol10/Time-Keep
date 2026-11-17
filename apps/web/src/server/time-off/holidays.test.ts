@@ -1,7 +1,10 @@
 import { datasetHolidays } from "@timekeep/core/holiday-import";
+import { eq, holiday } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb } from "../../../test/db";
+import { deleteGroup } from "../groups";
+import { removeMember } from "../team";
 import { setUpTimeOffCast, type TimeOffCast } from "../../../test/time-off-fixtures";
 import {
   deleteHoliday,
@@ -144,9 +147,58 @@ describe("saveHoliday", () => {
       userIds: [],
       groupIds: [cast.cebuId],
     });
-    expect(await listHolidays(db, await cast.viewer("bob"), 2027)).toMatchObject([
+    expect(await listHolidays(db, ann, 2027)).toMatchObject([
       { name: "Cebu Day", groupIds: [cast.cebuId], userIds: [] },
     ]);
+    // A member reads the holiday, not who it applies to.
+    expect(await listHolidays(db, await cast.viewer("bob"), 2027)).toMatchObject([
+      { name: "Cebu Day", groupIds: [], userIds: [] },
+    ]);
+  });
+
+  it("a holiday that named only a removed member goes, rather than applying to everyone", async () => {
+    const ann = await cast.viewer("ann");
+    await saveHoliday(db, ann, {
+      date: "2027-05-05",
+      name: "Bob's day",
+      repeatsYearly: false,
+      userIds: [cast.ids.bob],
+      groupIds: [],
+    });
+    await removeMember(db, await cast.viewer("olga"), cast.ids.bob);
+    expect((await listHolidays(db, ann, 2027)).map((h) => h.name)).not.toContain("Bob's day");
+  });
+
+  it("a holiday that named only a deleted group goes too", async () => {
+    const ann = await cast.viewer("ann");
+    await saveHoliday(db, ann, {
+      date: "2027-06-06",
+      name: "Cebu only",
+      repeatsYearly: false,
+      userIds: [],
+      groupIds: [cast.cebuId],
+    });
+    await deleteGroup(db, await cast.viewer("olga"), cast.cebuId);
+    expect((await listHolidays(db, ann, 2027)).map((h) => h.name)).not.toContain("Cebu only");
+  });
+
+  it("clears Estimated when an admin saves the holiday's date", async () => {
+    const ann = await cast.viewer("ann");
+    const saved = await saveHoliday(db, ann, {
+      date: "2027-04-02",
+      name: "Good Friday",
+      repeatsYearly: false,
+      userIds: [],
+      groupIds: [],
+    });
+    await db.update(holiday).set({ estimated: true }).where(eq(holiday.id, saved.id));
+    const confirmed = await saveHoliday(
+      db,
+      ann,
+      { date: "2027-04-02", name: "Good Friday", repeatsYearly: false, userIds: [], groupIds: [] },
+      saved.id,
+    );
+    expect(confirmed.estimated).toBe(false);
   });
 
   it("lists a yearly holiday in later years on that year's date", async () => {

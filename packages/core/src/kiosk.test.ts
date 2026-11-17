@@ -62,7 +62,7 @@ describe("kioskState and kioskActions", () => {
 });
 
 describe("kioskRequiredGaps", () => {
-  const defaults = { projectId: "p", taskId: "t", projectHasTasks: true };
+  const defaults = { projectId: "p", taskId: "t", tagId: null, projectHasTasks: true };
 
   it("is empty when the defaults satisfy the workspace", () => {
     expect(kioskRequiredGaps(["project", "task", "description"], defaults)).toEqual([]);
@@ -70,19 +70,30 @@ describe("kioskRequiredGaps", () => {
 
   it("finds a required project with no default", () => {
     expect(
-      kioskRequiredGaps(["project"], { projectId: null, taskId: null, projectHasTasks: false }),
+      kioskRequiredGaps(["project"], {
+        projectId: null,
+        taskId: null,
+        tagId: null,
+        projectHasTasks: false,
+      }),
     ).toEqual(["project"]);
   });
 
   it("wants a default task on a project with tasks, whatever the setting (rule 8)", () => {
     expect(kioskRequiredGaps([], { ...defaults, taskId: null })).toEqual(["task"]);
     expect(
-      kioskRequiredGaps(["task"], { projectId: "p", taskId: null, projectHasTasks: false }),
+      kioskRequiredGaps(["task"], {
+        projectId: "p",
+        taskId: null,
+        tagId: null,
+        projectHasTasks: false,
+      }),
     ).toEqual([]);
   });
 
-  it("always reports a required tag: a kiosk cannot add one", () => {
-    expect(kioskRequiredGaps(["tag"], defaults)).toEqual(["tag"]);
+  it("reports a required tag only without a default tag", () => {
+    expect(kioskRequiredGaps(["tag"], { ...defaults, tagId: null })).toEqual(["tag"]);
+    expect(kioskRequiredGaps(["tag"], { ...defaults, tagId: "g" })).toEqual([]);
   });
 });
 

@@ -32,7 +32,7 @@ import { parseStoredRows, serializeRows, storedRowsKey } from "./stored-rows";
 import { TemplatesMenu } from "./templates-menu";
 import { TimesheetGrid } from "./timesheet-grid";
 import { useTimeOffBands } from "../time-off/use-time-off-bands";
-import { useRangeEntries } from "./use-timesheet";
+import { useLockedDays, useRangeEntries } from "./use-timesheet";
 
 /** The weekly grid page: week navigation, rows the user added by hand, and the toolbar. */
 export function TimesheetPageClient({
@@ -58,6 +58,7 @@ export function TimesheetPageClient({
   const weekKey = localDateKey(weekStart, tz);
 
   const { data: entries = [] } = useRangeEntries(slug, from, to, true, targetKey);
+  const { data: lockedDays = {} } = useLockedDays(slug, from, to, targetKey);
   const { data: options } = useTrackerOptions(slug, targetKey);
   const bands = useTimeOffBands(
     slug,
@@ -187,6 +188,7 @@ export function TimesheetPageClient({
         labelOf={(row) => rowLabel(row, names)}
         onKeepRow={keepRow}
         removableRows={removable}
+        lockedDays={lockedDays}
         onRemoveRow={removeRow}
         bands={bands}
       />

@@ -6,7 +6,17 @@ import {
   type ReportQuery,
   type ViewerPrefs,
 } from "@timekeep/core";
-import { and, eq, isNull, kioskAttempt, membership, timeEntry, user } from "@timekeep/db";
+import {
+  and,
+  eq,
+  isNull,
+  kioskAttempt,
+  membership,
+  tag,
+  timeEntry,
+  timeEntryTag,
+  user,
+} from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { addMember, connectTestDb, createTestUser, createTestWorkspace } from "../../../test/db";
@@ -202,6 +212,28 @@ describe("punches", () => {
     expect(await act("CLOCK_IN", 0)).toMatchObject({ state: "IN" });
   });
 
+  it("with a default tag a required tag no longer blocks clock out", async () => {
+    await db
+      .insert(tag)
+      .values({ id: "tag-desk", workspaceId: cast.wsId, name: "Desk", color: "#0f766e" });
+    await updateKiosk(
+      db,
+      await cast.viewer("ann"),
+      kioskId,
+      frontDesk(cast, { taskId: cast.taskT, tagId: "tag-desk" }),
+    );
+    k = await resolveKiosk(db, token);
+    await cast.setRules({ requiredFields: ["tag"] });
+    await act("CLOCK_IN", 0);
+    expect(await act("CLOCK_OUT", 30)).toMatchObject({ state: "OUT" });
+    const [entry] = await bobEntries();
+    const tags = await db
+      .select({ tagId: timeEntryTag.tagId })
+      .from(timeEntryTag)
+      .where(eq(timeEntryTag.timeEntryId, entry!.id));
+    expect(tags).toEqual([{ tagId: "tag-desk" }]);
+  });
+
   it("blocks clock out when a required field is missing", async () => {
     await act("CLOCK_IN", 0);
     await cast.setRules({ requiredFields: ["tag"] });
@@ -282,6 +314,15 @@ describe("PIN throttles", () => {
     });
     const { payload } = await qrToken(db, await cast.viewer("bob"), cast.ids.bob);
     expect((await identify(db, k, { qr: payload }, at(11))).person.userId).toBe(cast.ids.bob);
+  });
+
+  it("do not count unknown QR codes toward the kiosk's pause", async () => {
+    for (let i = 0; i < 31; i++) {
+      await expect(
+        identify(db, k, { qr: `tkq1.${"z".repeat(40)}${String(i).padStart(3, "0")}` }, at(i / 10)),
+      ).rejects.toMatchObject({ code: "QR_INVALID" });
+    }
+    expect((await bobPin("0042", at(4))).person.userId).toBe(cast.ids.bob);
   });
 
   it("record at most five failures for ten parallel wrong PINs (Review Focus 4)", async () => {

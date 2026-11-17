@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import { formatPeriod, type Period, zonedDateTimeToInstant } from "@timekeep/core";
 
 import { expect, test } from "./fixtures";
+import { openSettings } from "./helpers/settings";
 import { waitForApp } from "./helpers/app";
 import {
   enableApproval,
@@ -83,11 +84,27 @@ test.describe("approvals and locks", { tag: "@nightly" }, () => {
     await expect(periodGroup(mia.page, last)).toContainText("Approved");
     const day = dayLabel(noonOn(lastWednesday, timezone), timezone);
     await expect(cell(mia.page, "No project · Approved work", day)).toHaveAttribute("readonly", "");
+    // An empty cell of the week too: no new time there.
+    const nextDay = dayLabel(
+      new Date(noonOn(lastWednesday, timezone).getTime() + 86_400_000),
+      timezone,
+    );
+    await expect(cell(mia.page, "No project · Approved work", nextDay)).toHaveValue("");
+    await expect(cell(mia.page, "No project · Approved work", nextDay)).toHaveAttribute(
+      "readonly",
+      "",
+    );
 
-    // The tracker row: every field disabled.
+    // The tracker row: every field disabled, and its menu's writes too.
     await openTracker(mia.page, slug);
     const row = await revealRow(mia.page, "Approved work");
     await expect(row.getByRole("textbox", { name: "Description" })).toBeDisabled();
+    await row.getByRole("button", { name: "More actions" }).click();
+    for (const item of ["Duplicate", "Split…", "Delete"]) {
+      await expect(mia.page.getByRole("menuitem", { name: item })).toBeDisabled();
+    }
+    await expect(mia.page.getByRole("menu")).toContainText("This period is approved.");
+    await mia.page.keyboard.press("Escape");
 
     // A crafted import into the week is refused by the server.
     const csv = `Date,Start,Duration,Description\n${lastWednesday},14:00,1:00,Sneaked in\n`;
@@ -217,6 +234,85 @@ test.describe("approvals and locks", { tag: "@nightly" }, () => {
     await expect(page.getByRole("region", { name: "History" })).toContainText(
       "The client added an hour",
     );
+  });
+
+  test("Undo after a delete in approved time does not ask for the note again", async ({
+    page,
+    freshUser,
+  }) => {
+    const { slug, timezone, name } = freshUser;
+    const { last } = weeks(timezone);
+    await enableApproval(page, slug);
+    await addLastWeek(page, slug, timezone, "Approved then cleared");
+    await submitPeriod(page, slug, last);
+    await approve(page, slug, name, last);
+
+    await openTimesheetWeek(page, slug, last.start);
+    const day = dayLabel(noonOn(weeks(timezone).lastWednesday, timezone), timezone);
+    const input = cell(page, "No project · Approved then cleared", day);
+    const before = await input.inputValue();
+    await input.fill("");
+    await input.press("Enter");
+    const prompt = page.getByRole("dialog", { name: "Why are you changing submitted time?" });
+    await prompt.getByRole("textbox", { name: "Note" }).fill("Logged twice");
+    await prompt.getByRole("button", { name: "Save change" }).click();
+    await expect(prompt).toBeHidden();
+    await page.getByRole("button", { name: "Undo" }).click();
+    await waitForSaves(page);
+    await expect(prompt).toBeHidden();
+    await expect(input).toHaveValue(before);
+  });
+
+  test("changing the timezone with approved periods asks first", async ({ page, freshUser }) => {
+    const { slug, timezone, name } = freshUser;
+    const { last } = weeks(timezone);
+    await enableApproval(page, slug);
+    await addLastWeek(page, slug, timezone, "Approved before the move");
+    await submitPeriod(page, slug, last);
+    await approve(page, slug, name, last);
+
+    await openSettings(page, slug);
+    const target = timezone === "Pacific/Kiritimati" ? "UTC" : "Pacific/Kiritimati";
+    await page.getByRole("combobox", { name: "Timezone" }).click();
+    await page.getByRole("option", { name: target, exact: true }).click();
+    await page.getByRole("button", { name: "Save settings" }).click();
+    const dialog = page.getByRole("alertdialog", { name: "Move approved periods?" });
+    await expect(dialog).toContainText("1 approved period will move by the change");
+    await dialog.getByRole("button", { name: "Change anyway" }).click();
+    await expect(page.getByText("Workspace settings saved")).toBeVisible();
+  });
+
+  test("a member in another time zone submits the workspace's week", async ({
+    page,
+    freshUser,
+    browser,
+    baseURL,
+  }) => {
+    const { slug, timezone } = freshUser;
+    const { last } = weeks(timezone);
+    await enableApproval(page, slug);
+    const mia = await addTeammate(page, browser, baseURL, slug, "Mia Member", "Member");
+    // About half a day from the workspace's zone, either way.
+    const offset = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      timeZoneName: "shortOffset",
+    })
+      .formatToParts(new Date())
+      .find((p) => p.type === "timeZoneName")!.value;
+    const away =
+      offset.startsWith("GMT-") || offset === "GMT" ? "Pacific/Kiritimati" : "Pacific/Pago_Pago";
+    await mia.page.goto("/account");
+    await mia.page.getByRole("combobox", { name: "Timezone" }).click();
+    await mia.page.getByRole("option", { name: away.replaceAll("_", " "), exact: true }).click();
+    await mia.page.getByRole("button", { name: "Save changes" }).click();
+    await expect(mia.page.getByText("Profile saved")).toBeVisible();
+
+    // Her entry on the workspace week's Wednesday; she submits the workspace's period.
+    await addLastWeek(mia.page, slug, timezone, "Far away work");
+    await submitPeriod(mia.page, slug, last);
+    await openApprovals(page, slug);
+    await expect(requestRow(page, "Mia Member", last)).toContainText("2:00:00");
+    await mia.context.close();
   });
 
   test("a rolling lock blocks a member, not an admin", async ({

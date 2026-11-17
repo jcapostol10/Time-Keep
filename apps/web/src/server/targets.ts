@@ -26,6 +26,7 @@ import {
   gte,
   inArray,
   like,
+  or,
   lte,
   managedGroup,
   managedUser,
@@ -246,13 +247,14 @@ export async function evaluateTargets(
   const to = windows[0]!.to;
   const userIds = people.map((p) => p.userId);
 
-  // Everyone's own days lie within a day of the workspace's.
+  // Everyone's own days lie within two days of the workspace's (zones are up to
+  // 26 hours apart).
   const bounds = {
     from: zonedDateTimeToInstant(
-      { date: addDaysToKey(from, -1), hours: 0, minutes: 0 },
+      { date: addDaysToKey(from, -2), hours: 0, minutes: 0 },
       zone.timezone,
     ),
-    to: zonedDateTimeToInstant({ date: addDaysToKey(to, 2), hours: 0, minutes: 0 }, zone.timezone),
+    to: zonedDateTimeToInstant({ date: addDaysToKey(to, 3), hours: 0, minutes: 0 }, zone.timezone),
   };
   const [work, approved, muted, recipients] = await Promise.all([
     workByPersonDay(db, zone.id, zone.timezone, userIds, bounds),
@@ -292,7 +294,13 @@ export async function evaluateTargets(
       await db
         .select({ kind: emailOutbox.kind, to: emailOutbox.toAddress })
         .from(emailOutbox)
-        .where(and(eq(emailOutbox.workspaceId, zone.id), like(emailOutbox.kind, "target:%")))
+        .where(
+          and(
+            eq(emailOutbox.workspaceId, zone.id),
+            // Only this run's windows: a kind ends with the window's first day.
+            or(...windows.map((w) => like(emailOutbox.kind, `target:%:${w.from}`))),
+          ),
+        )
     ).map((r) => `${r.kind}|${r.to.toLowerCase()}`),
   );
 
@@ -340,15 +348,18 @@ export async function evaluateTargets(
   let sent = 0;
   for (const window of windows) {
     for (const person of people) {
+      const seconds = work
+        .filter(
+          (w) => w.userId === person.userId && w.dateKey >= window.from && w.dateKey <= window.to,
+        )
+        .reduce((n, w) => n + w.workSeconds, 0);
+      // Days before the person joined were not theirs: no reminder about an empty
+      // one (time they logged there, backdated, still counts).
+      if (window.from < person.joinedOn && seconds === 0) continue;
       for (const assigned of rules.filter((r) => r.period === window.period)) {
         if (!targetApplies(assigned, person)) continue;
         const rule = effective(assigned, person, window);
         if (!rule) continue;
-        const seconds = work
-          .filter(
-            (w) => w.userId === person.userId && w.dateKey >= window.from && w.dateKey <= window.to,
-          )
-          .reduce((n, w) => n + w.workSeconds, 0);
         if (!targetBreached(rule, seconds)) continue;
         const kind = `target:${rule.id}:${person.userId}:${window.from}`;
         const base = {

@@ -3,10 +3,12 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  addDaysInZone,
   approvalRulesOf,
   can,
   formatDateKey,
   localDateKey,
+  zonedDateTimeToInstant,
   lockBoundary,
   lockDateKey,
   type LockRule,
@@ -198,6 +200,60 @@ export async function lockedReasons(
   );
 }
 
+/**
+ * Why each day of `[from, to)` (the viewer's days) is closed to the scope's
+ * actor, for cells with no entry yet (backlog ruling R9): a new entry there
+ * would start at 09:00, so the day is judged at that instant. Owners and
+ * admins get none.
+ */
+export async function lockedDays(
+  db: Pick<DbExecutor, "select">,
+  scope: EntryScope,
+  range: { from: Date; to: Date },
+  viewerTimezone: string,
+  now: Date = new Date(),
+): Promise<Record<string, string>> {
+  const actor = scope.actedBy ?? scope.actor;
+  if (can(actor, "approval.editLocked", { kind: "none" })) return {};
+  const { timezone } = await writeRulesOf(db, scope.workspaceId);
+  const items: { id: string; key: string; instant: Date }[] = [];
+  for (let day = range.from; day < range.to; day = addDaysInZone(day, 1, viewerTimezone)) {
+    const dayKey = localDateKey(day, viewerTimezone);
+    const instant = zonedDateTimeToInstant({ date: dayKey, hours: 9, minutes: 0 }, viewerTimezone);
+    items.push({ id: dayKey, key: localDateKey(instant, timezone), instant });
+  }
+  return Object.fromEntries(await lockedReasonsForKeys(db, scope, items, "Entries", now));
+}
+
+/**
+ * `lockedReasons` over the entries of several people, as one viewer edits
+ * them (the Detailed report): each owner's submitted periods, the viewer's
+ * privilege. Owners and admins get none.
+ */
+export async function lockedReasonsForOwners(
+  db: Pick<DbExecutor, "select">,
+  viewer: EntryScope,
+  entries: { id: string; userId: string; start: Date }[],
+  now: Date = new Date(),
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (entries.length === 0 || can(viewer.actor, "approval.editLocked", { kind: "none" })) {
+    return out;
+  }
+  const byOwner = new Map<string, { id: string; start: string }[]>();
+  for (const e of entries) {
+    byOwner.set(e.userId, [
+      ...(byOwner.get(e.userId) ?? []),
+      { id: e.id, start: e.start.toISOString() },
+    ]);
+  }
+  for (const [userId, owned] of byOwner) {
+    const reasons = await lockedReasons(db, { ...viewer, userId }, owned, now);
+    for (const [id, reason] of reasons) out.set(id, reason);
+  }
+  return out;
+}
+
 /** One guarded item: its local date keys before and after the change, and what to log. */
 export interface KeyedChange {
   /** The date keys the change touches (before and after), already in the workspace zone. */
@@ -207,6 +263,8 @@ export interface KeyedChange {
   entryId?: string;
   expenseId?: string;
   changes?: Record<string, { from: unknown; to: unknown }>;
+  /** A new entry (nothing before it). Several in one period are logged as one event. */
+  created?: boolean;
 }
 
 /** Phase 6d decision 23: what an invoiced entry or expense answers to every write. */
@@ -313,20 +371,40 @@ export async function assertKeysWritable(
     );
   }
   if (!opts.note) throw new TimeEntryError("NOTE_REQUIRED", NOTE_REQUIRED_MESSAGE);
-  await db.insert(approvalEvent).values(
-    hits.map(({ item, request }) => ({
-      id: randomUUID(),
-      workspaceId: scope.workspaceId,
-      requestId: request.id,
-      userId: scope.userId,
-      actorId: actor.userId,
-      action: "ADMIN_EDIT" as const,
-      note: opts.note,
+  const event = (requestId: string) => ({
+    id: randomUUID(),
+    workspaceId: scope.workspaceId,
+    requestId,
+    userId: scope.userId,
+    actorId: actor.userId,
+    action: "ADMIN_EDIT" as const,
+    note: opts.note,
+  });
+  // Each row is logged with what changed, except a batch of new entries (an
+  // import): several in one period are logged once, counted.
+  const createdIn = new Map<string, number>();
+  for (const { item, request } of hits) {
+    if (item.created) createdIn.set(request.id, (createdIn.get(request.id) ?? 0) + 1);
+  }
+  const batched = (requestId: string) => (createdIn.get(requestId) ?? 0) > 1;
+  const rows = hits
+    .filter(({ item, request }) => !(item.created && batched(request.id)))
+    .map(({ item, request }) => ({
+      ...event(request.id),
       entryId: item.entryId ?? null,
       expenseId: item.expenseId ?? null,
       changes: item.changes ?? null,
-    })),
-  );
+    }));
+  for (const [requestId, count] of createdIn) {
+    if (count < 2) continue;
+    rows.push({
+      ...event(requestId),
+      entryId: null,
+      expenseId: null,
+      changes: { entriesAdded: { from: 0, to: count } },
+    });
+  }
+  await db.insert(approvalEvent).values(rows);
 }
 
 function startsOf(change: WriteChange): Date[] {
@@ -352,6 +430,7 @@ export async function assertWritable(
         instants,
         entryId: change.entryId,
         changes: change.changes,
+        created: change.before === undefined && change.after !== undefined,
       };
     }),
     { ...opts, rules, noun: "Entries" },

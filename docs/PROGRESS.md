@@ -406,3 +406,58 @@ Rulings made while building branch 1, beyond the design:
 - `createProjectAction` and `createTagAction` keep no revalidation, because they serve the pickers' inline create, so their dialogs keep their refresh.
 - New e2e tests were seen red and green on the dev server with one worker, and the whole suite ran on a production build at the gate.
 - The final review's finding that a manager who creates a project became its manager widened their own reach (other people's amounts, member rates, schedules, approvals). That rule was reverted in favour of the import's request-local right.
+
+### Branch 2: approvals, time off, attendance, targets, kiosks and the daily cron (migrations 0021, 0022; plan `docs/superpowers/plans/2026-11-17-backlog-2.md`)
+
+- **Migrations:**
+  - 0021 drops `task_assignee` and `workspace_settings.task_creators` (the contract half of branch 1).
+  - 0022 adds `kiosk.tag_id` and `daily_job_run`.
+- **Kiosks:**
+  - A default tag carried by every punch, so a required tag can be met.
+  - The Phase 5c minors:
+    - Only failed PINs pause the kiosk.
+    - The QR path counts only "not allowed".
+    - Photo rows are written before the upload.
+    - Share links never carry the photo flag.
+    - Removing a member clears their kiosk, policy, holiday and target assignments.
+    - UI copy and the timeout while a punch is in flight.
+- **The daily jobs run hourly:**
+  - Each workspace runs once per local day, from 07:00 in its timezone, claimed in `daily_job_run`.
+  - The reminder catches up within three days.
+  - Target reminders skip days before joining and read only their own outbox kinds.
+  - Settled email bodies are blanked after 30 days.
+- **Approvals:**
+  - A period with a timer running in it is not approved.
+  - The settings save and a submit cannot cross.
+  - `approversFor` runs on the caller's transaction.
+  - A bulk edit reads the rules once.
+  - `deleteProject` takes its people's locks.
+  - An import into submitted time is logged once per period.
+  - Decision emails link to the period.
+  - The Approvals table shows billable time.
+  - The Unsubmitted tab includes a project manager's projects' people.
+  - `lock.manage` and `transition()` are gone.
+  - The note prompt queues, Undo reuses the note, and a delete across people is all or nothing.
+  - Locked time is read-only in empty cells, row menus and the Detailed report.
+  - A timezone or week-start change with approved periods asks first.
+- **Time off and attendance:**
+  - An HOURS request over no working day is refused.
+  - Approval re-checks the balance.
+  - Saving a holiday clears Estimated.
+  - Members get holidays without assignees.
+  - Attendance needs the Reports page.
+  - Group lookups are scoped.
+  - The windows are ±2 days.
+  - An unavailable policy is said in words.
+
+**Rulings:**
+- **R1:** auth and invitation emails stay in the request.
+- **R2:** an hourly cron with claims.
+- **R3:** a three-day reminder catch-up.
+- **R4:** outbox bodies are blanked, not deleted.
+- **R5:** no approval with a timer running.
+- **R6:** approval re-checks the balance.
+- **R7:** a confirmation before a timezone change.
+- **R8:** assignment stays the rule for time-off policies.
+- **R9:** a `lockedDays` read.
+- **Untested changes:** a few have no failing test. These are the workspace scoping of group lookups, the ±2-day windows, the Attendance Reports gate, the preview message and the QR error narrowing. Each is recorded in the ledger.

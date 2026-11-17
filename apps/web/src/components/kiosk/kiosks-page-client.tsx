@@ -29,6 +29,13 @@ import {
 } from "@timekeep/ui/components/dropdown-menu";
 import { Input } from "@timekeep/ui/components/input";
 import { Label } from "@timekeep/ui/components/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@timekeep/ui/components/select";
 import { Switch } from "@timekeep/ui/components/switch";
 import {
   Table,
@@ -65,10 +72,13 @@ interface ProjectOption extends Option {
   color: string;
 }
 
+/** The Select's value for "no default tag" (an item value cannot be empty). */
+const NO_TAG = "none";
+
 const GAP_WARNINGS: Partial<Record<RequiredField, string>> = {
   project: "This workspace requires a project: pick one, or people cannot clock out here.",
   task: "This project has tasks: pick a default task, or members cannot clock out here.",
-  tag: "This workspace requires a tag, which a kiosk cannot add: people could clock in here but not out.",
+  tag: "This workspace requires a tag: pick a default tag, or people cannot clock out here.",
 };
 
 /**
@@ -235,8 +245,13 @@ export function KiosksPageClient({
 function DeviceUrlDialog({ url, onClose }: { url: string | null; onClose: () => void }) {
   async function copy() {
     if (!url) return;
-    await navigator.clipboard.writeText(url);
-    toast.success("Device URL copied");
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Device URL copied");
+    } catch {
+      // No clipboard on an insecure page or when the browser refuses.
+      toast.error("Could not copy: select the URL and copy it.");
+    }
   }
   return (
     <Dialog open={url !== null} onOpenChange={(open) => !open && onClose()}>
@@ -288,6 +303,7 @@ function KioskDialog({
     projectId: kiosk?.projectId ?? null,
     taskId: kiosk?.taskId ?? null,
   });
+  const [tagId, setTagId] = useState<string | null>(kiosk?.tagId ?? null);
   const [assignees, setAssignees] = useState<Assignees>({
     everyone: kiosk?.everyone ?? true,
     userIds: kiosk?.userIds ?? [],
@@ -300,18 +316,25 @@ function KioskDialog({
 
   const gaps = kioskRequiredGaps(requiredFields, {
     ...selection,
+    tagId,
     projectHasTasks:
       (options?.projects.find((p) => p.id === selection.projectId)?.tasks.length ?? 0) > 0,
   });
 
   async function save() {
+    const seconds = Number(timeout);
+    if (!Number.isInteger(seconds) || seconds < 5 || seconds > 300) {
+      toast.error("Enter between 5 and 300 seconds.");
+      return;
+    }
     setSaving(true);
     const input = {
       name,
       projectId: selection.projectId,
       taskId: selection.taskId,
+      tagId,
       ...assignees,
-      sessionTimeoutSeconds: Number(timeout),
+      sessionTimeoutSeconds: seconds,
       showLogo,
       photo,
     };
@@ -356,6 +379,25 @@ function KioskDialog({
                 {GAP_WARNINGS[gap]}
               </p>
             ))}
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="kiosk-tag">Default tag</Label>
+            <Select
+              value={tagId ?? NO_TAG}
+              onValueChange={(value) => setTagId(value === NO_TAG ? null : value)}
+            >
+              <SelectTrigger id="kiosk-tag" aria-label="Default tag" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_TAG}>No tag</SelectItem>
+                {(options?.tags ?? []).map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <AssigneesField
             legend="Who can use it"

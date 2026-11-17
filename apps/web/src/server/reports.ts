@@ -79,6 +79,7 @@ import type {
 import { assertCan, scopeFilter } from "./authz";
 import { listFilterClients } from "./catalog/clients";
 import { listPickerProjects } from "./catalog/projects";
+import { lockedReasonsForOwners } from "./entry-guard";
 import { listTagOptions } from "./catalog/tags";
 import type { Viewer } from "./catalog/viewer";
 import { progressForProjects } from "./estimates";
@@ -797,7 +798,10 @@ export async function detailedReport(
   prefs: ViewerPrefs,
   page: { cursor?: DetailedCursor; sort: DetailedSort; dir: "asc" | "desc"; limit?: number },
   now: Date = new Date(),
+  /** `editing: false` (exports): no editability work, the rows are printed. */
+  opts: { editing?: boolean } = {},
 ): Promise<DetailedPage> {
+  const editing = opts.editing ?? true;
   const eff = effectiveQuery(query, viewer);
   const range = resolveReportRange(eff, prefs, now);
   const base = baseConditions(viewer, eff, range);
@@ -877,7 +881,7 @@ export async function detailedReport(
           .where(inArray(timeEntryTag.timeEntryId, ids))
       : [];
   const withPhoto = new Set(
-    ids.length > 0 && can(viewer.actor, "kiosk.manage", { kind: "none" })
+    ids.length > 0 && !viewer.shared && can(viewer.actor, "kiosk.manage", { kind: "none" })
       ? (
           await db
             .select({ entryId: kioskPhoto.entryId })
@@ -892,12 +896,34 @@ export async function detailedReport(
     list.push({ id: t.id, name: t.name });
     tagsByEntry.set(t.entryId, list);
   }
+  // Locked or submitted time is read-only to members and managers (Phase 5a):
+  // asked only for rows the viewer could otherwise edit, never for a share link
+  // (its rows are public) or an export (nothing is edited there).
+  const locked =
+    editing && !viewer.shared
+      ? await lockedReasonsForOwners(
+          db,
+          viewer,
+          pageRows.filter(
+            (r) =>
+              r.ownerStatus === "ACTIVE" &&
+              r.invoiceNumber === null &&
+              can(viewer.actor, "entry.write", {
+                kind: "entry",
+                userId: r.userId,
+                projectId: r.projectId,
+              }),
+          ),
+          now,
+        )
+      : new Map<string, string>();
   const entries: DetailedEntryDTO[] = pageRows.map((r) => {
     const tags = tagsByEntry.get(r.id) ?? [];
     // Invoiced time is read-only for everyone (Phase 6d, decision 23).
     const editable =
       r.ownerStatus === "ACTIVE" &&
       r.invoiceNumber === null &&
+      !locked.has(r.id) &&
       can(viewer.actor, "entry.write", { kind: "entry", userId: r.userId, projectId: r.projectId });
     // The currency its amount was rated in; unrated, its project's client's, else the workspace's.
     const currency = money ? (r.rateCurrency ?? r.clientCurrency ?? money.currency) : null;
@@ -940,6 +966,7 @@ export async function detailedReport(
         }),
       photo: withPhoto.has(r.id),
       invoiceNumber: r.invoiceNumber ?? null,
+      lockedReason: locked.get(r.id) ?? null,
     };
   });
   const last = pageRows[pageRows.length - 1];

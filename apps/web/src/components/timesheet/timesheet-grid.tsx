@@ -67,6 +67,7 @@ export function TimesheetGrid({
   onKeepRow,
   removableRows,
   onRemoveRow,
+  lockedDays = {},
   bands = [],
 }: {
   sheet: Timesheet;
@@ -80,6 +81,8 @@ export function TimesheetGrid({
   /** Rows added by hand (`rowKeyString`); one with no time can be removed. */
   removableRows?: ReadonlySet<string>;
   onRemoveRow?: (key: TimesheetRowKey) => void;
+  /** Why a day is closed to new time (lock date, submitted period), by date key. */
+  lockedDays?: Record<string, string>;
   /** Approved time off and holidays: read-only, never in the totals (decision 8). */
   bands?: TimeOffBand[];
 }) {
@@ -180,6 +183,7 @@ export function TimesheetGrid({
                         cell={row.cells[day]!}
                         billableDefault={project?.billable ?? false}
                         onKeepRow={onKeepRow}
+                        dayLockedReason={lockedDays[day] ?? null}
                       />
                     </td>
                   ))}

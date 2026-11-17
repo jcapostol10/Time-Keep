@@ -40,8 +40,9 @@ export async function savePunchPhoto(
 ): Promise<void> {
   assertKioskPhoto(input.bytes);
   const key = photoKey(input.workspaceId, input.entryId);
-  await uploadExport({ key, body: input.bytes, contentType: "image/jpeg" });
-  await db
+  // The row first: an object with no row would never be purged. An upload
+  // that fails takes back the row it wrote.
+  const [row] = await db
     .insert(kioskPhoto)
     .values({
       id: randomUUID(),
@@ -50,7 +51,14 @@ export async function savePunchPhoto(
       objectKey: key,
       takenAt: now,
     })
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({ id: kioskPhoto.id });
+  try {
+    await uploadExport({ key, body: input.bytes, contentType: "image/jpeg" });
+  } catch (error) {
+    if (row) await db.delete(kioskPhoto).where(eq(kioskPhoto.id, row.id));
+    throw error;
+  }
 }
 
 /** A short-lived link to an entry's photo, for those who manage kiosks; 404 without one. */

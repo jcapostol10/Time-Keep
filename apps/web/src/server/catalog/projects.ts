@@ -58,6 +58,7 @@ import { CatalogError, isUniqueViolation } from "./errors";
 import { estimateOf, progressFor, visibleProgress, workspaceZone } from "../estimates";
 import { inSubmittedPeriodSql, SUBMITTED_TIME_MESSAGE } from "../approval-sql";
 import { scopeFilter } from "../authz";
+import { timerLock } from "../person-lock";
 import { projectCurrency, projectsHaveRates, relabelProjectsCurrency } from "../rates";
 import { workspaceCurrency } from "./clients";
 import { grantTaskGroupsAccess, visibleTasksFor } from "./tasks";
@@ -708,6 +709,17 @@ export async function deleteProject(
 ): Promise<void> {
   await db.transaction(async (tx) => {
     await requireVisibleProject(tx, viewer, projectId);
+    // The people with time here, locked in a fixed order (as a bulk edit does),
+    // so a submit in flight lands before the check below, or waits for it.
+    const owners = await tx
+      .selectDistinct({ userId: timeEntry.userId })
+      .from(timeEntry)
+      .where(
+        and(eq(timeEntry.workspaceId, viewer.workspaceId), eq(timeEntry.projectId, projectId)),
+      );
+    for (const userId of owners.map((o) => o.userId).sort()) {
+      await tx.execute(timerLock(viewer.workspaceId, userId));
+    }
     // Moving or deleting submitted time would change what was approved.
     const [submitted] = await tx
       .select({ id: timeEntry.id })

@@ -81,16 +81,21 @@ export function kioskActions(state: KioskState, breaksAllowed: boolean): KioskAc
 /**
  * What a kiosk's defaults leave unmet, so people could clock in but not out:
  * a required project, a task on a project with tasks (rule 8 of decision 11,
- * whatever the setting), and a required tag, which a kiosk cannot add.
+ * whatever the setting), and a required tag when the kiosk has no default tag.
  */
 export function kioskRequiredGaps(
   required: readonly RequiredField[],
-  defaults: { projectId: string | null; taskId: string | null; projectHasTasks: boolean },
+  defaults: {
+    projectId: string | null;
+    taskId: string | null;
+    tagId: string | null;
+    projectHasTasks: boolean;
+  },
 ): RequiredField[] {
   const gaps: RequiredField[] = [];
   if (required.includes("project") && defaults.projectId === null) gaps.push("project");
   if (defaults.projectHasTasks && defaults.taskId === null) gaps.push("task");
-  if (required.includes("tag")) gaps.push("tag");
+  if (required.includes("tag") && defaults.tagId === null) gaps.push("tag");
   return gaps;
 }
 

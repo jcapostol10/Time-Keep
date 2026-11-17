@@ -6,7 +6,7 @@ import {
   lockSettingsCheck,
   workspaceSettingsSchema,
 } from "@timekeep/core";
-import { eq, getDb, workspace, workspaceSettings } from "@timekeep/db";
+import { eq, getDb, sql, workspace, workspaceSettings } from "@timekeep/db";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -65,6 +65,8 @@ const updateSettingsSchema = workspaceSettingsSchema
     confirmTaskVisibility: z.boolean().optional(),
     /** The person saw how many pending periods turning approval off withdraws (Phase 5a). */
     confirmApprovalOff: z.boolean().optional(),
+    /** The person saw that approved periods move with a new timezone or week start (R7). */
+    confirmTimezoneChange: z.boolean().optional(),
   })
   .superRefine(lockSettingsCheck);
 export type UpdateWorkspaceSettingsInput = z.infer<typeof updateSettingsSchema>;
@@ -78,8 +80,14 @@ export async function updateWorkspaceSettingsAction(
     await authorize(ctx, "workspace.update");
     const parsed = updateSettingsSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const { name, confirmCurrencyChange, confirmTaskVisibility, confirmApprovalOff, ...settings } =
-      parsed.data;
+    const {
+      name,
+      confirmCurrencyChange,
+      confirmTaskVisibility,
+      confirmApprovalOff,
+      confirmTimezoneChange,
+      ...settings
+    } = parsed.data;
 
     const db = getDb();
     const newCurrency = settings.currency !== ctx.settings.currency;
@@ -105,19 +113,22 @@ export async function updateWorkspaceSettingsAction(
       return fail(message, { confirmTaskVisibility: [message] });
     }
     // Phase 5a, decision 2: no new period type while periods are pending; turning
-    // approval off asks first, then withdraws them.
-    const approvalProblem = await checkApprovalSettings(
-      db,
-      ctx.workspace.id,
-      ctx.settings,
-      settings,
-      confirmApprovalOff === true,
-    );
-    if (approvalProblem) {
-      return fail(approvalProblem.message, { [approvalProblem.field]: [approvalProblem.message] });
-    }
+    // approval off asks first, then withdraws them. Checked under the settings
+    // row's lock, which a submit takes FOR SHARE: no submit lands in between.
     const turningOff = ctx.settings.approvalEnabled && !settings.approvalEnabled;
-    await db.transaction(async (tx) => {
+    const approvalProblem = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select 1 from ${workspaceSettings} where ${workspaceSettings.workspaceId} = ${ctx.workspace.id} for update`,
+      );
+      const problem = await checkApprovalSettings(
+        tx,
+        ctx.workspace.id,
+        ctx.settings,
+        settings,
+        confirmApprovalOff === true,
+        confirmTimezoneChange === true,
+      );
+      if (problem) return problem;
       if (turningOff) await withdrawPendingRequests(tx, ctx.workspace.id, ctx.user.id);
       await tx.update(workspace).set({ name }).where(eq(workspace.id, ctx.workspace.id));
       await tx
@@ -132,7 +143,11 @@ export async function updateWorkspaceSettingsAction(
           settings.currency,
         );
       }
+      return null;
     });
+    if (approvalProblem) {
+      return fail(approvalProblem.message, { [approvalProblem.field]: [approvalProblem.message] });
+    }
 
     revalidatePath(`/w/${slug}`, "layout");
     return ok({ slug });

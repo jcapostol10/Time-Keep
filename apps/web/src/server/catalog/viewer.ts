@@ -18,6 +18,8 @@ export interface Viewer {
   hideAmounts?: boolean;
   /** A share link or the dashboard: reports omit cost and profit, whoever is asking. */
   hideCosts?: boolean;
+  /** A share link reads as this viewer: its rows are public, so nothing internal (kiosk photos). */
+  shared?: boolean;
 }
 
 /**

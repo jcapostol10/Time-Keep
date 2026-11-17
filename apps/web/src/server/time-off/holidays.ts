@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  can,
   type HolidayImportInput,
   type HolidayInput,
   type HolidayRule,
@@ -85,12 +86,17 @@ export async function holidayRules(
   });
 }
 
-/** Everyone in the workspace may read the holiday list: it is not private. */
+/**
+ * Everyone in the workspace may read the holiday list: it is not private. Who
+ * a holiday applies to is, so only those who manage time off get its people
+ * and groups.
+ */
 export async function listHolidays(
   db: Database,
   viewer: Viewer,
   year: number,
 ): Promise<HolidayDTO[]> {
+  const manages = can(viewer.actor, "timeOff.manage", { kind: "none" });
   const from = `${year}-01-01`;
   const to = `${year}-12-31`;
   const rules = await holidayRules(db, viewer.workspaceId, from, to);
@@ -104,8 +110,8 @@ export async function listHolidays(
       repeatsYearly: h.repeatsYearly,
       source: rule.row.source,
       estimated: rule.row.estimated,
-      userIds: [...h.userIds],
-      groupIds: [...h.groupIds],
+      userIds: manages ? [...h.userIds] : [],
+      groupIds: manages ? [...h.groupIds] : [],
     };
   });
 }
@@ -137,7 +143,13 @@ export async function saveHoliday(
   try {
     const holidayId = await db.transaction(async (tx) => {
       await assertPeopleAndGroups(tx, viewer.workspaceId, input.userIds, input.groupIds);
-      const values = { date: input.date, name: input.name, repeatsYearly: input.repeatsYearly };
+      // Saving is the admin confirming the date: an imported estimate stops being one.
+      const values = {
+        date: input.date,
+        name: input.name,
+        repeatsYearly: input.repeatsYearly,
+        estimated: false,
+      };
       let holidayId = id;
       if (holidayId) {
         const rows = await tx

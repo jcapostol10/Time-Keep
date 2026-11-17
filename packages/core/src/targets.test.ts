@@ -7,6 +7,7 @@ const rule = (extra: Partial<TargetRule> = {}): TargetRule => ({
   period: "DAY",
   thresholdMinutes: 480,
   active: true,
+  everyone: true,
   userIds: [],
   groupIds: [],
   ...extra,
@@ -27,16 +28,19 @@ describe("targetBreached", () => {
 });
 
 describe("targetApplies", () => {
-  it("applies to everyone without assignees", () => {
+  it("applies to everyone when set for everyone", () => {
     expect(targetApplies(rule(), max)).toBe(true);
   });
   it("applies to an assigned user", () => {
-    expect(targetApplies(rule({ userIds: ["bob"] }), bob)).toBe(true);
-    expect(targetApplies(rule({ userIds: ["bob"] }), max)).toBe(false);
+    expect(targetApplies(rule({ everyone: false, userIds: ["bob"] }), bob)).toBe(true);
+    expect(targetApplies(rule({ everyone: false, userIds: ["bob"] }), max)).toBe(false);
   });
   it("applies to a member of an assigned group", () => {
-    expect(targetApplies(rule({ groupIds: ["cebu"] }), bob)).toBe(true);
-    expect(targetApplies(rule({ groupIds: ["cebu"] }), max)).toBe(false);
+    expect(targetApplies(rule({ everyone: false, groupIds: ["cebu"] }), bob)).toBe(true);
+    expect(targetApplies(rule({ everyone: false, groupIds: ["cebu"] }), max)).toBe(false);
+  });
+  it("applies to nobody once its people and groups are gone", () => {
+    expect(targetApplies(rule({ everyone: false }), bob)).toBe(false);
   });
   it("never applies while inactive", () => {
     expect(targetApplies(rule({ active: false }), bob)).toBe(false);

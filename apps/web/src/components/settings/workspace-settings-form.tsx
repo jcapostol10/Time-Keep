@@ -86,6 +86,7 @@ export function WorkspaceSettingsForm({
       confirmCurrencyChange: confirmed.includes("currency"),
       confirmTaskVisibility: confirmed.includes("taskVisibility"),
       confirmApprovalOff: confirmed.includes("approvalOff"),
+      confirmTimezoneChange: confirmed.includes("timezone"),
     });
     if (!result.ok) {
       // The server asks by naming the confirmation it needs, never the setting itself,
@@ -288,15 +289,16 @@ export function WorkspaceSettingsForm({
   );
 }
 
-type ConfirmField = "currency" | "taskVisibility" | "approvalOff";
-const CONFIRM_FIELDS: ConfirmField[] = ["currency", "taskVisibility", "approvalOff"];
+type ConfirmField = "currency" | "taskVisibility" | "approvalOff" | "timezone";
+const CONFIRM_FIELDS: ConfirmField[] = ["currency", "taskVisibility", "approvalOff", "timezone"];
 const CONFIRM_KEY: Record<
   ConfirmField,
-  "confirmCurrencyChange" | "confirmTaskVisibility" | "confirmApprovalOff"
+  "confirmCurrencyChange" | "confirmTaskVisibility" | "confirmApprovalOff" | "confirmTimezoneChange"
 > = {
   currency: "confirmCurrencyChange",
   taskVisibility: "confirmTaskVisibility",
   approvalOff: "confirmApprovalOff",
+  timezone: "confirmTimezoneChange",
 };
 const CONFIRM_COPY: Record<ConfirmField, { title: string; cancel: string; action: string }> = {
   currency: { title: "Change the workspace currency?", cancel: "Keep", action: "Change currency" },
@@ -309,5 +311,10 @@ const CONFIRM_COPY: Record<ConfirmField, { title: string; cancel: string; action
     title: "Turn approval off?",
     cancel: "Keep approval on",
     action: "Turn off and withdraw",
+  },
+  timezone: {
+    title: "Move approved periods?",
+    cancel: "Keep the current setting",
+    action: "Change anyway",
   },
 };

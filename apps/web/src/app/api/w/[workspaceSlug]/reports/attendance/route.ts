@@ -3,7 +3,8 @@ import { reportRoute } from "@/server/report-route";
 
 /**
  * The Attendance tab: each person's days in the query's range. Every member
- * may open it (their own days), so it asks attendance.read, not the Reports page.
+ * may open it (their own days), so it asks attendance.read; it is a Reports
+ * tab, so a hidden Reports page hides it too.
  */
 export async function GET(
   request: Request,
@@ -17,6 +18,7 @@ export async function GET(
     {
       action: "attendance.read",
       resource: (access) => ({ kind: "person", userId: access.user.id }),
+      reportsPage: true,
     },
   );
 }

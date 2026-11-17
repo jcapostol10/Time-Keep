@@ -343,6 +343,16 @@ export async function submitPeriod(
     // The entry guard takes the same lock: an edit either lands before the
     // totals or sees the request and is refused (Review Focus 3).
     await tx.execute(timerLock(viewer.workspaceId, viewer.userId));
+    // The settings as they stand once a save in flight has landed (it holds the
+    // row FOR UPDATE): approval may have been turned off, or the periods moved.
+    await tx.execute(
+      sql`select 1 from ${workspaceSettings} where ${workspaceSettings.workspaceId} = ${viewer.workspaceId} for share`,
+    );
+    const current = await workspaceApproval(tx, viewer.workspaceId);
+    if (!current.enabled) throw new CatalogError("INVALID", "Approval is off in this workspace.");
+    if (periodContaining(periodStart, current.rule).start !== periodStart) {
+      throw new CatalogError("INVALID", "The workspace's periods changed: reload and try again.");
+    }
     const [running] = await tx
       .select({ id: timeEntry.id })
       .from(timeEntry)
@@ -408,7 +418,7 @@ export async function submitPeriod(
     });
     const projectIds = (await projectIdsOf(tx, [requestId])).get(requestId) ?? [];
     const me = await emailOf(tx, viewer.userId);
-    for (const approver of await approversFor(db, viewer.workspaceId, {
+    for (const approver of await approversFor(tx, viewer.workspaceId, {
       userId: viewer.userId,
       projectIds,
     })) {
@@ -493,6 +503,32 @@ export async function reviewRequests(
       throw new CatalogError("INVALID", "Only pending periods can be approved or rejected.");
     }
     const approve = input.decision === "APPROVE";
+    // A timer running in the period (an owner or admin may start one there with a
+    // note) would add time after approval: say who must stop it first.
+    if (approve) {
+      for (const r of rows) {
+        const [running] = await tx
+          .select({ id: timeEntry.id })
+          .from(timeEntry)
+          .where(
+            and(
+              eq(timeEntry.workspaceId, viewer.workspaceId),
+              eq(timeEntry.userId, r.userId),
+              isNull(timeEntry.end),
+              isNull(timeEntry.deletedAt),
+              sql`(${timeEntry.start} at time zone ${ws.rule.timezone})::date between ${r.periodStart} and ${r.periodEnd}`,
+            ),
+          )
+          .limit(1);
+        if (running) {
+          const person = await emailOf(tx, r.userId);
+          throw new CatalogError(
+            "INVALID",
+            `${person?.name ?? "This person"} has a timer running in this period.`,
+          );
+        }
+      }
+    }
     const note = approve ? null : input.note!;
     await tx
       .update(approvalRequest)
@@ -525,7 +561,9 @@ export async function reviewRequests(
         workspaceId: viewer.workspaceId,
         to: person.email,
         kind: approve ? "approval.approved" : "approval.rejected",
-        ...(approve ? approvedEmail(base) : rejectedEmail({ ...base, note: note! })),
+        ...(approve
+          ? approvedEmail({ ...base, requestId: r.id })
+          : rejectedEmail({ ...base, note: note! })),
       });
     }
   });
@@ -669,18 +707,20 @@ async function listUnsubmitted(
   const last = periods.at(-1)!;
   const range = { from: periodBounds(first, tz).from, to: periodBounds(last, tz).to };
 
-  // The people the viewer may review whatever their projects: everyone for
-  // owners and admins, a manager's own people (the Unsubmitted tab has no
-  // request whose projects a project manager could check).
+  // The people the viewer may review: whatever their projects (owners and
+  // admins everyone, a manager their own people), or, for a project manager,
+  // anyone whose period turns out to be all on the manager's projects (checked
+  // per period below, with the period's projects).
+  const reviewable = (userId: string, projectIds: string[]) =>
+    can(viewer.actor, "approval.review", { kind: "approval", userId, projectIds });
+  const byProject = viewer.actor.managedProjectIds.size > 0;
   const people = (
     await db
       .select({ userId: membership.userId, name: user.name })
       .from(membership)
       .innerJoin(user, eq(user.id, membership.userId))
       .where(and(eq(membership.workspaceId, viewer.workspaceId), eq(membership.status, "ACTIVE")))
-  ).filter((m) =>
-    can(viewer.actor, "approval.review", { kind: "approval", userId: m.userId, projectIds: [] }),
-  );
+  ).filter((m) => byProject || reviewable(m.userId, []));
   if (people.length === 0) return [];
   const names = new Map(people.map((m) => [m.userId, m.name]));
 
@@ -689,6 +729,7 @@ async function listUnsubmitted(
     .select({
       userId: timeEntry.userId,
       day,
+      projectId: timeEntry.projectId,
       seconds: sql<number>`sum(${timeEntry.durationSeconds})::bigint`.mapWith(Number),
       count: sql<number>`count(*)::int`,
     })
@@ -704,7 +745,7 @@ async function listUnsubmitted(
         lt(timeEntry.start, range.to),
       ),
     )
-    .groupBy(timeEntry.userId, sql.raw("2"));
+    .groupBy(timeEntry.userId, sql.raw("2"), timeEntry.projectId);
   const requests = await db
     .select({
       userId: approvalRequest.userId,
@@ -733,6 +774,9 @@ async function listUnsubmitted(
       );
       const workSeconds = inPeriod.reduce((n, s) => n + s.seconds, 0);
       if (workSeconds === 0) continue;
+      // Time on no project is never all on a manager's projects.
+      const projectIds = [...new Set(inPeriod.map((s) => s.projectId ?? ""))];
+      if (!reviewable(userId, []) && !reviewable(userId, projectIds)) continue;
       out.push({
         userId,
         userName,
@@ -913,15 +957,20 @@ export async function myPeriods(
 
 // --- Settings ----------------------------------------------------------------------
 
-async function pendingCount(db: Executor, workspaceId: string): Promise<number> {
+async function countRequests(
+  db: Executor,
+  workspaceId: string,
+  status: "PENDING" | "APPROVED",
+): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(approvalRequest)
-    .where(
-      and(eq(approvalRequest.workspaceId, workspaceId), eq(approvalRequest.status, "PENDING")),
-    );
+    .where(and(eq(approvalRequest.workspaceId, workspaceId), eq(approvalRequest.status, status)));
   return row?.n ?? 0;
 }
+
+const pendingCount = (db: Executor, workspaceId: string) =>
+  countRequests(db, workspaceId, "PENDING");
 
 interface ApprovalSettingsShape {
   approvalEnabled: boolean;
@@ -941,8 +990,11 @@ export async function checkApprovalSettings(
   current: ApprovalSettingsShape,
   next: ApprovalSettingsShape,
   confirmedOff: boolean,
+  /** The person saw that approved periods' edges move (backlog ruling R7). */
+  confirmedZone = false,
 ): Promise<{
-  field: "approvalPeriod" | "timezone" | "weekStart" | "confirmApprovalOff";
+  field:
+    "approvalPeriod" | "timezone" | "weekStart" | "confirmApprovalOff" | "confirmTimezoneChange";
   message: string;
 } | null> {
   // Periods are made of the period type, the workspace timezone and its week start:
@@ -954,15 +1006,26 @@ export async function checkApprovalSettings(
   const turningOff = current.approvalEnabled && !next.approvalEnabled;
   if (!periodChanged && !turningOff) return null;
   const n = await pendingCount(db, workspaceId);
-  if (n === 0) return null;
-  if (turningOff) {
-    if (confirmedOff) return null;
+  if (turningOff && n > 0 && !confirmedOff) {
     return {
       field: "confirmApprovalOff",
       message: `${n} pending ${n === 1 ? "period" : "periods"} will be withdrawn.`,
     };
   }
-  return { field: moved!, message: "Approve or reject the pending periods first." };
+  if (turningOff) return null;
+  if (n > 0) return { field: moved!, message: "Approve or reject the pending periods first." };
+  // Approved periods keep their dates, read in the new zone or week: allowed
+  // (ruling 5), after saying so (R7).
+  if ((moved === "timezone" || moved === "weekStart") && !confirmedZone) {
+    const approved = await countRequests(db, workspaceId, "APPROVED");
+    if (approved > 0) {
+      return {
+        field: "confirmTimezoneChange",
+        message: `${approved} approved ${approved === 1 ? "period" : "periods"} will move by the change: ${approved === 1 ? "its" : "their"} first and last days shift.`,
+      };
+    }
+  }
+  return null;
 }
 
 /** Turning approval off: every pending request is withdrawn, logged as AUTO_WITHDRAW. */

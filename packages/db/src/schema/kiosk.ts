@@ -10,7 +10,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { user } from "./auth";
-import { project, task } from "./catalog";
+import { project, tag, task } from "./catalog";
 import { timestamps } from "./columns";
 import { kioskAttemptMethodEnum } from "./enums";
 import { assigneeColumns, oneAssignee } from "./time-off";
@@ -34,6 +34,8 @@ export const kiosk = pgTable(
     tokenRotatedAt: timestamp("token_rotated_at", { withTimezone: true }).notNull().defaultNow(),
     projectId: text("project_id").references(() => project.id, { onDelete: "set null" }),
     taskId: text("task_id").references(() => task.id, { onDelete: "set null" }),
+    /** A tag every punch carries, so a workspace that requires a tag can clock out (backlog ruling 8). */
+    tagId: text("tag_id").references(() => tag.id, { onDelete: "set null" }),
     /** Allowed to everyone; otherwise to the rows of `kiosk_assignee`. */
     everyone: boolean("everyone").notNull().default(true),
     sessionTimeoutSeconds: smallint("session_timeout_seconds").notNull().default(15),

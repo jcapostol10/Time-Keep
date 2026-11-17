@@ -18,6 +18,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@timekeep/ui/components/dropdown-menu";
 import { Input } from "@timekeep/ui/components/input";
@@ -77,6 +78,10 @@ function RowActions({ entry }: { entry: TimeEntryDTO }) {
   // Favourites are the viewer's own: not offered on someone else's entries.
   const ownEntries = useTarget() === null;
   const [splitting, setSplitting] = useState(false);
+  // A locked period (or lock date) takes every write away; an invoice only the
+  // ones that change the entry itself (a copy of it is a new, open entry).
+  const changeLocked = Boolean(entry.lockedReason);
+  const periodLocked = changeLocked && !entry.invoiceNumber;
   return (
     <>
       <DropdownMenu>
@@ -86,7 +91,12 @@ function RowActions({ entry }: { entry: TimeEntryDTO }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => void duplicate(entry.id)}>
+          {entry.lockedReason ? (
+            <DropdownMenuLabel className="text-muted-foreground max-w-56 text-xs font-normal">
+              {entry.lockedReason}
+            </DropdownMenuLabel>
+          ) : null}
+          <DropdownMenuItem disabled={periodLocked} onSelect={() => void duplicate(entry.id)}>
             <CopyIcon /> Duplicate
           </DropdownMenuItem>
           {ownEntries ? (
@@ -106,12 +116,16 @@ function RowActions({ entry }: { entry: TimeEntryDTO }) {
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuItem
-            disabled={!entry.end || !canWriteTimes}
+            disabled={!entry.end || !canWriteTimes || changeLocked}
             onSelect={() => setSplitting(true)}
           >
             <ScissorsIcon /> Split…
           </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={() => void remove([entry.id])}>
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={changeLocked}
+            onSelect={() => void remove([entry.id])}
+          >
             <Trash2Icon /> Delete
           </DropdownMenuItem>
         </DropdownMenuContent>

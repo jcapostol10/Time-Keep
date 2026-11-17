@@ -68,6 +68,8 @@ export interface DetailedEntryDTO extends DetailedEntry {
   photo: boolean;
   /** The invoice it is billed on (Phase 6d); read-only while set. */
   invoiceNumber: string | null;
+  /** Why the viewer may not change it (lock date, submitted period); null when they may. */
+  lockedReason: string | null;
 }
 
 /** The Detailed report's sort columns (core `DETAILED_SORTS`). */

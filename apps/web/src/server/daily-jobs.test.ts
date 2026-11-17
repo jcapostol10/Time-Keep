@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  dailyJobRun,
   emailOutbox,
   eq,
   invoice,
@@ -119,7 +120,7 @@ beforeEach(async () => {
 
 describe("runDailyJobs", () => {
   it("reminds whoever has unsubmitted time in a period that just ended, in each workspace's zone", async () => {
-    expect(await runDailyJobs(db, { now: MONDAY_MANILA })).toEqual({
+    expect(await runDailyJobs(db, { force: true, now: MONDAY_MANILA })).toEqual({
       reminders: 1,
       targets: 0,
       budgets: 0,
@@ -138,8 +139,10 @@ describe("runDailyJobs", () => {
   });
 
   it("sends each reminder once", async () => {
-    await runDailyJobs(db, { now: MONDAY_MANILA });
-    expect(await runDailyJobs(db, { now: new Date(MONDAY_MANILA.getTime() + 3_600_000) })).toEqual({
+    await runDailyJobs(db, { force: true, now: MONDAY_MANILA });
+    expect(
+      await runDailyJobs(db, { force: true, now: new Date(MONDAY_MANILA.getTime() + 3_600_000) }),
+    ).toEqual({
       reminders: 0,
       targets: 0,
       budgets: 0,
@@ -148,15 +151,18 @@ describe("runDailyJobs", () => {
     expect(await remindersTo(ids.tom!)).toHaveLength(1);
   });
 
-  it("does nothing on a day that does not follow a period, or with approval off", async () => {
-    expect(await runDailyJobs(db, { now: new Date("2026-10-27T22:00:00.000Z") })).toEqual({
+  it("does nothing four days or more after a period, or with approval off", async () => {
+    // Friday 30 Oct in Manila: the week that ended on the 25th is past the catch-up.
+    expect(
+      await runDailyJobs(db, { force: true, now: new Date("2026-10-29T22:00:00.000Z") }),
+    ).toEqual({
       reminders: 0,
       targets: 0,
       budgets: 0,
       invoices: { created: 0, sent: 0, overdue: 0 },
     });
     await settings(manila, { approvalEnabled: false });
-    expect(await runDailyJobs(db, { now: MONDAY_MANILA })).toEqual({
+    expect(await runDailyJobs(db, { force: true, now: MONDAY_MANILA })).toEqual({
       reminders: 0,
       targets: 0,
       budgets: 0,
@@ -164,14 +170,79 @@ describe("runDailyJobs", () => {
     });
   });
 
+  // Monday 26 Oct 18:30 in Manila and 06:30 in New York.
+  const MANILA_EVENING = new Date("2026-10-26T10:30:00.000Z");
+  const claims = () =>
+    db
+      .select({ workspaceId: dailyJobRun.workspaceId, localDate: dailyJobRun.localDate })
+      .from(dailyJobRun)
+      .orderBy(dailyJobRun.claimedAt);
+
+  it("runs each workspace once its own day reaches 07:00", async () => {
+    await runDailyJobs(db, { now: MANILA_EVENING });
+    expect(await claims()).toEqual([{ workspaceId: manila, localDate: "2026-10-26" }]);
+    expect(await remindersTo(ids.tom!)).toHaveLength(1);
+    // An hour later it is 07:30 in New York.
+    await runDailyJobs(db, { now: new Date(MANILA_EVENING.getTime() + 3_600_000) });
+    expect(await claims()).toEqual([
+      { workspaceId: manila, localDate: "2026-10-26" },
+      { workspaceId: newYork, localDate: "2026-10-26" },
+    ]);
+  });
+
+  it("claims the day once, so a second delivery of the hour does nothing", async () => {
+    await runDailyJobs(db, { now: MANILA_EVENING, workspaceIds: [manila] });
+    await db.delete(emailOutbox).where(like(emailOutbox.kind, "approval.unsubmitted:%"));
+    expect(await runDailyJobs(db, { now: MANILA_EVENING, workspaceIds: [manila] })).toMatchObject({
+      reminders: 0,
+    });
+    expect(await remindersTo(ids.tom!)).toEqual([]);
+  });
+
+  it("takes again a claim left unfinished for two hours", async () => {
+    const claim = (hoursAgo: number) =>
+      db
+        .insert(dailyJobRun)
+        .values({
+          workspaceId: manila,
+          localDate: "2026-10-26",
+          claimedAt: new Date(MANILA_EVENING.getTime() - hoursAgo * 3_600_000),
+        })
+        .onConflictDoUpdate({
+          target: [dailyJobRun.workspaceId, dailyJobRun.localDate],
+          set: { claimedAt: new Date(MANILA_EVENING.getTime() - hoursAgo * 3_600_000) },
+        });
+    await claim(1);
+    expect(await runDailyJobs(db, { now: MANILA_EVENING, workspaceIds: [manila] })).toMatchObject({
+      reminders: 0,
+    });
+    await claim(3);
+    expect(await runDailyJobs(db, { now: MANILA_EVENING, workspaceIds: [manila] })).toMatchObject({
+      reminders: 1,
+    });
+  });
+
+  it("reminds on a later day when the first day after the period was missed", async () => {
+    // Tuesday 27 Oct in Manila: Monday's run never happened.
+    const tuesday = new Date("2026-10-27T10:30:00.000Z");
+    expect(await runDailyJobs(db, { now: tuesday, workspaceIds: [manila] })).toMatchObject({
+      reminders: 1,
+    });
+    expect((await remindersTo(ids.tom!))[0]?.kind).toBe("approval.unsubmitted:2026-10-19");
+  });
+
   it("runs only the workspaces asked for", async () => {
-    expect(await runDailyJobs(db, { now: MONDAY_MANILA, workspaceIds: [newYork] })).toEqual({
+    expect(
+      await runDailyJobs(db, { force: true, now: MONDAY_MANILA, workspaceIds: [newYork] }),
+    ).toEqual({
       reminders: 0,
       targets: 0,
       budgets: 0,
       invoices: { created: 0, sent: 0, overdue: 0 },
     });
-    expect(await runDailyJobs(db, { now: MONDAY_MANILA, workspaceIds: [manila] })).toEqual({
+    expect(
+      await runDailyJobs(db, { force: true, now: MONDAY_MANILA, workspaceIds: [manila] }),
+    ).toEqual({
       reminders: 1,
       targets: 0,
       budgets: 0,
@@ -216,7 +287,9 @@ describe("overdue invoices (Phase 6d)", () => {
       .insert(payment)
       .values({ id: randomUUID(), invoiceId: paid, date: "2026-10-20", amountMinor: 10000 });
     await sentInvoice(manila, 10000, "2026-10-26"); // not due yet
-    expect(await runDailyJobs(db, { now: MONDAY_MANILA, workspaceIds: [manila] })).toMatchObject({
+    expect(
+      await runDailyJobs(db, { force: true, now: MONDAY_MANILA, workspaceIds: [manila] }),
+    ).toMatchObject({
       invoices: { created: 0, sent: 0, overdue: 1 },
     });
     const owner = await db.query.user.findFirst({ where: (t, { eq: e }) => e(t.id, ids.owner!) });
@@ -227,6 +300,7 @@ describe("overdue invoices (Phase 6d)", () => {
     expect(rows[0]?.subject).toContain(`INV-${due.slice(0, 6)}`);
     expect(
       await runDailyJobs(db, {
+        force: true,
         now: new Date(MONDAY_MANILA.getTime() + 3_600_000),
         workspaceIds: [manila],
       }),
@@ -239,7 +313,7 @@ describe("overdue invoices (Phase 6d)", () => {
     await settings(quiet, { timezone: "Asia/Manila", approvalEnabled: false });
     const due = await sentInvoice(quiet, 5000);
     failing.workspaceId = manila;
-    const result = await runDailyJobs(db, { now: MONDAY_MANILA });
+    const result = await runDailyJobs(db, { force: true, now: MONDAY_MANILA });
     expect(result.invoices.overdue).toBe(1);
     expect((await overdueRows()).map((r) => r.kind)).toEqual([`invoice.overdue:${due}`]);
     // Manila's own reminder, sent before its failure, stands.
@@ -250,7 +324,7 @@ describe("overdue invoices (Phase 6d)", () => {
     const quiet = (await createTestWorkspace(db, "Quiet", ids.owner!)).id;
     await settings(quiet, { timezone: "Asia/Manila", approvalEnabled: false });
     const due = await sentInvoice(quiet, 5000);
-    expect(await runDailyJobs(db, { now: MONDAY_MANILA })).toEqual({
+    expect(await runDailyJobs(db, { force: true, now: MONDAY_MANILA })).toEqual({
       reminders: 1,
       targets: 0,
       budgets: 0,

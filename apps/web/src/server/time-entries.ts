@@ -59,7 +59,13 @@ import type {
 } from "@/lib/tracker-types";
 
 import { WorkspaceAccessError } from "./access-error";
-import { assertWritable, invoicedLockedReason, lockedReasons } from "./entry-guard";
+import {
+  assertWritable,
+  invoicedLockedReason,
+  lockedReasons,
+  type WriteRules,
+  writeRulesOf,
+} from "./entry-guard";
 import { timerLock } from "./person-lock";
 import { DetailUnusableError, TimeEntryError } from "./entry-error";
 import { CatalogError } from "./catalog/errors";
@@ -928,6 +934,29 @@ export async function deleteEntries(
   return db.transaction((tx) => softDelete(tx, scope, ids, opts));
 }
 
+/**
+ * Deletes entries of several people (`scopesForEntries`) in one transaction:
+ * if any needs a note (or is refused), nothing is deleted, so a cancelled note
+ * prompt never leaves half a delete behind. People's locks are taken first,
+ * in one order, as a bulk edit takes them.
+ */
+export async function deleteEntriesOfOwners(
+  db: Database,
+  groups: { scope: EntryScope; ids: string[] }[],
+  opts: WriteNote = {},
+): Promise<{ deleted: string[] }> {
+  if (groups.length === 0) return { deleted: [] };
+  return db.transaction(async (tx) => {
+    const owners = [...new Set(groups.map((g) => g.scope.userId))].sort();
+    for (const userId of owners) {
+      await tx.execute(timerLock(groups[0]!.scope.workspaceId, userId));
+    }
+    const deleted: string[] = [];
+    for (const g of groups) deleted.push(...(await softDelete(tx, g.scope, g.ids, opts)).deleted);
+    return { deleted };
+  });
+}
+
 async function softDelete(
   db: Executor,
   scope: EntryScope,
@@ -1193,6 +1222,7 @@ async function applyBulkPatch(
   patch: BulkEntryPatch,
   now: Date,
   note: string | undefined,
+  rules: WriteRules,
 ): Promise<TimeEntryDTO> {
   await lockOwned(tx, scope, entryId);
   const row = await findOwned(tx, scope, entryId);
@@ -1216,7 +1246,7 @@ async function applyBulkPatch(
       before: row.start,
       changes: changesOf({ ...row, tagIds: currentTags }, details),
     },
-    { note, now },
+    { note, now, rules },
   );
   if (row.type === "break" && wantsDetails(details)) {
     throw new TimeEntryError("INVALID", "A break has no project, tags or billing.");
@@ -1289,10 +1319,12 @@ export async function bulkUpdateEntries(
     }
     const failures: string[] = [];
     const updated: TimeEntryDTO[] = [];
+    // The workspace's write rules once for the whole edit, not per entry.
+    const rules = await writeRulesOf(tx, groups[0]!.scope.workspaceId);
     for (const { scope, ids } of groups) {
       for (const id of ids) {
         try {
-          updated.push(await applyBulkPatch(tx, scope, id, patch, now, opts.note));
+          updated.push(await applyBulkPatch(tx, scope, id, patch, now, opts.note, rules));
         } catch (error) {
           // A missing note is asked for once, for the whole edit.
           if (!(error instanceof TimeEntryError) || error.code === "NOTE_REQUIRED") throw error;

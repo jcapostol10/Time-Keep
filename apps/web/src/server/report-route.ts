@@ -67,6 +67,8 @@ export interface ReportRouteArgs {
 export interface RoutePermission {
   action: Action;
   resource?: (access: WorkspaceContext) => Resource;
+  /** Also within the Reports page: a hidden Reports page hides the route too. */
+  reportsPage?: boolean;
 }
 
 const REPORTS_PAGE: RoutePermission = {
@@ -96,6 +98,9 @@ export async function reportRoute<T>(
 ): Promise<Response> {
   try {
     const access = await requireWorkspaceAccess(workspaceSlug);
+    if (permission.reportsPage) {
+      await authorize(access, REPORTS_PAGE.action, REPORTS_PAGE.resource!(access));
+    }
     const viewer = await authorize(
       access,
       permission.action,

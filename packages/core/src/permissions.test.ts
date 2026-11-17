@@ -154,7 +154,6 @@ const TABLE: Row[] = [
   ["approval.review", approval(MANAGED), true, true, false, false],
   ["approval.review", approval(ME), true, true, false, false],
   ["approval.editLocked", NONE, true, true, false, false],
-  ["lock.manage", NONE, true, true, false, false],
   // Phase 5b: time off, attendance, capacity and targets.
   ["timeOff.request", person(ME), true, true, true, true],
   ["timeOff.request", person(OTHER), false, false, false, false],

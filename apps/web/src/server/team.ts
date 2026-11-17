@@ -13,9 +13,13 @@ import {
   type Database,
   desc,
   eq,
+  holiday,
+  holidayAssignee,
   inArray,
   invitation,
   invitationGroup,
+  kiosk,
+  kioskAssignee,
   kioskCredential,
   lte,
   managedGroup,
@@ -26,6 +30,10 @@ import {
   projectMember,
   rate,
   sql,
+  targetRule,
+  targetRuleAssignee,
+  timeOffPolicy,
+  timeOffPolicyAssignee,
   user,
   userGroup,
   userGroupMember,
@@ -40,6 +48,7 @@ import type { Viewer } from "./catalog/viewer";
 import { timerLock } from "./person-lock";
 import { getRunningEntry, stopTimer } from "./time-entries";
 import { WorkspaceAccessError } from "./access-error";
+import { dropOrphanedHolidays, holidaysAssignedTo } from "./time-off/holiday-orphans";
 
 /**
  * Running a team: roles, deactivation, removal, ownership and a manager's
@@ -187,6 +196,34 @@ export async function removeMember(db: Database, viewer: Viewer, userId: string)
     await tx
       .delete(kioskCredential)
       .where(and(eq(kioskCredential.workspaceId, ws), eq(kioskCredential.userId, userId)));
+    // Assignments name the person directly: a re-invited member starts with none.
+    const kiosksHere = sql`(select ${kiosk.id} from ${kiosk} where ${kiosk.workspaceId} = ${ws})`;
+    const policiesHere = sql`(select ${timeOffPolicy.id} from ${timeOffPolicy} where ${timeOffPolicy.workspaceId} = ${ws})`;
+    const holidaysHere = sql`(select ${holiday.id} from ${holiday} where ${holiday.workspaceId} = ${ws})`;
+    const rulesHere = sql`(select ${targetRule.id} from ${targetRule} where ${targetRule.workspaceId} = ${ws})`;
+    await tx
+      .delete(kioskAssignee)
+      .where(and(eq(kioskAssignee.userId, userId), inArray(kioskAssignee.kioskId, kiosksHere)));
+    await tx
+      .delete(timeOffPolicyAssignee)
+      .where(
+        and(
+          eq(timeOffPolicyAssignee.userId, userId),
+          inArray(timeOffPolicyAssignee.policyId, policiesHere),
+        ),
+      );
+    const theirHolidays = await holidaysAssignedTo(tx, ws, { userId });
+    await tx
+      .delete(holidayAssignee)
+      .where(
+        and(eq(holidayAssignee.userId, userId), inArray(holidayAssignee.holidayId, holidaysHere)),
+      );
+    await dropOrphanedHolidays(tx, theirHolidays);
+    await tx
+      .delete(targetRuleAssignee)
+      .where(
+        and(eq(targetRuleAssignee.userId, userId), inArray(targetRuleAssignee.ruleId, rulesHere)),
+      );
     await tx
       .delete(membership)
       .where(and(eq(membership.workspaceId, ws), eq(membership.userId, userId)));

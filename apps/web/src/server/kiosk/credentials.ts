@@ -108,7 +108,6 @@ export async function credentialStatuses(
       workspaceId: workspace.id,
       workspaceName: workspace.name,
       slug: workspace.slug,
-      pinSetAt: kioskCredential.pinSetAt,
       pinHash: kioskCredential.pinHash,
       qrTokenHash: kioskCredential.qrTokenHash,
     })
@@ -135,7 +134,6 @@ export async function credentialStatuses(
     workspaceName: r.workspaceName,
     slug: r.slug,
     hasPin: r.pinHash !== null,
-    pinSetAt: r.pinSetAt?.toISOString() ?? null,
     hasQr: r.qrTokenHash !== null,
   }));
 }

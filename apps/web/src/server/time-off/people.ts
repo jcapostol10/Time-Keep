@@ -92,10 +92,15 @@ export async function peopleContext(
     ? await db
         .select({ userId: userGroupMember.userId, groupId: userGroupMember.groupId })
         .from(userGroupMember)
+        // This workspace's groups only (a person can be in groups elsewhere).
+        .innerJoin(userGroup, eq(userGroup.id, userGroupMember.groupId))
         .where(
-          inArray(
-            userGroupMember.userId,
-            rows.map((r) => r.userId),
+          and(
+            eq(userGroup.workspaceId, zone.id),
+            inArray(
+              userGroupMember.userId,
+              rows.map((r) => r.userId),
+            ),
           ),
         )
     : [];

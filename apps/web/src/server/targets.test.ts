@@ -1,10 +1,11 @@
 import type { TargetRuleInput } from "@timekeep/core";
-import { and, emailOutbox, eq, like, timeOffPolicy, userSettings } from "@timekeep/db";
+import { and, emailOutbox, eq, like, membership, timeOffPolicy, userSettings } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb } from "../../test/db";
 import { setUpTimeOffCast, type TimeOffCast } from "../../test/time-off-fixtures";
 import { runDailyJobs } from "./daily-jobs";
+import { removeMember } from "./team";
 import { deleteTargetRule, listTargetRules, saveTargetRule } from "./targets";
 import { createManualEntry } from "./time-entries";
 import { saveHoliday } from "./time-off/holidays";
@@ -99,7 +100,11 @@ describe("the daily job's targets", () => {
     await work("max", MONDAY, 8);
     await work("olga", MONDAY, 8);
     await work("ann", MONDAY, 8);
-    const result = await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    const result = await runDailyJobs(db, {
+      force: true,
+      now: TUESDAY_MANILA,
+      workspaceIds: [cast.wsId],
+    });
     expect(result).toEqual({
       reminders: 0,
       targets: 1,
@@ -111,6 +116,33 @@ describe("the daily job's targets", () => {
     expect(mail?.kind).toMatch(new RegExp(`^target:.+:${cast.ids.bob}:2026-11-02$`));
   });
 
+  it("does not remind about a day before the person joined", async () => {
+    await saveTargetRule(
+      db,
+      await cast.viewer("ann"),
+      rule({ everyone: false, userIds: [cast.ids.bob] }),
+    );
+    // Bob joined on Tuesday, so Monday's empty day is not his.
+    await db
+      .update(membership)
+      .set({ createdAt: TUESDAY_MANILA })
+      .where(and(eq(membership.workspaceId, cast.wsId), eq(membership.userId, cast.ids.bob)));
+    await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    expect(await targetMail()).toEqual([]);
+  });
+
+  it("a rule that named only a removed member applies to nobody, not to everyone", async () => {
+    await saveTargetRule(
+      db,
+      await cast.viewer("ann"),
+      rule({ everyone: false, userIds: [cast.ids.bob] }),
+    );
+    await removeMember(db, await cast.viewer("olga"), cast.ids.bob);
+    // Nobody else tracked anything on Monday: an everyone rule would remind them all.
+    await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    expect(await targetMail()).toEqual([]);
+  });
+
   it("sends nothing to someone who muted target reminders", async () => {
     await saveTargetRule(
       db,
@@ -119,7 +151,7 @@ describe("the daily job's targets", () => {
     );
     await db.insert(userSettings).values({ userId: cast.ids.bob, muteTargetReminders: true });
     await work("bob", MONDAY, 6);
-    await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
     expect(await targetMail()).toEqual([]);
   });
 
@@ -131,7 +163,7 @@ describe("the daily job's targets", () => {
     );
     await db.insert(userSettings).values({ userId: cast.ids.bob, muteTargetReminders: true });
     await work("bob", MONDAY, 11);
-    await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
     const to = (await targetMail()).map((m) => m.toAddress).sort();
     expect(to).toEqual([await emailOf("olga"), await emailOf("ann"), await emailOf("max")].sort());
   });
@@ -146,7 +178,7 @@ describe("the daily job's targets", () => {
       userIds: [],
       groupIds: [cast.cebuId],
     });
-    await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
     expect(await targetMail()).toEqual([]);
   });
 
@@ -157,9 +189,9 @@ describe("the daily job's targets", () => {
       rule({ period: "WEEK", threshold: "40", everyone: false, userIds: [cast.ids.bob] }),
     );
     await work("bob", MONDAY, 6);
-    await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
     expect(await targetMail()).toEqual([]);
-    await runDailyJobs(db, { now: NEXT_MONDAY_MANILA, workspaceIds: [cast.wsId] });
+    await runDailyJobs(db, { force: true, now: NEXT_MONDAY_MANILA, workspaceIds: [cast.wsId] });
     const [mail] = await targetMail();
     expect(mail?.kind).toMatch(/:2026-11-02$/);
   });
@@ -171,8 +203,9 @@ describe("the daily job's targets", () => {
       rule({ everyone: false, userIds: [cast.ids.bob] }),
     );
     await work("bob", MONDAY, 6);
-    await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
     const again = await runDailyJobs(db, {
+      force: true,
       now: new Date(TUESDAY_MANILA.getTime() + H * 1000),
       workspaceIds: [cast.wsId],
     });
@@ -187,10 +220,11 @@ describe("the daily job's targets", () => {
       await cast.viewer("ann"),
       rule({ everyone: false, userIds: [cast.ids.bob] }),
     );
-    await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
     expect(await targetMail()).toEqual([]);
     // Tuesday 3 Nov 17:00 in New York: Monday is over.
     await runDailyJobs(db, {
+      force: true,
       now: new Date("2026-11-03T22:00:00.000Z"),
       workspaceIds: [cast.wsId],
     });
@@ -199,7 +233,9 @@ describe("the daily job's targets", () => {
 
   it("ignores an inactive rule", async () => {
     await saveTargetRule(db, await cast.viewer("ann"), rule({ active: false }));
-    expect(await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] })).toEqual({
+    expect(
+      await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] }),
+    ).toEqual({
       reminders: 0,
       targets: 0,
       budgets: 0,
@@ -250,7 +286,7 @@ describe("targets around time off and days off (review fixes)", () => {
     for (const day of ["2026-11-04", "2026-11-05", "2026-11-06"]) {
       await work("bob", `${day}T01:00:00.000Z`, 8);
     }
-    await runDailyJobs(db, { now: NEXT_MONDAY_MANILA, workspaceIds: [cast.wsId] });
+    await runDailyJobs(db, { force: true, now: NEXT_MONDAY_MANILA, workspaceIds: [cast.wsId] });
     expect(await targetMail()).toEqual([]);
   });
 
@@ -262,7 +298,7 @@ describe("targets around time off and days off (review fixes)", () => {
     );
     await vacation("2026-11-02", "2026-11-02", true);
     await work("bob", "2026-11-02T01:00:00.000Z", 4);
-    await runDailyJobs(db, { now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
     expect(await targetMail()).toEqual([]);
   });
 
@@ -275,6 +311,7 @@ describe("targets around time off and days off (review fixes)", () => {
     // Sunday 1 Nov, 08:00 in Manila; the job runs Monday 06:00.
     await work("bob", "2026-11-01T00:00:00.000Z", 11);
     await runDailyJobs(db, {
+      force: true,
       now: new Date("2026-11-01T22:00:00.000Z"),
       workspaceIds: [cast.wsId],
     });

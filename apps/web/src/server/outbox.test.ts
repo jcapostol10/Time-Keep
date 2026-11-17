@@ -3,7 +3,14 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { emailOutbox, eq } from "@timekeep/db";
 
 import { connectTestDb, truncateAll } from "../../test/db";
-import { drainAll, drainOutbox, enqueueEmail, outboxAudience, type RenderedEmail } from "./outbox";
+import {
+  blankOldBodies,
+  drainAll,
+  drainOutbox,
+  enqueueEmail,
+  outboxAudience,
+  type RenderedEmail,
+} from "./outbox";
 
 const h = connectTestDb();
 const db = h.db;
@@ -226,5 +233,33 @@ describe("clocks", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("retention", () => {
+  it("blanks the bodies of settled rows after 30 days and keeps the rows, their kinds being dedupe keys", async () => {
+    await enqueueEmail(db, { ...mail("old@test.local"), kind: "approval.unsubmitted:2026-01-05" });
+    await enqueueEmail(db, {
+      ...mail("recent@test.local"),
+      kind: "approval.unsubmitted:2026-03-02",
+    });
+    await enqueueEmail(db, { ...mail("waiting@test.local"), kind: "test" });
+    const now = new Date("2026-04-01T00:00:00.000Z");
+    const set = (to: string, status: "SENT" | "PENDING", daysAgo: number) =>
+      db
+        .update(emailOutbox)
+        .set({ status, createdAt: new Date(now.getTime() - daysAgo * 86_400_000) })
+        .where(eq(emailOutbox.toAddress, to));
+    await set("old@test.local", "SENT", 40);
+    await set("recent@test.local", "SENT", 10);
+    await set("waiting@test.local", "PENDING", 40);
+
+    expect(await blankOldBodies(db, now)).toBe(1);
+    const rows = await db.select().from(emailOutbox).orderBy(emailOutbox.toAddress);
+    expect(rows.map((r) => [r.toAddress, r.kind, r.html === "", r.text === ""])).toEqual([
+      ["old@test.local", "approval.unsubmitted:2026-01-05", true, true],
+      ["recent@test.local", "approval.unsubmitted:2026-03-02", false, false],
+      ["waiting@test.local", "test", false, false],
+    ]);
   });
 });

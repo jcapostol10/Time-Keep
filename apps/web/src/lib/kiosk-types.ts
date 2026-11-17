@@ -7,6 +7,8 @@ export interface KioskDTO {
   name: string;
   projectId: string | null;
   taskId: string | null;
+  /** A tag every punch carries. */
+  tagId: string | null;
   everyone: boolean;
   userIds: string[];
   groupIds: string[];
@@ -29,7 +31,6 @@ export interface CredentialStatus {
   workspaceName: string;
   slug: string;
   hasPin: boolean;
-  pinSetAt: string | null;
   hasQr: boolean;
 }
 

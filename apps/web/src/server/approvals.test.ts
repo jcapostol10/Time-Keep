@@ -6,6 +6,7 @@ import {
   eq,
   managedUser,
   projectMember,
+  sql,
   workspaceSettings,
 } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -281,6 +282,20 @@ describe("reviewRequests", () => {
     expect(await outboxTo(ids.bob!)).toHaveLength(1);
   });
 
+  it("refuses to approve while the person's timer runs in the period", async () => {
+    await entry("ann", "2026-10-26T03:00:00.000Z", 60);
+    const anns = await submitPeriod(db, await viewer("ann"), "2026-10-26", NOW);
+    // An admin may start a timer into their own pending period, with a note.
+    await startTimer(db, await viewer("ann"), { ...work, projectId: null }, NOW, {
+      note: "On call",
+    });
+    await expect(
+      reviewRequests(db, await viewer("olga"), { ids: [anns.id], decision: "APPROVE" }, NOW),
+    ).rejects.toThrow("Ann Admin has a timer running in this period.");
+    const [row] = await db.select().from(approvalRequest).where(eq(approvalRequest.id, anns.id));
+    expect(row?.status).toBe("PENDING");
+  });
+
   it("never lets a manager approve their own, but lets an admin", async () => {
     await setRules({ approvalReviewers: "TEAM_MANAGERS" });
     await entry("max", "2026-10-20T03:00:00.000Z", 60);
@@ -430,6 +445,15 @@ describe("listApprovals", () => {
       }),
     ]);
   });
+
+  it("shows a project manager the people whose closed period is all on their projects", async () => {
+    await setRules({ approvalReviewers: "PROJECT_MANAGERS" });
+    const rows = (await listApprovals(db, await viewer("pat"), { tab: "unsubmitted" }, NOW)) as {
+      userName: string;
+      periodStart: string;
+    }[];
+    expect(rows.map((r) => [r.userName, r.periodStart])).toEqual([["Carol Member", "2026-10-19"]]);
+  });
 });
 
 describe("periodView", () => {
@@ -488,6 +512,30 @@ describe("a submit racing an edit", () => {
 });
 
 describe("approval settings", () => {
+  it("a submit waits for a settings change in flight and sees approval off", async () => {
+    const other = connectTestDb();
+    try {
+      const bob = await viewer("bob");
+      let submit: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // The settings save holds the row while it turns approval off.
+        await tx.execute(
+          sql`select 1 from workspace_settings where workspace_id = ${wsId} for update`,
+        );
+        submit = submitPeriod(other.db, bob, LAST_WEEK, NOW);
+        await new Promise((r) => setTimeout(r, 400));
+        await tx
+          .update(workspaceSettings)
+          .set({ approvalEnabled: false })
+          .where(eq(workspaceSettings.workspaceId, wsId));
+      });
+      await expect(submit).rejects.toThrow("Approval is off in this workspace.");
+      expect(await db.select().from(approvalRequest)).toEqual([]);
+    } finally {
+      await other.close();
+    }
+  });
+
   it("refuses a new period type while a request is pending", async () => {
     await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
     const current = {
@@ -522,6 +570,26 @@ describe("approval settings", () => {
     expect(
       await checkApprovalSettings(db, wsId, current, { ...current, weekStart: 0 }, false),
     ).toEqual({ field: "weekStart", message: "Approve or reject the pending periods first." });
+  });
+
+  it("asks before a new timezone or week start moves approved periods' edges (R7)", async () => {
+    const bobs = await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
+    await reviewRequests(db, await viewer("ann"), { ids: [bobs.id], decision: "APPROVE" }, NOW);
+    const current = {
+      approvalEnabled: true,
+      approvalPeriod: "WEEKLY",
+      timezone: "Asia/Manila",
+      weekStart: 1,
+    };
+    expect(
+      await checkApprovalSettings(db, wsId, current, { ...current, timezone: "UTC" }, false),
+    ).toEqual({
+      field: "confirmTimezoneChange",
+      message: "1 approved period will move by the change: its first and last days shift.",
+    });
+    expect(
+      await checkApprovalSettings(db, wsId, current, { ...current, weekStart: 0 }, false, true),
+    ).toBeNull();
   });
 
   it("asks before turning approval off, then withdraws the pending periods and keeps approved ones", async () => {

@@ -8,6 +8,7 @@ import {
   requireWorkspaceAccess,
   routeErrorResponse,
 } from "@/server/workspace-access";
+import { WorkspaceAccessError } from "@/server/access-error";
 import { CatalogError } from "@/server/catalog/errors";
 
 /**
@@ -39,11 +40,16 @@ export async function GET(
       const preview = await previewTimeOff(getDb(), viewer, parsed.data);
       return Response.json({ preview }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
-      if (error instanceof CatalogError) {
-        return Response.json(
-          { error: error.message },
-          { headers: { "Cache-Control": "no-store" } },
-        );
+      // A policy the person is no longer on (unassigned or archived since the
+      // dialog loaded) is said in words rather than left as a failed fetch.
+      const message =
+        error instanceof CatalogError
+          ? error.message
+          : error instanceof WorkspaceAccessError && error.status === 404
+            ? "This policy is not available to you."
+            : null;
+      if (message) {
+        return Response.json({ error: message }, { headers: { "Cache-Control": "no-store" } });
       }
       throw error;
     }

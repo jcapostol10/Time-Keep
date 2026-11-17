@@ -87,11 +87,11 @@ describe("clock-in photos", () => {
       from: "2026-10-27T16:00:00.000Z",
       to: "2026-10-28T16:00:00.000Z",
     };
-    const rows = async (who: "ann" | "max") =>
+    const rows = async (who: "ann" | "max", shared = false) =>
       (
         await detailedReport(
           db,
-          await cast.viewer(who),
+          { ...(await cast.viewer(who)), shared },
           query,
           prefs,
           { sort: "start", dir: "asc" },
@@ -100,6 +100,8 @@ describe("clock-in photos", () => {
       ).entries.map((e) => e.photo);
     expect(await rows("ann")).toEqual([true]);
     expect(await rows("max")).toEqual([false]);
+    // A share link reads with its creator's role, but its rows are public.
+    expect(await rows("ann", true)).toEqual([false]);
   });
 
   it("are purged after 90 days, and attempts after a day", async () => {

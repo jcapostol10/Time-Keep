@@ -15,6 +15,7 @@ import {
   kioskAssignee,
   project,
   sql,
+  tag,
   task,
   userGroupMember,
 } from "@timekeep/db";
@@ -65,6 +66,7 @@ function toDTO(k: KioskRow, assignees: { userId: string | null; groupId: string 
     name: k.name,
     projectId: k.projectId,
     taskId: k.taskId,
+    tagId: k.tagId,
     everyone: k.everyone,
     userIds: assignees.flatMap((a) => (a.userId ? [a.userId] : [])),
     groupIds: assignees.flatMap((a) => (a.groupId ? [a.groupId] : [])),
@@ -105,7 +107,7 @@ async function kioskDTO(db: DbExecutor, k: KioskRow): Promise<KioskDTO> {
   return toDTO(k, (await assigneesOf(db, [k.id])).get(k.id) ?? []);
 }
 
-/** The defaults are this workspace's: the project, and the task in that project. */
+/** The defaults are this workspace's: the project, the task in that project, and a live tag. */
 async function assertDefaults(db: DbExecutor, workspaceId: string, input: KioskInput) {
   if (input.projectId) {
     const [p] = await db
@@ -133,6 +135,14 @@ async function assertDefaults(db: DbExecutor, workspaceId: string, input: KioskI
       );
     if (!t) throw new CatalogError("INVALID", "Pick a task of the kiosk's project.");
   }
+  if (input.tagId) {
+    const [g] = await db
+      .select({ id: tag.id, archived: tag.archived })
+      .from(tag)
+      .where(and(eq(tag.id, input.tagId), eq(tag.workspaceId, workspaceId)));
+    if (!g) throw new CatalogError("INVALID", "Pick a tag from this workspace.");
+    if (g.archived) throw new CatalogError("INVALID", "That tag is archived: pick another.");
+  }
   if (!input.everyone) {
     await assertPeopleAndGroups(db, workspaceId, input.userIds, input.groupIds);
   }
@@ -155,6 +165,7 @@ function settingsOf(viewer: Viewer, input: KioskInput) {
     name: input.name,
     projectId: input.projectId,
     taskId: input.taskId,
+    tagId: input.tagId,
     everyone: input.everyone,
     sessionTimeoutSeconds: input.sessionTimeoutSeconds,
     showLogo: input.showLogo,

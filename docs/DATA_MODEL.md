@@ -17,7 +17,6 @@ workspace ──< client
 workspace ──< project >── client   (nullable, ON DELETE RESTRICT)
 project ──< project_member >── user   (who may see a PRIVATE project)
 project ──< project_favorite >── user
-project ──< task ──< task_assignee >── user   (out of the Drizzle schema 2026-11-17; dropped by the next contract migration)
 task ──< task_group >── user_group            (tasks by group, decision 11)
 workspace ──< tag
 workspace ──< time_entry >── user
@@ -97,7 +96,6 @@ One row per workspace, created in the same transaction as the workspace.
 | hidden_pages | text[] of `projects`, `team`, `reports` | `{}` |
 | members_see_team_time | boolean | `false` |
 | project_creators, client_creators, tag_creators | enum `creator_setting` (`admins`, `managers`, `everyone`) | `admins` |
-| task_creators | enum `creator_setting` | `admins`; **out of the Drizzle schema since 2026-11-17** (unread and unwritten; NOT NULL with a default, so inserts that leave it out still succeed); dropped by the next contract migration |
 | task_visibility | enum `task_visibility` (`EVERYONE`, `BY_GROUP`) | `EVERYONE` (0012); `BY_GROUP` shows members only the tasks of their groups (decision 11) |
 | required_fields | text[] of `project`, `task`, `tag`, `description` | `{}` |
 | force_timer | boolean | `false` |
@@ -198,7 +196,7 @@ Both `(project_id → project cascade, user_id → user cascade)` with a composi
 | estimate_seconds | bigint? | an optional time estimate (0017, Phase 6b), shown on the Tasks and Budget tabs; tasks never add up into the project's estimate |
 | created_at, updated_at | timestamptz | |
 
-`task_assignee` `(task_id, user_id)` is **out of the Drizzle schema since 2026-11-17** (the expand half: no code reads or writes it, and `TaskDTO` lost `assigneeIds`); the next contract migration drops the table. `test/db.ts` still truncates it until then.
+`task_assignee` (Phase 2) and `workspace_settings.task_creators` (Phase 4b) were dropped by migration 0021 (2026-11-17), after the code stopped reading and writing them (tasks by group replaced both).
 
 ### task_group
 
@@ -599,6 +597,7 @@ A shared device at `/kiosk/<token>`, needing no login.
 | token_rotated_at | timestamptz | now; a punch ticket carries it, so rotating retires tickets already issued |
 | project_id | text? → project (set null) | the default project of a punch |
 | task_id | text? → task (set null) | the default task (in that project) |
+| tag_id | text? → tag (set null) | the default tag every punch carries (0022), so a workspace that requires a tag can clock out; an archived or foreign tag is refused at save |
 | everyone | boolean | true; otherwise the rows of `kiosk_assignee` (users or groups, exactly one per row) |
 | session_timeout_seconds | smallint | 15 (5–300): back to the name list after a punch |
 | show_logo | boolean | true |
@@ -614,6 +613,10 @@ One row per (workspace, user), unique: `pin_hash` (Better Auth's scrypt, 4–6 d
 ### kiosk_attempt (Phase 5c)
 
 Every PIN or QR check: `kiosk_id` (cascade), `user_id?` (cascade; null for an unknown QR code), `method` enum `kiosk_attempt_method` (`PIN`, `QR`), `success`, `created_at`. Indexes `(kiosk_id, created_at)` and `(kiosk_id, user_id, created_at)`. Five failures for a person since their last success within 15 minutes lock them on that kiosk; 30 on the kiosk pause its PIN entry. Rows older than a day are deleted by the daily job.
+
+### daily_job_run (0022, 2026-11-17)
+
+The hourly cron runs each workspace's daily jobs once per local day, at or after 07:00 in its timezone. `workspace_id` (cascade) and `local_date` (date) are the primary key, plus `claimed_at` (default now) and `finished_at?`. A run claims its day with `INSERT … ON CONFLICT DO NOTHING RETURNING`, which also serializes a cron delivered twice; a claim left unfinished for two hours may be taken again.
 
 ### kiosk_photo (Phase 5c)
 
