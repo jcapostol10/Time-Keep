@@ -58,6 +58,10 @@ export async function GET(
         : report === "receipts"
           ? await authorize(access, "expense.read", own)
           : await authorize(access, "page.view", { kind: "page", page: "reports" });
+    // Attendance is a Reports tab: a hidden Reports page hides its export too.
+    if (report === "attendance") {
+      await authorize(access, "page.view", { kind: "page", page: "reports" });
+    }
     // Profit is cost: only for those the matrix lets see it (Phase 6a).
     if (report === "profit") await authorize(access, "report.viewCosts");
     const query = parseReportQuery(params);

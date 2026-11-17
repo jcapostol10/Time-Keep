@@ -1,4 +1,5 @@
 import { datasetHolidays } from "@timekeep/core/holiday-import";
+import { eq, holiday } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb } from "../../../test/db";
@@ -144,9 +145,32 @@ describe("saveHoliday", () => {
       userIds: [],
       groupIds: [cast.cebuId],
     });
-    expect(await listHolidays(db, await cast.viewer("bob"), 2027)).toMatchObject([
+    expect(await listHolidays(db, ann, 2027)).toMatchObject([
       { name: "Cebu Day", groupIds: [cast.cebuId], userIds: [] },
     ]);
+    // A member reads the holiday, not who it applies to.
+    expect(await listHolidays(db, await cast.viewer("bob"), 2027)).toMatchObject([
+      { name: "Cebu Day", groupIds: [], userIds: [] },
+    ]);
+  });
+
+  it("clears Estimated when an admin saves the holiday's date", async () => {
+    const ann = await cast.viewer("ann");
+    const saved = await saveHoliday(db, ann, {
+      date: "2027-04-02",
+      name: "Good Friday",
+      repeatsYearly: false,
+      userIds: [],
+      groupIds: [],
+    });
+    await db.update(holiday).set({ estimated: true }).where(eq(holiday.id, saved.id));
+    const confirmed = await saveHoliday(
+      db,
+      ann,
+      { date: "2027-04-02", name: "Good Friday", repeatsYearly: false, userIds: [], groupIds: [] },
+      saved.id,
+    );
+    expect(confirmed.estimated).toBe(false);
   });
 
   it("lists a yearly holiday in later years on that year's date", async () => {

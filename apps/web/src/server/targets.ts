@@ -247,13 +247,14 @@ export async function evaluateTargets(
   const to = windows[0]!.to;
   const userIds = people.map((p) => p.userId);
 
-  // Everyone's own days lie within a day of the workspace's.
+  // Everyone's own days lie within two days of the workspace's (zones are up to
+  // 26 hours apart).
   const bounds = {
     from: zonedDateTimeToInstant(
-      { date: addDaysToKey(from, -1), hours: 0, minutes: 0 },
+      { date: addDaysToKey(from, -2), hours: 0, minutes: 0 },
       zone.timezone,
     ),
-    to: zonedDateTimeToInstant({ date: addDaysToKey(to, 2), hours: 0, minutes: 0 }, zone.timezone),
+    to: zonedDateTimeToInstant({ date: addDaysToKey(to, 3), hours: 0, minutes: 0 }, zone.timezone),
   };
   const [work, approved, muted, recipients] = await Promise.all([
     workByPersonDay(db, zone.id, zone.timezone, userIds, bounds),

@@ -120,6 +120,11 @@ export function RequestDialog({ slug, onClose }: { slug: string; onClose: () => 
                 ))}
               </SelectContent>
             </Select>
+            {data && policies.length === 0 ? (
+              <p className="text-muted-foreground text-sm">
+                No time off policy applies to you yet. Ask an admin to add you to one.
+              </p>
+            ) : null}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">

@@ -16,6 +16,7 @@ import {
   timeOffPolicyAssignee,
   timeOffRequest,
   userGroup,
+  userGroupMember,
 } from "@timekeep/db";
 
 import type { PolicyDTO } from "@/lib/time-off-types";
@@ -144,10 +145,14 @@ export async function listPolicies(
     rows.map((p) => p.id),
   );
   if (manages) return rows.map((p) => toDTO(p, assignees.get(p.id) ?? [], true));
-  const groups = await db.query.userGroupMember.findMany({
-    where: (m, { eq: e }) => e(m.userId, viewer.userId),
-    columns: { groupId: true },
-  });
+  // This workspace's groups only.
+  const groups = await db
+    .select({ groupId: userGroupMember.groupId })
+    .from(userGroupMember)
+    .innerJoin(userGroup, eq(userGroup.id, userGroupMember.groupId))
+    .where(
+      and(eq(userGroupMember.userId, viewer.userId), eq(userGroup.workspaceId, viewer.workspaceId)),
+    );
   const me = { userId: viewer.userId, groupIds: new Set(groups.map((g) => g.groupId)) };
   return rows
     .filter((p) => assignedAt(p, assignees.get(p.id) ?? [], me as PersonContext) !== null)

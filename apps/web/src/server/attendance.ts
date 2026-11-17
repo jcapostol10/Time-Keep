@@ -121,10 +121,11 @@ export async function attendanceReport(
   if (candidates.length === 0) return { from, to, label: range.label, people: [] };
   const candidateIds = candidates.map((p) => p.userId);
 
-  // Everyone's days lie within a day of the viewer's range, whatever their timezone.
+  // Everyone's days lie within two days of the viewer's range, whatever their
+  // timezone (UTC+14 and UTC−12 are 26 hours apart).
   const bounds = {
-    from: addDaysInZone(range.from, -1, prefs.timezone),
-    to: addDaysInZone(range.to, 1, prefs.timezone),
+    from: addDaysInZone(range.from, -2, prefs.timezone),
+    to: addDaysInZone(range.to, 2, prefs.timezone),
   };
   const [work, approvedAll] = await Promise.all([
     workByPersonDay(db, viewer.workspaceId, zone.timezone, candidateIds, bounds),

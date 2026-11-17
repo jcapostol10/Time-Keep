@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb } from "../../../test/db";
 import { setUpTimeOffCast, type TimeOffCast } from "../../../test/time-off-fixtures";
+import { addAdjustment } from "./adjustments";
 import { listBalances } from "./balances";
 import { timeOffCalendar } from "./calendar";
 import { saveHoliday } from "./holidays";
@@ -154,6 +155,24 @@ describe("requestTimeOff", () => {
     ).rejects.toThrow("This would take Vacation below zero.");
   });
 
+  it("refuses an HOURS request over days with no working day", async () => {
+    const hoursId = (
+      await savePolicy(
+        db,
+        await cast.viewer("ann"),
+        policy({ name: "Hours", unit: "HOURS", allowance: "40" }),
+      )
+    ).id;
+    await expect(
+      requestTimeOff(
+        db,
+        await cast.viewer("bob"),
+        ask("2026-11-07", "2026-11-08", { policyId: hoursId, hours: "4" }),
+        NOW,
+      ),
+    ).rejects.toThrow("These dates have no working days.");
+  });
+
   it("refuses a policy the person is not on with 404", async () => {
     const ann = await cast.viewer("ann");
     const cebuOnly = await savePolicy(
@@ -226,6 +245,25 @@ describe("reviewTimeOff", () => {
     await expect(
       reviewTimeOff(db, max, { ids: [r.id], decision: "APPROVE" }),
     ).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("re-checks the balance at approval, after a negative adjustment", async () => {
+    const ann = await cast.viewer("ann");
+    const r = await requestTimeOff(
+      db,
+      await cast.viewer("bob"),
+      ask("2026-11-09", "2026-11-13"),
+      NOW,
+    );
+    await addAdjustment(
+      db,
+      ann,
+      { policyId: vacationId, userId: cast.ids.bob, amount: "-12", note: "Carried wrongly" },
+      "2026-11-03",
+    );
+    await expect(reviewTimeOff(db, ann, { ids: [r.id], decision: "APPROVE" })).rejects.toThrow(
+      "This would take Bob Member's Vacation below zero.",
+    );
   });
 
   it("needs a note to reject, and keeps it", async () => {

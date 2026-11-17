@@ -27,6 +27,8 @@ export default async function AttendanceReportPage({
     "member",
     `/w/${workspaceSlug}/reports/attendance`,
   );
+  // A Reports tab: a hidden Reports page hides it too.
+  await authorizePage(() => authorize(ctx, "page.view", { kind: "page", page: "reports" }));
   const viewer = await authorizePage(() =>
     authorize(ctx, "attendance.read", { kind: "person", userId: ctx.user.id }),
   );

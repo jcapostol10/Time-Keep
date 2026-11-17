@@ -183,13 +183,22 @@ async function planRequest(
     minutes: policy.unit === "HOURS" ? requestMinutes(input) : null,
   };
   let amountCenti: number;
+  let workingDays: number;
   try {
     const keys = await holidayKeys(tx, zone, person, span.start, span.end);
     amountCenti = countRequestCenti(policy.unit, span, person.capacity, keys);
+    // An HOURS total spreads over the range's working days: with none it would
+    // take balance and show nowhere.
+    workingDays = countRequestCenti(
+      "DAYS",
+      { ...span, halfDay: false, minutes: null },
+      person.capacity,
+      keys,
+    );
   } catch (error) {
     throw new CatalogError("INVALID", (error as Error).message);
   }
-  if (amountCenti === 0) {
+  if (amountCenti === 0 || workingDays === 0) {
     throw new CatalogError("INVALID", "These dates have no working days.");
   }
   const [overlap] = await tx
@@ -349,6 +358,17 @@ export async function reviewTimeOff(
   const zone = await workspaceZone(db, viewer.workspaceId);
   const ids = [...new Set(input.ids)];
   await db.transaction(async (tx) => {
+    // The people's locks first, in one order (a request and an adjustment's
+    // balance read take them too), then the rows.
+    const owners = await tx
+      .selectDistinct({ userId: timeOffRequest.userId })
+      .from(timeOffRequest)
+      .where(
+        and(inArray(timeOffRequest.id, ids), eq(timeOffRequest.workspaceId, viewer.workspaceId)),
+      );
+    for (const userId of owners.map((o) => o.userId).sort()) {
+      await tx.execute(timerLock(viewer.workspaceId, userId));
+    }
     const rows = await selectRequests(tx)
       .where(
         and(inArray(timeOffRequest.id, ids), eq(timeOffRequest.workspaceId, viewer.workspaceId)),
@@ -360,6 +380,24 @@ export async function reviewTimeOff(
       throw new CatalogError("INVALID", "Only pending time off can be approved or rejected.");
     }
     const status = input.decision === "APPROVE" ? "APPROVED" : "REJECTED";
+    // Backlog ruling R6: a balance lowered since the request (an adjustment)
+    // may no longer cover it; pending time, this request's included, counts.
+    if (status === "APPROVED") {
+      const today = localDateKey(new Date(), zone.timezone);
+      for (const r of rows) {
+        const person = await personContext(tx, zone, r.userId);
+        const asOf = r.start > today ? r.start : today;
+        const balance = (await balancesFor(tx, zone, [person], Number(r.start.slice(0, 4)), asOf))
+          .get(person.userId)
+          ?.find((b) => b.assigned.policy.id === r.policyId);
+        if (balance && wouldGoNegative(balance.balance, 0, balance.assigned.policy.allowNegative)) {
+          throw new CatalogError(
+            "INVALID",
+            `This would take ${person.name}'s ${balance.assigned.policy.name} below zero.`,
+          );
+        }
+      }
+    }
     await tx
       .update(timeOffRequest)
       .set({
