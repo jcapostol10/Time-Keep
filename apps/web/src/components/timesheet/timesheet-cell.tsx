@@ -62,13 +62,23 @@ export function TimesheetCell({
 
   async function commit(raw: string) {
     if (readOnly) return;
-    setText(null);
     const trimmed = raw.trim();
     const seconds = trimmed === "" ? 0 : parseDuration(trimmed);
     if (seconds === null) {
+      setText(null);
       toast.error("Enter a duration like 1:30, 1.5 or 90m");
       return;
     }
+    // The new value shows while the write is in flight; the range cache holds it after.
+    setText(seconds === 0 ? "" : formatDuration(seconds, viewer.durationFormat));
+    try {
+      await applyCell(seconds);
+    } finally {
+      setText(null);
+    }
+  }
+
+  async function applyCell(seconds: number) {
     const all = toTimesheetEntries(entries);
     const plan = planCellChange({
       cellEntries: all.filter((e) => cell.entryIds.includes(e.id)),

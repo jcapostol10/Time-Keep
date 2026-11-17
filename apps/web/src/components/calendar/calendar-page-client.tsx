@@ -38,8 +38,11 @@ export function CalendarPageClient({
   to,
   dateKey,
   view: viewParam,
+  fetchFrom,
 }: {
   from: string;
+  /** Where the entry read starts: a day before `from` (the page's hydration key). */
+  fetchFrom: string;
   to: string;
   dateKey: string;
   view: CalendarView | null;
@@ -68,7 +71,7 @@ export function CalendarPageClient({
     [view, weekStart, dateKey, tz],
   );
 
-  const { data: entries = [] } = useRangeEntries(slug, from, to, true, targetKey);
+  const { data: entries = [] } = useRangeEntries(slug, fetchFrom, to, true, targetKey);
   const timeOffBands = useTimeOffBands(
     slug,
     days[0] ?? null,

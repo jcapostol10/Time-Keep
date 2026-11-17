@@ -18,9 +18,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 ### b1 — tracker, timesheet, calendar, catalog, auth, CI
 
 - [ ] **b1** Timesheet rows added by hand live only for the page visit (templates persist); keep them per week in local storage.
-- [ ] **b1** Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands. Timesheet cells likewise show the old value until the refetch lands. Patch the range query before the write.
-- [ ] **b1** Calendar blocks have `role=button` and `tabIndex=0` but no Enter/Space handler, so they cannot be opened from the keyboard.
-- [ ] **b1** The calendar loads entries whose start falls in the week, so an entry begun late on the previous week's last day is not drawn on the first day. Fetch from one day earlier; `blockOnDay` already clips.
 - [ ] **b1** The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; install Playwright's Chromium in the CI job.
 - [ ] **b1** The Detailed report's sort is per visit, not in the URL.
 
@@ -161,6 +158,9 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] Calendar's first day, done 2026-11-17 (backlog cleanup b1): the calendar reads entries from a day before the week, so one begun the evening before is drawn on the first day.
+- [x] Calendar keyboard, done 2026-11-17 (backlog cleanup b1): Enter and Space on a focused block open the editor.
+- [x] Optimistic calendar and timesheet writes, done 2026-11-17 (backlog cleanup b1): moves, resizes, cell edits and deletes patch the person's loaded ranges before the write and go back if it is refused, cancelled at the note prompt, or fails to send; a created entry goes into the range when it lands.
 - [x] The three-workers note, done 2026-11-17 (backlog cleanup b1): it lives in CLAUDE.md's e2e bullets (a spec that writes to the demo tenant must be checked against the read-mostly demo specs).
 - [x] `ci.yml`'s skipped pull_request job, done 2026-11-17 (backlog cleanup b1): the note lives in CLAUDE.md's Deployment section (require the push run's check if branch protection is added).
 - [x] Tasks by group follow-ups, done 2026-11-17 (backlog cleanup b1): the report filters keep a project whose tasks are all hidden from the member (rule 8 is about tracking, not reading); a project that turns private gives its tasks' groups access in the same transaction (`grantTaskGroupsAccess`, rule 9); a manager who creates a project becomes its manager (`project_member.is_manager`), so the CSV import can create a new project's tasks for them in one go. Ruling: becoming the project's manager also opens approvals of other people's time on it, by the existing project-manager rule; intended, as for any project manager.

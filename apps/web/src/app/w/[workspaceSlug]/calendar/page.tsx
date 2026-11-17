@@ -1,4 +1,5 @@
 import {
+  addDaysInZone,
   localDateKey,
   resolveViewerPrefs,
   weekBounds,
@@ -43,16 +44,19 @@ export default async function CalendarPage({
   const { weekStart, weekEnd } = weekBounds(anchor, viewer.timezone, viewer.weekStart);
   const from = weekStart.toISOString();
   const to = weekEnd.toISOString();
+  // From a day earlier: an entry begun the evening before the week is drawn on its first day.
+  const fetchStart = addDaysInZone(weekStart, -1, viewer.timezone);
+  const fetchFrom = fetchStart.toISOString();
 
   const [entries, projects, tagRows, recent] = await Promise.all([
-    listEditableEntriesInRange(db, scope, { from: weekStart, to: weekEnd }),
+    listEditableEntriesInRange(db, scope, { from: fetchStart, to: weekEnd }),
     listPickerProjects(db, scope),
     listTags(db, scope.workspaceId, { includeArchived: false }),
     listRecentDescriptions(db, scope),
   ]);
 
   const queryClient = new QueryClient();
-  queryClient.setQueryData(trackerKeys.range(workspaceSlug, from, to, key), entries);
+  queryClient.setQueryData(trackerKeys.range(workspaceSlug, fetchFrom, to, key), entries);
   queryClient.setQueryData(trackerKeys.people(workspaceSlug), people);
   queryClient.setQueryData<TrackerOptions>(trackerKeys.options(workspaceSlug, key), {
     projects,
@@ -65,7 +69,13 @@ export default async function CalendarPage({
       <PageHeader title="Calendar" />
       <HydrationBoundary state={dehydrate(queryClient)}>
         <TargetProvider target={target}>
-          <CalendarPageClient from={from} to={to} dateKey={dateKey} view={view} />
+          <CalendarPageClient
+            from={from}
+            fetchFrom={fetchFrom}
+            to={to}
+            dateKey={dateKey}
+            view={view}
+          />
         </TargetProvider>
       </HydrationBoundary>
     </>

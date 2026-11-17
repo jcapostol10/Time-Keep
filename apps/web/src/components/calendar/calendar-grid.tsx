@@ -156,6 +156,7 @@ export function CalendarGrid({
                       geometry={b.geometry}
                       layout={layout.get(b.id) ?? { column: 0, columns: 1 }}
                       durationFormat={viewer.durationFormat}
+                      onEdit={onEdit}
                     />
                   ))}
                   {running ? <RunningBlock running={running} dayKey={day} tz={tz} /> : null}
