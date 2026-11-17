@@ -14,13 +14,13 @@ import {
   openInvoices,
   sendInvoice,
 } from "./helpers/invoices";
-import { waitForEmail, waitForEmailAttachments } from "./helpers/mail";
+import { waitForEmail } from "./helpers/mail";
 import { billableOn, setWorkspaceRate } from "./helpers/money";
 import { addManualEntry, pickProject } from "./helpers/tracker";
 
 /**
- * Invoicing's slower flows (Phase 6d): the PDF attachment (Mailpit only), the
- * daily job's recurring and overdue work, and voiding.
+ * Invoicing's slower flows (Phase 6d): the daily job's recurring and overdue
+ * work, and voiding.
  */
 
 const tracker = async (page: Page, slug: string) => {
@@ -29,19 +29,6 @@ const tracker = async (page: Page, slug: string) => {
 };
 
 test.describe("invoices (nightly)", { tag: "@nightly" }, () => {
-  test("the sent email carries the PDF", async ({ page, freshUser }) => {
-    const billing = uniqueEmail("acme");
-    await createClientViaUi(page, freshUser.slug, "Acme", { email: billing });
-    const number = await createInvoice(page, freshUser.slug, "Acme");
-    await addLine(page, { description: "Design", quantity: "1", unitPrice: "100" });
-    await sendInvoice(page, { email: true });
-    const attachments = await waitForEmailAttachments(billing, new RegExp(`Invoice ${number}`));
-    expect(attachments.map((a) => [a.FileName, a.ContentType])).toEqual([
-      [`${number}.pdf`, "application/pdf"],
-    ]);
-    expect(attachments[0]!.Size).toBeGreaterThan(1000);
-  });
-
   test("a recurring invoice appears after the daily job and not twice", async ({
     page,
     freshUser,

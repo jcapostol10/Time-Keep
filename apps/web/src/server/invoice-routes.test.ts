@@ -36,6 +36,7 @@ vi.mock("./storage", () => ({
 vi.mock("./invoices/pdf", async (original) => ({
   ...(await original<object>()),
   buildInvoicePdf: async () => store.pdf,
+  printInvoiceHtml: async () => store.pdf,
 }));
 
 const { GET: listGET } = await import("@/app/api/w/[workspaceSlug]/invoices/route");

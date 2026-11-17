@@ -11,6 +11,8 @@ import {
   WEEK,
 } from "../../../test/invoice-fixtures";
 import type { Viewer } from "../catalog/viewer";
+import { drainOutbox } from "../outbox";
+import type * as Pdf from "./pdf";
 import { importIntoInvoice } from "./import";
 import {
   addManualLine,
@@ -31,6 +33,8 @@ const store = vi.hoisted(() => ({
   uploads: [] as { key: string; contentType: string; size: number }[],
   deletes: [] as string[],
   pdf: new Uint8Array([37, 80, 68, 70]),
+  /** Runs while the next PDF is being printed: what else happens meanwhile. */
+  duringPrint: null as null | (() => Promise<void>),
 }));
 vi.mock("../storage", () => ({
   uploadExport: async (args: { key: string; body: Uint8Array; contentType: string }) => {
@@ -43,7 +47,17 @@ vi.mock("../storage", () => ({
     `https://signed.test/${key}?ttl=${ttl}&name=${encodeURIComponent(filename)}`,
   getExport: async () => store.pdf,
 }));
-vi.mock("./pdf", () => ({ buildInvoicePdf: async () => store.pdf }));
+// The real HTML (it is what a send compares); only the printer is replaced.
+vi.mock("./pdf", async (original) => ({
+  ...(await original<typeof Pdf>()),
+  buildInvoicePdf: async () => store.pdf,
+  printInvoiceHtml: async () => {
+    const hook = store.duringPrint;
+    store.duringPrint = null;
+    await hook?.();
+    return store.pdf;
+  },
+}));
 
 const h = connectTestDb();
 const h2 = connectTestDb();
@@ -327,6 +341,65 @@ describe("delete and void", () => {
 });
 
 describe("sendInvoice", () => {
+  it("prints outside its transaction, and refuses an invoice that changed meanwhile", async () => {
+    const inv = await create(f.acmeId);
+    await line(inv.id, "Design", 200, 10000);
+    // While the PDF prints, someone adds a line from another connection. That it
+    // completes at all means the send holds no lock on the invoice while printing.
+    store.duringPrint = async () => {
+      await addManualLine(h2.db, owner, inv.id, {
+        description: "Late addition",
+        quantityCenti: 100,
+        unitPriceMinor: 500,
+      });
+    };
+    await expect(sendInvoice(db, owner, inv.id, { email: true, now: NOW })).rejects.toThrow(
+      "The invoice changed while it was being sent. Try again.",
+    );
+    // Not sent, nothing frozen, no email: the PDF would not have matched the invoice.
+    expect((await getInvoice(db, owner, inv.id)).status).toBe("DRAFT");
+    expect(store.uploads).toEqual([]);
+    expect(await db.select().from(emailOutbox)).toEqual([]);
+    // The next try sends the invoice as it now is.
+    const sent = await sendInvoice(db, owner, inv.id, { email: true, now: NOW });
+    expect(sent).toMatchObject({ status: "SENT", totalMinor: 20500 });
+  });
+
+  it("tells the owners and admins once when the client's email cannot be sent", async () => {
+    const inv = await create(f.acmeId);
+    await line(inv.id, "Design", 200, 10000);
+    await sendInvoice(db, owner, inv.id, { email: true, now: NOW });
+    const delivered: string[] = [];
+    const drain = (minutes: number) =>
+      drainOutbox(db, {
+        now: new Date(Date.now() + minutes * 60_000),
+        send: async (message) => {
+          delivered.push(message.subject);
+        },
+        // The frozen PDF is gone from the bucket.
+        load: async () => {
+          throw new Error("NoSuchKey");
+        },
+      });
+    for (let attempt = 1; attempt <= 5; attempt++) await drain(attempt * 200);
+    const rows = await db.select().from(emailOutbox);
+    expect(rows.find((r) => r.kind === `invoice.sent:${inv.id}`)).toMatchObject({
+      status: "FAILED",
+    });
+    // One notice for each owner and admin (the fixture has two), and no more.
+    const notices = rows.filter((r) => r.kind === `invoice.send-failed:${inv.id}`);
+    expect(notices).toHaveLength(2);
+    expect(new Set(notices.map((n) => n.toAddress)).size).toBe(2);
+    expect(notices[0]?.subject).toBe("INV-0001 could not be emailed to Acme");
+    expect(notices[0]?.text).toContain(`/invoices/${inv.id}`);
+    // The notices themselves go out, and nothing asks for another.
+    await drain(1200);
+    expect(delivered).toEqual(Array(2).fill("INV-0001 could not be emailed to Acme"));
+    expect(
+      (await db.select().from(emailOutbox)).filter((r) => r.kind.startsWith("invoice.send-failed")),
+    ).toHaveLength(2);
+  });
+
   it("freezes a PDF, mints a token and emails the client with the attachment", async () => {
     const inv = await create(f.acmeId);
     await line(inv.id, "Design", 200, 10000);

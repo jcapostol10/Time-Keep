@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb, truncateAll } from "../../test/db";
 import {
+  attachmentMeta,
   captureEmail,
   captureEnabled,
   previewMailMode,
@@ -102,5 +103,26 @@ describe("captured email store", () => {
       subject: "Verify your email",
       html: "<p>1</p>",
     });
+  });
+
+  it("keeps what an email carried as a file: its name, type and size, never its bytes", async () => {
+    await captureEmail(handle.db, {
+      to: "billing@e2e.test",
+      subject: "Invoice INV-0001",
+      html: "<p>Attached</p>",
+      text: "Attached",
+      attachments: attachmentMeta([
+        { filename: "INV-0001.pdf", content: new Uint8Array([37, 80, 68, 70, 45]) },
+      ]),
+    });
+    const [message] = await listCapturedEmails(handle.db, { to: "billing@e2e.test" });
+    expect(message?.attachments).toEqual([
+      { filename: "INV-0001.pdf", contentType: "application/pdf", size: 5 },
+    ]);
+    // An email without one says so.
+    await captureEmail(handle.db, { to: "plain@e2e.test", subject: "Hi", html: "", text: "" });
+    expect((await listCapturedEmails(handle.db, { to: "plain@e2e.test" }))[0]?.attachments).toEqual(
+      [],
+    );
   });
 });

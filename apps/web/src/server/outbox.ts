@@ -10,19 +10,23 @@ import {
 } from "@timekeep/core";
 import {
   and,
+  client,
   type Database,
   type DbExecutor,
   emailOutbox,
   eq,
   inArray,
+  invoice,
   lt,
   ne,
   sql,
+  workspace,
 } from "@timekeep/db";
 import type { SQL } from "drizzle-orm";
 import { isE2eEmail } from "@timekeep/db/e2e-tenant";
 
 import { env } from "./env";
+import { activeAdminEmails, invoiceSendFailedEmail } from "./invoices/emails";
 import { type EmailContent, renderEmail, type RenderedEmail, sendRenderedEmail } from "./mail";
 import type { CaptureEnv } from "./mail-capture";
 
@@ -170,11 +174,55 @@ export async function drainOutbox(
           lastError: message.slice(0, 1000),
         })
         .where(eq(emailOutbox.id, row.id));
-      if (giveUp) console.error(`[outbox] gave up on "${row.subject}" (${row.kind})`, error);
-      else console.warn(`[outbox] send failed, retrying in ${wait} min (${row.kind}): ${message}`);
+      if (giveUp) {
+        console.error(`[outbox] gave up on "${row.subject}" (${row.kind})`, error);
+        await tellAdminsInvoiceUnsent(db, row).catch((notifyError: unknown) =>
+          console.error("[outbox] could not tell the admins", row.kind, notifyError),
+        );
+      } else
+        console.warn(`[outbox] send failed, retrying in ${wait} min (${row.kind}): ${message}`);
     }
   }
   return { sent, failed };
+}
+
+const INVOICE_SENT = "invoice.sent:";
+
+/**
+ * An invoice reads Sent as soon as its email is queued. When that email is
+ * given up on (a dead address, a PDF missing from the bucket), the owners and
+ * admins are told, once per invoice, instead of finding out from the client.
+ */
+async function tellAdminsInvoiceUnsent(
+  db: Database,
+  row: { workspaceId: string | null; kind: string },
+): Promise<void> {
+  if (!row.workspaceId || !row.kind.startsWith(INVOICE_SENT)) return;
+  const invoiceId = row.kind.slice(INVOICE_SENT.length);
+  const kind = `invoice.send-failed:${invoiceId}`;
+  const [already] = await db
+    .select({ id: emailOutbox.id })
+    .from(emailOutbox)
+    .where(and(eq(emailOutbox.workspaceId, row.workspaceId), eq(emailOutbox.kind, kind)))
+    .limit(1);
+  if (already) return;
+  const [found] = await db
+    .select({ number: invoice.number, clientName: client.name, slug: workspace.slug })
+    .from(invoice)
+    .innerJoin(client, eq(client.id, invoice.clientId))
+    .innerJoin(workspace, eq(workspace.id, invoice.workspaceId))
+    .where(and(eq(invoice.id, invoiceId), eq(invoice.workspaceId, row.workspaceId)));
+  if (!found) return;
+  const content = invoiceSendFailedEmail({
+    appUrl: env().APP_URL,
+    slug: found.slug,
+    invoiceId,
+    number: found.number,
+    clientName: found.clientName,
+  });
+  for (const to of await activeAdminEmails(db, row.workspaceId)) {
+    await enqueueEmail(db, { workspaceId: row.workspaceId, to, kind, ...content });
+  }
 }
 
 /** Drains batch after batch while they come back full, within a time budget. */

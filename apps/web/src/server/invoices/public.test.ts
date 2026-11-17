@@ -17,7 +17,11 @@ vi.mock("../storage", () => ({
     `https://signed.test/${key}?ttl=${ttl}&name=${encodeURIComponent(filename)}`,
   getExport: async () => store.pdf,
 }));
-vi.mock("./pdf", () => ({ buildInvoicePdf: async () => store.pdf }));
+vi.mock("./pdf", () => ({
+  buildInvoicePdf: async () => store.pdf,
+  invoiceHtml: async () => "<html></html>",
+  printInvoiceHtml: async () => store.pdf,
+}));
 
 const h = connectTestDb();
 const db = h.db;
