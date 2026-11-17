@@ -21,6 +21,7 @@ import { copyWeekAction } from "@/server/actions/timesheet";
 
 import { trackSave } from "../tracker/saving-store";
 import { useEntryWrites } from "../tracker/use-entry-writes";
+import { copyWeekMessage } from "./copy-message";
 import { useRangeEntries } from "./use-timesheet";
 
 /** Copies last week's rows, or its rows and their time, into the shown week. */
@@ -81,9 +82,10 @@ export function CopyLastWeekDialog({
       return;
     }
     writes.settle();
-    toast.success(
-      result.data.length === 1 ? "1 entry copied" : `${result.data.length} entries copied`,
-    );
+    const { created, skipped } = result.data;
+    const message = copyWeekMessage({ created: created.length, ...skipped });
+    if (skipped.unusable.length > 0) toast.warning(message);
+    else toast.success(message);
     onOpenChange(false);
   }
 
