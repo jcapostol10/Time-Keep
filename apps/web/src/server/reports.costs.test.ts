@@ -6,7 +6,16 @@ import {
   type ReportQuery,
   type ViewerPrefs,
 } from "@timekeep/core";
-import { client, eq, managedUser, project, rate, workspaceSettings } from "@timekeep/db";
+import {
+  client,
+  eq,
+  expenseCategory,
+  managedUser,
+  project,
+  projectMember,
+  rate,
+  workspaceSettings,
+} from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -799,6 +808,46 @@ describe("expenses in the Profit tab (Phase 6c)", () => {
       // Web 400 + Us −200 + Ops 0.
       profitMinor: 20_000,
     });
+  });
+
+  it("a manager's Profit tab counts the expenses of their people and their projects only", async () => {
+    const max = await createTestUser(db, "Max Manager");
+    await addMember(db, wsId, max.id, "manager");
+    ids.max = max.id;
+    await db.insert(managedUser).values({ workspaceId: wsId, managerId: max.id, userId: ids.bob! });
+    await db.insert(projectMember).values({ projectId: ids.ops!, userId: max.id, isManager: true });
+    await setSettings({ managersSeeCosts: true });
+    const [travel] = await db
+      .select()
+      .from(expenseCategory)
+      .where(eq(expenseCategory.workspaceId, wsId));
+    const spend = async (who: string, projectId: string, amountMinor: number) =>
+      createExpense(
+        db,
+        await viewer(who),
+        {
+          projectId,
+          categoryId: travel!.id,
+          date: "2026-03-10",
+          amountMinor,
+          billable: false,
+          description: "",
+        },
+        { now: NOW },
+      );
+    await spend("bob", ids.web!, 10_000); // his person, on a project he does not manage
+    await spend("carol", ids.ops!, 7_000); // not his person, on his project
+    await spend("carol", ids.web!, 5_000); // neither: out of his scope
+
+    const report = await profitReport(db, await viewer("max"), q(), PREFS, NOW);
+    const expensesOf = (label: string) =>
+      report.groups.find((g) => g.label === label)?.totals.expenseMinor ?? 0;
+    // Web: Bob's only (not Olga's 500, not Carol's 50).
+    expect(expensesOf("Web")).toBe(10_000);
+    // Ops is his project: Olga's 150 and Carol's 70.
+    expect(expensesOf("Ops")).toBe(22_000);
+    expect(expensesOf("Us")).toBe(0);
+    expect(report.totals.expenseMinor).toBe(32_000);
   });
 
   it("expenses on a project billed in USD still adjust that group's profit", async () => {

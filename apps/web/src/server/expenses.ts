@@ -159,14 +159,10 @@ export function expenseConditions(
       ),
     );
   }
-  if (query.projectIds.length > 0) {
-    conds.push(
-      inArray(
-        expense.projectId,
-        query.projectIds.filter((id) => id !== NONE_ID),
-      ),
-    );
-  }
+  // "Without project" means nothing here (every expense has a project): a filter
+  // carried from a time report is dropped rather than matching nothing.
+  const projectIds = query.projectIds.filter((id) => id !== NONE_ID);
+  if (projectIds.length > 0) conds.push(inArray(expense.projectId, projectIds));
   if (query.categoryIds.length > 0) conds.push(inArray(expense.categoryId, query.categoryIds));
   if (query.billable !== "all") conds.push(eq(expense.billable, query.billable === "yes"));
   if (query.invoiced !== "all") {
@@ -433,6 +429,12 @@ export async function expenseScope(
     .where(and(eq(expense.id, expenseId), eq(expense.workspaceId, viewer.workspaceId)));
   if (!row) throw new WorkspaceAccessError(404, "Not found");
   const scope = await scopeForUser(db, viewer, row.userId);
+  // The expense rule itself, on the expense's own project (the entries' rule today).
+  assertCan(viewer.actor, "expense.write", {
+    kind: "entry",
+    userId: row.userId,
+    projectId: row.projectId,
+  });
   return { scope, row };
 }
 
@@ -440,7 +442,8 @@ export async function expenseScope(
 async function usableProject(db: Executor, scope: EntryScope, projectId: string) {
   try {
     const row = await requireVisibleProject(db, scope, projectId);
-    if (row.archived) throw new TimeEntryError("INVALID", PROJECT_UNAVAILABLE);
+    // A template takes no expense, as it takes no time.
+    if (row.archived || row.isTemplate) throw new TimeEntryError("INVALID", PROJECT_UNAVAILABLE);
     return row;
   } catch (error) {
     if (error instanceof CatalogError) throw new TimeEntryError("INVALID", PROJECT_UNAVAILABLE);
@@ -538,11 +541,12 @@ export async function createExpense(
   opts: { note?: string; now?: Date } = {},
 ): Promise<ExpenseDTO> {
   const now = opts.now ?? new Date();
-  await usableProject(db, scope, input.projectId);
-  const category = await usableCategory(db, scope.workspaceId, input.categoryId);
-  const money = moneyOf(category.kind, input, category.unitPriceMinor);
   return db.transaction(async (tx) => {
     await tx.execute(timerLock(scope.workspaceId, scope.userId));
+    // Read under the lock, in the transaction that writes: as updateExpense does.
+    await usableProject(tx, scope, input.projectId);
+    const category = await usableCategory(tx, scope.workspaceId, input.categoryId);
+    const money = moneyOf(category.kind, input, category.unitPriceMinor);
     const id = randomUUID();
     await assertExpenseWritable(
       tx,

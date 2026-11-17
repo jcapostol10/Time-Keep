@@ -30,6 +30,7 @@ type Executor = Pick<Database, "select" | "insert" | "update">;
 
 const NAME_TAKEN = "A category with this name exists.";
 const NOT_FOUND = "Category not found.";
+const UNIT_INCOMPLETE = "A unit category needs a unit name and a price.";
 const KIND_IN_USE = "This category has expenses; its kind cannot change.";
 
 export function toCategoryDTO(row: ExpenseCategory): ExpenseCategoryDTO {
@@ -117,6 +118,15 @@ export async function updateExpenseCategory(
       .from(expense)
       .where(eq(expense.categoryId, categoryId));
     if ((used?.n ?? 0) > 0) throw new CatalogError("CONFLICT", KIND_IN_USE);
+  }
+  // The schema checks a patch on its own; what is stored must still be whole.
+  if (kind === "UNIT") {
+    const unitName = patch.unitName !== undefined ? patch.unitName : before.unitName;
+    const unitPrice =
+      patch.unitPriceMinor !== undefined ? patch.unitPriceMinor : before.unitPriceMinor;
+    if (!unitName?.trim() || unitPrice === null || unitPrice === undefined) {
+      throw new CatalogError("INVALID", UNIT_INCOMPLETE);
+    }
   }
   try {
     const [row] = await db

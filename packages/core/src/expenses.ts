@@ -49,13 +49,15 @@ export function expenseAmount(quantityCenti: number, unitPriceMinor: number): nu
   return Number((BigInt(quantityCenti) * BigInt(unitPriceMinor) + BigInt(50)) / BigInt(100));
 }
 
-const QUANTITY = /^(\d+)(?:[.,](\d{1,2}))?$/;
+const QUANTITY = /^(\d*)(?:[.,](\d{1,2}))?$/;
 
 /** "12.5" or "1,5" → hundredths; null for empty, invalid, more than two decimals, or zero. */
 export function parseQuantity(input: string): number | null {
   const match = QUANTITY.exec(input.trim());
   if (!match) return null;
-  const [, whole = "0", fraction = ""] = match;
+  const [, whole = "", fraction = ""] = match;
+  // ".5" is a half; a lone separator or nothing at all is not a number.
+  if (whole === "" && fraction === "") return null;
   const centi = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
   if (!Number.isSafeInteger(centi) || centi <= 0) return null;
   return centi;

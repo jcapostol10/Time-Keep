@@ -938,7 +938,16 @@ export async function myPeriods(
         r.periodEnd >= period.start,
     );
     const request = own ?? blocking ?? null;
-    const { workSeconds } = await totalsOf(db, viewer.workspaceId, viewer.userId, period, bounds);
+    // Time only: the list shows hours, so the expense totals are not read here.
+    const [time] = await db
+      .select({
+        workSeconds: sql<number>`coalesce(sum(${timeEntry.durationSeconds}), 0)::bigint`.mapWith(
+          Number,
+        ),
+      })
+      .from(timeEntry)
+      .where(periodEntries(viewer.workspaceId, viewer.userId, bounds));
+    const workSeconds = time?.workSeconds ?? 0;
     out.push({
       period,
       status: request?.status ?? null,
