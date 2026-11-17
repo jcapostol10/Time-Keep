@@ -23,7 +23,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 - [ ] **b1** Calendar blocks have `role=button` and `tabIndex=0` but no Enter/Space handler, so they cannot be opened from the keyboard.
 - [ ] **b1** The calendar loads entries whose start falls in the week, so an entry begun late on the previous week's last day is not drawn on the first day. Fetch from one day earlier; `blockOnDay` already clips.
 - [ ] **b1** Members see every client name in the projects-page filter, including archived clients and clients whose projects are all private to them.
-- [ ] **b1** ArrowLeft and ArrowRight move between timesheet cells even mid-text, so the caret cannot move within "1:30". Move between cells only when the caret is at the edge.
 - [ ] **b1** The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; install Playwright's Chromium in the CI job.
 - [ ] **b1** The Detailed report's sort is per visit, not in the URL.
 - [ ] **b1** `workspace_settings.task_creators` and `task_assignee` are unread since tasks by group (2026-10-29): drop them in a contract migration.
@@ -167,6 +166,7 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] Timesheet arrows, done 2026-11-17 (backlog cleanup b1): Left and Right leave a cell only at the text's edge or with the whole value selected (`movesHorizontally`), so the caret moves within "1:30".
 - [x] Copy last week, done 2026-11-17 (backlog cleanup b1): an entry already in the target week with the same times and details is not copied again, an entry whose details can no longer take time is skipped with its reason (the toast names the first), and a break stays a break (it was copied as work). A period refusal still fails the whole copy.
 - [x] Sign-up error codes, done 2026-11-17 (backlog cleanup b1): `signUpErrorField` puts Better Auth's `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL` (and `INVALID_EMAIL`) on the email field. A duplicate still gets the generic success while email verification is on.
 - [x] Closed by ruling in the backlog cleanup, 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-design.md`):

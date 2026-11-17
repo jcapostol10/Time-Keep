@@ -15,10 +15,11 @@ import type { TimeEntryDTO } from "@/lib/tracker-types";
 import type { TimeOffBand } from "../time-off/use-time-off-bands";
 import { ColorDot } from "../tracker/project-picker";
 import { useTracker } from "../tracker/tracker-provider";
+import { movesHorizontally } from "./grid-keys";
 import { dayHeading, type NameLookup, projectPart } from "./model";
 import { TimesheetCell } from "./timesheet-cell";
 
-/** Moves focus between cell inputs with the arrow keys. */
+/** Moves focus between cell inputs with the arrow keys (Left and Right only at the text's edge). */
 function onGridKeyDown(event: KeyboardEvent<HTMLTableElement>) {
   const target = event.target as HTMLElement;
   if (!(target instanceof HTMLInputElement) || target.dataset.row === undefined) return;
@@ -30,6 +31,16 @@ function onGridKeyDown(event: KeyboardEvent<HTMLTableElement>) {
   };
   const move = moves[event.key];
   if (!move) return;
+  if (
+    (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
+    !movesHorizontally(event.key, {
+      start: target.selectionStart,
+      end: target.selectionEnd,
+      length: target.value.length,
+    })
+  ) {
+    return;
+  }
   event.preventDefault();
   const row = Number(target.dataset.row) + move[0];
   const col = Number(target.dataset.col) + move[1];
