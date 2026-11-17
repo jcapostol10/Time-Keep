@@ -376,3 +376,33 @@ The final review (2026-11-11) found no cross-tenant or cross-scope leak and two 
 ## Phase 9 — Apps
 
 - [ ] Browser extension, mobile PWA, desktop auto tracker
+
+## Backlog cleanup (2026-11-17; design `docs/superpowers/specs/2026-11-17-backlog-cleanup-design.md`)
+
+The backlog's seventy-odd entries each got an outcome: a fix in one of five branches (b1–b5), a ruling (17), or the new "Later" list (Phase 8, Phase 9, not planned). `docs/BACKLOG.md` tags every open entry with its branch.
+
+### Branch 1 — tracker, timesheet, calendar, catalog, auth, CI (no migration; plan `docs/superpowers/plans/2026-11-17-backlog-1.md`)
+
+- Sign-up errors land on the right field (`signUpErrorField`).
+- One render per revalidating action: the client's `router.refresh()` after 30 revalidating actions is gone.
+- Timesheet:
+  - Rows added by hand are kept in local storage per workspace, viewer, person and week, and a row with no time can be removed.
+  - A cleared row stays for the visit.
+  - Left and Right leave a cell only at the text's edge.
+  - Copy last week skips duplicates and entries whose details can no longer take time (breaks off included), naming the first, and keeps breaks as breaks.
+- Calendar:
+  - Moves, resizes, cell edits and deletes show at once. A refused write puts back only its own entries and refetches.
+  - A typed cell is never saved twice by a blur during the save.
+  - Blocks open with Enter or Space.
+  - An entry begun the evening before the week is drawn on its first day.
+- Filters: the projects toolbar and the report filters name only the clients of projects the viewer can see. The report filters keep a project whose tasks are all hidden from the member.
+- Tasks by group: a project that turns private gives its tasks' groups access. The CSV import lets a manager who may create projects add tasks to the projects that same import creates, for that request only.
+- The Detailed report's sort is in the URL.
+- `task_assignee` and `workspace_settings.task_creators` left the Drizzle schema (the expand half; branch 2 drops them).
+- CI installs Chromium so the PDF tests run.
+- The reassign test survives a clock step.
+
+Rulings made while building branch 1, beyond the design:
+- `createProjectAction` and `createTagAction` keep no revalidation, because they serve the pickers' inline create, so their dialogs keep their refresh.
+- New e2e tests were seen red and green on the dev server with one worker, and the whole suite ran on a production build at the gate.
+- The final review's finding that a manager who creates a project became its manager widened their own reach (other people's amounts, member rates, schedules, approvals). That rule was reverted in favour of the import's request-local right.
