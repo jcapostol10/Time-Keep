@@ -37,7 +37,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 - [ ] **b2** Phase 5a: the Unsubmitted tab shows a project manager only the people they manage, not people whose time is all on the manager's projects.
 - [ ] **b2** Phase 5a: `assertWritable` reads its own `workspace_settings` row next to `rulesOf`'s; fold the two reads into one.
 - [ ] **b2** Phase 5a: an owner's or admin's import into submitted periods writes one `ADMIN_EDIT` event per entry; write one per import.
-- [ ] **b2** The daily cron runs at 22:00 UTC, so a workspace far west of UTC gets its reminder a day late. Run it hourly and act per workspace at its local morning (ruling 9).
 
 ### b3 — money: rates, cost, currencies, budgets, expenses, invoices
 
@@ -150,6 +149,7 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] Hourly daily jobs, done 2026-11-17 (backlog cleanup b2, ruling 9): Vercel Cron runs every hour; each workspace's day runs once, from 07:00 in its timezone, claimed in `daily_job_run` (a second delivery does nothing; an unfinished claim is retaken after two hours). The unsubmitted reminder catches up within three days of a period's end (R3), target reminders skip days before the person joined and read only this run's kinds, and settled email bodies are blanked after 30 days with their rows kept as dedupe keys (R4).
 - [x] Phase 5c review minors, done 2026-11-17 (backlog cleanup b2): the QR path counts only "not allowed here" as a failed code; the kiosk's 30-failure pause counts failed PINs only, so unknown QR codes cannot pause it; a clock-in photo's row is written before the upload and taken back if the upload fails; share links never carry the photo flag (`Viewer.shared`); removing a member clears their kiosk, policy, holiday and target assignments; the device URL's Copy says when it cannot copy; the timeout field says what it accepts; the session timeout waits while a punch is in flight; `credentialStatuses` no longer returns `pinSetAt`.
 - [x] Kiosk default tag, done 2026-11-17 (backlog cleanup b2): `kiosk.tag_id` (0022), a Default tag select in the kiosk dialog, every punch carries it, and an archived or foreign tag is refused at save; the dialog warns about a required tag only without a default tag.
 - [x] Dropped `task_assignee` and `workspace_settings.task_creators`, done 2026-11-17 (backlog cleanup b2, migration 0021): the contract half, after branch 1's code (which no longer reads or writes them) reached production.

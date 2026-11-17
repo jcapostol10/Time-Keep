@@ -26,6 +26,7 @@ import {
   gte,
   inArray,
   like,
+  or,
   lte,
   managedGroup,
   managedUser,
@@ -292,7 +293,13 @@ export async function evaluateTargets(
       await db
         .select({ kind: emailOutbox.kind, to: emailOutbox.toAddress })
         .from(emailOutbox)
-        .where(and(eq(emailOutbox.workspaceId, zone.id), like(emailOutbox.kind, "target:%")))
+        .where(
+          and(
+            eq(emailOutbox.workspaceId, zone.id),
+            // Only this run's windows: a kind ends with the window's first day.
+            or(...windows.map((w) => like(emailOutbox.kind, `target:%:${w.from}`))),
+          ),
+        )
     ).map((r) => `${r.kind}|${r.to.toLowerCase()}`),
   );
 
@@ -340,6 +347,8 @@ export async function evaluateTargets(
   let sent = 0;
   for (const window of windows) {
     for (const person of people) {
+      // Not a window that starts before the person joined: those days were not theirs.
+      if (window.from < person.joinedOn) continue;
       for (const assigned of rules.filter((r) => r.period === window.period)) {
         if (!targetApplies(assigned, person)) continue;
         const rule = effective(assigned, person, window);

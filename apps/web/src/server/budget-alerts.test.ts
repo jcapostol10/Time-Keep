@@ -67,7 +67,7 @@ async function emailOf(who: keyof TimeOffCast["ids"]) {
   return u!.email;
 }
 
-const run = (now = NOW) => runDailyJobs(db, { now, workspaceIds: [cast.wsId] });
+const run = (now = NOW) => runDailyJobs(db, { force: true, now, workspaceIds: [cast.wsId] });
 
 beforeEach(async () => {
   cast = await setUpTimeOffCast(db);

@@ -1,16 +1,19 @@
 import "server-only";
 
 import {
+  addDaysToKey,
   approvalRulesOf,
   budgetThresholdsOf,
   isUndeliverable,
   localDateKey,
+  localTimeParts,
   periodBounds,
   periodContaining,
   previousPeriod,
 } from "@timekeep/core";
 import {
   and,
+  dailyJobRun,
   type Database,
   emailOutbox,
   eq,
@@ -43,12 +46,53 @@ import { runRecurringInvoices } from "./invoices/recurring";
 import { enqueueEmail } from "./outbox";
 import { evaluateTargets } from "./targets";
 
+/** The local hour from which a workspace's day is run (backlog ruling 9). */
+export const DAILY_RUN_HOUR = 7;
+/** A claim this old with no finish is taken again (the run was killed). */
+const CLAIM_LEASE_MS = 2 * 60 * 60 * 1000;
+/** Days after a period ends in which its reminder still goes, if a day was missed. */
+const REMINDER_CATCH_UP_DAYS = 3;
+
 /**
- * The once-a-day jobs (Vercel Cron at 22:00 UTC, 06:00 in Manila; the e2e
- * hook for one workspace). Each workspace is evaluated in its own timezone:
- * on the first local day after one of its periods ends, everyone with
- * stopped work in that period and no submission gets one reminder (unless
- * they muted reminders). Then the target rules (Phase 5b): yesterday for DAY
+ * Claims a workspace's local day for its daily run: true for the one caller
+ * that may run it. A claim left unfinished past its lease is taken again.
+ */
+export async function claimDailyRun(
+  db: Database,
+  workspaceId: string,
+  localDate: string,
+  now: Date,
+): Promise<boolean> {
+  const [claimed] = await db
+    .insert(dailyJobRun)
+    .values({ workspaceId, localDate, claimedAt: now })
+    .onConflictDoUpdate({
+      target: [dailyJobRun.workspaceId, dailyJobRun.localDate],
+      set: { claimedAt: now },
+      setWhere: and(
+        isNull(dailyJobRun.finishedAt),
+        lt(dailyJobRun.claimedAt, new Date(now.getTime() - CLAIM_LEASE_MS)),
+      ),
+    })
+    .returning({ workspaceId: dailyJobRun.workspaceId });
+  return claimed !== undefined;
+}
+
+async function finishDailyRun(db: Database, workspaceId: string, localDate: string, now: Date) {
+  await db
+    .update(dailyJobRun)
+    .set({ finishedAt: now })
+    .where(and(eq(dailyJobRun.workspaceId, workspaceId), eq(dailyJobRun.localDate, localDate)));
+}
+
+/**
+ * The daily jobs. Vercel Cron calls them every hour; each workspace runs once
+ * per local day, in the first call at or after 07:00 in its timezone, claimed
+ * in `daily_job_run` (the e2e hook and the tests pass `force` to skip the hour
+ * and the claim). Each workspace is evaluated in its own timezone: within
+ * three local days after one of its periods ends, everyone with stopped work
+ * in that period and no submission gets one reminder (unless they muted
+ * reminders). Then the target rules (Phase 5b): yesterday for DAY
  * rules, last week on the week's first day. Then the budget alerts (Phase 6b):
  * each threshold an estimated project has crossed. Idempotent: each outbox
  * row's kind names its period, or its rule, person and day, or its project,
@@ -64,7 +108,7 @@ export interface DailyJobsResult {
 
 export async function runDailyJobs(
   db: Database,
-  opts: { now?: Date; workspaceIds?: string[] } = {},
+  opts: { now?: Date; workspaceIds?: string[]; force?: boolean } = {},
 ): Promise<DailyJobsResult> {
   const now = opts.now ?? new Date();
   const workspaces = await db
@@ -105,11 +149,16 @@ export async function runDailyJobs(
   const invoices = { created: 0, sent: 0, overdue: 0 };
   for (const ws of workspaces) {
     // One workspace's failure is logged and never stops the others (Phase 6d review).
+    const { enabled, period: rule } = approvalRulesOf(ws, ws);
+    const today = localDateKey(now, rule.timezone);
+    if (!opts.force) {
+      if (localTimeParts(now, rule.timezone).hours < DAILY_RUN_HOUR) continue;
+      if (!(await claimDailyRun(db, ws.id, today, now))) continue;
+    }
     try {
-      const { enabled, period: rule } = approvalRulesOf(ws, ws);
-      const today = localDateKey(now, rule.timezone);
-      if (enabled && periodContaining(today, rule).start === today) {
-        const ended = previousPeriod(periodContaining(today, rule), rule);
+      // The period that ended last, reminded within a few days so a missed day is not lost.
+      const ended = previousPeriod(periodContaining(today, rule), rule);
+      if (enabled && today <= addDaysToKey(ended.end, REMINDER_CATCH_UP_DAYS)) {
         reminders += await remindUnsubmitted(db, ws, ended);
       }
       targets += await evaluateTargets(
@@ -146,6 +195,7 @@ export async function runDailyJobs(
       invoices.created += recurring.created;
       invoices.sent += recurring.sent;
       invoices.overdue += await sendOverdueEmails(db, zone, now);
+      if (!opts.force) await finishDailyRun(db, ws.id, today, now);
     } catch (error) {
       console.error(`[daily] workspace ${ws.slug} failed`, error);
     }

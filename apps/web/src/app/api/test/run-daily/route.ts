@@ -28,7 +28,8 @@ export async function GET(request: Request) {
   const workspaceId = await e2eWorkspaceId(db, slug);
   if (!workspaceId)
     return Response.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
-  const jobs = await runDailyJobs(db, { now, workspaceIds: [workspaceId] });
+  // `force`: the e2e suite runs a workspace's day at any hour, as often as it asks.
+  const jobs = await runDailyJobs(db, { now, workspaceIds: [workspaceId], force: true });
   // The jobs run at `now`; the mail they enqueued is due from the real clock.
   const mail = await drainAll(db);
   return Response.json({ ...jobs, ...mail }, { headers: NO_STORE });

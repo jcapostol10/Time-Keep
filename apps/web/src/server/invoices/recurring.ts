@@ -283,7 +283,7 @@ async function runAs(db: Database, workspaceId: string, createdBy: string | null
   throw new Error(`Workspace ${workspaceId} has no active owner to run recurring invoices as`);
 }
 
-/** A day the job missed is caught up for this many days (the cron runs once a day). */
+/** A day the job missed is caught up for this many days (each workspace runs once a local day). */
 const CATCH_UP_DAYS = 7;
 
 /** The periods due over the last week up to today, oldest first, each once. */
