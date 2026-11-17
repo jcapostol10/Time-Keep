@@ -15,7 +15,6 @@ import {
   emailOutbox,
   eq,
   inArray,
-  like,
   membership,
   ne,
   project,
@@ -118,12 +117,23 @@ export async function evaluateBudgets(db: Database, zone: BudgetZone, now: Date)
     estimate: estimateOf(r),
     currency: entryCurrency(r.clientCurrency, zone.currency),
   }));
-  const [progress, already, to] = await Promise.all([
-    progressFor(db, zone.id, subjects, now, zone.timezone),
+  const progress = await progressFor(db, zone.id, subjects, now, zone.timezone);
+  // Only the alerts this run could send are looked up, not every budget email the
+  // workspace ever had.
+  const kinds = rows.flatMap((row) => {
+    const p = progress.get(row.id);
+    return p
+      ? crossedThresholds(p.used, p.estimate, zone.thresholds).map(
+          (threshold) => `budget:${row.id}:${threshold}:${p.period.key}`,
+        )
+      : [];
+  });
+  if (kinds.length === 0) return 0;
+  const [already, to] = await Promise.all([
     db
       .select({ kind: emailOutbox.kind, to: emailOutbox.toAddress })
       .from(emailOutbox)
-      .where(and(eq(emailOutbox.workspaceId, zone.id), like(emailOutbox.kind, "budget:%")))
+      .where(and(eq(emailOutbox.workspaceId, zone.id), inArray(emailOutbox.kind, kinds)))
       .then((sent) => new Set(sent.map((r) => `${r.kind}|${r.to.toLowerCase()}`))),
     recipients(
       db,

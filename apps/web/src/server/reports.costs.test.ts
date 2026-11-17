@@ -56,7 +56,12 @@ let wsId: string;
 let ids: Record<string, string>;
 const viewer = (who: string): Promise<Viewer> => loadViewer(db, wsId, ids[who]!);
 
-async function entry(who: string, projectName: "web" | "us", hours: number, billable = true) {
+async function entry(
+  who: string,
+  projectName: "web" | "us" | "eu",
+  hours: number,
+  billable = true,
+) {
   const start = new Date("2026-03-10T09:00:00Z");
   await createManualEntry(db, await viewer(who), {
     description: `${who} ${projectName} ${billable ? "billable" : "internal"}`,
@@ -524,6 +529,81 @@ describe("cost, profit and currencies in reports", () => {
     await entry("bob", "us", 1);
     const after = await summaryReport(db, owner, q(), PREFS, NOW);
     expect(after.totals).toMatchObject({ unratedCount: 1, profitExcludedCount: 3 });
+  });
+
+  /** A project of a client billed in EUR, with no rate in EUR, and one billable hour on it. */
+  async function unratedEuroProject() {
+    const owner = await viewer("olga");
+    ids.eu = (await createProject(db, owner, { name: "Eu" })).id;
+    const globex = randomUUID();
+    await db
+      .insert(client)
+      .values({ id: globex, workspaceId: wsId, name: "Globex", currency: "EUR" });
+    await db.update(project).set({ clientId: globex }).where(eq(project.id, ids.eu));
+    await entry("olga", "eu", 1);
+  }
+
+  it("a row billed only in another currency with nothing rated reads zero in that currency", async () => {
+    await unratedEuroProject();
+    const owner = await viewer("olga");
+    const report = await summaryReport(db, owner, q({ groupBy: ["project"] }), PREFS, NOW);
+    expect(report.groups.find((g) => g.label === "Eu")?.totals).toMatchObject({
+      amountMinor: 0,
+      otherAmounts: [{ currency: "EUR", amountMinor: 0 }],
+      unratedCount: 1,
+    });
+    const file = await buildExport(db, owner, {
+      report: "summary",
+      format: "csv",
+      query: q({ groupBy: ["project"] }),
+      prefs: PREFS,
+      now: NOW,
+    });
+    expect(csvHeader(file.body)).toContain("Amount (EUR)");
+    // Someone who sees no amounts still gets none.
+    const masked = await summaryReport(
+      db,
+      await viewer("carol"),
+      q({ groupBy: ["project"] }),
+      PREFS,
+      NOW,
+    );
+    expect(masked.groups.every((g) => g.totals.otherAmounts.length === 0)).toBe(true);
+  });
+
+  it("skips budget progress where nothing renders it", async () => {
+    const owner = await viewer("olga");
+    await setProjectEstimate(db, owner, ids.web!, {
+      kind: "TIME",
+      seconds: 36_000,
+      minor: null,
+      reset: "NONE",
+      alerts: true,
+    });
+    const query = q({ groupBy: ["project"] });
+    expect((await summaryReport(db, owner, query, PREFS, NOW)).progress).not.toBeNull();
+    expect(
+      (await summaryReport(db, owner, query, PREFS, NOW, { progress: false })).progress,
+    ).toBeNull();
+    expect((await profitReport(db, owner, query, PREFS, NOW)).progress).toBeNull();
+  });
+
+  it("a project's status counts its entries and says when it has no rate in its currency", async () => {
+    await unratedEuroProject();
+    const range = { from: new Date(q().from!), to: new Date(q().to!) };
+    const owner = await viewer("olga");
+    expect(await getProjectStatus(db, owner, ids.us!, range, PREFS)).toMatchObject({
+      entryCount: 2,
+      unratedIn: null,
+    });
+    expect(await getProjectStatus(db, owner, ids.eu!, range, PREFS)).toMatchObject({
+      entryCount: 1,
+      unratedIn: "EUR",
+    });
+    // A member sees no amounts, so nothing about rates either.
+    expect(
+      (await getProjectStatus(db, await viewer("carol"), ids.eu!, range, PREFS)).unratedIn,
+    ).toBeNull();
   });
 
   it("keeps two currencies apart under a tag, and counts a two-tag entry once in the total", async () => {

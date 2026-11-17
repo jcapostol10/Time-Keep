@@ -56,7 +56,13 @@ import type { PickerProject, PickerTask } from "@/lib/tracker-types";
 
 import { currencyLock } from "../currency-lock";
 import { CatalogError, isUniqueViolation } from "./errors";
-import { estimateOf, progressFor, visibleProgress, workspaceZone } from "../estimates";
+import {
+  estimateOf,
+  hasBillableRate,
+  progressFor,
+  visibleProgress,
+  workspaceZone,
+} from "../estimates";
 import { inSubmittedPeriodSql, SUBMITTED_TIME_MESSAGE } from "../approval-sql";
 import { scopeFilter } from "../authz";
 import { timerLock } from "../person-lock";
@@ -903,7 +909,17 @@ export async function getProjectStatus(
     summaryReport(db, viewer, { ...query, groupBy: ["user"] }, prefs),
   ]);
   const totals = byTask.totals;
+  // Whoever sees amounts is told when nothing here is rated in the project's currency;
+  // only owners and admins can do something about it, so the tab words it for both.
+  let unratedIn: string | null = null;
+  if (byTask.money) {
+    const currency = await projectCurrency(db, viewer.workspaceId, projectId);
+    const rated = await hasBillableRate(db, viewer.workspaceId, projectId, currency, new Date());
+    if (!rated) unratedIn = currency;
+  }
   return {
+    entryCount: totals.entryCount,
+    unratedIn,
     weeks: weekly
       ? byTask.series.map((p) => ({
           key: p.key,

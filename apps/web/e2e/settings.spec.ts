@@ -206,6 +206,18 @@ test.describe("workspace rules", () => {
     await expect(reportTotal(page)).toHaveText("0:00:00");
   });
 
+  test("budget thresholds show as they were saved", async ({ page, freshUser }) => {
+    await openSettings(page, freshUser.slug);
+    const field = page.getByLabel("Budget alert thresholds");
+    await field.fill("100, 50, 50");
+    await saveSettings(page);
+    // Sorted, without the repeat: what the alerts will use, not what was typed.
+    await expect(field).toHaveValue("50, 100");
+    await field.fill("fifty");
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await expect(page.getByText("Thresholds are whole percentages from 1 to 200.")).toBeVisible();
+  });
+
   test("the account and settings pages fit a 375px screen", async ({ page, freshUser }) => {
     await page.setViewportSize({ width: 375, height: 760 });
     // The account page sits outside the workspace shell: wait for its last section.

@@ -19,7 +19,7 @@ export default async function ProjectBudgetPage({
   const ctx = await requireWorkspacePage(workspaceSlug);
   const viewer = await authorizePage(() => authorizeProject(ctx, "project.update", projectId));
   const prefs = resolveViewerPrefs(ctx.user, ctx.settings);
-  const budget = await getProjectBudget(getDb(), viewer, projectId, new Date());
+  const budget = await getProjectBudget(getDb(), viewer, projectId, new Date(), ctx.settings);
   return (
     <BudgetTab
       slug={workspaceSlug}

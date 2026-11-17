@@ -167,7 +167,7 @@ export const workspaceSettingsSchema = z.object({
   budgetThresholds: z
     .array(
       z
-        .number()
+        .number({ error: THRESHOLD_MESSAGE })
         .int(THRESHOLD_MESSAGE)
         .min(1, THRESHOLD_MESSAGE)
         .max(BUDGET_THRESHOLD_MAX, THRESHOLD_MESSAGE),

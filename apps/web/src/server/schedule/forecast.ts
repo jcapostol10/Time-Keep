@@ -47,11 +47,13 @@ export async function projectForecast(
   estimate: Estimate,
   currency: string,
   now: Date,
+  /** The workspace timezone when the caller already holds it. */
+  timezone?: string,
 ): Promise<Forecast | null> {
   const value = estimate.kind === "TIME" ? estimate.seconds : estimate.minor;
   if (estimate.kind === "NONE" || !value || value <= 0) return null;
   const kind = estimate.kind;
-  const { timezone: tz } = await workspaceZone(db, workspaceId);
+  const tz = timezone ?? (await workspaceZone(db, workspaceId)).timezone;
   const period = estimatePeriod(estimate.reset, now, tz);
 
   // Tracked: raw stopped work in the period, per local day of the workspace.

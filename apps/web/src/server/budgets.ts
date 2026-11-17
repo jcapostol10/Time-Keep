@@ -1,7 +1,6 @@
 import "server-only";
 
 import {
-  addDaysToKey,
   budgetThresholdsOf,
   cumulative,
   dateKeysBetween,
@@ -19,12 +18,10 @@ import {
   isNotNull,
   isNull,
   lt,
-  or,
   project,
-  rate,
   sql,
   timeEntry,
-  workspaceSettings,
+  type WorkspaceSettings,
 } from "@timekeep/db";
 
 import type { BudgetDTO, ProjectDetail } from "@/lib/catalog-types";
@@ -33,7 +30,7 @@ import { assertCan } from "./authz";
 import { getProject, requireVisibleProject } from "./catalog/projects";
 import { listTasks } from "./catalog/tasks";
 import type { Viewer } from "./catalog/viewer";
-import { estimateOf, progressFor, workspaceZone } from "./estimates";
+import { estimateOf, hasBillableRate, progressFor } from "./estimates";
 import { projectCurrency } from "./rates";
 import { projectForecast } from "./schedule/forecast";
 
@@ -43,7 +40,7 @@ import { projectForecast } from "./schedule/forecast";
  * owners, admins and the project's managers (`project.update`).
  */
 
-/** Past this many days the chart samples weekly points. */
+/** Past this many days the chart keeps one point per week (its last day) and today. */
 const DAILY_LIMIT = 62;
 
 export async function setProjectEstimate(
@@ -72,31 +69,6 @@ export async function setProjectEstimate(
   return getProject(db, viewer, projectId);
 }
 
-/** A billable rate in force for the project in its currency: the project's own, or a member's or the workspace's. */
-async function hasBillableRate(
-  db: Database,
-  workspaceId: string,
-  projectId: string,
-  currency: string,
-  now: Date,
-): Promise<boolean> {
-  const [row] = await db
-    .select({ id: rate.id })
-    .from(rate)
-    .where(
-      and(
-        eq(rate.workspaceId, workspaceId),
-        eq(rate.kind, "billable"),
-        eq(rate.currency, currency),
-        isNotNull(rate.amountMinor),
-        sql`${rate.effectiveFrom} <= ${now}`,
-        or(eq(rate.projectId, projectId), isNull(rate.projectId)),
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
-}
-
 /** The measure per local day of the workspace, over `[from, to)`: seconds, or billable amounts in `currency`. */
 async function dailyMeasure(
   db: Database,
@@ -105,7 +77,7 @@ async function dailyMeasure(
   kind: "TIME" | "MONEY",
   currency: string,
   tz: string,
-  bounds: { from: Date | null; to: Date },
+  bounds: { from: Date | null; to: Date | null },
 ): Promise<Map<string, number>> {
   const localDay = sql<string>`((${timeEntry.start} at time zone ${tz})::date)::text`;
   const value =
@@ -123,7 +95,7 @@ async function dailyMeasure(
         isNotNull(timeEntry.end),
         eq(timeEntry.type, "work"),
         bounds.from ? gte(timeEntry.start, bounds.from) : undefined,
-        lt(timeEntry.start, bounds.to),
+        bounds.to ? lt(timeEntry.start, bounds.to) : undefined,
       ),
     )
     .groupBy(sql.raw("1"));
@@ -135,6 +107,8 @@ export async function getProjectBudget(
   viewer: Viewer,
   projectId: string,
   now: Date,
+  /** The workspace's settings row, which the page already holds. */
+  settings: Pick<WorkspaceSettings, "timezone" | "budgetThresholds" | "weekStart">,
 ): Promise<BudgetDTO> {
   const row = await requireVisibleProject(db, viewer, projectId);
   assertCan(viewer.actor, "project.update", {
@@ -144,16 +118,11 @@ export async function getProjectBudget(
     isMember: row.members.some((m) => m.userId === viewer.userId),
   });
   const estimate = estimateOf(row);
-  const [zone, currency, settings, tasks] = await Promise.all([
-    workspaceZone(db, viewer.workspaceId),
+  const [currency, tasks] = await Promise.all([
     projectCurrency(db, viewer.workspaceId, projectId),
-    db
-      .select({ budgetThresholds: workspaceSettings.budgetThresholds })
-      .from(workspaceSettings)
-      .where(eq(workspaceSettings.workspaceId, viewer.workspaceId)),
     listTasks(db, viewer, projectId),
   ]);
-  const tz = zone.timezone;
+  const tz = settings.timezone;
   const progress =
     (
       await progressFor(db, viewer.workspaceId, [{ id: projectId, estimate, currency }], now, tz)
@@ -181,10 +150,9 @@ export async function getProjectBudget(
       fromKey = first?.start ? localDateKey(first.start, tz) : today;
     }
     if (fromKey > today) fromKey = today;
-    const tomorrow = zonedDateTimeToInstant(
-      { date: addDaysToKey(today, 1), hours: 0, minutes: 0 },
-      tz,
-    );
+    // Measured over what the bar counts (to the period's end, or without a bound for a
+    // whole-project estimate); a day after today is folded into today's point, so the
+    // chart ends on the bar's number.
     const daily = await dailyMeasure(
       db,
       viewer.workspaceId,
@@ -194,14 +162,26 @@ export async function getProjectBudget(
       tz,
       {
         from: period.from ?? zonedDateTimeToInstant({ date: fromKey, hours: 0, minutes: 0 }, tz),
-        to: tomorrow,
+        to: period.to,
       },
     );
+    let ahead = 0;
+    for (const [day, value] of daily) if (day > today) ahead += value;
     const keys = dateKeysBetween(fromKey, today);
-    const points = cumulative(keys.map((key) => ({ key, value: daily.get(key) ?? 0 })));
+    const points = cumulative(
+      keys.map((key) => ({
+        key,
+        value: (daily.get(key) ?? 0) + (key === today ? ahead : 0),
+      })),
+    );
+    // A long chart keeps the last day of each of the workspace's weeks, and today.
+    const weekEnd = (settings.weekStart + 6) % 7;
     const sampled =
       points.length > DAILY_LIMIT
-        ? points.filter((_, i) => i % 7 === 6 || i === points.length - 1)
+        ? points.filter(
+            (p, i) =>
+              i === points.length - 1 || new Date(`${p.key}T00:00:00Z`).getUTCDay() === weekEnd,
+          )
         : points;
     series = sampled.map((p) => ({ key: p.key, label: formatDateKey(p.key), value: p.value }));
   }
@@ -213,13 +193,14 @@ export async function getProjectBudget(
     estimate,
     currency,
     now,
+    tz,
   );
 
   return {
     estimate,
     currency,
     forecast,
-    thresholds: budgetThresholdsOf({ budgetThresholds: settings[0]?.budgetThresholds }),
+    thresholds: budgetThresholdsOf({ budgetThresholds: settings.budgetThresholds }),
     progress,
     hasRates: await hasBillableRate(db, viewer.workspaceId, projectId, currency, now),
     series,

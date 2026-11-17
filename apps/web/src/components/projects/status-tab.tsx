@@ -5,6 +5,7 @@ import {
   type DurationFormat,
   formatDuration,
   formatMoney,
+  hasProfit,
   localDateKey,
   monthBoundsInZone,
   weekBounds,
@@ -28,7 +29,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recha
 import type { ProjectStatus } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
 
-import { amountText } from "../reports/money-cell";
+import { amountText, CostNotes } from "../reports/money-cell";
 
 /** Tracked time on the project by task and by member for an inclusive date range. */
 export function StatusTab({
@@ -149,14 +150,23 @@ export function StatusTab({
             <Stat
               label="Profit"
               value={
-                status.profitExcludedCount > 0 && status.amountMinor === 0
-                  ? "—"
-                  : formatMoney(status.profitMinor, status.money.currency)
+                hasProfit(status) ? formatMoney(status.profitMinor, status.money.currency) : "—"
               }
             />
           </>
         ) : null}
       </div>
+      {status.unratedIn ? (
+        <p className="text-muted-foreground text-sm" data-testid="status-unrated">
+          This project has no rate in {status.unratedIn} yet, so its billable time has no amount. An
+          owner or admin can set a project rate.
+        </p>
+      ) : null}
+      {status.money?.costs ? (
+        <div className="rounded-lg border [&>p:first-child]:border-t-0">
+          <CostNotes totals={status} />
+        </div>
+      ) : null}
 
       {status.weeks ? (
         <figure className="bg-card h-40 rounded-lg border p-3" data-testid="status-weeks">

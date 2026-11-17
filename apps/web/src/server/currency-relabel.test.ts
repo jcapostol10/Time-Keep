@@ -22,7 +22,7 @@ import {
 import { loadViewer } from "./authz";
 import { currencyLock } from "./currency-lock";
 import { createClient, updateClient } from "./catalog/clients";
-import { createProject, updateProject } from "./catalog/projects";
+import { createProject, deleteProject, updateProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { requestRateRecalc, runRateRecalcJob } from "./rate-recalc";
 import { relabelWorkspaceCurrency, setRate } from "./rates";
@@ -247,6 +247,28 @@ describe("currency relabels", () => {
     await updateClient(db, wsId, ids.Acme!, { notes: "Net 30" });
     expect(await rates()).toEqual(BEFORE_RATES);
     expect(await entries()).toEqual(BEFORE_ENTRIES);
+  });
+
+  it("deleting a project re-rates the entries it moves in their new project's currency", async () => {
+    const costOf = async (name: string) =>
+      (
+        await db
+          .select({ rate: timeEntry.costRateMinor, amount: timeEntry.costAmountMinor })
+          .from(timeEntry)
+          .where(eq(timeEntry.id, entryOf[name]!))
+      )[0];
+    // On Us the cost came from the project-member cost rate.
+    expect(await costOf("Us")).toEqual({ rate: 70_000, amount: 70_000 });
+
+    // USD → EUR: the EUR project rate applies; cost falls back to the member's.
+    await deleteProject(db, owner, ids.Us!, { mode: "reassign", projectId: ids.Eu! });
+    expect((await entries()).Us).toEqual(["EUR", 3000, 3000]);
+    expect(await costOf("Us")).toEqual({ rate: 60_000, amount: 60_000 });
+
+    // PHP → a USD project with no USD rate: unrated, never a PHP number read as USD.
+    await deleteProject(db, owner, ids.Home!, { mode: "reassign", projectId: ids.Us2! });
+    expect((await entries()).Home).toEqual([null, null, null]);
+    expect(await costOf("Home")).toEqual({ rate: 60_000, amount: 60_000 });
   });
 
   it("decides on what is committed once it holds the currency lock", async () => {

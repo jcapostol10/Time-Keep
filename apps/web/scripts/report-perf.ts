@@ -3,8 +3,10 @@
  * owner, a scoped manager and a member, plus the member's picker read with
  * tasks by group, the one-year Attendance report (Phase 5b), and prints the
  * plans of the Summary's queries; then rates all 1,000,000 entries with the
- * "apply to past entries" job. Fails over the one-second Summary or Attendance
- * budget, the 200 ms picker budget or the 300-second function budget.
+ * "apply to past entries" job, and times a workspace currency relabel inside a
+ * transaction it rolls back. Fails over the one-second Summary or Attendance
+ * budget, the 200 ms picker budget, the 300-second function budget or the
+ * 60-second relabel budget.
  *
  *   pnpm --filter @timekeep/web report:perf
  *
@@ -18,11 +20,16 @@ import { loadViewer } from "../src/server/authz";
 import { listPickerProjects } from "../src/server/catalog/projects";
 import type { Viewer } from "../src/server/catalog/viewer";
 import { requestRateRecalc, runRateRecalcJob } from "../src/server/rate-recalc";
+import { relabelWorkspaceCurrency } from "../src/server/rates";
 import { summaryReport } from "../src/server/reports";
 
 const BUDGET_MS = 1000;
 const PICKER_BUDGET_MS = 200;
 const RECALC_BUDGET_MS = 300_000;
+/** A currency change relabels inside the settings request, holding the settings row. */
+const RELABEL_BUDGET_MS = 60_000;
+
+class RolledBack extends Error {}
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -66,7 +73,7 @@ async function main() {
         runs.push(performance.now() - t0);
         if (i === 0) {
           console.info(
-            `[perf] ${label}: ${report.totals.entryCount} entries, ${report.series.length} buckets, amount ${report.totals.amountMinor}`,
+            `[perf] ${label}: ${report.totals.entryCount} entries, ${report.series.length} buckets, amount ${report.totals.amountMinor}, ${Object.keys(report.progress ?? {}).length} progress bars`,
           );
         }
       }
@@ -161,6 +168,24 @@ async function main() {
       const result = await db.execute<{ "QUERY PLAN": string }>(plan);
       console.info(result.rows.map((r) => r["QUERY PLAN"]).join("\n"));
       console.info("");
+    }
+    // Last, so its dead tuples skew nothing above: a workspace currency change relabels
+    // every rated entry in one statement. Timed, then rolled back.
+    let relabelMs = 0;
+    try {
+      await db.transaction(async (tx) => {
+        const t0 = performance.now();
+        await relabelWorkspaceCurrency(tx, "perf-ws", "USD", "EUR");
+        relabelMs = performance.now() - t0;
+        throw new RolledBack();
+      });
+    } catch (error) {
+      if (!(error instanceof RolledBack)) throw error;
+    }
+    console.info(`[perf] workspace currency relabel: ${(relabelMs / 1000).toFixed(1)} s`);
+    if (relabelMs > RELABEL_BUDGET_MS) {
+      console.error(`[perf] relabel over budget: ${(relabelMs / 1000).toFixed(0)} s > 60 s`);
+      process.exitCode = 1;
     }
     if (median > BUDGET_MS) {
       console.error(`[perf] over budget: ${median.toFixed(0)} ms > ${BUDGET_MS} ms`);

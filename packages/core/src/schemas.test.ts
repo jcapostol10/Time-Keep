@@ -244,6 +244,14 @@ describe("estimates (Phase 6b)", () => {
       workspaceSettingsSchema.safeParse({ ...settings, budgetThresholds: [201] }).success,
     ).toBe(false);
     expect(DEFAULT_WORKSPACE_SETTINGS.budgetThresholds).toEqual([50, 80, 100]);
+    // Text that is not a number arrives as NaN: the same sentence, not zod's default.
+    const typed = workspaceSettingsSchema.safeParse({
+      ...settings,
+      budgetThresholds: [Number.NaN],
+    });
+    expect(typed.success ? null : typed.error.issues[0]?.message).toBe(
+      "Thresholds are whole percentages from 1 to 200.",
+    );
   });
 });
 

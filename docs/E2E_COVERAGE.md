@@ -265,6 +265,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Cost, profit and currencies
 
 - [x] An admin sets a member's cost rate and sees Cost and Profit in the Summary and Detailed reports — `profit.spec.ts` › "a cost rate shows cost and profit to an admin"
+- [x] The Summary keeps its Cost and Profit columns at 375px — `profit.spec.ts` › "a cost rate shows cost and profit to an admin"
 - [x] A member never sees cost or profit, in a report, a tab or the route — `profit.spec.ts` › "a member sees no cost or profit"
 - [x] A manager sees cost only when the workspace setting is on — `profit.spec.ts` › "the setting opens cost to managers"
 - [x] A client billed in EUR shows its amounts in EUR beside the workspace's USD, never one sum — `profit.spec.ts` › "a EUR client's amounts stay in EUR"
@@ -328,6 +329,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A required field blocks Stop and manual Add until it is filled — `settings.spec.ts` › "a required project blocks Stop until it is picked"
 - [x] Force timer hides manual mode and makes the timesheet read-only for a member — `settings.spec.ts` › "force timer takes manual entry away from a member"
 - [x] A break entry is tracked with the Break switch and stays out of the Summary by default — `settings.spec.ts` › "a break stays out of the Summary unless the Type filter asks"
+- [x] Budget alert thresholds show sorted and without repeats after a save, and text that is not a number is refused in plain words — `settings.spec.ts` › "budget thresholds show as they were saved"
 - [x] Report rounding rounds the Summary and the Raw toggle shows real time — `settings.spec.ts` › "rounding rounds the Summary and Raw shows real time"
 
 ## Add time for others
