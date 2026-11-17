@@ -445,6 +445,15 @@ describe("listApprovals", () => {
       }),
     ]);
   });
+
+  it("shows a project manager the people whose closed period is all on their projects", async () => {
+    await setRules({ approvalReviewers: "PROJECT_MANAGERS" });
+    const rows = (await listApprovals(db, await viewer("pat"), { tab: "unsubmitted" }, NOW)) as {
+      userName: string;
+      periodStart: string;
+    }[];
+    expect(rows.map((r) => [r.userName, r.periodStart])).toEqual([["Carol Member", "2026-10-19"]]);
+  });
 });
 
 describe("periodView", () => {

@@ -707,18 +707,20 @@ async function listUnsubmitted(
   const last = periods.at(-1)!;
   const range = { from: periodBounds(first, tz).from, to: periodBounds(last, tz).to };
 
-  // The people the viewer may review whatever their projects: everyone for
-  // owners and admins, a manager's own people (the Unsubmitted tab has no
-  // request whose projects a project manager could check).
+  // The people the viewer may review: whatever their projects (owners and
+  // admins everyone, a manager their own people), or, for a project manager,
+  // anyone whose period turns out to be all on the manager's projects (checked
+  // per period below, with the period's projects).
+  const reviewable = (userId: string, projectIds: string[]) =>
+    can(viewer.actor, "approval.review", { kind: "approval", userId, projectIds });
+  const byProject = viewer.actor.managedProjectIds.size > 0;
   const people = (
     await db
       .select({ userId: membership.userId, name: user.name })
       .from(membership)
       .innerJoin(user, eq(user.id, membership.userId))
       .where(and(eq(membership.workspaceId, viewer.workspaceId), eq(membership.status, "ACTIVE")))
-  ).filter((m) =>
-    can(viewer.actor, "approval.review", { kind: "approval", userId: m.userId, projectIds: [] }),
-  );
+  ).filter((m) => byProject || reviewable(m.userId, []));
   if (people.length === 0) return [];
   const names = new Map(people.map((m) => [m.userId, m.name]));
 
@@ -727,6 +729,7 @@ async function listUnsubmitted(
     .select({
       userId: timeEntry.userId,
       day,
+      projectId: timeEntry.projectId,
       seconds: sql<number>`sum(${timeEntry.durationSeconds})::bigint`.mapWith(Number),
       count: sql<number>`count(*)::int`,
     })
@@ -742,7 +745,7 @@ async function listUnsubmitted(
         lt(timeEntry.start, range.to),
       ),
     )
-    .groupBy(timeEntry.userId, sql.raw("2"));
+    .groupBy(timeEntry.userId, sql.raw("2"), timeEntry.projectId);
   const requests = await db
     .select({
       userId: approvalRequest.userId,
@@ -771,6 +774,9 @@ async function listUnsubmitted(
       );
       const workSeconds = inPeriod.reduce((n, s) => n + s.seconds, 0);
       if (workSeconds === 0) continue;
+      // Time on no project is never all on a manager's projects.
+      const projectIds = [...new Set(inPeriod.map((s) => s.projectId ?? ""))];
+      if (!reviewable(userId, []) && !reviewable(userId, projectIds)) continue;
       out.push({
         userId,
         userName,
