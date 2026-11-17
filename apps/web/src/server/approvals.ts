@@ -957,15 +957,20 @@ export async function myPeriods(
 
 // --- Settings ----------------------------------------------------------------------
 
-async function pendingCount(db: Executor, workspaceId: string): Promise<number> {
+async function countRequests(
+  db: Executor,
+  workspaceId: string,
+  status: "PENDING" | "APPROVED",
+): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(approvalRequest)
-    .where(
-      and(eq(approvalRequest.workspaceId, workspaceId), eq(approvalRequest.status, "PENDING")),
-    );
+    .where(and(eq(approvalRequest.workspaceId, workspaceId), eq(approvalRequest.status, status)));
   return row?.n ?? 0;
 }
+
+const pendingCount = (db: Executor, workspaceId: string) =>
+  countRequests(db, workspaceId, "PENDING");
 
 interface ApprovalSettingsShape {
   approvalEnabled: boolean;
@@ -985,8 +990,11 @@ export async function checkApprovalSettings(
   current: ApprovalSettingsShape,
   next: ApprovalSettingsShape,
   confirmedOff: boolean,
+  /** The person saw that approved periods' edges move (backlog ruling R7). */
+  confirmedZone = false,
 ): Promise<{
-  field: "approvalPeriod" | "timezone" | "weekStart" | "confirmApprovalOff";
+  field:
+    "approvalPeriod" | "timezone" | "weekStart" | "confirmApprovalOff" | "confirmTimezoneChange";
   message: string;
 } | null> {
   // Periods are made of the period type, the workspace timezone and its week start:
@@ -998,15 +1006,26 @@ export async function checkApprovalSettings(
   const turningOff = current.approvalEnabled && !next.approvalEnabled;
   if (!periodChanged && !turningOff) return null;
   const n = await pendingCount(db, workspaceId);
-  if (n === 0) return null;
-  if (turningOff) {
-    if (confirmedOff) return null;
+  if (turningOff && n > 0 && !confirmedOff) {
     return {
       field: "confirmApprovalOff",
       message: `${n} pending ${n === 1 ? "period" : "periods"} will be withdrawn.`,
     };
   }
-  return { field: moved!, message: "Approve or reject the pending periods first." };
+  if (turningOff) return null;
+  if (n > 0) return { field: moved!, message: "Approve or reject the pending periods first." };
+  // Approved periods keep their dates, read in the new zone or week: allowed
+  // (ruling 5), after saying so (R7).
+  if ((moved === "timezone" || moved === "weekStart") && !confirmedZone) {
+    const approved = await countRequests(db, workspaceId, "APPROVED");
+    if (approved > 0) {
+      return {
+        field: "confirmTimezoneChange",
+        message: `${approved} approved ${approved === 1 ? "period" : "periods"} will move by the change: ${approved === 1 ? "its" : "their"} first and last days shift.`,
+      };
+    }
+  }
+  return null;
 }
 
 /** Turning approval off: every pending request is withdrawn, logged as AUTO_WITHDRAW. */

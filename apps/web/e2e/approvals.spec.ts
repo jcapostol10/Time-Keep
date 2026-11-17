@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import { formatPeriod, type Period, zonedDateTimeToInstant } from "@timekeep/core";
 
 import { expect, test } from "./fixtures";
+import { openSettings } from "./helpers/settings";
 import { waitForApp } from "./helpers/app";
 import {
   enableApproval,
@@ -260,6 +261,25 @@ test.describe("approvals and locks", { tag: "@nightly" }, () => {
     await waitForSaves(page);
     await expect(prompt).toBeHidden();
     await expect(input).toHaveValue(before);
+  });
+
+  test("changing the timezone with approved periods asks first", async ({ page, freshUser }) => {
+    const { slug, timezone, name } = freshUser;
+    const { last } = weeks(timezone);
+    await enableApproval(page, slug);
+    await addLastWeek(page, slug, timezone, "Approved before the move");
+    await submitPeriod(page, slug, last);
+    await approve(page, slug, name, last);
+
+    await openSettings(page, slug);
+    const target = timezone === "Pacific/Kiritimati" ? "UTC" : "Pacific/Kiritimati";
+    await page.getByRole("combobox", { name: "Timezone" }).click();
+    await page.getByRole("option", { name: target, exact: true }).click();
+    await page.getByRole("button", { name: "Save settings" }).click();
+    const dialog = page.getByRole("alertdialog", { name: "Move approved periods?" });
+    await expect(dialog).toContainText("1 approved period will move by the change");
+    await dialog.getByRole("button", { name: "Change anyway" }).click();
+    await expect(page.getByText("Workspace settings saved")).toBeVisible();
   });
 
   test("a rolling lock blocks a member, not an admin", async ({

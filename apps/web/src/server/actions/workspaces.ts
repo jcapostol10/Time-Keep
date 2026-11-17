@@ -65,6 +65,8 @@ const updateSettingsSchema = workspaceSettingsSchema
     confirmTaskVisibility: z.boolean().optional(),
     /** The person saw how many pending periods turning approval off withdraws (Phase 5a). */
     confirmApprovalOff: z.boolean().optional(),
+    /** The person saw that approved periods move with a new timezone or week start (R7). */
+    confirmTimezoneChange: z.boolean().optional(),
   })
   .superRefine(lockSettingsCheck);
 export type UpdateWorkspaceSettingsInput = z.infer<typeof updateSettingsSchema>;
@@ -78,8 +80,14 @@ export async function updateWorkspaceSettingsAction(
     await authorize(ctx, "workspace.update");
     const parsed = updateSettingsSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const { name, confirmCurrencyChange, confirmTaskVisibility, confirmApprovalOff, ...settings } =
-      parsed.data;
+    const {
+      name,
+      confirmCurrencyChange,
+      confirmTaskVisibility,
+      confirmApprovalOff,
+      confirmTimezoneChange,
+      ...settings
+    } = parsed.data;
 
     const db = getDb();
     const newCurrency = settings.currency !== ctx.settings.currency;
@@ -118,6 +126,7 @@ export async function updateWorkspaceSettingsAction(
         ctx.settings,
         settings,
         confirmApprovalOff === true,
+        confirmTimezoneChange === true,
       );
       if (problem) return problem;
       if (turningOff) await withdrawPendingRequests(tx, ctx.workspace.id, ctx.user.id);

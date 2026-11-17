@@ -572,6 +572,26 @@ describe("approval settings", () => {
     ).toEqual({ field: "weekStart", message: "Approve or reject the pending periods first." });
   });
 
+  it("asks before a new timezone or week start moves approved periods' edges (R7)", async () => {
+    const bobs = await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
+    await reviewRequests(db, await viewer("ann"), { ids: [bobs.id], decision: "APPROVE" }, NOW);
+    const current = {
+      approvalEnabled: true,
+      approvalPeriod: "WEEKLY",
+      timezone: "Asia/Manila",
+      weekStart: 1,
+    };
+    expect(
+      await checkApprovalSettings(db, wsId, current, { ...current, timezone: "UTC" }, false),
+    ).toEqual({
+      field: "confirmTimezoneChange",
+      message: "1 approved period will move by the change: its first and last days shift.",
+    });
+    expect(
+      await checkApprovalSettings(db, wsId, current, { ...current, weekStart: 0 }, false, true),
+    ).toBeNull();
+  });
+
   it("asks before turning approval off, then withdraws the pending periods and keeps approved ones", async () => {
     const bobs = await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
     const carols = await submitPeriod(db, await viewer("carol"), LAST_WEEK, NOW);

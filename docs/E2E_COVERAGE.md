@@ -368,6 +368,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Approve several periods at once from the Pending tab; they move to the Archive — `approvals.spec.ts` › "bulk approve from the Pending tab"
 - [x] Approvers get the "submitted" email and the member the decision — `approvals.spec.ts` › "approval emails reach approvers and the member"
 - [x] An owner or admin changes approved time only with a note, which the period's history shows — `approvals.spec.ts` › "an admin edits approved time with a note"
+- [x] Changing the workspace timezone with approved periods asks first — `approvals.spec.ts` › "changing the timezone with approved periods asks first"
 - [x] Undo after a delete in approved time restores it without asking for the note again — `approvals.spec.ts` › "Undo after a delete in approved time does not ask for the note again"
 - [x] A rolling lock blocks a member's entry in the locked days, not an admin's — `approvals.spec.ts` › "a rolling lock blocks a member, not an admin"
 - [x] The daily job emails a reminder for a closed period with time and no submission — `approvals.spec.ts` › "the daily job reminds an unsubmitted period"
