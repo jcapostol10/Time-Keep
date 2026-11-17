@@ -26,7 +26,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 - [ ] **b1** The Detailed report's sort is per visit, not in the URL.
 - [ ] **b1** `workspace_settings.task_creators` and `task_assignee` are unread since tasks by group (2026-10-29): drop them in a contract migration.
 - [ ] **b1** Tasks by group follow-ups: a member's report filters (built from the picker) no longer offer a project whose tasks are all hidden from them even when their old entries are on it; making a public project private after its tasks were grouped does not give those groups access (rule 9 applies at assignment time); a manager allowed to create projects cannot create a new project's tasks in one import (rule 5: they are not the new project's manager).
-- [ ] **b1** `time-entries.test.ts` › "reassignProjectEntries moves entries and clears their task" failed once in the 5a gate (the moved entry's `updated_at` read 156 ms earlier than its creation's) and passed on two reruns; both stamps come from Postgres `now()`, so look at the Docker clock or the test's ordering.
 - [ ] **b1** `ci.yml` skips its pull_request job for same-repository PRs (the push already ran). GitHub counts a skipped job as a passing required check, so if branch protection is ever added, require the push run's check explicitly. Move this note into CLAUDE.md's Deployment section.
 - [ ] **b1** The suite runs spec files with 3 workers; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). Move the "a new spec that writes to the demo tenant needs checking" note into CLAUDE.md's e2e bullets.
 
@@ -165,6 +164,7 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] Flaky reassign test, done 2026-11-17 (backlog cleanup b1): the test stamps the entry an hour back before the reassign, so a database clock that steps back a little between transactions cannot fail it; it still fails if the reassign leaves `updated_at` alone.
 - [x] One render per revalidating action, done 2026-11-17 (backlog cleanup b1): the client no longer calls `router.refresh()` after the 30 actions that already revalidate (the action's response re-renders the page). Kept where the action does not revalidate: the project and tag dialogs (their actions also serve the pickers' inline create, which must not re-render the tracker), targets, periods, share-link revoke, the project access tab's failure path and the once-a-session timezone detector. `rowAction` keeps its retry: tracker rows and expense categories need it too.
 - [x] Timesheet arrows, done 2026-11-17 (backlog cleanup b1): Left and Right leave a cell only at the text's edge or with the whole value selected (`movesHorizontally`), so the caret moves within "1:30".
 - [x] Copy last week, done 2026-11-17 (backlog cleanup b1): an entry already in the target week with the same times and details is not copied again, an entry whose details can no longer take time is skipped with its reason (the toast names the first), and a break stays a break (it was copied as work). A period refusal still fails the whole copy.

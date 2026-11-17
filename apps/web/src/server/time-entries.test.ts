@@ -1003,14 +1003,20 @@ describe("time entries service", () => {
       const theirs = await createManualEntry(db, memberScope, manual({ projectId: web.id }));
       await createManualEntry(db, scope, manual({ projectId: app.id }, 60));
 
+      // Stamp the entry an hour back, so the reassign's stamp is later even if
+      // the database's clock steps back a little between transactions.
+      const [{ stamped } = { stamped: new Date(0) }] = await db
+        .update(timeEntry)
+        .set({ updatedAt: sql`now() - interval '1 hour'` })
+        .where(eq(timeEntry.id, mine.id))
+        .returning({ stamped: timeEntry.updatedAt });
+
       expect(await countProjectEntries(db, scope.workspaceId, web.id)).toBe(2);
       expect(await reassignProjectEntries(db, scope.workspaceId, web.id, app.id)).toBe(2);
       expect(await countProjectEntries(db, scope.workspaceId, web.id)).toBe(0);
       const movedMine = (await range(scope)).find((e) => e.id === mine.id);
       expect(movedMine).toMatchObject({ projectId: app.id, taskId: null, task: null });
-      expect(new Date(movedMine!.updatedAt).getTime()).toBeGreaterThan(
-        new Date(mine.updatedAt).getTime(),
-      );
+      expect(new Date(movedMine!.updatedAt).getTime()).toBeGreaterThan(stamped.getTime());
       expect((await range(memberScope)).map((e) => [e.id, e.projectId])).toEqual([
         [theirs.id, app.id],
       ]);
