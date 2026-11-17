@@ -2,7 +2,6 @@ import type { Page } from "@playwright/test";
 import { addDaysToKey, localDateKey, zonedDateTimeToInstant } from "@timekeep/core";
 
 import { expect, test } from "./fixtures";
-import { uniqueEmail } from "./helpers/app";
 import { runDailyJob } from "./helpers/approvals";
 import { createClientViaUi, createProjectViaUi } from "./helpers/catalog";
 import {
