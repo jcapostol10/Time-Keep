@@ -27,6 +27,14 @@ export type UpdateEntryPatch = z.input<typeof updateEntrySchema>;
 
 const NOT_SAVED = "The change could not be saved.";
 
+/**
+ * Optimistic writes not yet settled, across every view of the tab. A refused
+ * write refetches only when it is the last one: an earlier refetch would bring
+ * back the server's rows under a later write still queued (server actions run
+ * one at a time), and that write's own settle refetches when it lands.
+ */
+let optimisticInFlight = 0;
+
 /** A range query's key: ["tracker", slug, "entries", userId, "range", from, to]. */
 function rangeBounds(key: QueryKey): { from: string; to: string } | null {
   return key[4] === "range" && typeof key[5] === "string" && typeof key[6] === "string"
@@ -47,21 +55,57 @@ export function useEntryWrites() {
   const cache = useTrackerCache(slug, target);
   const qc = useQueryClient();
 
-  /** Applies `change` to every loaded range of the person; returns the undo. */
+  /** Applies `change` to every loaded range of the person. */
   const patchRanges = useCallback(
     (change: (list: TimeEntryDTO[], bounds: { from: string; to: string }) => TimeEntryDTO[]) => {
-      const before = qc.getQueriesData<TimeEntryDTO[]>({
+      for (const [key, data] of qc.getQueriesData<TimeEntryDTO[]>({
         queryKey: trackerKeys.entries(slug, target),
-      });
-      for (const [key, data] of before) {
+      })) {
         const bounds = rangeBounds(key);
         if (bounds && data) qc.setQueryData(key, change(data, bounds));
       }
-      return () => {
-        for (const [key, data] of before) if (rangeBounds(key)) qc.setQueryData(key, data);
-      };
     },
     [qc, slug, target],
+  );
+
+  /**
+   * Changes the given entries in every loaded range and returns their undo: it
+   * puts back only those entries as they were (another write made meanwhile
+   * keeps its change), then refetches, so the view ends on the server's rows.
+   */
+  const optimistic = useCallback(
+    (ids: string[], change: (list: TimeEntryDTO[]) => TimeEntryDTO[]) => {
+      const wanted = new Set(ids);
+      const before = new Map<string, TimeEntryDTO>();
+      for (const [key, data] of qc.getQueriesData<TimeEntryDTO[]>({
+        queryKey: trackerKeys.entries(slug, target),
+      })) {
+        if (!rangeBounds(key)) continue;
+        for (const e of data ?? []) if (wanted.has(e.id)) before.set(e.id, e);
+      }
+      patchRanges((list) => change(list));
+      optimisticInFlight += 1;
+      let open = true;
+      const done = () => {
+        if (open) optimisticInFlight -= 1;
+        open = false;
+      };
+      return {
+        /** The write landed: its settle refetches. */
+        done,
+        /** The write was refused: put the entries back, and refetch if nothing else is pending. */
+        undo: () => {
+          done();
+          patchRanges((list, { from, to }) => {
+            let next = list.map((e) => before.get(e.id) ?? e);
+            for (const e of before.values()) next = insertIntoRange(next, e, from, to);
+            return next;
+          });
+          if (optimisticInFlight === 0) void cache.invalidateEntries();
+        },
+      };
+    },
+    [qc, slug, target, patchRanges, cache],
   );
 
   const settle = useCallback(() => {
@@ -103,27 +147,28 @@ export function useEntryWrites() {
   const update = useCallback(
     async (id: string, patch: UpdateEntryPatch): Promise<TimeEntryDTO | null> => {
       await qc.cancelQueries({ queryKey: trackerKeys.entries(slug, target) });
-      const undo =
+      const write =
         typeof patch.start === "string" || typeof patch.end === "string"
-          ? patchRanges((list) =>
+          ? optimistic([id], (list) =>
               patchRange(list, id, {
                 start: typeof patch.start === "string" ? patch.start : undefined,
                 end: typeof patch.end === "string" ? patch.end : undefined,
               }),
             )
-          : () => {};
+          : null;
       const result = await trackSave(() =>
         withNoteRetry((note) => updateEntryAction(slug, id, { ...patch, note })),
       ).catch(() => ({ ok: false as const, error: NOT_SAVED }));
       if (!result.ok) {
-        undo();
+        write?.undo();
         toast.error(result.error);
         return null;
       }
+      write?.done();
       settle();
       return result.data;
     },
-    [qc, slug, target, settle, patchRanges],
+    [qc, slug, target, settle, optimistic],
   );
 
   const restore = useCallback(
@@ -145,15 +190,16 @@ export function useEntryWrites() {
   const remove = useCallback(
     async (ids: string[]): Promise<boolean> => {
       await qc.cancelQueries({ queryKey: trackerKeys.entries(slug, target) });
-      const undo = patchRanges((list) => removeFromRange(list, ids));
+      const write = optimistic(ids, (list) => removeFromRange(list, ids));
       const result = await trackSave(() =>
         withNoteRetry((note) => deleteEntriesAction(slug, { ids, note })),
       ).catch(() => ({ ok: false as const, error: NOT_SAVED }));
       if (!result.ok) {
-        undo();
+        write.undo();
         toast.error(result.error);
         return false;
       }
+      write.done();
       settle();
       toast(ids.length === 1 ? "Entry deleted" : `${ids.length} entries deleted`, {
         duration: 5000,
@@ -161,7 +207,7 @@ export function useEntryWrites() {
       });
       return true;
     },
-    [qc, slug, target, settle, restore, patchRanges],
+    [qc, slug, target, settle, restore, optimistic],
   );
 
   return useMemo(

@@ -137,6 +137,36 @@ test.describe("calendar", () => {
     await expect(block(page, "Refused, No project, 1:00:00")).toHaveCSS("top", "576px");
   });
 
+  test("a refused move puts back only its own block", async ({ page, freshUser, trackerPage }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "First", start: "09:00", duration: "1" });
+    await addManualEntry(page, { description: "Second", start: "11:00", duration: "1" });
+    await openCalendar(page, freshUser.slug, "day");
+    await scrollToMinutes(page, 8 * 60);
+    // The first save is held, then refused; the second (queued behind it) is held, then saved.
+    let actions = 0;
+    await page.route("**/*", async (route) => {
+      const action = await route.request().headerValue("next-action");
+      if (route.request().method() !== "POST" || !action) return route.fallback();
+      const nth = ++actions;
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      if (nth === 1) await route.abort();
+      else await route.fallback();
+    });
+
+    await dragBlock(page, block(page, "First, No project, 1:00:00"), 0, 4 * SLOT_PX);
+    await dragBlock(page, block(page, "Second, No project, 1:00:00"), 0, 3 * 4 * SLOT_PX);
+    await expect(page.getByText("The change could not be saved.")).toBeVisible();
+    // Undoing the first move leaves the second where it was dropped, while its save is held.
+    await expect(block(page, "Second, No project, 1:00:00")).toHaveCSS("top", "896px", {
+      timeout: 1_000,
+    });
+    await waitForSaves(page);
+    // 09:00 is 576px down the column; 14:00 is 896px.
+    await expect(block(page, "First, No project, 1:00:00")).toHaveCSS("top", "576px");
+    await expect(block(page, "Second, No project, 1:00:00")).toHaveCSS("top", "896px");
+  });
+
   test("open a block with the keyboard", async ({ page, freshUser, trackerPage }) => {
     await trackerPage();
     await addManualEntry(page, { description: "Keyboard entry", start: "09:00", duration: "1" });
