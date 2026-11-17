@@ -37,7 +37,6 @@ export interface WorkspaceRuleColumns {
   allowBreaks: boolean;
   roundingMode: string;
   roundingMinutes: number;
-  /** `task_creators` is still a column but unread: tasks are admins' and project managers'. */
   taskVisibility: string;
   // Phase 5a: approvals and lock dates.
   approvalEnabled: boolean;

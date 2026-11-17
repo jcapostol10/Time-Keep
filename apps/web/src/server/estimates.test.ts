@@ -298,10 +298,9 @@ describe("setProjectEstimate and getProjectBudget", () => {
     const p = await createProject(db, owner, { name: "Site" });
     const design = await createTask(db, owner, p.id, {
       name: "Design",
-      assigneeIds: [],
       estimateSeconds: 7_200,
     });
-    await createTask(db, owner, p.id, { name: "QA", assigneeIds: [] });
+    await createTask(db, owner, p.id, { name: "QA" });
     await entry(p.id, new Date("2026-11-03T02:00:00Z"), 1, { taskId: design.id });
     const budget = await getProjectBudget(db, owner, p.id, NOW);
     expect(budget.tasks).toEqual([

@@ -58,21 +58,19 @@ describe("tasks service", () => {
     const web = await createProject(db, owner, { name: "Web" });
     const design = await createTask(db, owner, web.id, {
       name: "Design",
-      assigneeIds: [member.userId],
     });
     expect(design).toMatchObject({
       projectId: web.id,
       name: "Design",
       status: "ACTIVE",
-      assigneeIds: [member.userId],
       // No groups until one is assigned (decision 11).
       groupIds: [],
       trackedSeconds: 0,
     });
-    await expect(
-      createTask(db, owner, web.id, { name: "Design", assigneeIds: [] }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
-    await createTask(db, owner, web.id, { name: "QA", assigneeIds: [] });
+    await expect(createTask(db, owner, web.id, { name: "Design" })).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    await createTask(db, owner, web.id, { name: "QA" });
 
     await createManualEntry(db, owner as EntryScope, {
       description: "",
@@ -86,8 +84,8 @@ describe("tasks service", () => {
 
     const renamed = await updateTask(db, owner, design.id, { name: "Visual design" });
     expect(renamed.name).toBe("Visual design");
-    const done = await updateTask(db, owner, design.id, { status: "DONE", assigneeIds: [] });
-    expect(done).toMatchObject({ status: "DONE", assigneeIds: [] });
+    const done = await updateTask(db, owner, design.id, { status: "DONE" });
+    expect(done).toMatchObject({ status: "DONE" });
 
     expect(
       (await listTasks(db, owner, web.id)).map((t) => [t.name, t.status, t.trackedSeconds]),
@@ -97,16 +95,9 @@ describe("tasks service", () => {
     ]);
   });
 
-  it("requires assignees to be workspace members", async () => {
-    const web = await createProject(db, owner, { name: "Web" });
-    await expect(
-      createTask(db, owner, web.id, { name: "Design", assigneeIds: [outsider.userId] }),
-    ).rejects.toMatchObject({ code: "INVALID" });
-  });
-
   it("deleting a task keeps its entries on the project", async () => {
     const web = await createProject(db, owner, { name: "Web" });
-    const design = await createTask(db, owner, web.id, { name: "Design", assigneeIds: [] });
+    const design = await createTask(db, owner, web.id, { name: "Design" });
     await createManualEntry(db, owner as EntryScope, {
       description: "",
       projectId: web.id,
@@ -128,7 +119,7 @@ describe("tasks service", () => {
 
   it("hides the tasks of projects the viewer cannot see", async () => {
     const secret = await createProject(db, owner, { name: "Secret", visibility: "PRIVATE" });
-    const t = await createTask(db, owner, secret.id, { name: "Hidden", assigneeIds: [] });
+    const t = await createTask(db, owner, secret.id, { name: "Hidden" });
     await expect(listTasks(db, member, secret.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(updateTask(db, member, t.id, { name: "X" })).rejects.toMatchObject({
       code: "NOT_FOUND",
@@ -163,7 +154,6 @@ describe("tasks service", () => {
       const secret = await createProject(db, owner, { name: "Secret", visibility: "PRIVATE" });
       const audit = await createTask(db, owner, secret.id, {
         name: "Audit",
-        assigneeIds: [],
         groupIds: [finance],
       });
       expect(audit.groupIds).toEqual([finance]);
@@ -176,17 +166,17 @@ describe("tasks service", () => {
     it("in BY_GROUP mode a task needs a group", async () => {
       const web = await createProject(db, owner, { name: "Web" });
       await expect(
-        createTask(db, byGroup(owner), web.id, { name: "Loose", assigneeIds: [], groupIds: [] }),
+        createTask(db, byGroup(owner), web.id, { name: "Loose", groupIds: [] }),
       ).rejects.toThrow("Pick at least one group.");
-      await createTask(db, owner, web.id, { name: "Loose", assigneeIds: [], groupIds: [] });
+      await createTask(db, owner, web.id, { name: "Loose", groupIds: [] });
     });
 
     it("setTaskGroups adds, removes and sets; removing the last task keeps the project access", async () => {
       const finance = await group("Finance", []);
       const design = await group("Design", []);
       const secret = await createProject(db, owner, { name: "Secret", visibility: "PRIVATE" });
-      const a = await createTask(db, owner, secret.id, { name: "A", assigneeIds: [] });
-      const b = await createTask(db, owner, secret.id, { name: "B", assigneeIds: [] });
+      const a = await createTask(db, owner, secret.id, { name: "A" });
+      const b = await createTask(db, owner, secret.id, { name: "B" });
 
       await setTaskGroups(db, owner, [a.id, b.id], [finance], "add");
       expect(await groupsOf(a.id)).toEqual([finance]);
@@ -208,7 +198,6 @@ describe("tasks service", () => {
       const web = await createProject(db, owner, { name: "Web" });
       const t = await createTask(db, owner, web.id, {
         name: "Books",
-        assigneeIds: [],
         groupIds: [finance],
       });
       expect(await countTasksWithoutGroup(db, owner.workspaceId)).toBe(0);
@@ -221,8 +210,8 @@ describe("tasks service", () => {
       const finance = await group("Finance", []);
       const web = await createProject(db, owner, { name: "Web" });
       const ops = await createProject(db, owner, { name: "Ops" });
-      const onWeb = await createTask(db, owner, web.id, { name: "W", assigneeIds: [] });
-      const onOps = await createTask(db, owner, ops.id, { name: "O", assigneeIds: [] });
+      const onWeb = await createTask(db, owner, web.id, { name: "W" });
+      const onOps = await createTask(db, owner, ops.id, { name: "O" });
       const manager = asViewer(
         { workspaceId: owner.workspaceId, userId: member.userId, role: "manager" },
         { projectIds: [ops.id] },
@@ -231,9 +220,9 @@ describe("tasks service", () => {
       await expect(setTaskGroups(db, manager, [onWeb.id], [finance], "add")).rejects.toMatchObject({
         status: 404,
       });
-      await expect(
-        createTask(db, manager, web.id, { name: "Nope", assigneeIds: [] }),
-      ).rejects.toMatchObject({ status: 404 });
+      await expect(createTask(db, manager, web.id, { name: "Nope" })).rejects.toMatchObject({
+        status: 404,
+      });
     });
 
     it("a rename that keeps the groups leaves their rows as they were", async () => {
@@ -241,7 +230,6 @@ describe("tasks service", () => {
       const web = await createProject(db, owner, { name: "Web" });
       const t = await createTask(db, owner, web.id, {
         name: "Books",
-        assigneeIds: [],
         groupIds: [finance],
       });
       const before = (await db.select().from(taskGroup).where(eq(taskGroup.taskId, t.id)))[0]!;
@@ -258,7 +246,7 @@ describe("tasks service", () => {
     it("lists no tasks, rather than not found, for a deactivated member", async () => {
       const finance = await group("Finance", [member.userId]);
       const web = await createProject(db, owner, { name: "Web" });
-      await createTask(db, owner, web.id, { name: "Books", assigneeIds: [], groupIds: [finance] });
+      await createTask(db, owner, web.id, { name: "Books", groupIds: [finance] });
       await db
         .update(membership)
         .set({ status: "DEACTIVATED" })
@@ -273,7 +261,7 @@ describe("tasks service", () => {
     it("refuses an unknown group", async () => {
       const web = await createProject(db, owner, { name: "Web" });
       await expect(
-        createTask(db, owner, web.id, { name: "T", assigneeIds: [], groupIds: [randomUUID()] }),
+        createTask(db, owner, web.id, { name: "T", groupIds: [randomUUID()] }),
       ).rejects.toThrow("Unknown group.");
     });
   });
@@ -291,11 +279,10 @@ describe("task estimates (Phase 6b)", () => {
     const web = await createProject(db, owner, { name: "Web" });
     const design = await createTask(db, owner, web.id, {
       name: "Design",
-      assigneeIds: [],
       estimateSeconds: 7_200,
     });
     expect(design.estimateSeconds).toBe(7_200);
-    const qa = await createTask(db, owner, web.id, { name: "QA", assigneeIds: [] });
+    const qa = await createTask(db, owner, web.id, { name: "QA" });
     expect(qa.estimateSeconds).toBeNull();
     expect((await updateTask(db, owner, qa.id, { estimateSeconds: 1_800 })).estimateSeconds).toBe(
       1_800,

@@ -23,12 +23,13 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 - [ ] **b1** The calendar loads entries whose start falls in the week, so an entry begun late on the previous week's last day is not drawn on the first day. Fetch from one day earlier; `blockOnDay` already clips.
 - [ ] **b1** The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; install Playwright's Chromium in the CI job.
 - [ ] **b1** The Detailed report's sort is per visit, not in the URL.
-- [ ] **b1** `workspace_settings.task_creators` and `task_assignee` are unread since tasks by group (2026-10-29): drop them in a contract migration.
+
 - [ ] **b1** `ci.yml` skips its pull_request job for same-repository PRs (the push already ran). GitHub counts a skipped job as a passing required check, so if branch protection is ever added, require the push run's check explicitly. Move this note into CLAUDE.md's Deployment section.
 - [ ] **b1** The suite runs spec files with 3 workers; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). Move the "a new spec that writes to the demo tenant needs checking" note into CLAUDE.md's e2e bullets.
 
 ### b2 — approvals, time off, attendance, targets, kiosks, the daily cron
 
+- [ ] **b2** Drop `task_assignee` and `workspace_settings.task_creators` (the contract half): branch 1 took them out of the Drizzle schema and stopped reading and writing them (2026-11-17); once that is live everywhere, a migration drops them and `test/db.ts` stops truncating the table.
 - [ ] **b2** Kiosk default tag (ruling 8): with a required tag, nobody can clock out on a kiosk, because a kiosk adds no tags; add `kiosk.tag_id` (additive migration) and a picker.
 - [ ] **b2** Phase 5c review minors:
   - The QR path of `identify` treats any error from `allowedPerson` as "not allowed", so a database error counts as a QR failure; catch only `WorkspaceAccessError`.

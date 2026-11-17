@@ -96,7 +96,7 @@ describe("entry rules", () => {
     const details = { ...bare, projectId: project.id, start: START, end: END };
     await expect(createManualEntry(db, olga, details)).resolves.toMatchObject({ taskId: null });
 
-    const t = await createTask(db, olga, project.id, { name: "T", assigneeIds: [] });
+    const t = await createTask(db, olga, project.id, { name: "T" });
     await expect(createManualEntry(db, olga, details)).rejects.toMatchObject({ field: "task" });
     await expect(createManualEntry(db, olga, { ...details, taskId: t.id })).resolves.toMatchObject({
       taskId: t.id,

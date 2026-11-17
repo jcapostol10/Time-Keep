@@ -1,15 +1,7 @@
 import { relations } from "drizzle-orm";
 
 import { account, session, user } from "./auth";
-import {
-  client,
-  project,
-  projectFavorite,
-  projectMember,
-  tag,
-  task,
-  taskAssignee,
-} from "./catalog";
+import { client, project, projectFavorite, projectMember, tag, task } from "./catalog";
 import {
   favoriteEntry,
   timeEntry,
@@ -31,7 +23,6 @@ export const userRelations = relations(user, ({ many, one }) => ({
   timeEntries: many(timeEntry),
   projectMemberships: many(projectMember),
   projectFavorites: many(projectFavorite),
-  taskAssignments: many(taskAssignee),
   timesheetTemplates: many(timesheetTemplate),
   expenses: many(expense),
   settings: one(userSettings, { fields: [user.id], references: [userSettings.userId] }),
@@ -121,14 +112,8 @@ export const projectFavoriteRelations = relations(projectFavorite, ({ one }) => 
 export const taskRelations = relations(task, ({ one, many }) => ({
   workspace: one(workspace, { fields: [task.workspaceId], references: [workspace.id] }),
   project: one(project, { fields: [task.projectId], references: [project.id] }),
-  assignees: many(taskAssignee),
   groups: many(taskGroup),
   timeEntries: many(timeEntry),
-}));
-
-export const taskAssigneeRelations = relations(taskAssignee, ({ one }) => ({
-  task: one(task, { fields: [taskAssignee.taskId], references: [task.id] }),
-  user: one(user, { fields: [taskAssignee.userId], references: [user.id] }),
 }));
 
 export const taskGroupRelations = relations(taskGroup, ({ one }) => ({

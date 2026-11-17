@@ -435,7 +435,7 @@ export async function copyProject(
         })),
       );
     }
-    // Decision 11: a copy carries the tasks' groups (task_assignee is unread).
+    // Decision 11: a copy carries the tasks' groups.
     if (taskGroups.length > 0) {
       await tx.insert(taskGroup).values(
         taskGroups.map((g) => ({

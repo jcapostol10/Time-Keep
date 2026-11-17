@@ -106,8 +106,6 @@ export interface TaskDTO {
   projectId: string;
   name: string;
   status: "ACTIVE" | "DONE";
-  /** Kept for the data; no longer edited or read for access (decision 11). */
-  assigneeIds: string[];
   /** The groups whose members see and track on the task when tasks are by group. */
   groupIds: string[];
   trackedSeconds: number;

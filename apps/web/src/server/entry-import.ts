@@ -515,7 +515,6 @@ export async function commitEntryImport(
       const creator = createdIds.has(project.id) ? withManagedProject(viewer, project.id) : viewer;
       const created = await createTask(tx, creator, project.id, {
         name: r.task,
-        assigneeIds: [],
         groupIds: options.newTaskGroupIds ?? [],
       });
       project.tasks.push({ id: created.id, name: created.name });

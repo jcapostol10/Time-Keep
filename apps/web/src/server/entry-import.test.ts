@@ -64,7 +64,7 @@ describe("entry import", () => {
     await db.insert(managedUser).values({ workspaceId: wsId, managerId: max.id, userId: bob.id });
     const owner = await viewer("olga");
     const web = await createProject(db, owner, { name: "Web" });
-    await createTask(db, owner, web.id, { name: "Setup", assigneeIds: [] });
+    await createTask(db, owner, web.id, { name: "Setup" });
     await createTag(db, wsId, { name: "t1" });
   });
 

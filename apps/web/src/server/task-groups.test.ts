@@ -63,7 +63,7 @@ async function task(projectId: string, name: string, groupIds: string[]): Promis
     ...olga,
     actor: { ...olga.actor, settings: { ...olga.actor.settings, taskVisibility: "EVERYONE" } },
   };
-  const t = await createTask(db, seeding, projectId, { name, assigneeIds: [] });
+  const t = await createTask(db, seeding, projectId, { name });
   if (groupIds.length > 0) {
     await db.insert(taskGroup).values(groupIds.map((groupId) => ({ taskId: t.id, groupId })));
   }

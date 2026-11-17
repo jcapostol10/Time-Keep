@@ -104,7 +104,7 @@ describe("favourites", () => {
     await expect(pinFavorite(db, olga, details({ tagIds: [foreignTag.id] }))).rejects.toMatchObject(
       { code: "NOT_FOUND" },
     );
-    const hidden = await createTask(db, olga, secretId, { name: "Hidden", assigneeIds: [] });
+    const hidden = await createTask(db, olga, secretId, { name: "Hidden" });
     await expect(
       pinFavorite(db, olga, details({ projectId: webId, taskId: hidden.id })),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });

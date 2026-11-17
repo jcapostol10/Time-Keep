@@ -45,7 +45,7 @@ describe("audit criteria", () => {
     const ws = await createTestWorkspace(db, "Workspace", olga.id);
     me = await loadViewer(db, ws.id, olga.id);
     const withTasks = await createProject(db, me, { name: "With tasks" });
-    const setup = await createTask(db, me, withTasks.id, { name: "Setup", assigneeIds: [] });
+    const setup = await createTask(db, me, withTasks.id, { name: "Setup" });
     const bare = await createProject(db, me, { name: "Bare" });
     const entry = (
       description: string,
