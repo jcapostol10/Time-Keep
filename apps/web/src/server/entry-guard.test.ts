@@ -6,6 +6,8 @@ import {
   approvalEvent,
   approvalRequest,
   eq,
+  inArray,
+  isNull,
   managedUser,
   rate,
   timeEntry,
@@ -32,6 +34,7 @@ import {
   createManualEntries,
   createManualEntry,
   deleteEntries,
+  deleteEntriesOfOwners,
   duplicateEntry,
   type EntryScope,
   restoreEntries,
@@ -211,6 +214,33 @@ describe.each(["PENDING", "APPROVED"] as const)("a %s week", (status) => {
     expect(events.length).toBeGreaterThan(0);
     expect(events[0]).toMatchObject({ userId: ids.bob, actorId: ids.ann, note: NOTE });
     expect(events[0]?.requestId).not.toBeNull();
+  });
+
+  it("a delete across people that needs a note for one deletes nothing without it", async () => {
+    const maxEntry = await createManualEntry(
+      db,
+      await loadViewer(db, wsId, ids.max!),
+      {
+        ...details,
+        ...IN,
+      },
+      NOW,
+    );
+    const groups = await scopesForEntries(db, await loadViewer(db, wsId, ids.ann!), [
+      maxEntry.id,
+      inId,
+    ]);
+    await expect(deleteEntriesOfOwners(db, groups)).rejects.toMatchObject({
+      code: "NOTE_REQUIRED",
+    });
+    const live = await db
+      .select({ id: timeEntry.id })
+      .from(timeEntry)
+      .where(and(inArray(timeEntry.id, [maxEntry.id, inId]), isNull(timeEntry.deletedAt)));
+    expect(live).toHaveLength(2);
+    await expect(deleteEntriesOfOwners(db, groups, { note: NOTE })).resolves.toMatchObject({
+      deleted: expect.arrayContaining([maxEntry.id, inId]),
+    });
   });
 
   it("logs which entry changed and how", async () => {

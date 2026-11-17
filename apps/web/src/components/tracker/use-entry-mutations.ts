@@ -83,10 +83,11 @@ export function useEntryMutations() {
     [slug, cache, notifyEntriesChanged],
   );
 
+  /** `note`: the delete's, so an Undo of a delete in submitted time does not ask again. */
   const restore = useCallback(
-    async (ids: string[]) => {
+    async (ids: string[], note?: string) => {
       const result = await trackSave(() =>
-        withNoteRetry((note) => restoreEntriesAction(slug, { ids, note })),
+        withNoteRetry((n) => restoreEntriesAction(slug, { ids, note: n }), note),
       );
       if (!result.ok) {
         toast.error(result.error);
@@ -105,8 +106,12 @@ export function useEntryMutations() {
       if (ids.length === 0) return false;
       const snapshot = await cache.snapshotEntries();
       cache.removeEntries(ids);
+      let usedNote: string | undefined;
       const result = await trackSave(() =>
-        withNoteRetry((note) => deleteEntriesAction(slug, { ids, note })),
+        withNoteRetry((note) => {
+          usedNote = note;
+          return deleteEntriesAction(slug, { ids, note });
+        }),
       );
       if (!result.ok) {
         cache.restoreEntries(snapshot);
@@ -117,7 +122,7 @@ export function useEntryMutations() {
       const deleted = result.data.deleted;
       toast(deleted.length === 1 ? "Entry deleted" : `${deleted.length} entries deleted`, {
         duration: UNDO_MS,
-        action: { label: "Undo", onClick: () => void restore(deleted) },
+        action: { label: "Undo", onClick: () => void restore(deleted, usedNote) },
       });
       return true;
     },

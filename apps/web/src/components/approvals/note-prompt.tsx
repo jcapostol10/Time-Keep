@@ -15,6 +15,8 @@ import { useState, useSyncExternalStore } from "react";
 
 import type { ActionResult } from "@/lib/action-result";
 
+import { createNoteQueue } from "./note-queue";
+
 /**
  * Phase 5a decision 5: an owner or admin changing time in a submitted or
  * approved period says why. The server answers such a write without a note
@@ -23,28 +25,11 @@ import type { ActionResult } from "@/lib/action-result";
  * again with the note. Cancelling leaves the time unchanged.
  */
 
-type Pending = { resolve: (note: string | null) => void } | null;
+const queue = createNoteQueue();
 
-let pending: Pending = null;
-const listeners = new Set<() => void>();
-
-function emit() {
-  for (const l of listeners) l();
-}
-
-/** Opens the dialog; resolves with the note, or null when cancelled. */
+/** Opens the dialog (after any already open); resolves with the note, or null when cancelled. */
 export function askForNote(): Promise<string | null> {
-  pending?.resolve(null);
-  return new Promise((resolve) => {
-    pending = {
-      resolve: (note) => {
-        pending = null;
-        emit();
-        resolve(note);
-      },
-    };
-    emit();
-  });
+  return queue.ask();
 }
 
 /** True when the server wants a note for this write. */
@@ -52,29 +37,26 @@ export function needsNote(result: { ok: boolean; fieldErrors?: Record<string, st
   return !result.ok && Boolean(result.fieldErrors?.note);
 }
 
-/** Runs an entry action; when the server asks for a note, asks for it and runs it again once. */
+/**
+ * Runs an entry action; when the server asks for a note, asks for it and runs
+ * it again once. `note` is sent from the start (an Undo reuses the delete's).
+ */
 export async function withNoteRetry<T>(
   call: (note?: string) => Promise<ActionResult<T>>,
+  note?: string,
 ): Promise<ActionResult<T>> {
-  const first = await call();
+  const first = await call(note);
   if (!needsNote(first)) return first;
-  const note = await askForNote();
-  if (note === null) return { ok: false, error: "Not changed: no reason was given." };
-  return call(note);
+  const asked = await askForNote();
+  if (asked === null) return { ok: false, error: "Not changed: no reason was given." };
+  return call(asked);
 }
 
 const MIN_NOTE = 3;
 
 export function NotePromptHost() {
-  const current = useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
-    () => pending,
-    () => null,
-  );
-  return current ? <NoteDialog key="note" onDone={current.resolve} /> : null;
+  const current = useSyncExternalStore(queue.subscribe, queue.current, () => null);
+  return current ? <NoteDialog key={current.id} onDone={current.resolve} /> : null;
 }
 
 function NoteDialog({ onDone }: { onDone: (note: string | null) => void }) {

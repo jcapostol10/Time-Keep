@@ -172,9 +172,9 @@ export function useEntryWrites() {
   );
 
   const restore = useCallback(
-    async (ids: string[]): Promise<boolean> => {
+    async (ids: string[], note?: string): Promise<boolean> => {
       const result = await trackSave(() =>
-        withNoteRetry((note) => restoreEntriesAction(slug, { ids, note })),
+        withNoteRetry((n) => restoreEntriesAction(slug, { ids, note: n }), note),
       );
       if (!result.ok) {
         toast.error(result.error);
@@ -191,8 +191,12 @@ export function useEntryWrites() {
     async (ids: string[]): Promise<boolean> => {
       await qc.cancelQueries({ queryKey: trackerKeys.entries(slug, target) });
       const write = optimistic(ids, (list) => removeFromRange(list, ids));
+      let usedNote: string | undefined;
       const result = await trackSave(() =>
-        withNoteRetry((note) => deleteEntriesAction(slug, { ids, note })),
+        withNoteRetry((note) => {
+          usedNote = note;
+          return deleteEntriesAction(slug, { ids, note });
+        }),
       ).catch(() => ({ ok: false as const, error: NOT_SAVED }));
       if (!result.ok) {
         write.undo();
@@ -203,7 +207,7 @@ export function useEntryWrites() {
       settle();
       toast(ids.length === 1 ? "Entry deleted" : `${ids.length} entries deleted`, {
         duration: 5000,
-        action: { label: "Undo", onClick: () => void restore(ids) },
+        action: { label: "Undo", onClick: () => void restore(ids, usedNote) },
       });
       return true;
     },

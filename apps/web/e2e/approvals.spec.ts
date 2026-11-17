@@ -219,6 +219,33 @@ test.describe("approvals and locks", { tag: "@nightly" }, () => {
     );
   });
 
+  test("Undo after a delete in approved time does not ask for the note again", async ({
+    page,
+    freshUser,
+  }) => {
+    const { slug, timezone, name } = freshUser;
+    const { last } = weeks(timezone);
+    await enableApproval(page, slug);
+    await addLastWeek(page, slug, timezone, "Approved then cleared");
+    await submitPeriod(page, slug, last);
+    await approve(page, slug, name, last);
+
+    await openTimesheetWeek(page, slug, last.start);
+    const day = dayLabel(noonOn(weeks(timezone).lastWednesday, timezone), timezone);
+    const input = cell(page, "No project · Approved then cleared", day);
+    const before = await input.inputValue();
+    await input.fill("");
+    await input.press("Enter");
+    const prompt = page.getByRole("dialog", { name: "Why are you changing submitted time?" });
+    await prompt.getByRole("textbox", { name: "Note" }).fill("Logged twice");
+    await prompt.getByRole("button", { name: "Save change" }).click();
+    await expect(prompt).toBeHidden();
+    await page.getByRole("button", { name: "Undo" }).click();
+    await waitForSaves(page);
+    await expect(prompt).toBeHidden();
+    await expect(input).toHaveValue(before);
+  });
+
   test("a rolling lock blocks a member, not an admin", async ({
     page,
     freshUser,

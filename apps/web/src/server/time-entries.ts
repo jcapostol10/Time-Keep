@@ -934,6 +934,29 @@ export async function deleteEntries(
   return db.transaction((tx) => softDelete(tx, scope, ids, opts));
 }
 
+/**
+ * Deletes entries of several people (`scopesForEntries`) in one transaction:
+ * if any needs a note (or is refused), nothing is deleted, so a cancelled note
+ * prompt never leaves half a delete behind. People's locks are taken first,
+ * in one order, as a bulk edit takes them.
+ */
+export async function deleteEntriesOfOwners(
+  db: Database,
+  groups: { scope: EntryScope; ids: string[] }[],
+  opts: WriteNote = {},
+): Promise<{ deleted: string[] }> {
+  if (groups.length === 0) return { deleted: [] };
+  return db.transaction(async (tx) => {
+    const owners = [...new Set(groups.map((g) => g.scope.userId))].sort();
+    for (const userId of owners) {
+      await tx.execute(timerLock(groups[0]!.scope.workspaceId, userId));
+    }
+    const deleted: string[] = [];
+    for (const g of groups) deleted.push(...(await softDelete(tx, g.scope, g.ids, opts)).deleted);
+    return { deleted };
+  });
+}
+
 async function softDelete(
   db: Executor,
   scope: EntryScope,
