@@ -15,6 +15,8 @@ export interface ClientDTO {
   currency: string | null;
   archived: boolean;
   projectCount: number;
+  /** An invoice that is not void: the currency cannot change. */
+  hasInvoices: boolean;
 }
 
 export interface ProjectListItem {

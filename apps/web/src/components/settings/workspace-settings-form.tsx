@@ -45,6 +45,7 @@ import { toast } from "sonner";
 import { type z } from "zod";
 
 import { ApprovalFields } from "@/components/settings/approval-fields";
+import { CurrencySelect } from "@/components/currency-select";
 import { RulesFields } from "@/components/settings/rules-fields";
 import { TimezoneSelect } from "@/components/settings/timezone-select";
 import { updateWorkspaceSettingsAction } from "@/server/actions/workspaces";
@@ -231,14 +232,12 @@ export function WorkspaceSettingsForm({
                 <FormItem>
                   <FormLabel>Currency</FormLabel>
                   <FormControl>
-                    <Input
-                      maxLength={3}
-                      className="uppercase"
-                      {...field}
-                      onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                    <CurrencySelect
+                      value={field.value}
+                      onChange={(code) => code && field.onChange(code)}
                     />
                   </FormControl>
-                  <FormDescription>ISO 4217 code, e.g. USD or PHP.</FormDescription>
+                  <FormDescription>What rates and amounts are in.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

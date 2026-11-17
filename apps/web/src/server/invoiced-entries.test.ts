@@ -12,7 +12,7 @@ import {
   truncateAll,
 } from "../../test/db";
 import { loadViewer, scopeForUser } from "./authz";
-import { createClient, deleteClient, updateClient } from "./catalog/clients";
+import { createClient, deleteClient, listClients, updateClient } from "./catalog/clients";
 import { createProject, deleteProject, updateProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { createExpenseCategory } from "./expense-categories";
@@ -381,6 +381,16 @@ describe("a client with invoices", () => {
     });
     // A currency it already has is no change.
     await expect(updateClient(db, wsId, acmeId, { currency: null })).resolves.toBeTruthy();
+  });
+
+  it("is listed as having invoices until they are all void", async () => {
+    const listed = async () =>
+      (await listClients(db, wsId, {})).find((c) => c.id === acmeId)?.hasInvoices;
+    expect(await listed()).toBe(false);
+    const inv = await invoiceRow("INV-0009", "SENT");
+    expect(await listed()).toBe(true);
+    await db.update(invoice).set({ status: "VOID" }).where(eq(invoice.id, inv));
+    expect(await listed()).toBe(false);
   });
 
   it("may change its currency once its only invoice is void", async () => {

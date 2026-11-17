@@ -4,56 +4,21 @@
  * amounts are computed with BigInt so no product loses a cent.
  */
 
+import { CURRENCIES } from "./currencies";
+
 /** The highest hourly rate accepted, in major units. */
 export const MAX_RATE_MAJOR = 1_000_000;
 
-/** Used only when the runtime cannot list currencies. */
-const COMMON_CURRENCIES = [
-  "AED",
-  "AUD",
-  "BRL",
-  "CAD",
-  "CHF",
-  "CNY",
-  "EUR",
-  "GBP",
-  "HKD",
-  "IDR",
-  "INR",
-  "JPY",
-  "KRW",
-  "MXN",
-  "MYR",
-  "NZD",
-  "PHP",
-  "SAR",
-  "SEK",
-  "SGD",
-  "THB",
-  "TWD",
-  "USD",
-  "VND",
-  "ZAR",
-];
+const CODES: readonly string[] = CURRENCIES.map((c) => c.code);
+const CODE_SET = new Set(CODES);
 
-let knownCodes: readonly string[] | null = null;
-
-/** Every ISO 4217 code the runtime can format, sorted. */
+/** Every ISO 4217 code TimeKeep accepts, sorted. */
 export function currencyCodes(): readonly string[] {
-  if (!knownCodes) {
-    let listed: string[] = [];
-    try {
-      listed = Intl.supportedValuesOf("currency");
-    } catch {
-      listed = [];
-    }
-    knownCodes = (listed.length > 0 ? listed : COMMON_CURRENCIES).slice().sort();
-  }
-  return knownCodes;
+  return CODES;
 }
 
 export function isCurrencyCode(code: string): boolean {
-  return currencyCodes().includes(code);
+  return CODE_SET.has(code);
 }
 
 /** Digits after the decimal point: USD 2, JPY 0, KWD 3. */

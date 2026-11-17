@@ -54,6 +54,7 @@ import type { SQL } from "drizzle-orm";
 import type { ProjectDetail, ProjectListItem, ProjectStatus } from "@/lib/catalog-types";
 import type { PickerProject, PickerTask } from "@/lib/tracker-types";
 
+import { currencyLock } from "../currency-lock";
 import { CatalogError, isUniqueViolation } from "./errors";
 import { estimateOf, progressFor, visibleProgress, workspaceZone } from "../estimates";
 import { inSubmittedPeriodSql, SUBMITTED_TIME_MESSAGE } from "../approval-sql";
@@ -579,70 +580,72 @@ export async function updateProject(
 ): Promise<ProjectDetail> {
   const before = await requireVisibleProject(db, viewer, projectId);
   if (patch.clientId) await requireClientName(db, viewer.workspaceId, patch.clientId);
-  let relabelTo: string | null = null;
-  if (patch.clientId !== undefined && patch.clientId !== before.clientId) {
-    // Invoiced time and expenses belong to their client's invoice (Phase 6d): they do not move.
-    const [invoicedTime] = await db
-      .select({ id: timeEntry.id })
-      .from(timeEntry)
-      .where(
-        and(
-          eq(timeEntry.workspaceId, viewer.workspaceId),
-          eq(timeEntry.projectId, projectId),
-          isNull(timeEntry.deletedAt),
-          isNotNull(timeEntry.invoiceId),
-        ),
-      )
-      .limit(1);
-    const [invoicedExpense] = await db
-      .select({ id: expense.id })
-      .from(expense)
-      .where(
-        and(
-          eq(expense.workspaceId, viewer.workspaceId),
-          eq(expense.projectId, projectId),
-          isNull(expense.deletedAt),
-          isNotNull(expense.invoiceId),
-        ),
-      )
-      .limit(1);
-    if (invoicedTime || invoicedExpense) {
-      throw new CatalogError(
-        "CONFLICT",
-        "This project has invoiced time. Void its invoices before moving it to another client.",
-      );
-    }
-    const ws = viewer.workspaceId;
-    const base = await workspaceCurrency(db, ws);
-    let to = base;
-    if (patch.clientId) {
-      const [target] = await db
-        .select({ currency: client.currency })
-        .from(client)
-        .where(and(eq(client.id, patch.clientId), eq(client.workspaceId, ws)));
-      to = entryCurrency(target?.currency, base);
-    }
-    if (
-      to !== (await projectCurrency(db, ws, projectId)) &&
-      (await projectsHaveRates(db, ws, [projectId]))
-    ) {
-      if (!can(viewer.actor, "rate.set", { kind: "none" })) {
-        throw new CatalogError(
-          "INVALID",
-          "Only owners and admins can move a project with rates to a client billed in another currency.",
-        );
-      }
-      if (!options.confirmCurrencyChange) {
-        throw new CatalogError(
-          "CONFIRM",
-          `This project's rates and amounts will show in ${to}; they are not converted.`,
-        );
-      }
-      relabelTo = to;
-    }
-  }
   try {
     await db.transaction(async (tx) => {
+      // A move to another client decides what to relabel: read it under the lock.
+      if (patch.clientId !== undefined) await tx.execute(currencyLock(viewer.workspaceId));
+      let relabelTo: string | null = null;
+      if (patch.clientId !== undefined && patch.clientId !== before.clientId) {
+        // Invoiced time and expenses belong to their client's invoice (Phase 6d): they do not move.
+        const [invoicedTime] = await tx
+          .select({ id: timeEntry.id })
+          .from(timeEntry)
+          .where(
+            and(
+              eq(timeEntry.workspaceId, viewer.workspaceId),
+              eq(timeEntry.projectId, projectId),
+              isNull(timeEntry.deletedAt),
+              isNotNull(timeEntry.invoiceId),
+            ),
+          )
+          .limit(1);
+        const [invoicedExpense] = await tx
+          .select({ id: expense.id })
+          .from(expense)
+          .where(
+            and(
+              eq(expense.workspaceId, viewer.workspaceId),
+              eq(expense.projectId, projectId),
+              isNull(expense.deletedAt),
+              isNotNull(expense.invoiceId),
+            ),
+          )
+          .limit(1);
+        if (invoicedTime || invoicedExpense) {
+          throw new CatalogError(
+            "CONFLICT",
+            "This project has invoiced time. Void its invoices before moving it to another client.",
+          );
+        }
+        const ws = viewer.workspaceId;
+        const base = await workspaceCurrency(tx, ws);
+        let to = base;
+        if (patch.clientId) {
+          const [target] = await tx
+            .select({ currency: client.currency })
+            .from(client)
+            .where(and(eq(client.id, patch.clientId), eq(client.workspaceId, ws)));
+          to = entryCurrency(target?.currency, base);
+        }
+        if (
+          to !== (await projectCurrency(tx, ws, projectId)) &&
+          (await projectsHaveRates(tx, ws, [projectId]))
+        ) {
+          if (!can(viewer.actor, "rate.set", { kind: "none" })) {
+            throw new CatalogError(
+              "INVALID",
+              "Only owners and admins can move a project with rates to a client billed in another currency.",
+            );
+          }
+          if (!options.confirmCurrencyChange) {
+            throw new CatalogError(
+              "CONFIRM",
+              `This project's rates and amounts will show in ${to}; they are not converted.`,
+            );
+          }
+          relabelTo = to;
+        }
+      }
       await tx
         .update(project)
         .set({

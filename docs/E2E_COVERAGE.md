@@ -108,6 +108,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Archive a client and find it under the archived filter; unarchive it — `clients.spec.ts` › "archive and unarchive a client"
 - [x] Delete an unused client — `clients.spec.ts` › "delete an unused client"
 - [x] A client with projects cannot be deleted — `projects.spec.ts` › "create a project from the projects page"
+- [x] Bill a client in any ISO 4217 currency, found by searching its name — `clients.spec.ts` › "a client can be billed in any ISO currency"
+- [x] A client with invoices shows its currency locked, with the reason — `clients.spec.ts` › "a client with invoices cannot change currency"
 - [x] Members cannot open the clients page and do not see it in the sidebar — `clients.spec.ts` › "members cannot open the clients page"
 
 ## Projects

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { currencyCodes, isCurrencyCode } from "./money";
 import {
@@ -161,6 +161,25 @@ describe("currency codes", () => {
     expect(isCurrencyCode("php")).toBe(false);
     expect(isCurrencyCode("ZZZ")).toBe(false);
     expect(isCurrencyCode("")).toBe(false);
+  });
+
+  it("does not depend on what the runtime's Intl lists", async () => {
+    const spy = vi.spyOn(Intl, "supportedValuesOf").mockImplementation(() => {
+      throw new RangeError("not supported");
+    });
+    vi.resetModules();
+    const fresh = await import("./money");
+    expect(fresh.isCurrencyCode("XOF")).toBe(true);
+    expect(fresh.isCurrencyCode("DEM")).toBe(false);
+    expect(fresh.currencyCodes().length).toBeGreaterThan(150);
+    spy.mockRestore();
+  });
+
+  it("names every currency it lists", async () => {
+    const { CURRENCIES } = await import("./currencies");
+    expect(CURRENCIES.find((c) => c.code === "CHF")?.name).toBe("Swiss Franc");
+    expect(CURRENCIES.every((c) => /^[A-Z]{3}$/.test(c.code) && c.name.length > 2)).toBe(true);
+    expect(new Set(CURRENCIES.map((c) => c.code)).size).toBe(CURRENCIES.length);
   });
 
   it("lists them sorted", () => {

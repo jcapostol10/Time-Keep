@@ -20,6 +20,7 @@ import { requireWorkspaceAccess, WorkspaceAccessError } from "@/server/workspace
 import { createWorkspace } from "@/server/workspaces";
 import { checkApprovalSettings, withdrawPendingRequests } from "@/server/approvals";
 import { authorize } from "@/server/authz";
+import { currencyLock } from "@/server/currency-lock";
 import { countTasksWithoutGroup } from "@/server/catalog/tasks";
 import { hasOpenInvoicesIn } from "@/server/invoices/read";
 import { relabelWorkspaceCurrency, workspaceHasRates } from "@/server/rates";
@@ -90,17 +91,6 @@ export async function updateWorkspaceSettingsAction(
     } = parsed.data;
 
     const db = getDb();
-    const newCurrency = settings.currency !== ctx.settings.currency;
-    // Phase 6d: an open invoice in the workspace currency keeps it; relabelling its time
-    // and expenses would make them disagree with the invoice.
-    if (newCurrency && (await hasOpenInvoicesIn(db, ctx.workspace.id, ctx.settings.currency))) {
-      const message = `Invoices in ${ctx.settings.currency} are open. Void or delete them before changing the currency.`;
-      return fail(message, { currency: [message] });
-    }
-    if (newCurrency && !confirmCurrencyChange && (await workspaceHasRates(db, ctx.workspace.id))) {
-      const message = `Rates and amounts will show in ${settings.currency}; they are not converted.`;
-      return fail(message, { confirmCurrencyChange: [message] });
-    }
     // Decision 11, rule 1: switching tasks to "By group" says how many tasks nobody will see yet.
     const toByGroup =
       settings.taskVisibility === "BY_GROUP" && ctx.settings.taskVisibility !== "BY_GROUP";
@@ -117,9 +107,32 @@ export async function updateWorkspaceSettingsAction(
     // row's lock, which a submit takes FOR SHARE: no submit lands in between.
     const turningOff = ctx.settings.approvalEnabled && !settings.approvalEnabled;
     const approvalProblem = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`select 1 from ${workspaceSettings} where ${workspaceSettings.workspaceId} = ${ctx.workspace.id} for update`,
+      // Currency decisions are read under the currency lock, from the row as it is
+      // now: another tab may have changed the currency since this page loaded.
+      await tx.execute(currencyLock(ctx.workspace.id));
+      const locked = await tx.execute<{ currency: string }>(
+        sql`select ${workspaceSettings.currency} as currency from ${workspaceSettings} where ${workspaceSettings.workspaceId} = ${ctx.workspace.id} for update`,
       );
+      const oldCurrency = locked.rows[0]?.currency ?? ctx.settings.currency;
+      const newCurrency = settings.currency !== oldCurrency;
+      // Phase 6d: an open invoice in the workspace currency keeps it; relabelling its time
+      // and expenses would make them disagree with the invoice.
+      if (newCurrency && (await hasOpenInvoicesIn(tx, ctx.workspace.id, oldCurrency))) {
+        return {
+          field: "currency",
+          message: `Invoices in ${oldCurrency} are open. Void or delete them before changing the currency.`,
+        };
+      }
+      if (
+        newCurrency &&
+        !confirmCurrencyChange &&
+        (await workspaceHasRates(tx, ctx.workspace.id))
+      ) {
+        return {
+          field: "confirmCurrencyChange",
+          message: `Rates and amounts will show in ${settings.currency}; they are not converted.`,
+        };
+      }
       const problem = await checkApprovalSettings(
         tx,
         ctx.workspace.id,
@@ -136,12 +149,7 @@ export async function updateWorkspaceSettingsAction(
         .set(settings)
         .where(eq(workspaceSettings.workspaceId, ctx.workspace.id));
       if (newCurrency) {
-        await relabelWorkspaceCurrency(
-          tx,
-          ctx.workspace.id,
-          ctx.settings.currency,
-          settings.currency,
-        );
+        await relabelWorkspaceCurrency(tx, ctx.workspace.id, oldCurrency, settings.currency);
       }
       return null;
     });

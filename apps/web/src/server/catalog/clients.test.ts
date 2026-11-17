@@ -59,6 +59,7 @@ describe("clients service", () => {
       currency: null,
       archived: false,
       projectCount: 0,
+      hasInvoices: false,
     });
     await createProject(db, viewer, { name: "Site", clientId: acme.id });
     await createProject(db, viewer, { name: "App", clientId: acme.id });

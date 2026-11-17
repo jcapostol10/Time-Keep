@@ -20,6 +20,7 @@ import {
   truncateAll,
 } from "../../test/db";
 import { loadViewer } from "./authz";
+import { currencyLock } from "./currency-lock";
 import { createClient, updateClient } from "./catalog/clients";
 import { createProject, updateProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
@@ -246,6 +247,42 @@ describe("currency relabels", () => {
     await updateClient(db, wsId, ids.Acme!, { notes: "Net 30" });
     expect(await rates()).toEqual(BEFORE_RATES);
     expect(await entries()).toEqual(BEFORE_ENTRIES);
+  });
+
+  it("decides on what is committed once it holds the currency lock", async () => {
+    const fresh = await createClient(db, wsId, {
+      name: "Fresh",
+      address: "",
+      email: "",
+      notes: "",
+      currency: null,
+    });
+    const quiet = await createProject(db, owner, { name: "Quiet" });
+    await db.update(project).set({ clientId: fresh.id }).where(eq(project.id, quiet.id));
+    const other = connectTestDb();
+    try {
+      let change: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // Another currency writer is mid-flight: it gives the project a rate.
+        await tx.execute(currencyLock(wsId));
+        change = updateClient(other.db, wsId, fresh.id, { currency: "USD" });
+        change.catch(() => undefined);
+        await new Promise((r) => setTimeout(r, 400));
+        await tx.insert(rate).values({
+          id: randomUUID(),
+          workspaceId: wsId,
+          level: "project",
+          projectId: quiet.id,
+          currency: "PHP",
+          amountMinor: 80_000,
+          effectiveFrom: JAN,
+        });
+      });
+      // The rate committed before the change could look: it must ask first.
+      await expect(change).rejects.toMatchObject({ code: "CONFIRM" });
+    } finally {
+      await other.close();
+    }
   });
 
   it("moving a project to a client in another currency relabels the project", async () => {
