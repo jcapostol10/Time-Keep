@@ -77,7 +77,7 @@ import type {
 } from "@/lib/report-types";
 
 import { assertCan, scopeFilter } from "./authz";
-import { listClientOptions } from "./catalog/clients";
+import { listFilterClients } from "./catalog/clients";
 import { listPickerProjects } from "./catalog/projects";
 import { listTagOptions } from "./catalog/tags";
 import type { Viewer } from "./catalog/viewer";
@@ -1098,7 +1098,7 @@ export async function reportFilterOptions(
   const team = canReadTeam(viewer);
   const [members, clients, projects, tags, groups, scope] = await Promise.all([
     team ? listMembers(db as Database, viewer.workspaceId) : Promise.resolve(null),
-    listClientOptions(db, viewer.workspaceId),
+    listFilterClients(db, viewer),
     listPickerProjects(db, viewer),
     listTagOptions(db, viewer.workspaceId),
     team
@@ -1124,7 +1124,7 @@ export async function reportFilterOptions(
         ]
       : null,
     groups,
-    clients: clients.filter((c) => !c.archived).map((c) => ({ id: c.id, name: c.name })),
+    clients: clients.map((c) => ({ id: c.id, name: c.name })),
     projects,
     tasks: projects.flatMap((p) =>
       p.tasks.map((t) => ({ id: t.id, name: t.name, projectId: p.id })),

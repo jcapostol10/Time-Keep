@@ -23,6 +23,7 @@ import {
 import type { ClientDTO } from "@/lib/catalog-types";
 
 import { projectsHaveRates, relabelProjectsCurrency } from "../rates";
+import { type Viewer, visibleProjectFilter } from "./viewer";
 import { CatalogError, isUniqueViolation } from "./errors";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
@@ -96,6 +97,31 @@ export async function listClientOptions(
     .select({ id: client.id, name: client.name, archived: client.archived })
     .from(client)
     .where(eq(client.workspaceId, workspaceId))
+    .orderBy(asc(client.name));
+}
+
+/**
+ * Clients for a filter (the projects toolbar, the reports): the live clients
+ * of projects the viewer can see; owners and admins every live client. A
+ * member never learns the name of a client whose projects are all private to
+ * others.
+ */
+export async function listFilterClients(
+  db: Executor,
+  viewer: Viewer,
+): Promise<{ id: string; name: string; archived: boolean }[]> {
+  const visible = visibleProjectFilter(viewer);
+  const live = and(eq(client.workspaceId, viewer.workspaceId), eq(client.archived, false));
+  const where = visible
+    ? and(
+        live,
+        sql`EXISTS (SELECT 1 FROM ${project} WHERE ${project.clientId} = ${client.id} AND ${project.isTemplate} = false AND ${visible})`,
+      )
+    : live;
+  return db
+    .select({ id: client.id, name: client.name, archived: client.archived })
+    .from(client)
+    .where(where)
     .orderBy(asc(client.name));
 }
 

@@ -21,7 +21,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 - [ ] **b1** Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands. Timesheet cells likewise show the old value until the refetch lands. Patch the range query before the write.
 - [ ] **b1** Calendar blocks have `role=button` and `tabIndex=0` but no Enter/Space handler, so they cannot be opened from the keyboard.
 - [ ] **b1** The calendar loads entries whose start falls in the week, so an entry begun late on the previous week's last day is not drawn on the first day. Fetch from one day earlier; `blockOnDay` already clips.
-- [ ] **b1** Members see every client name in the projects-page filter, including archived clients and clients whose projects are all private to them.
 - [ ] **b1** The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; install Playwright's Chromium in the CI job.
 - [ ] **b1** The Detailed report's sort is per visit, not in the URL.
 - [ ] **b1** `workspace_settings.task_creators` and `task_assignee` are unread since tasks by group (2026-10-29): drop them in a contract migration.
@@ -164,6 +163,7 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] Client filters, done 2026-11-17 (backlog cleanup b1): `listFilterClients` gives the projects toolbar and every report's filters the live clients of projects the viewer can see (owners and admins every live client); the create and edit dialogs keep the full list.
 - [x] Flaky reassign test, done 2026-11-17 (backlog cleanup b1): the test stamps the entry an hour back before the reassign, so a database clock that steps back a little between transactions cannot fail it; it still fails if the reassign leaves `updated_at` alone.
 - [x] One render per revalidating action, done 2026-11-17 (backlog cleanup b1): the client no longer calls `router.refresh()` after the 30 actions that already revalidate (the action's response re-renders the page). Kept where the action does not revalidate: the project and tag dialogs (their actions also serve the pickers' inline create, which must not re-render the tracker), targets, periods, share-link revoke, the project access tab's failure path and the once-a-session timezone detector. `rowAction` keeps its retry: tracker rows and expense categories need it too.
 - [x] Timesheet arrows, done 2026-11-17 (backlog cleanup b1): Left and Right leave a cell only at the text's edge or with the whole value selected (`movesHorizontally`), so the caret moves within "1:30".
