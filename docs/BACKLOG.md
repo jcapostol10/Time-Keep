@@ -2,155 +2,134 @@
 
 Known gaps and deferred fixes that are not part of a phase checklist. When an item is fixed, move it to **Done** with the date and the commit. Add new deferred findings here as they come up (code-review minors, things a test run exposed, setup left for later).
 
+The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-design.md`) gave every open entry an outcome. Each entry below is tagged with the branch that fixes it (**b1**–**b5**). Feature ideas moved to **Later**, and entries settled by a ruling moved to **Done**.
+
 ## Needs the owner
 
-- [ ] **Production email:** verify a sending domain in Resend and set `MAIL_FROM` to an address on it (Vercel → Production env, then redeploy). Until then, production can only email the Resend account owner, so sign-up verification, password reset and invites fail for everyone else. On our side (2026-10-22): production refuses to boot with a placeholder sender, a failed send tells the person what happened instead of a bare 500, and Profile settings has "Send me a test email" to check the sender.
-- [ ] **Production is behind Vercel Authentication.** Deployment protection covers every deployment, production included, so anyone not signed in to the Vercel team gets a Vercel login page instead of TimeKeep. Fine while it is private; before real customers use it, switch protection to "Standard" (previews only) or add a custom domain outside protection. The e2e workflow only targets previews, so it is unaffected.
-
-- [ ] **Check for clients whose currency was set before Phase 6a.** The client dialog has offered Currency since Phase 3 with no effect; from 6a it is what the client's projects are billed in. Amounts already saved keep their own currency, but new time on such a client's projects is unrated until the project has a rate in the client's currency (its Rates tab says so). Before the merge deploys, run over the session URL: `select c.name, c.currency, ws.currency from client c join workspace_settings ws using (workspace_id) where c.currency is not null and c.currency <> ws.currency;` and, for each row that was not meant, set the client back to the workspace currency.
+- [ ] **Production email:** verify a sending domain in Resend and set `MAIL_FROM` to an address on it (Vercel → Production env, then redeploy). Until then, production can only email the Resend account owner, so sign-up verification, password reset and invites fail for everyone else. On our side (2026-10-22): production refuses to boot with a placeholder sender, a failed send tells the person what happened instead of a bare 500, and Profile settings has "Send me a test email" to check the sender. Resend verifies only a domain you own, so this waits for the custom domain.
+- [ ] **Production is behind Vercel Authentication.** Deployment protection covers every deployment, production included, so anyone not signed in to the Vercel team gets a Vercel login page instead of TimeKeep. Before real customers use it, add a custom domain outside protection (or switch protection to previews only). Until then, a Vercel shareable link (`?_vercel_share=…`, from the deployment's Share button) lets a named person in; they open it first in each browser, and report share links, invoice links and kiosk URLs still stop at the Vercel login for everyone else. The e2e workflow only targets previews, so it is unaffected.
+- [ ] **Check for clients whose currency was set before Phase 6a.** The client dialog has offered Currency since Phase 3 with no effect; from 6a it is what the client's projects are billed in. New time on such a client's projects is unrated until the project has a rate in the client's currency. Run privately (through the Supabase plugin or the SQL editor, never in a public Actions log), leaving out the demo and e2e tenants: `select w.slug, c.name, c.currency, ws.currency as workspace_currency from client c join workspace w on w.id = c.workspace_id join workspace_settings ws on ws.workspace_id = c.workspace_id where c.currency is not null and c.currency <> ws.currency and exists (select 1 from membership m join "user" u on u.id = m.user_id where m.workspace_id = c.workspace_id and u.email not like '%@e2e.test' and u.email not like '%@demo.test' and u.email not like '%@kiosk.invalid');` and, for each row that was not meant, set the client back to the workspace currency.
+- [ ] **Review the Phase 6 decisions.** The design (`docs/superpowers/specs/2026-11-05-phase-6-design.md`) was written without an interview; its 28 decisions and the 6a rulings in `docs/PROGRESS.md` are the builder's. The two that shape 6a: no currency conversion anywhere, and a rate applies only in its own currency.
+- [ ] **Review the Phase 7 decisions.** The design (`docs/superpowers/specs/2026-11-11-phase-7-design.md`) was written without an interview; its 22 decisions and the 7a rulings in `docs/PROGRESS.md` are the builder's. The ones that shape 7a: a published assignment is never edited in place (drafts replace it at Publish), members see only their own published plan, and approved time off lowers capacity rather than removing an assignment's day.
+- [ ] **Review the cleanup rulings** (`docs/superpowers/specs/2026-11-17-backlog-cleanup-design.md`, 17 rulings, and its Later list).
 
 ## App
 
-- [ ] **Review the Phase 6 decisions.** The design (`docs/superpowers/specs/2026-11-05-phase-6-design.md`) was written without an interview; its 28 decisions and the 6a rulings in `docs/PROGRESS.md` are the builder's. The two that shape 6a: no currency conversion anywhere, and a rate applies only in its own currency.
-- [ ] **Decide: should cost follow the report rounding rule?** Today a rounded report rounds cost with the same rule as the amount (a half hour rounded up to one costs an hour). Cost is what the company pays, so raw cost may be the better number; one expression in `reports.ts`.
-- [ ] **Phase 6a review minors** (final review, 2026-11-06):
-  - The relabel decisions (`updateClient`, `updateProject`, `setRate`'s currency) are read before the transaction opens; a rate saved or a project added in between keeps the old code. Lock the client row or take a workspace advisory lock inside the transaction.
-  - The client dialog still says "Its projects are not affected" when editing; a currency change does affect them.
-  - The Summary hides Cost and Profit under 640px while the cost notes still show.
-  - A row billed only in another currency with nothing rated prints a workspace-currency zero, and the export has no column for that currency.
-  - The Status tab has its own "is there a profit" rule instead of core `hasProfit`, and no note about entries without a cost rate.
-  - Core has two constants named `COMMON_CURRENCIES` (`currencies.ts`, `money.ts`), and `isCurrencyCode` depends on the runtime's Intl list, so browser and server can disagree.
-  - Only owners and admins see the "Set a project rate" notice (it is on the Rates tab); a project's manager is not told their project is unrated.
-  - On a Profit row that mixes currencies, Cost includes the hours profit leaves out, so Amount less Cost is not Profit; the note should say so.
-  - Untested: `deleteProject` reassigning entries across currencies (the code re-rates both snapshots).
-  - With approvals on, approved time can never be costed after the fact: the recalculation job skips approved periods, so profit for it shows zero cost.
-  - A relabel is one `UPDATE time_entry` inside the request; not measured on a large workspace.
-- [ ] **Watch the one-year Summary's time.** Phase 6a added cost measures and a currency key: on 1,000,000 entries the owner's one-year Summary went from 435 ms to about 650 ms on an idle machine (814 ms measured under load), against a 1 s limit that `report:perf` enforces. If it creeps further, group by the two raw columns and fold in JavaScript, or keep a currency column on the entry for unrated time.
-- [ ] **A cost rate applied to past entries re-rates billable snapshots too.** One job re-rates both snapshots from the date (design decision 2). An entry whose billable rate was kept on purpose ("New entries only", then an edit) takes the rate its start resolves to today. A fix is a `kinds` column on `rate_recalc_job`.
-- [ ] **Client currencies come from the short list** (`COMMON_CURRENCIES`, about twenty codes), though the server accepts any ISO 4217 code the runtime knows. A searchable list of all of them is a UI change only.
-- [ ] **Phase 6b review minors** (final review, 2026-11-09):
-  - The alert dedupe loads every `budget:%` outbox row of the workspace on every daily run (projects × thresholds × months × recipients, never purged); narrow it to the candidate kinds computed from `crossedThresholds`.
-  - `ThresholdsInput` keeps its typed text after a save normalises the value ("80, 50, 50" while `[50, 80]` is stored) and a non-numeric token shows the default zod message instead of the thresholds message.
-  - The Budget chart bounds its series at local tomorrow while a whole-project bar has no upper bound, so a future-dated entry shows in the bar and not in the chart's last point.
-  - `getProjectBudget` reads `workspace_settings` twice (`workspaceZone` and the thresholds); the page already holds `ctx.settings`.
-  - `hasRates` counts any non-null billable row in force in the project's currency, superseded rows and other people's member rates included, so the "no rate" notice can hide when nobody on the project is rated.
-  - `summaryReport` computes budget progress for the CSV, Excel and PDF exports and the Profit tab, which never render it: three extra queries per export. Pass a flag.
-  - The perf seed has no estimated project, so `report:perf` does not exercise the Summary with the progress path.
-  - No advisory lock around `evaluateBudgets` (as for the 5a reminders and 5b targets): two concurrent daily runs could double-send.
-- [ ] **Phase 6b, estimates (2026-11-09):** a raised estimate does not re-fire a threshold already emailed for the period (the outbox kind is the guard), so a project moved from 80% to 40% and back gets no second alert; estimates that add up from tasks, "billable time only" time estimates and cost-based budgets are out of scope (design decision 10); the Budget chart samples weekly past 62 days instead of bucketing by week; `hasRates` on the Budget tab is an approximation (a billable rate row in force in the project's currency at the project level or with no project), not `currentRate` per person; alert recipients are read without pagination (fine for a workspace, not for thousands of projects).
-- [ ] **Phase 6c review minors** (final review, 2026-11-10):
-  - Expense writes are authorised through `scopeForUser`'s `entry.write`; `expense.write` is read only for the `editable` flag. The two rows are identical today; changing `expense.write` alone would not change who can write.
-  - `expenseCategoryPatchSchema` validates the patch, not the merged row: `{ unitPriceMinor: null }` on a UNIT category passes (new expenses on it are then refused as zero).
-  - `usableProject` does not refuse a template project the way the entry service does.
-  - Receipt keys are deterministic, so a failed transaction after the upload leaves the new bytes under the old row's MIME; the upload also holds the connection and the person's lock for the S3 round trip. A versioned key would remove both.
-  - Each receipt thumbnail runs `getExpense` → `toDTOs` → `expenseLockedReasons` (about six queries) and mints a new presigned URL, so a 50-row page costs about 300 queries; a lighter read (row plus `can`) would do.
-  - `lockedReasons` now reads `writeRulesOf` twice per tracker or timesheet read; `myPeriods` runs the expense totals it never uses.
-  - The period page's "changed since submission" flag compares work seconds only, not expenses.
-  - The edit dialog removes a receipt before the save (a failed save loses it) and can ask an admin for a note up to three times (remove, save, upload).
-  - `useState(expense?.date ?? localDateKey(new Date(), …))` was an impure initializer (fixed in the review pass); the dialogs use local state, not react-hook-form (CLAUDE.md now says so).
-  - A `projectIds=none` carried from another report tab matches nothing on the Expenses tab, which hides the "Without project" option, so it cannot be cleared there.
-  - `parseQuantity(".5")` is refused; `fflate` is `^0.8.3`, not pinned exactly; `createExpense` checks the project and category outside its transaction; one missing receipt object fails the whole zip job.
-  - No integration test of the Profit tab for a manager with expenses in and out of scope (covered through `expenseTotalsBy` only).
-- [ ] **Phase 6d, invoicing (2026-11-10):** no credit notes (a void is the only undo of a sent invoice); taxes are per invoice, not per line; no online payment; no QuickBooks or Xero adapter (`server/invoices/sync.ts` is empty); a recurring template catches up only the periods due in the last seven days, so a longer outage is never back-filled; the public invoice page has no locale (English, the date keys as `3 Mar 2026`); an import never splits an entry across ranges or invoices; a voided invoice keeps its number (never reused) and its PDF; invoice PDFs are never purged from the bucket; `captured_email` keeps no attachment, so the PDF attachment is checked in the nightly lane only; the client dialog does not warn before a currency change on a client with invoices (the server refuses with its message); a page left open past midnight defaults its date fields to the day it was opened.
-- [ ] **Phase 6d review minors** (final review, 2026-11-10): the editor's "sent" date is the UTC date of `sent_at`, not the viewer's; a quantity of 1e9 at a price of 1e13 overflows `bigint` (an opaque error) and many such lines pass `Number.MAX_SAFE_INTEGER` in `invoiceTotals`, and `next_number` has no upper bound on an `int4`; a client email whose PDF attachment is missing fails after its retries while the invoice reads Sent and no admin is told; a public PDF download bumps `invoice.updated_at`; Chromium renders the frozen PDF inside the send transaction, holding the row lock and a pooled connection for seconds; notes edited after sending show on the public page but not in the frozen PDF; `deleteProject`'s invoiced-time check has the same lock-free window against a concurrent import that the guard had.
-- [ ] **Phase 6c, expenses (2026-11-10):** the unsubmitted-period reminder counts time only, so a period with expenses and no time is never reminded about; receipts of soft-deleted expenses are never purged (a hard delete or a cron sweep later); the receipts zip is built in memory, so a workspace with thousands of receipts needs a streaming build; EXIF orientation is not read when a photo is shrunk in the browser (a sideways phone photo stays sideways); the expense dialog's project picker lists the viewer's own projects when adding for someone else (the server refuses one the person cannot see); `expenseLockedReasons` runs one query per owner in a list page (fine at 50 rows).
-- [ ] **Decide: a default tag for kiosks.** With a required tag, nobody can clock out on a kiosk, because a kiosk adds no tags (spec decision 15 has none); the person stays clocked in until an admin edits the entry. The Kiosks dialog warns about it. A fix is a `kiosk.tag_id` column (an additive migration) and a picker.
-- [ ] Phase 5c review minors:
+### b1 — tracker, timesheet, calendar, catalog, auth, CI
+
+- [ ] **b1** `sign-up-form.tsx` maps `USER_ALREADY_EXISTS` to the email field, but Better Auth 1.7.7 emits `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; moot while `requireEmailVerification` answers a duplicate sign-up with a generic success. (A refused password-reset send also looks like success, by Better Auth's design, which keeps account existence private: unchanged.)
+- [ ] **b1** After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
+- [ ] **b1** Timesheet rows added by hand live only for the page visit (templates persist); keep them per week in local storage.
+- [ ] **b1** Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands. Timesheet cells likewise show the old value until the refetch lands. Patch the range query before the write.
+- [ ] **b1** Calendar blocks have `role=button` and `tabIndex=0` but no Enter/Space handler, so they cannot be opened from the keyboard.
+- [ ] **b1** The calendar loads entries whose start falls in the week, so an entry begun late on the previous week's last day is not drawn on the first day. Fetch from one day earlier; `blockOnDay` already clips.
+- [ ] **b1** Members see every client name in the projects-page filter, including archived clients and clients whose projects are all private to them.
+- [ ] **b1** ArrowLeft and ArrowRight move between timesheet cells even mid-text, so the caret cannot move within "1:30". Move between cells only when the caret is at the edge.
+- [ ] **b1** Copy last week has no duplicate guard (copying twice doubles every entry) and one archived project or done task aborts the whole copy without saying which entry.
+- [ ] **b1** The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; install Playwright's Chromium in the CI job.
+- [ ] **b1** The Detailed report's sort is per visit, not in the URL.
+- [ ] **b1** `workspace_settings.task_creators` and `task_assignee` are unread since tasks by group (2026-10-29): drop them in a contract migration.
+- [ ] **b1** Tasks by group follow-ups: a member's report filters (built from the picker) no longer offer a project whose tasks are all hidden from them even when their old entries are on it; making a public project private after its tasks were grouped does not give those groups access (rule 9 applies at assignment time); a manager allowed to create projects cannot create a new project's tasks in one import (rule 5: they are not the new project's manager).
+- [ ] **b1** `time-entries.test.ts` › "reassignProjectEntries moves entries and clears their task" failed once in the 5a gate (the moved entry's `updated_at` read 156 ms earlier than its creation's) and passed on two reruns; both stamps come from Postgres `now()`, so look at the Docker clock or the test's ordering.
+- [ ] **b1** `ci.yml` skips its pull_request job for same-repository PRs (the push already ran). GitHub counts a skipped job as a passing required check, so if branch protection is ever added, require the push run's check explicitly. Move this note into CLAUDE.md's Deployment section.
+- [ ] **b1** The suite runs spec files with 3 workers; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). Move the "a new spec that writes to the demo tenant needs checking" note into CLAUDE.md's e2e bullets.
+
+### b2 — approvals, time off, attendance, targets, kiosks, the daily cron
+
+- [ ] **b2** Kiosk default tag (ruling 8): with a required tag, nobody can clock out on a kiosk, because a kiosk adds no tags; add `kiosk.tag_id` (additive migration) and a picker.
+- [ ] **b2** Phase 5c review minors:
   - The QR path of `identify` treats any error from `allowedPerson` as "not allowed", so a database error counts as a QR failure; catch only `WorkspaceAccessError`.
-  - An unknown QR payload costs nothing to send and counts toward the kiosk's 30-failure pause, so whoever has the URL can pause PIN entry; consider not counting failures with no person, or a per-kiosk rate limit on identify.
+  - An unknown QR payload costs nothing to send and counts toward the kiosk's 30-failure pause, so whoever has the URL can pause PIN entry; stop counting failures with no person toward the pause.
   - `savePunchPhoto` uploads before it inserts the row, so an insert failure leaves an object the purge never finds.
   - `photo: true` reaches a public share page's payload when the link's creator manages kiosks (not rendered, existence only); strip it on the share path.
   - `removeMember` keeps `kiosk_assignee` rows, so re-inviting someone silently re-allows them on that kiosk.
   - The device URL's Copy has no failure toast (insecure contexts), and an emptied timeout field shows a raw validation message.
   - The session timeout can fire while a punch is in flight (the photo capture waits for the camera); clear it while busy.
   - `credentialStatuses` returns `pinSetAt`, which no UI reads.
-- [ ] `time-entries.test.ts` › "reassignProjectEntries moves entries and clears their task" failed once in the 5a gate (the moved entry's `updated_at` read 156 ms earlier than its creation's) and passed on two reruns; both stamps come from Postgres `now()`, so look at the Docker clock or the test's ordering.
-- [ ] Phase 5a review minors: `approversFor` uses the root pool inside the submit transaction (pass `tx`); the guard runs three statements per write (load the rules once per bulk edit or import); an owner's or admin's timer started with a note in a pending period can still be running when the period is approved; the settings check counts pending requests outside the update transaction; `deleteProject`'s submitted-time check takes no person lock; the daily reminder fires only on the first local day after a period (a missed run, or a DST-skipped day, loses it) and its dedupe is read-then-insert; `email_outbox` keeps full HTML forever (add retention, keep the reminder rows); `lock.manage` and core `transition()` are unused; the note prompt cancels an open prompt when a second write asks, Undo after a delete asks again, and a cancelled multi-owner delete restores rows already deleted; decision emails link to the timesheet, not the period; the Approvals tables lack billable totals; no web-level test with the viewer's zone different from the workspace's; Detailed report rows are not marked read-only for locked time.
-- [ ] Phase 5a: a workspace timezone change while periods are APPROVED is allowed (only PENDING refuses it), so an approved period's edge moves by the zone difference; store request bounds as instants if that bites.
-- [ ] Phase 5b: a request is counted when it is made, so a holiday or capacity change afterwards leaves its amount as it was (balances use the stored amount; Attendance and the timesheet recount the days). Recount pending requests on such a change if it matters.
-- [ ] Phase 5b: the request dialog offers an owner or admin only the policies assigned to them, but the Policies tab's list of who a policy applies to is the only place that shows assignment; an admin asking for time off on an unassigned policy gets "Not found".
-- [ ] Phase 5b: target rules evaluate every active member each morning with one query per workspace for work and one per window; at hundreds of members and many rules, batch the dedupe read and the outbox inserts.
-- [ ] Phase 5b: the Attendance tab has no share link and no Detailed drill-down from a day; add both when someone asks.
-- [ ] Phase 5b review minors (2026-11-03): the target dedupe reads every `target:%` outbox row the workspace ever had (narrow it to today's kinds); a member is reminded about days before they joined; an HOURS request over a range with no working days takes balance but shows nowhere (refuse it as DAYS does); the "Estimated" holiday badge cannot be cleared after the admin confirms the date; `/time-off/holidays` returns holidays' assignees to members (strip them as `listPolicies` does); the Attendance tab ignores a hidden Reports page; the group lookups in `peopleContext` and `listPolicies` are not scoped by workspace (harmless: ids are unique); `requestTimeOff` calls `approversFor` with the pool inside its transaction (as in 5a); Attendance's ±1-day window misses up to 2 h between UTC+14 and UTC−12 (use ±2 days); the preview answers 404 for an unassigned or archived policy so the dialog shows nothing; approval does not re-check the balance after a negative adjustment.
-- [ ] Phase 5a: auth (verification, reset, magic link) and invitation emails are still sent inside the request; move them to the outbox (`enqueueEmail` + `drainSoon`) so a slow SMTP never holds a response and a failure retries.
-- [ ] Phase 5a: an empty timesheet cell in a locked day or a submitted period stays typeable (the server refuses the write with its message); mark those days read-only from the period list and the lock boundary.
-- [ ] Phase 5a: a locked row's Duplicate, Split and Delete stay enabled in its menu (the server refuses them); disable them with the reason.
-- [ ] Phase 5a: the Unsubmitted tab shows a project manager only the people they manage, not people whose time is all on the manager's projects.
-- [ ] Phase 5a: `assertWritable` reads its own `workspace_settings` row next to `rulesOf`'s; fold the two reads into one if writes slow down.
-- [ ] Phase 5a: an owner's or admin's import into submitted periods writes one `ADMIN_EDIT` event per entry; a large import writes as many rows.
-- [ ] Phase 5a: the daily cron runs at 22:00 UTC, which is the next morning in Asia and the evening before in the Americas; a workspace far west of UTC gets its reminder a day late. Run the job hourly (a paid Vercel plan) or per timezone once that matters.
+- [ ] **b2** Phase 5a review minors: `approversFor` uses the root pool inside the submit transaction (pass `tx`); the guard runs three statements per write (load the rules once per bulk edit or import); an owner's or admin's timer started with a note in a pending period can still be running when the period is approved; the settings check counts pending requests outside the update transaction; `deleteProject`'s submitted-time check takes no person lock; the daily reminder fires only on the first local day after a period and its dedupe is read-then-insert; `email_outbox` keeps full HTML forever (add retention, keep the reminder rows); `lock.manage` and core `transition()` are unused; the note prompt cancels an open prompt when a second write asks, Undo after a delete asks again, and a cancelled multi-owner delete restores rows already deleted; decision emails link to the timesheet, not the period; the Approvals tables lack billable totals; no web-level test with the viewer's zone different from the workspace's; Detailed report rows are not marked read-only for locked time.
+- [ ] **b2** Phase 5a: a workspace timezone change while periods are APPROVED is allowed (ruling 5 keeps it); the settings page says what it moves before saving.
+- [ ] **b2** Phase 5b: the request dialog offers an owner or admin only the policies assigned to them, but only the Policies tab shows assignment; an admin asking for time off on an unassigned policy gets "Not found".
+- [ ] **b2** Phase 5b review minors (2026-11-03): the target dedupe reads every `target:%` outbox row the workspace ever had (narrow it to today's kinds); a member is reminded about days before they joined; an HOURS request over a range with no working days takes balance but shows nowhere (refuse it as DAYS does); the "Estimated" holiday badge cannot be cleared after the admin confirms the date; `/time-off/holidays` returns holidays' assignees to members (strip them as `listPolicies` does); the Attendance tab ignores a hidden Reports page; the group lookups in `peopleContext` and `listPolicies` are not scoped by workspace; `requestTimeOff` calls `approversFor` with the pool inside its transaction; Attendance's ±1-day window misses up to 2 h between UTC+14 and UTC−12 (use ±2 days); the preview answers 404 for an unassigned or archived policy so the dialog shows nothing; approval does not re-check the balance after a negative adjustment.
+- [ ] **b2** Phase 5a: auth (verification, reset, magic link) and invitation emails are still sent inside the request; move them to the outbox (`enqueueEmail` + `drainSoon`).
+- [ ] **b2** Phase 5a: an empty timesheet cell in a locked day or a submitted period stays typeable; mark those days read-only from the period list and the lock boundary.
+- [ ] **b2** Phase 5a: a locked row's Duplicate, Split and Delete stay enabled in its menu; disable them with the reason.
+- [ ] **b2** Phase 5a: the Unsubmitted tab shows a project manager only the people they manage, not people whose time is all on the manager's projects.
+- [ ] **b2** Phase 5a: `assertWritable` reads its own `workspace_settings` row next to `rulesOf`'s; fold the two reads into one.
+- [ ] **b2** Phase 5a: an owner's or admin's import into submitted periods writes one `ADMIN_EDIT` event per entry; write one per import.
+- [ ] **b2** The daily cron runs at 22:00 UTC, so a workspace far west of UTC gets its reminder a day late. Run it hourly and act per workspace at its local morning (ruling 9).
 
-- [ ] Export jobs and the rate recalculation job (`runRateRecalcJob`, 76 s for 1M entries) run inside the web function after the response (`after()`, within the 300 s budget). Once a worker host exists, enqueue `runExportJob(db, jobId)` on pg-boss instead (decision 1 of the Phase 3 design); the function is already one call, but `apps/worker` cannot import the web app's `server-only` storage and mail modules, so they need a shared package first.
-- [ ] `sign-up-form.tsx` maps `USER_ALREADY_EXISTS` to the email field, but Better Auth 1.7.7 emits `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; moot while `requireEmailVerification` answers a duplicate sign-up with a generic success (predates Phase 2). A refused password-reset send also looks like success, by Better Auth's design, which keeps account existence private.
-- [ ] After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
-- [ ] Timesheet rows added by hand live only for the page visit (templates persist); consider keeping them per week in local storage.
-- [ ] Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands (fast locally, visible on a slow connection). Timesheet cells likewise show the old value until the refetch lands. Patch the range query before the write.
-- [ ] Calendar blocks have `role=button` and `tabIndex=0` but no Enter/Space handler, so they cannot be opened from the keyboard.
-- [ ] The calendar loads entries whose start falls in the week, so an entry begun late on the previous week's last day is not drawn on the first day. Fetch from one day earlier; `blockOnDay` already clips.
-- [ ] Members see every client name in the projects-page filter, including archived clients and clients whose projects are all private to them.
-- [ ] ArrowLeft and ArrowRight move between timesheet cells even mid-text, so the caret cannot move within "1:30". Move between cells only when the caret is at the edge.
-- [ ] Copy last week has no duplicate guard (copying twice doubles every entry) and one archived project or done task aborts the whole copy without saying which entry.
-- [ ] The one-year Summary over the perf seed takes about 760 ms locally, with the series aggregate on one Postgres worker (the planner estimates one group per row for any expression on `start`). If production reports approach a second, add the day-level rollup table the Phase 3 design keeps as the last resort, maintained by the entry service.
-- [ ] The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; only the preview e2e run exercises `@sparticuz/chromium`. Consider installing Playwright's Chromium in the CI job.
-- [ ] The Detailed report keeps tags and the date read-only (edit them in the tracker), and its sort is per visit, not in the URL.
-- [ ] The `export_report` enum value `project-status` is unused: the Status tab exports the Summary grouped by task then person.
-- [ ] The rate recalculation re-rates every entry from its date, even when the changed rate can only affect some (a project's rate touches only that project's entries). Narrow the job to the changed level's target once workspaces are large enough for it to matter (1M entries take 76 s today).
-- [ ] The recalculation's batch `UPDATE` (raw SQL) leaves `updated_at` alone, so an entry's DTO does not show that its amount changed; nothing reads amounts from the entry DTO yet.
-- [ ] "New entries only" is effective from today's midnight in the workspace timezone: an entry created after the change but dated earlier keeps the old rate (decision 3: an entry is rated by its date). Clockify's wording suggests "created from now"; revisit if owners find it surprising.
-- [ ] Phase 4a review: `commitUserImport` creates the CSV's groups before any invite succeeds, and sends up to 500 invites (Better Auth plus SMTP) one after another in one action, which can run past the function budget part-way through. Re-running is safe ("invited already"), but the first result is lost. Move the sending into a job once the worker exists.
-- [ ] A second rate change on the same effective date replaces that date's row (Phase 4a Task 8 ruling), so History loses the earlier value of the day, and entries created between the two changes keep the replaced rate until a recalculation runs.
+### b3 — money: rates, cost, currencies, budgets, expenses, invoices
 
-- [ ] Tasks by group (decision 11) sends no email when a group gains tasks: members learn about them in the picker. An email or a digest when a group's tasks change is an option if teams ask for it.
-- [ ] `workspace_settings.task_creators` and `task_assignee` are unread since tasks by group (2026-10-29) and kept for a later contract migration, once every open preview runs code that no longer reads them.
-- [ ] Tasks by group, follow-ups the review set aside: a member's report filters (built from the picker) no longer offer a project whose tasks are all hidden from them even when their old entries are on it; making a public project private after its tasks were grouped does not give those groups access (rule 9 applies at assignment time); a manager allowed to create projects cannot create a new project's tasks in one import (rule 5: they are not the new project's manager).
-- [ ] The CSV import parses and resolves the file twice (the dry run and the commit) and writes up to 10,000 rows inside one request. Fine within the 300 s budget today; move the commit to a job with the export jobs once the worker exists.
-- [ ] Rounding rounds each entry before summing (Clockify's rule); a workspace that wants the total rounded instead has no setting for it.
-- [ ] Phase 4b review: `stopTimer` with an explicit end stays ungated under force timer (Task 5 ruling, for the idle dialog's discard), so a member can trim a running timer to any end after its start. Accepted; a known soft spot.
+- [ ] **b3** **A cost rate applied to past entries re-rates billable snapshots too.** One job re-rates both snapshots from the date. Add a `kinds` column on `rate_recalc_job`.
+- [ ] **b3** **Client currencies come from the short list** (`COMMON_CURRENCIES`, about twenty codes), though the server accepts any ISO 4217 code. Offer a searchable list of all of them.
+- [ ] **b3** **Phase 6a review minors** (final review, 2026-11-06):
+  - The relabel decisions (`updateClient`, `updateProject`, `setRate`'s currency) are read before the transaction opens; lock the client row or take a workspace advisory lock inside the transaction.
+  - The client dialog still says "Its projects are not affected" when editing; a currency change does affect them.
+  - The Summary hides Cost and Profit under 640px while the cost notes still show.
+  - A row billed only in another currency with nothing rated prints a workspace-currency zero, and the export has no column for that currency.
+  - The Status tab has its own "is there a profit" rule instead of core `hasProfit`, and no note about entries without a cost rate.
+  - Core has two constants named `COMMON_CURRENCIES` (`currencies.ts`, `money.ts`), and `isCurrencyCode` depends on the runtime's Intl list, so browser and server can disagree.
+  - Only owners and admins see the "Set a project rate" notice; a project's manager is not told their project is unrated.
+  - On a Profit row that mixes currencies, Cost includes the hours profit leaves out, so Amount less Cost is not Profit; the note should say so.
+  - Untested: `deleteProject` reassigning entries across currencies (the code re-rates both snapshots).
+  - A relabel is one `UPDATE time_entry` inside the request; not measured on a large workspace.
+- [ ] **b3** **Phase 6b review minors** (final review, 2026-11-09):
+  - The alert dedupe loads every `budget:%` outbox row of the workspace on every daily run; narrow it to the candidate kinds computed from `crossedThresholds`.
+  - `ThresholdsInput` keeps its typed text after a save normalises the value, and a non-numeric token shows the default zod message.
+  - The Budget chart bounds its series at local tomorrow while a whole-project bar has no upper bound, so a future-dated entry shows in the bar and not in the chart's last point.
+  - `getProjectBudget` reads `workspace_settings` twice; the page already holds `ctx.settings`.
+  - `hasRates` counts any non-null billable row in force in the project's currency, so the "no rate" notice can hide when nobody on the project is rated.
+  - `summaryReport` computes budget progress for exports and the Profit tab, which never render it. Pass a flag.
+  - The perf seed has no estimated project, so `report:perf` does not exercise the Summary with the progress path.
+  - No advisory lock around `evaluateBudgets`: two concurrent daily runs could double-send.
+  - The Budget chart samples weekly past 62 days instead of bucketing by week.
+- [ ] **b3** **Phase 6c review minors** (final review, 2026-11-10):
+  - Expense writes are authorised through `scopeForUser`'s `entry.write`; `expense.write` is read only for the `editable` flag.
+  - `expenseCategoryPatchSchema` validates the patch, not the merged row: `{ unitPriceMinor: null }` on a UNIT category passes.
+  - `usableProject` does not refuse a template project the way the entry service does.
+  - Receipt keys are deterministic, so a failed transaction after the upload leaves the new bytes under the old row's MIME; the upload also holds the connection and the person's lock for the S3 round trip. Use a versioned key.
+  - Each receipt thumbnail runs `getExpense` → `toDTOs` → `expenseLockedReasons` (about six queries) and mints a new presigned URL; use a lighter read.
+  - `lockedReasons` reads `writeRulesOf` twice per tracker or timesheet read; `myPeriods` runs the expense totals it never uses.
+  - The period page's "changed since submission" flag compares work seconds only, not expenses.
+  - The edit dialog removes a receipt before the save (a failed save loses it) and can ask an admin for a note up to three times.
+  - A `projectIds=none` carried from another report tab matches nothing on the Expenses tab, which hides the "Without project" option.
+  - `parseQuantity(".5")` is refused; `fflate` is `^0.8.3`, not pinned exactly; `createExpense` checks the project and category outside its transaction; one missing receipt object fails the whole zip job.
+  - No integration test of the Profit tab for a manager with expenses in and out of scope.
+- [ ] **b3** **Phase 6c, expenses:** the unsubmitted-period reminder counts time only; receipts of soft-deleted expenses are never purged; the receipts zip is built in memory (stream it); EXIF orientation is not read when a photo is shrunk; the expense dialog's project picker lists the viewer's own projects when adding for someone else.
+- [ ] **b3** **Phase 6d, invoicing:** a recurring template catches up only 7 days (ruling 13: 31); `captured_email` keeps no attachment, so the PDF attachment is checked in the nightly lane only; the client dialog does not warn before a currency change on a client with invoices; a page left open past midnight defaults its date fields to the day it was opened.
+- [ ] **b3** **Phase 6d review minors** (final review, 2026-11-10): the editor's "sent" date is the UTC date of `sent_at`, not the viewer's; a quantity of 1e9 at a price of 1e13 overflows `bigint` (an opaque error), many such lines pass `Number.MAX_SAFE_INTEGER` in `invoiceTotals`, and `next_number` has no upper bound on an `int4`; a client email whose PDF attachment is missing fails after its retries while the invoice reads Sent and no admin is told; a public PDF download bumps `invoice.updated_at`; Chromium renders the frozen PDF inside the send transaction, holding the row lock and a pooled connection for seconds; notes edited after sending show on the public page but not in the frozen PDF; `deleteProject`'s invoiced-time check has the same lock-free window against a concurrent import that the guard had.
 
-- [ ] **Review the Phase 7 decisions.** The design (`docs/superpowers/specs/2026-11-11-phase-7-design.md`) was written without an interview; its 22 decisions and the 7a rulings in `docs/PROGRESS.md` are the builder's. The ones that shape 7a: a published assignment is never edited in place (drafts replace it at Publish), members see only their own published plan, and approved time off lowers capacity rather than removing an assignment's day.
-- [ ] **Phase 7a deferred** (2026-11-11):
-  - A series is one row: moving, resizing or deleting one occurrence moves the whole series (no per-occurrence exceptions), and a series cannot be split.
-  - Split is a right-click on the team grid only; keyboard and touch users edit the dates and copy instead.
-  - The project schedule's bars open the dialog but cannot be dragged; drags are on the team grid, with a mouse.
-  - Columns are not windowed: fine up to the month zoom (31 days); a quarter zoom would need it.
-  - The Calendar band shows the viewer's own plan only, never the person shown by add-for-others.
-  - A removed or deactivated member's assignments stay in the table with no row on the grid.
-  - The Team tab has no group or project filters yet (the route takes `groupIds` and `projectIds`), and Previous / Next do not prefetch the adjacent range (design decisions 14 and 15).
-- [ ] **Phase 7b deferred** (2026-11-11):
-  - The forecast reads the published plan only; a what-if forecast over drafts is not offered.
-  - Scheduled money uses the rate in force on each day as of today's rate rows; a future-dated rate row counts from its date, but a rate change entered later does not re-forecast history (nothing is stored, so it simply moves).
-  - Observed once (2026-11-11, a local production run of four specs on three workers): `schedule.spec.ts` › "a draft is hidden from the member until Publish…" did not get the publish email within the 15 s wait and passed on retry. Not reproduced in six isolated runs, two full local suites or two preview runs; the outbox rows were cleaned up before they could be read. If it recurs, read the row's `status`, `attempts` and `last_error` before the cleanup (CI fails on a flaky test).
-  - The Assignments report has no chart and no share link (a plan is internal); its export always streams, so a very large range answers 413 instead of becoming a job.
-- [ ] **Phase 7b review minors** (final review, 2026-11-11):
+### b4 — schedule and forecast
+
+- [ ] **b4** **Phase 7a deferred:** split only by right-click on the team grid (add Split to the bar menu); the Calendar band shows the viewer's own plan only, never the person shown by add-for-others; a removed or deactivated member's assignments stay in the table with no row on the grid; the Team tab has no group or project filters yet, and Previous / Next do not prefetch the adjacent range.
+- [ ] **b4** **Phase 7b deferred:** `schedule.spec.ts` › "a draft is hidden from the member until Publish…" missed the publish email once in the 15 s wait (2026-11-11), not reproduced since; add diagnostics that print the outbox row's `status`, `attempts` and `last_error` when it recurs.
+- [ ] **b4** **Phase 7b review minors** (final review, 2026-11-11):
   - The forecast's tracked side counts the whole period, so a manual entry dated after today is counted with the plan for that day too (and "Reached on" can be a future date).
   - The Assignments PDF header lists the shared query's task, tag, billable and description filters, which the report ignores, and omits groups.
-  - The Assignments XLSX writes durations (with U+2212) and the percent as text; a typed seconds or percent column would let Excel sum them.
-  - The tracked window is a day either side of the viewer's range: an owner more than 24 hours from the viewer can lose an entry near midnight (widen to two days).
-  - The Budget tab scans the project's entries three times per load (progress, the chart, the forecast); the forecast could reuse the chart's daily rows.
+  - The Assignments XLSX writes durations (with U+2212) and the percent as text.
+  - The tracked window is a day either side of the viewer's range: widen to two days.
+  - The Budget tab scans the project's entries three times per load; the forecast could reuse the chart's daily rows.
   - The chart's caption does not mention the scheduled projection; the totals row's Variance % is not coloured.
-  - A removed member's rows keep their name rather than "(former member)" (as the Summary does).
-- [ ] **Phase 7a review minors** (final review, 2026-11-11):
-  - Writers do not take the `schedule:` lock and `draftsInScope` does not lock its rows: a draft edited out of the publisher's scope mid-publish is still applied, and an edit racing a publish can deadlock (opposite lock order).
-  - `draftCount` counts drafts that Publish skips (an out-of-scope original), so the bar can show a change that never publishes.
+  - A removed member's rows keep their name rather than "(former member)".
+- [ ] **b4** **Phase 7a review minors** (final review, 2026-11-11):
+  - Writers do not take the `schedule:` lock and `draftsInScope` does not lock its rows: a draft edited out of the publisher's scope mid-publish is still applied, and an edit racing a publish can deadlock.
+  - `draftCount` counts drafts that Publish skips (an out-of-scope original).
   - Splitting a tiny total can store a `0:00 total` part, and a first part with no working day fails with zod's default text.
-  - The publish bar's "Published …" time uses the browser's locale and zone, not the viewer's preference (and differs between server and client render).
+  - The publish bar's "Published …" time uses the browser's locale and zone, not the viewer's preference.
   - A `projectIds` filter naming a private project confirms it has assignments (grey rows); intersect the filter with visible projects.
   - `copyAssignment` checks only the destination, so a copy by a published id can duplicate another planner's out-of-scope draft.
-  - Saving an unchanged published assignment makes an identical draft (a change, and an email at Publish).
+  - Saving an unchanged published assignment makes an identical draft.
   - Drags have no `pointercancel` / Escape handling, and every pointer move re-renders the grid even when the column did not change.
   - The grid has no arrow-key navigation, bars sit outside gridcells, the resize handles are keyboard tab stops that do nothing, and the project rows' "Expand" buttons share one label.
   - The schedule read's perf test asserts 2 s where the design said 500 ms (measured 138 ms).
 
 ## E2E suite
 
-- [ ] `others.spec.ts` "the timer bar stays the viewer's own" is a weak test: it passed with the entry list keyed to the viewer, and no single break models a timer for someone else (timers have no target at all), so its coverage line stays unticked.
-- [ ] `ci.yml` skips its pull_request job for same-repository PRs (the push already ran). GitHub counts a skipped job as a passing required check, so if branch protection is ever added, require the push run's check explicitly; none exists today.
-- [ ] Against the dev server, three workers occasionally close an open picker mid-test (Next recompiles routes on demand and pushes updates); the production-server run (see the CLAUDE.md commands) is stable. Consider making `pnpm e2e` build and start a production server locally.
-- [ ] The suite runs spec files with 3 workers to stay under 10 minutes on a preview; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). If a new spec writes to the demo tenant, check it against the others or give it its own project in the Playwright config.
-- [ ] Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
-- [ ] Re-prove the 26 coverage ticks carried over from Phases 0–1: break each guarded behaviour once and watch its test fail.
-- [ ] `projects.spec.ts` "filter, search and sort the projects list" was flaky once on the local full run of 2026-11-11 (the Name Z–A sort still read A–Z after 10 s; passed on retry). Phase 7 does not touch the projects list; watch for a recurrence.
-- [ ] `settings.spec.ts` "a required project blocks Stop until it is picked" was flaky once on the preview run of 2026-10-29 (Start pressed, no Stop within 20 s; passed on retry). Not reproduced locally; watch for a recurrence before adding a wait.
+- [ ] **b5** `others.spec.ts` "the timer bar stays the viewer's own" is a weak test: rewrite it so a real break fails it, or delete it and its coverage line (ruling 15).
+- [ ] **b5** Local `pnpm e2e` runs against the dev server, where three workers occasionally close an open picker mid-test; make it build and start a production server (ruling 16).
+- [ ] **b5** Backfill the rest of `docs/E2E_COVERAGE.md`, in this order: entry list (week paging, inline time/date edits, bulk delete), timer settings with `page.clock` (idle, Pomodoro, reminders), Phase 0 gaps, 375px layouts.
+- [ ] **b5** Re-prove the 26 coverage ticks carried over from Phases 0–1: break each guarded behaviour once and watch its test fail.
+- [ ] **b5** `projects.spec.ts` "filter, search and sort the projects list" was flaky once (2026-11-11), and `settings.spec.ts` "a required project blocks Stop until it is picked" once (2026-10-29); add diagnostics that print the cause if either recurs (ruling 15).
 
 ## Coverage check (`apps/web/scripts/coverage-check.ts`)
 
@@ -160,8 +139,50 @@ Nothing open.
 
 Nothing open.
 
+## Later
+
+Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by that phase's design; "not planned" means the PRD excludes it or nobody has asked.
+
+**Phase 8 (platform, ops)**
+
+- Export jobs (`runExportJob`), the rate recalculation (`runRateRecalcJob`, 76 s for 1M entries), the CSV import's commit and the user import's invitations run in the web function today (`after()` or the request, within the 300 s budget). Move them onto pg-boss once a worker host exists; `apps/worker` cannot import the web app's `server-only` storage and mail modules, so they need a shared package first.
+- The rate recalculation re-rates every entry from its date, even when the changed rate can only affect some; narrow the job to the changed level's target.
+- Credit notes (a void is the only undo of a sent invoice), per-line taxes, online invoice payment.
+- Scale: budget alert recipients are read without pagination; target rules evaluate every active member with one query per window. Batch the reads and the outbox inserts at thousands of projects or hundreds of members.
+
+**Phase 9 (apps)**
+
+- Touch and keyboard drags on the schedule grid, and drags on the project schedule's bars.
+
+**Not planned**
+
+- QuickBooks or Xero sync (`server/invoices/sync.ts` stays an empty registry); a locale for the public invoice page (the PRD excludes localisation).
+- Estimates that add up from tasks, "billable time only" time estimates, cost-based budgets; re-firing a threshold after a raised estimate.
+- A "round the total" rounding setting (rounding stays per entry).
+- Repeat-series exceptions (one occurrence moved or deleted) and splitting a series.
+- What-if forecasts over drafts; a chart, share link or export job for the Assignments report (its export streams, and a very large range answers 413).
+- An email or digest when a group gains tasks.
+- Inline editing of tags and dates in the Detailed report.
+- Share links and drill-downs on the Attendance tab.
+- A windowed column axis for a quarter zoom on the schedule.
+- An invoice import that splits an entry across ranges or invoices.
+
 ## Done
 
+- [x] Closed by ruling in the backlog cleanup, 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-design.md`):
+  - "Should cost follow the report rounding rule?" Yes (ruling 1): profit is amount less cost over the same hours.
+  - "With approvals on, approved time can never be costed after the fact." Kept (ruling 2): approval freezes the period, money included.
+  - "New entries only" from today's midnight by the entry's date. Kept (ruling 3).
+  - A second rate change on the same date replaces that date's row. Kept (ruling 4).
+  - A time-off request is not recounted after a holiday or capacity change. Kept (ruling 6): the amount is what the approver saw.
+  - `stopTimer` with an explicit end ungated under force timer. Accepted (ruling 7).
+  - The unused `export_report` value `project-status`. Kept (ruling 10): removing a Postgres enum value means recreating the type.
+  - The recalculation's batch `UPDATE` leaves `updated_at` alone. Kept (ruling 11): nothing reads amounts from the entry DTO.
+  - A voided invoice keeps its number and its PDF; invoice PDFs are never purged. By design (ruling 12): an invoice is a business record.
+  - "Watch the one-year Summary's time" (650 ms after 6a) and "the one-year Summary takes about 760 ms" (the rollup as last resort). Closed into the gate (ruling 14): `report:perf` fails over 1 s.
+  - Phase 6c: `useState(expense?.date ?? localDateKey(new Date(), …))` was an impure initializer; fixed in the 6c review pass, and CLAUDE.md records that the expense dialogs use local state.
+  - Phase 6c: `expenseLockedReasons` runs one query per owner in a list page. Accepted: at most 50 rows a page.
+  - Phase 7b: a rate change entered later does not re-forecast history. By design: nothing is stored, so the forecast simply moves.
 - [x] Phase 6c's deferred `invoiced` filter on the Expenses page (design decision 18), done 2026-11-10 in Phase 6d (a426be9): the Expenses page and the reports filter Invoiced / Not invoiced, and an invoiced expense is read-only.
 - [x] Vercel automation bypass secret rotated, done 2026-11-04: the first kiosk acceptance test asserted on whole cookie objects, so its failure on preview run 41773136961 wrote `_vercel_jwt` unmasked into the public `playwright-report-preview` artifact. The owner deleted the artifact, regenerated the secret and updated `VERCEL_AUTOMATION_BYPASS_SECRET` in the Actions secrets; the test reads cookie names only since a25512f, and CLAUDE.md forbids asserting on whole cookies or headers.
 - [x] Report leak guard, done 2026-11-05 ("e2e: keep secrets out of the public report"): lint refuses cookie and header dumps in `e2e/` (`cookieNames()` is the one reader), and `e2e:report-guard` deletes a report that carries a job secret or a JWT, inside zips too, before the preview and nightly workflows upload it.
