@@ -250,10 +250,10 @@ async function assertDetailsUsable(
     });
     const visible =
       found && can(scope.actor, "project.view", await projectResource(db, scope, projectId));
-    if (!found) throw new DetailUnusableError( "Project not found.");
+    if (!found) throw new DetailUnusableError("Project not found.");
     // Visibility is a condition for assigning a project; an entry already on a
     // private project the user has since left keeps it (they can still retag it).
-    if (projectTouched && !visible) throw new DetailUnusableError( "Project not found.");
+    if (projectTouched && !visible) throw new DetailUnusableError("Project not found.");
     // Archived blocks only when the project itself is being (re)assigned.
     projectRow = {
       id: found.id,
@@ -268,7 +268,7 @@ async function assertDetailsUsable(
       where: and(eq(task.id, taskId), eq(task.workspaceId, scope.workspaceId)),
       columns: { projectId: true, status: true },
     });
-    if (!found) throw new DetailUnusableError( "Task not found.");
+    if (!found) throw new DetailUnusableError("Task not found.");
     taskRow = found;
   }
 
@@ -281,14 +281,14 @@ async function assertDetailsUsable(
         where: and(inArray(tag.id, tagIds), eq(tag.workspaceId, scope.workspaceId)),
         columns: { id: true, name: true, archived: true },
       });
-      if (tagRows.length !== tagIds.length) throw new DetailUnusableError( "Tag not found.");
+      if (tagRows.length !== tagIds.length) throw new DetailUnusableError("Tag not found.");
       const alreadyOn = new Set(current?.tagIds ?? []);
       addedTags = tagRows.filter((t) => !alreadyOn.has(t.id));
     }
   }
 
   const block = trackingBlock({ project: projectRow, task: taskRow, tags: addedTags });
-  if (block) throw new DetailUnusableError( block);
+  if (block) throw new DetailUnusableError(block);
 
   // Decision 11: a task is taken through one of its groups, judged for the
   // entry's owner (`scope.actor`, never `actedBy`: rule 11). Only a task being
@@ -303,7 +303,7 @@ async function assertDetailsUsable(
       projectId: taskRow.projectId,
       groupIds: groups.map((g) => g.groupId),
     });
-    if (!allowed) throw new DetailUnusableError( TASK_UNAVAILABLE_MESSAGE);
+    if (!allowed) throw new DetailUnusableError(TASK_UNAVAILABLE_MESSAGE);
   }
 }
 
