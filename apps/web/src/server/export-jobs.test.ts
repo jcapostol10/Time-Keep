@@ -174,7 +174,7 @@ describe("export jobs", () => {
   it("a receipts job builds a zip and emails its owner (Phase 6c)", async () => {
     const { createProject } = await import("./catalog/projects");
     const { createExpenseCategory } = await import("./expense-categories");
-    const { receiptKeys } = await import("./expense-receipts");
+    const { newReceiptKeys } = await import("./expense-receipts");
     const { createExpense, setReceipt } = await import("./expenses");
     const { uploadExport } = await import("./storage");
     const { unzipSync } = await import("fflate");
@@ -199,7 +199,7 @@ describe("export jobs", () => {
       },
       { now: NOW },
     );
-    const keys = receiptKeys(alice.workspaceId, e.id);
+    const keys = newReceiptKeys(alice.workspaceId, e.id);
     const bytes = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
     await uploadExport({ key: keys.file, body: bytes, contentType: "image/jpeg" });
     await setReceipt(

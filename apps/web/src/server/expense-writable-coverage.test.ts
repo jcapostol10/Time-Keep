@@ -16,6 +16,8 @@ import { functions } from "../../test/source-functions";
 const FILE = path.resolve(__dirname, "expenses.ts");
 
 const EXEMPT: Record<string, string> = {
+  forgetDeletedReceipt:
+    "the daily purge clears the receipt of an expense already deleted; nobody can read or write it",
   markExpensesInvoiced:
     "the invoice service marks and releases; invoiced expenses are read-only through the guard",
   releaseExpensesInvoiced:

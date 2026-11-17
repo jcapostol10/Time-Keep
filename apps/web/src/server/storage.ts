@@ -1,6 +1,10 @@
 import "server-only";
 
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
+  UploadPartCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   ListObjectsV2Command,
@@ -79,6 +83,78 @@ export async function uploadExport(args: {
       CacheControl: "private, no-store",
     }),
   );
+}
+
+/** S3 refuses a part under 5 MB unless it is the last one. */
+const PART_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Stores a file that arrives in chunks (the receipts zip) without holding it
+ * whole: a multipart upload, one part in memory at a time. A failure aborts
+ * the upload, so no parts are left behind.
+ */
+export async function uploadExportStream(args: {
+  key: string;
+  chunks: AsyncIterable<Uint8Array>;
+  contentType: string;
+}): Promise<void> {
+  const client = getClient();
+  const target = { Bucket: env().S3_EXPORT_BUCKET, Key: args.key };
+  const { UploadId } = await client.send(
+    new CreateMultipartUploadCommand({
+      ...target,
+      ContentType: args.contentType,
+      CacheControl: "private, no-store",
+    }),
+  );
+  if (!UploadId) throw new Error(`No upload id for ${args.key}`);
+  const parts: { ETag: string | undefined; PartNumber: number }[] = [];
+  const send = async (body: Uint8Array) => {
+    const PartNumber = parts.length + 1;
+    const out = await client.send(
+      new UploadPartCommand({ ...target, UploadId, PartNumber, Body: body }),
+    );
+    parts.push({ ETag: out.ETag, PartNumber });
+  };
+  try {
+    let pending: Uint8Array[] = [];
+    let size = 0;
+    for await (const chunk of args.chunks) {
+      pending.push(chunk);
+      size += chunk.byteLength;
+      if (size >= PART_BYTES) {
+        await send(concat(pending, size));
+        pending = [];
+        size = 0;
+      }
+    }
+    // The last part may be any size; an empty file still needs one part.
+    if (size > 0 || parts.length === 0) await send(concat(pending, size));
+    await client.send(
+      new CompleteMultipartUploadCommand({
+        ...target,
+        UploadId,
+        MultipartUpload: { Parts: parts },
+      }),
+    );
+  } catch (error) {
+    await client
+      .send(new AbortMultipartUploadCommand({ ...target, UploadId }))
+      .catch((abortError: unknown) =>
+        console.error("[storage] abort failed", args.key, abortError),
+      );
+    throw error;
+  }
+}
+
+function concat(chunks: Uint8Array[], size: number): Uint8Array {
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return out;
 }
 
 /** A short-lived download link that saves the file under `filename` (or shows it, `inline`). */

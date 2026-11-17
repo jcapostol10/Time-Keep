@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { approvalRequest, eq, workspaceSettings } from "@timekeep/db";
+import { approvalRequest, eq, expense, workspaceSettings } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -14,10 +14,15 @@ import {
 const store = vi.hoisted(() => ({
   uploads: [] as { key: string; contentType: string; size: number }[],
   deletes: [] as string[],
+  /** Runs inside the next upload: what happens to the database while the file is in flight. */
+  duringUpload: null as null | (() => Promise<void>),
 }));
 vi.mock("./storage", () => ({
   uploadExport: async (args: { key: string; body: Uint8Array; contentType: string }) => {
     store.uploads.push({ key: args.key, contentType: args.contentType, size: args.body.length });
+    const hook = store.duringUpload;
+    store.duringUpload = null;
+    await hook?.();
   },
   deleteExport: async (key: string) => {
     store.deletes.push(key);
@@ -30,7 +35,7 @@ const { loadViewer, scopeForUser } = await import("./authz");
 const { createProject } = await import("./catalog/projects");
 const { PENDING_MESSAGE } = await import("./entry-guard");
 const { createExpenseCategory } = await import("./expense-categories");
-const { assertReceipt, receiptKeys, receiptUrl, removeReceipt, saveReceipt } =
+const { assertReceipt, purgeDeletedReceipts, receiptUrl, removeReceipt, saveReceipt } =
   await import("./expense-receipts");
 const { createExpense, getExpense } = await import("./expenses");
 
@@ -61,6 +66,7 @@ const viewer = (who: string) => loadViewer(db, wsId, ids[who]!);
 beforeEach(async () => {
   store.uploads = [];
   store.deletes = [];
+  store.duringUpload = null;
   await truncateAll(db);
   const olga = await createTestUser(db, "Olga Owner");
   const max = await createTestUser(db, "Max Manager");
@@ -129,13 +135,21 @@ describe("assertReceipt", () => {
 });
 
 describe("saveReceipt", () => {
-  it("stores keys and mime, replaces an old receipt, and the guard applies", async () => {
+  /** The receipt columns as stored. */
+  const stored = async (id: string) =>
+    (
+      await db
+        .select({
+          key: expense.receiptKey,
+          thumb: expense.receiptThumbKey,
+          mime: expense.receiptMime,
+        })
+        .from(expense)
+        .where(eq(expense.id, id))
+    )[0]!;
+
+  it("stores each upload under its own key and deletes what the row no longer names", async () => {
     const e = await bobsExpense();
-    const keys = receiptKeys(wsId, e.id);
-    expect(keys).toEqual({
-      file: `receipts/${wsId}/${e.id}`,
-      thumb: `receipts/${wsId}/${e.id}.thumb.jpg`,
-    });
     const saved = await saveReceipt(
       db,
       await viewer("bob"),
@@ -144,11 +158,15 @@ describe("saveReceipt", () => {
       { now: NOW },
     );
     expect(saved.receipt).toEqual({ mime: "image/jpeg", thumb: true });
+    const first = await stored(e.id);
+    // A version under the expense, never a key another upload could reuse.
+    expect(first.key).toMatch(new RegExp(`^receipts/${wsId}/${e.id}/[0-9a-f-]{36}$`));
+    expect(first.thumb).toBe(`${first.key}.thumb.jpg`);
     expect(store.uploads.map((u) => [u.key, u.contentType])).toEqual([
-      [keys.file, "image/jpeg"],
-      [keys.thumb, "image/jpeg"],
+      [first.key, "image/jpeg"],
+      [first.thumb, "image/jpeg"],
     ]);
-    // A PDF replaces it: no thumbnail, so the old one is deleted after the row changes.
+    // A PDF replaces it under a new key; both old objects go once the row has changed.
     store.uploads = [];
     const replaced = await saveReceipt(
       db,
@@ -158,8 +176,11 @@ describe("saveReceipt", () => {
       { now: NOW },
     );
     expect(replaced.receipt).toEqual({ mime: "application/pdf", thumb: false });
-    expect(store.uploads.map((u) => u.key)).toEqual([keys.file]);
-    expect(store.deletes).toEqual([keys.thumb]);
+    const second = await stored(e.id);
+    expect(second.key).not.toBe(first.key);
+    expect(second).toMatchObject({ thumb: null, mime: "application/pdf" });
+    expect(store.uploads.map((u) => u.key)).toEqual([second.key]);
+    expect(store.deletes.sort()).toEqual([first.key, first.thumb].sort());
     // A thumbnail that is not a small JPEG is ignored.
     store.uploads = [];
     const noThumb = await saveReceipt(
@@ -171,6 +192,37 @@ describe("saveReceipt", () => {
     );
     expect(noThumb.receipt).toEqual({ mime: "image/jpeg", thumb: false });
     expect(store.uploads).toHaveLength(1);
+  });
+
+  it("a save that fails after the upload keeps the old receipt and deletes the new objects", async () => {
+    const e = await bobsExpense();
+    await saveReceipt(
+      db,
+      await viewer("bob"),
+      e.id,
+      { bytes: JPEG, mime: "image/jpeg", thumb: null },
+      { now: NOW },
+    );
+    const before = await stored(e.id);
+    store.uploads = [];
+    store.deletes = [];
+    // While the new file is in flight the expense is deleted: the write is refused.
+    store.duringUpload = async () => {
+      await db.update(expense).set({ deletedAt: NOW }).where(eq(expense.id, e.id));
+    };
+    await expect(
+      saveReceipt(
+        db,
+        await viewer("bob"),
+        e.id,
+        { bytes: pdfOf(100), mime: "application/pdf", thumb: null },
+        { now: NOW },
+      ),
+    ).rejects.toThrow();
+    // The row still names the JPEG, with the JPEG's type: never new bytes under an old MIME.
+    expect(await stored(e.id)).toEqual(before);
+    expect(store.uploads).toHaveLength(1);
+    expect(store.deletes).toEqual([store.uploads[0]!.key]);
   });
 
   it("is refused in a pending period for the owner, and uploads nothing", async () => {
@@ -239,8 +291,7 @@ describe("saveReceipt", () => {
     );
     const removed = await removeReceipt(db, await viewer("bob"), e.id, { now: NOW });
     expect(removed.receipt).toBeNull();
-    const keys = receiptKeys(wsId, e.id);
-    expect(store.deletes.sort()).toEqual([keys.file, keys.thumb].sort());
+    expect(store.deletes.sort()).toEqual(store.uploads.map((u) => u.key).sort());
     expect((await getExpense(db, await viewer("bob"), e.id)).receipt).toBeNull();
     // The scope helper agrees: a stranger is not found.
     await expect(scopeForUser(db, await viewer("carol"), ids.bob!)).rejects.toMatchObject({
@@ -262,12 +313,12 @@ describe("receiptUrl", () => {
       { bytes: pdfOf(50), mime: "application/pdf", thumb: null },
       { now: NOW },
     );
-    const keys = receiptKeys(wsId, e.id);
+    const key = store.uploads[0]!.key;
     expect(await receiptUrl(db, await viewer("bob"), e.id, {})).toBe(
-      `https://signed.test/${keys.file}?ttl=300&name=receipt.pdf`,
+      `https://signed.test/${key}?ttl=300&name=receipt.pdf`,
     );
     // Owners read everyone's; a colleague reads nobody's; no thumbnail for a PDF.
-    expect(await receiptUrl(db, await viewer("olga"), e.id, {})).toContain(keys.file);
+    expect(await receiptUrl(db, await viewer("olga"), e.id, {})).toContain(key);
     await expect(receiptUrl(db, await viewer("carol"), e.id, {})).rejects.toMatchObject({
       status: 404,
     });
@@ -277,5 +328,63 @@ describe("receiptUrl", () => {
     await expect(receiptUrl(db, await viewer("bob"), randomUUID(), {})).rejects.toMatchObject({
       status: 404,
     });
+  });
+
+  it("opens a receipt stored before keys had versions, by the key the row holds", async () => {
+    const e = await bobsExpense();
+    const old = `receipts/${wsId}/${e.id}`;
+    await db
+      .update(expense)
+      .set({ receiptKey: old, receiptThumbKey: `${old}.thumb.jpg`, receiptMime: "image/jpeg" })
+      .where(eq(expense.id, e.id));
+    expect(await receiptUrl(db, await viewer("bob"), e.id, {})).toBe(
+      `https://signed.test/${old}?ttl=300&name=receipt.jpg`,
+    );
+    expect(await receiptUrl(db, await viewer("bob"), e.id, { thumb: true })).toContain(
+      `${old}.thumb.jpg`,
+    );
+  });
+});
+
+describe("purgeDeletedReceipts", () => {
+  it("removes the receipts of expenses deleted over 30 days ago, and only those", async () => {
+    const DAY = 24 * 3_600_000;
+    const make = async (deletedAt: Date | null) => {
+      const e = await bobsExpense();
+      await saveReceipt(
+        db,
+        await viewer("bob"),
+        e.id,
+        { bytes: JPEG, mime: "image/jpeg", thumb: JPEG },
+        { now: NOW },
+      );
+      if (deletedAt) await db.update(expense).set({ deletedAt }).where(eq(expense.id, e.id));
+      return e.id;
+    };
+    const long = await make(new Date(NOW.getTime() - 31 * DAY));
+    const recent = await make(new Date(NOW.getTime() - DAY));
+    const live = await make(null);
+    const keysOf = async (id: string) => {
+      const [row] = await db
+        .select({
+          key: expense.receiptKey,
+          thumb: expense.receiptThumbKey,
+          mime: expense.receiptMime,
+        })
+        .from(expense)
+        .where(eq(expense.id, id));
+      return row!;
+    };
+    const gone = await keysOf(long);
+    store.deletes = [];
+
+    expect(await purgeDeletedReceipts(db, NOW)).toBe(1);
+    expect(store.deletes.sort()).toEqual([gone.key, gone.thumb].sort());
+    expect(await keysOf(long)).toEqual({ key: null, thumb: null, mime: null });
+    // Still restorable, or still live: untouched.
+    expect((await keysOf(recent)).key).not.toBeNull();
+    expect((await keysOf(live)).key).not.toBeNull();
+    // Nothing left to do on the next run.
+    expect(await purgeDeletedReceipts(db, NOW)).toBe(0);
   });
 });

@@ -513,13 +513,14 @@ export async function countProjectExpenses(
 
 /**
  * Hard-deletes a project's soft-deleted expenses so the project itself can go.
- * Their receipt objects stay in the bucket (see docs/BACKLOG.md).
+ * Returns the object keys of their receipts, for the caller to delete once
+ * its transaction has committed.
  */
 export async function purgeDeletedProjectExpenses(
   db: Executor,
   workspaceId: string,
   projectId: string,
-): Promise<number> {
+): Promise<string[]> {
   const rows = await db
     .delete(expense)
     .where(
@@ -529,8 +530,81 @@ export async function purgeDeletedProjectExpenses(
         isNotNull(expense.deletedAt),
       ),
     )
-    .returning({ id: expense.id });
-  return rows.length;
+    .returning({ file: expense.receiptKey, thumb: expense.receiptThumbKey });
+  return rows.flatMap((r) => [r.file, r.thumb]).filter((k): k is string => k !== null);
+}
+
+/** What a receipt link needs, and nothing else: one narrow read, checked against `expense.read`. */
+export async function receiptRefOf(
+  db: Executor,
+  viewer: EntryScope,
+  expenseId: string,
+): Promise<{ fileKey: string; thumbKey: string | null; mime: string }> {
+  const [row] = await db
+    .select({
+      userId: expense.userId,
+      projectId: expense.projectId,
+      fileKey: expense.receiptKey,
+      thumbKey: expense.receiptThumbKey,
+      mime: expense.receiptMime,
+    })
+    .from(expense)
+    .where(
+      and(
+        eq(expense.id, expenseId),
+        eq(expense.workspaceId, viewer.workspaceId),
+        isNull(expense.deletedAt),
+      ),
+    );
+  if (!row) throw new WorkspaceAccessError(404, "Not found");
+  assertCan(viewer.actedBy ?? viewer.actor, "expense.read", {
+    kind: "entry",
+    userId: row.userId,
+    projectId: row.projectId,
+  });
+  if (!row.fileKey || !row.mime) throw new WorkspaceAccessError(404, "Not found");
+  return { fileKey: row.fileKey, thumbKey: row.thumbKey, mime: row.mime };
+}
+
+/** The stored receipt key of each expense that has one (the zip reads them by key). */
+export async function receiptKeysOf(
+  db: Executor,
+  workspaceId: string,
+  expenseIds: string[],
+): Promise<Map<string, string>> {
+  if (expenseIds.length === 0) return new Map();
+  const rows = await db
+    .select({ id: expense.id, key: expense.receiptKey })
+    .from(expense)
+    .where(and(eq(expense.workspaceId, workspaceId), inArray(expense.id, expenseIds)));
+  return new Map(rows.flatMap((r) => (r.key ? [[r.id, r.key] as const] : [])));
+}
+
+/** Receipts of expenses deleted before `before`: nobody can open them any more. */
+export async function deletedReceipts(
+  db: Executor,
+  before: Date,
+  limit: number,
+): Promise<{ id: string; fileKey: string | null; thumbKey: string | null }[]> {
+  return db
+    .select({ id: expense.id, fileKey: expense.receiptKey, thumbKey: expense.receiptThumbKey })
+    .from(expense)
+    .where(
+      and(
+        isNotNull(expense.deletedAt),
+        lt(expense.deletedAt, before),
+        or(isNotNull(expense.receiptKey), isNotNull(expense.receiptThumbKey)),
+      ),
+    )
+    .limit(limit);
+}
+
+/** Forgets the receipt of a deleted expense once its objects are gone (the daily purge). */
+export async function forgetDeletedReceipt(db: Executor, expenseId: string): Promise<void> {
+  await db
+    .update(expense)
+    .set({ receiptKey: null, receiptThumbKey: null, receiptMime: null })
+    .where(and(eq(expense.id, expenseId), isNotNull(expense.deletedAt)));
 }
 
 /** Records an expense for the scope's person (the caller, or someone they add for). */
@@ -766,36 +840,77 @@ export interface ReceiptRef {
   mime: ReceiptType;
 }
 
+/** The lock, the row and the guard of a receipt write; shared by the dry run and the write. */
+async function guardReceipt(
+  tx: Executor,
+  scope: EntryScope,
+  expenseId: string,
+  mime: ReceiptType | null,
+  opts: { note?: string; now: Date },
+): Promise<Expense> {
+  await tx.execute(timerLock(scope.workspaceId, scope.userId));
+  const row = await liveRow(tx, scope, expenseId);
+  if (row.deletedAt) throw new TimeEntryError("NOT_FOUND", NOT_FOUND);
+  await assertExpenseWritable(
+    tx,
+    scope,
+    {
+      expenseId,
+      before: row.date,
+      after: row.date,
+      changes: { receipt: { from: row.receiptMime, to: mime } },
+    },
+    { note: opts.note, now: opts.now },
+  );
+  return row;
+}
+
+class DryRun extends Error {}
+
 /**
- * Sets or clears an expense's receipt (Phase 6c decision 15). The guard runs
- * first; `opts.upload` (the object store write) runs inside the transaction
- * after it, so a refused write uploads nothing and a failed upload changes no
- * row. Returns the previous keys, for the caller to delete what is now unused.
+ * Refuses exactly as `setReceipt` would, and writes nothing (the transaction
+ * is rolled back). The receipt's caller asks first, so a write the guard
+ * refuses uploads no file.
+ */
+export async function assertReceiptWritable(
+  db: Database,
+  scope: EntryScope,
+  expenseId: string,
+  mime: ReceiptType | null,
+  opts: { note?: string; now?: Date } = {},
+): Promise<void> {
+  try {
+    await db.transaction(async (tx) => {
+      await guardReceipt(tx, scope, expenseId, mime, {
+        note: opts.note,
+        now: opts.now ?? new Date(),
+      });
+      throw new DryRun();
+    });
+  } catch (error) {
+    if (!(error instanceof DryRun)) throw error;
+  }
+}
+
+/**
+ * Sets or clears an expense's receipt (Phase 6c decision 15), through the
+ * guard. The object store is never written inside this transaction: the
+ * caller uploads under a new key first and deletes it if this fails. Returns
+ * the previous keys, for the caller to delete what is now unused.
  */
 export async function setReceipt(
   db: Database,
   scope: EntryScope,
   expenseId: string,
   receipt: ReceiptRef | null,
-  opts: { note?: string; now?: Date; upload?: () => Promise<void> } = {},
+  opts: { note?: string; now?: Date } = {},
 ): Promise<{ expense: ExpenseDTO; previous: { fileKey: string | null; thumbKey: string | null } }> {
   const now = opts.now ?? new Date();
   return db.transaction(async (tx) => {
-    await tx.execute(timerLock(scope.workspaceId, scope.userId));
-    const row = await liveRow(tx, scope, expenseId);
-    if (row.deletedAt) throw new TimeEntryError("NOT_FOUND", NOT_FOUND);
-    await assertExpenseWritable(
-      tx,
-      scope,
-      {
-        expenseId,
-        before: row.date,
-        after: row.date,
-        changes: { receipt: { from: row.receiptMime, to: receipt?.mime ?? null } },
-      },
-      { note: opts.note, now },
-    );
-    await opts.upload?.();
+    const row = await guardReceipt(tx, scope, expenseId, receipt?.mime ?? null, {
+      note: opts.note,
+      now,
+    });
     await tx
       .update(expense)
       .set({

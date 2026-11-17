@@ -715,7 +715,10 @@ export async function deleteProject(
   viewer: Viewer,
   projectId: string,
   mode: DeleteProjectMode,
-): Promise<void> {
+): Promise<{ orphanedReceipts: string[] }> {
+  // Receipt objects of the deleted expenses purged below: the caller removes them
+  // from the bucket once this has committed (the catalog does not touch storage).
+  let orphanedReceipts: string[] = [];
   await db.transaction(async (tx) => {
     await requireVisibleProject(tx, viewer, projectId);
     // The people with time here, locked in a fixed order (as a bulk edit does),
@@ -773,7 +776,7 @@ export async function deleteProject(
         `This project has ${expenses} ${expenses === 1 ? "expense" : "expenses"}. Move or delete ${expenses === 1 ? "it" : "them"} first.`,
       );
     }
-    await purgeDeletedProjectExpenses(tx, viewer.workspaceId, projectId);
+    orphanedReceipts = await purgeDeletedProjectExpenses(tx, viewer.workspaceId, projectId);
     if (mode.mode === "reassign") {
       if (mode.projectId) {
         if (mode.projectId === projectId) {
@@ -796,6 +799,7 @@ export async function deleteProject(
     }
     await tx.delete(project).where(eq(project.id, projectId));
   });
+  return { orphanedReceipts };
 }
 
 /** Replaces the members of a (private) project; each must be an active workspace member. */

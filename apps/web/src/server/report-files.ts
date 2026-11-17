@@ -44,6 +44,13 @@ export interface ExportFile {
   rowCount: number;
 }
 
+/** A file too large to hold whole (the receipts zip): its bytes arrive in chunks. */
+export type StreamedExportFile = Omit<ExportFile, "body" | "rowCount"> & {
+  chunks: AsyncIterable<Uint8Array>;
+  /** Known only once the chunks are read to the end. */
+  rowCount: () => number;
+};
+
 /**
  * The reports that export to a file: the three report tabs, Attendance
  * (Phase 5b), Profit (Phase 6a) and Expenses (Phase 6c). The receipts zip is
