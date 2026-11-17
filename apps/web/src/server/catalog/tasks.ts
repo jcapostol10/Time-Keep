@@ -232,6 +232,19 @@ async function grantProjectAccess(
 }
 
 /**
+ * Rule 9 for a project that turns PRIVATE: every group given one of its tasks
+ * gets the project's access (`updateProject`, in its transaction).
+ */
+export async function grantTaskGroupsAccess(db: Executor, projectId: string): Promise<void> {
+  const rows = await db
+    .select({ groupId: taskGroup.groupId })
+    .from(taskGroup)
+    .innerJoin(task, eq(task.id, taskGroup.taskId))
+    .where(eq(task.projectId, projectId));
+  await grantProjectAccess(db, [projectId], [...new Set(rows.map((r) => r.groupId))]);
+}
+
+/**
  * Sets, adds or removes groups on tasks (decision 11), by someone with
  * `task.assignGroups` on every task's project: a manager's foreign project is
  * not found. One transaction; `add` and `set` apply rule 9.

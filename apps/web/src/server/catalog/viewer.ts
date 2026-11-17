@@ -41,3 +41,17 @@ export function visibleProjectFilter(viewer: Viewer): SQL | undefined {
     sql`EXISTS (SELECT 1 FROM "project_group" pg JOIN "user_group_member" gm ON gm."group_id" = pg."group_id" WHERE pg."project_id" = ${project.id} AND gm."user_id" = ${viewer.userId})`,
   );
 }
+
+/**
+ * The viewer once they manage `projectId` too: a manager who creates a project
+ * becomes its manager in the same request, before the actor is reloaded.
+ */
+export function withManagedProject(viewer: Viewer, projectId: string): Viewer {
+  return {
+    ...viewer,
+    actor: {
+      ...viewer.actor,
+      managedProjectIds: new Set([...viewer.actor.managedProjectIds, projectId]),
+    },
+  };
+}

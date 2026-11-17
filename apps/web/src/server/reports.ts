@@ -1099,7 +1099,8 @@ export async function reportFilterOptions(
   const [members, clients, projects, tags, groups, scope] = await Promise.all([
     team ? listMembers(db as Database, viewer.workspaceId) : Promise.resolve(null),
     listFilterClients(db, viewer),
-    listPickerProjects(db, viewer),
+    // Rule 8 hides untrackable projects from pickers; a filter still finds old entries on them.
+    listPickerProjects(db, viewer, { keepProjectsWithHiddenTasks: true }),
     listTagOptions(db, viewer.workspaceId),
     team
       ? db
