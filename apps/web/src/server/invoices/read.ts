@@ -146,7 +146,7 @@ export function toPaymentDTO(p: Payment): PaymentDTO {
  * one line of the subtotal), and the computed status reads today in the
  * workspace timezone.
  */
-export function toListItem(row: InvoiceRow, todayKey: string): InvoiceListItem {
+export function toListItem(row: InvoiceRow, todayKey: string, timezone: string): InvoiceListItem {
   const inv = row.invoice;
   const totals = invoiceTotals([{ amountMinor: inv.subtotalMinor }], inv);
   const paidMinor = Number(row.paidMinor);
@@ -175,6 +175,7 @@ export function toListItem(row: InvoiceRow, todayKey: string): InvoiceListItem {
     paidMinor,
     balanceMinor: balanceMinor(inv.totalMinor, paidMinor),
     sentAt: inv.sentAt ? inv.sentAt.toISOString() : null,
+    sentDate: inv.sentAt ? localDateKey(inv.sentAt, timezone) : null,
     hasPdf: inv.pdfKey !== null,
     publicPath: null,
     recurringId: inv.recurringId,
@@ -209,7 +210,7 @@ export async function loadDTO(
     .where(eq(payment.invoiceId, id))
     .orderBy(asc(payment.date), asc(payment.createdAt), asc(payment.id));
   return {
-    ...toListItem(row, localDateKey(now, timezone)),
+    ...toListItem(row, localDateKey(now, timezone), timezone),
     publicPath,
     lines: items.map(toLineDTO),
     payments: payments.map(toPaymentDTO),
@@ -303,5 +304,5 @@ export async function listInvoices(
       balanceMinor: money((r) => r.balance),
     };
   }
-  return { invoices: page.map((r) => toListItem(r, today)), nextCursor, totals };
+  return { invoices: page.map((r) => toListItem(r, today, ws.timezone)), nextCursor, totals };
 }

@@ -27,6 +27,7 @@ import {
 
 import type { InvoiceDTO } from "@/lib/invoice-types";
 
+import { clientLock } from "../invoice-lock";
 import { CatalogError, isUniqueViolation } from "../catalog/errors";
 import type { Viewer } from "../catalog/viewer";
 import { env } from "../env";
@@ -54,12 +55,10 @@ type Executor = DbExecutor;
 
 export const DRAFT_ONLY = "Only a draft can be changed.";
 const ALREADY_SENT = "This invoice was already sent.";
+const TOTAL_TOO_LARGE = "This invoice's total is too large.";
 const IS_VOID = "This invoice is void.";
 
-/** One import per client at a time (decision 23): a transaction-scoped advisory lock. */
-export function clientLock(clientId: string) {
-  return sql`SELECT pg_advisory_xact_lock(hashtext(${`invoice:${clientId}`}))`;
-}
+export { clientLock };
 
 /** The lines' sum through core `invoiceTotals`, cached on the row for the list. */
 export async function recomputeTotals(tx: Executor, id: string): Promise<void> {
@@ -76,7 +75,13 @@ export async function recomputeTotals(tx: Executor, id: string): Promise<void> {
     .select({ amountMinor: invoiceItem.amountMinor })
     .from(invoiceItem)
     .where(eq(invoiceItem.invoiceId, id));
-  const totals = invoiceTotals(lines, inv);
+  let totals;
+  try {
+    totals = invoiceTotals(lines, inv);
+  } catch {
+    // Imported lines are not bounded by the line schema: say it, rather than overflow.
+    throw new CatalogError("INVALID", TOTAL_TOO_LARGE);
+  }
   await tx
     .update(invoice)
     .set({ subtotalMinor: totals.subtotalMinor, totalMinor: totals.totalMinor })
@@ -177,11 +182,12 @@ export async function createInvoice(
   return getInvoice(db, viewer, id, now);
 }
 
-const AFTER_SEND = new Set<keyof InvoicePatch>(["notes", "externalRef"]);
+// The notes are printed on the frozen PDF, so they freeze with it (backlog ruling R-F).
+const AFTER_SEND = new Set<keyof InvoicePatch>(["externalRef"]);
 
 /**
- * A draft takes every field; a sent or void invoice only its notes and the
- * accounting reference. A tax applies only with both a name and a rate.
+ * A draft takes every field; a sent or void invoice only the accounting
+ * reference. A tax applies only with both a name and a rate.
  */
 export async function updateInvoice(
   db: Database,

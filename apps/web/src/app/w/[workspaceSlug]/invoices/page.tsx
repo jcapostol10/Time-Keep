@@ -1,4 +1,3 @@
-import { localDateKey } from "@timekeep/core";
 import { getDb } from "@timekeep/db";
 import { dehydrate, HydrationBoundary, QueryClient } from "@tanstack/react-query";
 import type { Metadata } from "next";
@@ -42,7 +41,7 @@ export default async function InvoicesPage({
         slug={workspaceSlug}
         tab={tab}
         clients={clients.filter((c) => !c.archived).map((c) => ({ id: c.id, name: c.name }))}
-        today={localDateKey(new Date(), ws.timezone)}
+        timezone={ws.timezone}
         currency={ws.currency}
       />
     </HydrationBoundary>

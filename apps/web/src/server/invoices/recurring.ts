@@ -283,10 +283,13 @@ async function runAs(db: Database, workspaceId: string, createdBy: string | null
   throw new Error(`Workspace ${workspaceId} has no active owner to run recurring invoices as`);
 }
 
-/** A day the job missed is caught up for this many days (each workspace runs once a local day). */
-const CATCH_UP_DAYS = 7;
+/**
+ * A run the job missed is caught up for this many days (ruling 13): any monthly
+ * template after an outage of up to a month. Older periods are not back-filled.
+ */
+const CATCH_UP_DAYS = 31;
 
-/** The periods due over the last week up to today, oldest first, each once. */
+/** The periods due over the last 31 days up to today, oldest first, each once. */
 function duePeriods(t: RecurringInvoice, today: string) {
   const schedule = scheduleOf(t);
   const seen = new Map<string, NonNullable<ReturnType<typeof recurringDue>>>();

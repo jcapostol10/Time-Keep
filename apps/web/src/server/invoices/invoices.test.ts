@@ -1,5 +1,5 @@
 import { invoiceSettingsSchema } from "@timekeep/core";
-import { emailOutbox, eq, invoice, timeEntry } from "@timekeep/db";
+import { emailOutbox, eq, invoice, sql, timeEntry, workspaceSettings } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { connectTestDb } from "../../../test/db";
@@ -215,10 +215,42 @@ describe("draft edits", () => {
       updateLine(db, owner, inv.id, l1.id, { ...l1, unitPriceMinor: 1 }),
     ).rejects.toThrow(locked);
     await expect(removeLine(db, owner, inv.id, l1.id)).rejects.toThrow(locked);
-    // Notes and the accounting reference stay editable after sending.
-    await expect(
-      updateInvoice(db, owner, inv.id, { notes: "Paid by wire", externalRef: "QB-9" }),
-    ).resolves.toMatchObject({ notes: "Paid by wire", externalRef: "QB-9" });
+    // The notes are on the PDF the client was sent: they freeze with it. The
+    // accounting reference is the workspace's own and stays editable.
+    await expect(updateInvoice(db, owner, inv.id, { notes: "Paid by wire" })).rejects.toThrow(
+      locked,
+    );
+    await expect(updateInvoice(db, owner, inv.id, { externalRef: "QB-9" })).resolves.toMatchObject({
+      externalRef: "QB-9",
+    });
+  });
+
+  it("a total past what a number can hold is refused in words", async () => {
+    const inv = await create(f.acmeId);
+    // Each line is within the schema's limit; a thousand of them are not a safe total.
+    await line(inv.id, "Huge", 100, 9_000_000_000_000);
+    await db.execute(
+      sql`insert into invoice_item (id, invoice_id, kind, description, quantity_centi, unit_price_minor, amount_minor, position)
+          select 'big-' || g, ${inv.id}, 'MANUAL', 'Huge', 100, 9000000000000, 9000000000000, 10 + g
+          from generate_series(1, 1100) g`,
+    );
+    await expect(line(inv.id, "One more", 100, 100)).rejects.toThrow(
+      "This invoice's total is too large.",
+    );
+  });
+
+  it("says when it was sent on the workspace's date, not the UTC one", async () => {
+    await db
+      .update(workspaceSettings)
+      .set({ timezone: "Asia/Manila" })
+      .where(eq(workspaceSettings.workspaceId, f.wsId));
+    const inv = await create(f.acmeId);
+    await line(inv.id, "Design", 100, 5000);
+    // 17:30 UTC on the 10th is 01:30 on the 11th in Manila.
+    const late = new Date("2026-11-10T17:30:00.000Z");
+    const sent = await sendInvoice(db, owner, inv.id, { email: false, now: late });
+    expect(sent.sentDate).toBe("2026-11-11");
+    expect((await getInvoice(db, owner, inv.id, late)).sentDate).toBe("2026-11-11");
   });
 
   it("a duplicate number is a conflict and a number change needs a draft", async () => {

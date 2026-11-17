@@ -1,5 +1,6 @@
 "use client";
 
+import { localDateKey } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import {
   Dialog,
@@ -29,18 +30,19 @@ import { useInvoiceWrite } from "./use-invoices";
 export function NewInvoiceDialog({
   slug,
   clients,
-  today,
+  timezone,
   onClose,
 }: {
   slug: string;
   clients: { id: string; name: string }[];
-  today: string;
+  /** The workspace timezone: a dialog reads today's date when it opens, not when the page loaded. */
+  timezone: string;
   onClose: () => void;
 }) {
   const router = useRouter();
   const write = useInvoiceWrite(slug);
   const [clientId, setClientId] = useState("");
-  const [issueDate, setIssueDate] = useState(today);
+  const [issueDate, setIssueDate] = useState(() => localDateKey(new Date(), timezone));
   const [dueDate, setDueDate] = useState("");
   const [busy, setBusy] = useState(false);
 

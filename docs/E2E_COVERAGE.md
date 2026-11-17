@@ -296,6 +296,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 - [x] An invoice imported from this week's billable time equals the Summary report; the imported entries are locked in the tracker and badged in Detailed — `invoices.spec.ts` › "an invoice imported from this week's billable time equals the Summary report"
 - [x] Sending freezes the invoice; the emailed public link shows it without a session and downloads its PDF once per 10 s; payments move it to Partially paid, then Paid — `invoices.spec.ts` › "sending freezes the invoice, the public link shows it, and a payment moves the balance"
+- [x] A page left open past midnight offers the new day in the New invoice dialog — `invoices.spec.ts` › "a page left open past midnight offers the new day"
 - [x] A manager and a member see no Invoices link; the page is not found and the route forbidden — `invoices.spec.ts` › "a member and a manager see no Invoices page"
 - [x] The sent email carries the invoice PDF as an attachment — `invoices-extra.spec.ts` › "the sent email carries the PDF"
 - [x] A recurring invoice appears after the daily job on its day, and not twice — `invoices-extra.spec.ts` › "a recurring invoice appears after the daily job and not twice"

@@ -34,12 +34,13 @@ import { useInvoiceWrite, useRecurringInvoices } from "./use-invoices";
 export function RecurringTab({
   slug,
   clients,
-  today,
+  timezone,
   currency,
 }: {
   slug: string;
   clients: { id: string; name: string }[];
-  today: string;
+  /** The workspace timezone: a dialog reads today's date when it opens, not when the page loaded. */
+  timezone: string;
   currency: string;
 }) {
   const { data } = useRecurringInvoices(slug);
@@ -137,7 +138,7 @@ export function RecurringTab({
           slug={slug}
           template={editing === "new" ? null : editing}
           clients={clients}
-          today={today}
+          timezone={timezone}
           currency={currency}
           onClose={() => setEditing(null)}
         />

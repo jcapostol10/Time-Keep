@@ -1,6 +1,12 @@
 "use client";
 
-import { formatDateKey, formatMoney, minorToDecimal, parseMoney } from "@timekeep/core";
+import {
+  formatDateKey,
+  formatMoney,
+  minorToDecimal,
+  parseMoney,
+  localDateKey,
+} from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import {
   Dialog,
@@ -23,11 +29,12 @@ import { useInvoiceWrite } from "./use-invoices";
 export function PaymentsCard({
   slug,
   invoice,
-  today,
+  timezone,
 }: {
   slug: string;
   invoice: InvoiceDTO;
-  today: string;
+  /** The workspace timezone: a dialog reads today's date when it opens, not when the page loaded. */
+  timezone: string;
 }) {
   const write = useInvoiceWrite(slug);
   const [recording, setRecording] = useState(false);
@@ -78,7 +85,7 @@ export function PaymentsCard({
         <PaymentDialog
           slug={slug}
           invoice={invoice}
-          today={today}
+          timezone={timezone}
           onClose={() => setRecording(false)}
         />
       ) : null}
@@ -89,16 +96,17 @@ export function PaymentsCard({
 function PaymentDialog({
   slug,
   invoice,
-  today,
+  timezone,
   onClose,
 }: {
   slug: string;
   invoice: InvoiceDTO;
-  today: string;
+  /** The workspace timezone: a dialog reads today's date when it opens, not when the page loaded. */
+  timezone: string;
   onClose: () => void;
 }) {
   const write = useInvoiceWrite(slug);
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(() => localDateKey(new Date(), timezone));
   const [amount, setAmount] = useState(minorToDecimal(invoice.balanceMinor, invoice.currency));
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);

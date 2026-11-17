@@ -691,7 +691,7 @@ One client, that client's currency when created (`client.currency`, else the wor
 | status | enum `invoice_status` (`DRAFT`, `SENT`, `VOID`) | |
 | discount_bps | integer | default 0; a percent of the subtotal |
 | tax1_name, tax1_bps, tax2_name, tax2_bps | text?, integer? | each tax is a percent of (subtotal − discount), not compounded |
-| notes | text | editable after sending too |
+| notes | text | printed on the PDF; frozen once the invoice is sent (2026-11-18) |
 | subtotal_minor, total_minor | bigint | cached from the lines by `recomputeTotals` (core `invoiceTotals`) |
 | sent_at | timestamptz? | |
 | pdf_key | text? | the frozen PDF in `S3_EXPORT_BUCKET` (`invoices/<workspace>/<invoice>.pdf`), written on send and kept on void |

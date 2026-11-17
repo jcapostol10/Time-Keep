@@ -55,6 +55,7 @@ import type { ProjectDetail, ProjectListItem, ProjectStatus } from "@/lib/catalo
 import type { PickerProject, PickerTask } from "@/lib/tracker-types";
 
 import { currencyLock } from "../currency-lock";
+import { clientLock } from "../invoice-lock";
 import { CatalogError, isUniqueViolation } from "./errors";
 import {
   estimateOf,
@@ -720,7 +721,11 @@ export async function deleteProject(
   // from the bucket once this has committed (the catalog does not touch storage).
   let orphanedReceipts: string[] = [];
   await db.transaction(async (tx) => {
-    await requireVisibleProject(tx, viewer, projectId);
+    const target = await requireVisibleProject(tx, viewer, projectId);
+    // An invoice import marks this client's time under the client's lock: wait for
+    // it, so the invoiced-time check below sees its marks. Taken before the person
+    // locks, the order the import's own writes follow.
+    if (target.clientId) await tx.execute(clientLock(target.clientId));
     // The people with time here, locked in a fixed order (as a bulk edit does),
     // so a submit in flight lands before the check below, or waits for it.
     const owners = await tx

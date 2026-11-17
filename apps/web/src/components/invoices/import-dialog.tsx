@@ -1,6 +1,12 @@
 "use client";
 
-import { addDaysToKey, formatMoney, hoursText, type ImportGroup } from "@timekeep/core";
+import {
+  addDaysToKey,
+  formatMoney,
+  hoursText,
+  type ImportGroup,
+  localDateKey,
+} from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import {
   Dialog,
@@ -44,18 +50,19 @@ export function ImportDialog({
   slug,
   invoice,
   projects,
-  today,
+  timezone,
   onClose,
 }: {
   slug: string;
   invoice: InvoiceDTO;
   projects: { id: string; name: string }[];
-  today: string;
+  /** The workspace timezone: a dialog reads today's date when it opens, not when the page loaded. */
+  timezone: string;
   onClose: () => void;
 }) {
   const write = useInvoiceWrite(slug);
-  const [from, setFrom] = useState(addDaysToKey(today, -30));
-  const [to, setTo] = useState(today);
+  const [from, setFrom] = useState(() => addDaysToKey(localDateKey(new Date(), timezone), -30));
+  const [to, setTo] = useState(() => localDateKey(new Date(), timezone));
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const [groupBy, setGroupBy] = useState<ImportGroup>("project");
   const [expenses, setExpenses] = useState(true);

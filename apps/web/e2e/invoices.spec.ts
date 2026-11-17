@@ -11,6 +11,7 @@ import {
   invoiceStatus,
   invoiceTotal,
   lineRow,
+  openInvoices,
   publicLinkIn,
   recordPayment,
   sendInvoice,
@@ -111,6 +112,28 @@ test.describe("invoices", () => {
     await expect(invoiceBalance(page)).toHaveText("$150.00");
     await recordPayment(page, "150");
     await expect(invoiceStatus(page)).toHaveText("Paid");
+  });
+
+  test("a page left open past midnight offers the new day", async ({ page, freshUser }) => {
+    const { slug } = freshUser;
+    await createClientViaUi(page, slug, "Acme");
+    await page.clock.install();
+    await openInvoices(page, slug);
+    const dialog = page.getByRole("dialog", { name: "New invoice" });
+    const issueDate = async () => {
+      await page.getByRole("button", { name: "New invoice" }).click();
+      const value = await dialog.getByLabel("Issue date").inputValue();
+      await page.keyboard.press("Escape");
+      await expect(dialog).toBeHidden();
+      return value;
+    };
+    const opened = await issueDate();
+    expect(opened).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // The page stays open for a day; the dialog is opened again.
+    await page.clock.fastForward("24:00:00");
+    const next = new Date(`${opened}T00:00:00Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    expect(await issueDate()).toBe(next.toISOString().slice(0, 10));
   });
 
   test("a member and a manager see no Invoices page", async ({ page, demoUser }) => {

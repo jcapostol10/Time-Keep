@@ -12,6 +12,7 @@ import {
   truncateAll,
 } from "../../test/db";
 import { loadViewer, scopeForUser } from "./authz";
+import { clientLock } from "./invoice-lock";
 import { createClient, deleteClient, listClients, updateClient } from "./catalog/clients";
 import { createProject, deleteProject, updateProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
@@ -291,6 +292,31 @@ describe("an invoiced entry", () => {
     await expect(
       deleteProject(db, await viewer("olga"), webId, { mode: "delete" }),
     ).rejects.toThrow("This project has invoiced time. Void the invoices first.");
+  });
+});
+
+describe("deleting a project while an import is marking its time", () => {
+  it("waits for the import and then refuses", async () => {
+    const other = connectTestDb();
+    try {
+      const e = await entry("bob");
+      const inv = await invoiceRow();
+      const owner = await viewer("olga");
+      let removal: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // The import holds the client's lock while it marks its rows.
+        await tx.execute(clientLock(acmeId));
+        removal = deleteProject(other.db, owner, webId, { mode: "delete" });
+        removal.catch(() => undefined);
+        await new Promise((r) => setTimeout(r, 400));
+        await markInvoiced(tx, wsId, [e.id], inv);
+      });
+      await expect(removal).rejects.toThrow(
+        "This project has invoiced time. Void the invoices first.",
+      );
+    } finally {
+      await other.close();
+    }
   });
 });
 

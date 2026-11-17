@@ -90,7 +90,12 @@ export function invoiceTotals(
   lines: readonly { amountMinor: number }[],
   rates: InvoiceRates,
 ): InvoiceTotals {
-  const subtotalMinor = lines.reduce((sum, l) => sum + l.amountMinor, 0);
+  // Summed exactly: many large lines would pass what a number holds without a sign of it.
+  const exact = lines.reduce((sum, l) => sum + BigInt(l.amountMinor), BigInt(0));
+  if (exact > BigInt(Number.MAX_SAFE_INTEGER) / BigInt(4)) {
+    throw new RangeError("The invoice total is too large.");
+  }
+  const subtotalMinor = Number(exact);
   const discountMinor = percentOf(subtotalMinor, rates.discountBps);
   const taxable = subtotalMinor - discountMinor;
   const tax1Minor = rates.tax1Bps === null ? 0 : percentOf(taxable, rates.tax1Bps);

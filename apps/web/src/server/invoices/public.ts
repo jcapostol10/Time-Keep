@@ -12,6 +12,7 @@ import {
   lte,
   or,
   payment,
+  sql,
 } from "@timekeep/db";
 
 import type { PublicInvoiceDTO } from "@/lib/invoice-types";
@@ -62,7 +63,7 @@ export async function publicInvoice(
     .from(payment)
     .where(eq(payment.invoiceId, ref.invoiceId))
     .orderBy(asc(payment.date), asc(payment.createdAt));
-  const item = toListItem(row, localDateKey(now, ws.timezone));
+  const item = toListItem(row, localDateKey(now, ws.timezone), ws.timezone);
   return {
     number: item.number,
     status: item.computedStatus,
@@ -105,7 +106,8 @@ export async function claimInvoiceDownload(
   const cutoff = new Date(now.getTime() - INVOICE_DOWNLOAD_INTERVAL_MS);
   const rows = await db
     .update(invoice)
-    .set({ lastDownloadAt: now })
+    // `updated_at` stamps every update unless it is set: a download is not a change.
+    .set({ lastDownloadAt: now, updatedAt: sql`${invoice.updatedAt}` })
     .where(
       and(
         eq(invoice.id, invoiceId),

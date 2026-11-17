@@ -64,6 +64,13 @@ describe("lineAmount and percentOf", () => {
 describe("invoiceTotals", () => {
   const lines = [{ amountMinor: 10001 }, { amountMinor: 5000 }];
 
+  it("refuses a total that a number cannot hold exactly", () => {
+    const many = Array.from({ length: 1100 }, () => ({ amountMinor: 9_000_000_000_000 }));
+    expect(() => invoiceTotals(many, { discountBps: 0, tax1Bps: null, tax2Bps: null })).toThrow(
+      "too large",
+    );
+  });
+
   it("takes the discount, then each tax on the discounted subtotal, rounded alone", () => {
     expect(invoiceTotals(lines, { discountBps: 1000, tax1Bps: 1200, tax2Bps: 125 })).toEqual({
       subtotalMinor: 15001,

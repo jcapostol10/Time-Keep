@@ -134,7 +134,9 @@ describe("recurring invoices", () => {
         schedule: "WEEKLY",
         weekday: 1,
         dayOfMonth: null,
-        startDate: "2026-10-19",
+        // From this week on: an earlier start would also bill the weeks before (the
+        // catch-up reaches 31 days back, never before the start date).
+        startDate: "2026-10-26",
         lines: [],
         importPeriod: true,
       }),
@@ -221,15 +223,20 @@ describe("recurring invoices", () => {
 });
 
 describe("recurring invoices, when something goes wrong", () => {
-  it("a day the job missed is caught up within the week", async () => {
+  it("a day the job missed is caught up within 31 days, and no further", async () => {
     await createRecurring(db, owner, template({ dayOfMonth: 1 }), NOW);
     // The 1st was missed; the 4th still bills January, once.
     expect(await run("2026-02-04")).toEqual({ created: 1, sent: 0 });
     const [inv] = await invoices(noon("2026-02-04"));
     expect(inv).toMatchObject({ periodKey: "2026-01-01", issueDate: "2026-02-04" });
     expect(await run("2026-02-05")).toEqual({ created: 0, sent: 0 });
-    // Past the week, a missed period is not back-filled.
-    expect(await run("2026-03-09")).toEqual({ created: 0, sent: 0 });
+    // A month-long outage: the run of 1 March comes thirty days late and still bills February.
+    expect(await run("2026-03-31")).toEqual({ created: 1, sent: 0 });
+    // Longer than that is not back-filled: after 1 April and 1 May were both missed,
+    // the 5th of June bills May (due on the 1st) and nothing older.
+    expect(await run("2026-06-05")).toEqual({ created: 1, sent: 0 });
+    const keys = (await invoices(noon("2026-06-05"))).map((i) => i.periodKey).sort();
+    expect(keys).toEqual(["2026-01-01", "2026-02-01", "2026-05-01"]);
   });
 
   it("a template that cannot run tells the admins once and does not stop the others", async () => {

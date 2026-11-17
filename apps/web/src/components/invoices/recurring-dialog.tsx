@@ -8,6 +8,7 @@ import {
   parseMoney,
   type RecurringMode,
   type RecurringScheduleKind,
+  localDateKey,
 } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import {
@@ -48,14 +49,15 @@ export function RecurringDialog({
   slug,
   template,
   clients,
-  today,
+  timezone,
   currency,
   onClose,
 }: {
   slug: string;
   template: RecurringInvoiceDTO | null;
   clients: { id: string; name: string }[];
-  today: string;
+  /** The workspace timezone: a dialog reads today's date when it opens, not when the page loaded. */
+  timezone: string;
   currency: string;
   onClose: () => void;
 }) {
@@ -65,7 +67,9 @@ export function RecurringDialog({
   const [schedule, setSchedule] = useState<RecurringScheduleKind>(template?.schedule ?? "MONTHLY");
   const [weekday, setWeekday] = useState(String(template?.weekday ?? 1));
   const [dayOfMonth, setDayOfMonth] = useState(String(template?.dayOfMonth ?? 1));
-  const [startDate, setStartDate] = useState(template?.startDate ?? today);
+  const [startDate, setStartDate] = useState(
+    () => template?.startDate ?? localDateKey(new Date(), timezone),
+  );
   const [endDate, setEndDate] = useState(template?.endDate ?? "");
   const [lines, setLines] = useState<LineDraft[]>(
     (template?.lines ?? []).map((l) => ({
