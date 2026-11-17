@@ -379,7 +379,7 @@ async function breakAware<T extends EntryInput>(
   const type = input.type ?? "work";
   if (type === "work") return { ...input, type };
   const { allowBreaks } = await rulesOf(db, scope.workspaceId);
-  if (!allowBreaks) throw new TimeEntryError("INVALID", "Breaks are not enabled.");
+  if (!allowBreaks) throw new DetailUnusableError("Breaks are not enabled.");
   return { ...input, type, projectId: null, taskId: null, tagIds: [], billable: false };
 }
 

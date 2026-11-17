@@ -135,6 +135,28 @@ describe("timesheet templates and copy week", () => {
     expect(second.skipped.duplicates).toBe(2);
   });
 
+  it("a break is skipped, not fatal, once breaks are turned off", async () => {
+    const setBreaks = (allowBreaks: boolean) =>
+      db
+        .update(workspaceSettings)
+        .set({ allowBreaks })
+        .where(eq(workspaceSettings.workspaceId, scope.workspaceId));
+    await setBreaks(true);
+    await entry(scope, "2026-03-02T04:00:00.000Z", 30, { description: "", type: "break" });
+    await entry(scope, "2026-03-02T01:00:00.000Z", 60, { description: "work" });
+    await setBreaks(false);
+
+    const result = await copyWeek(db, scope, {
+      fromWeekStart: LAST_WEEK,
+      toWeekStart: THIS_WEEK,
+      tz: TZ,
+    });
+    expect(result.created.map((e) => e.description)).toEqual(["work"]);
+    expect(result.skipped.unusable).toEqual([
+      { description: "", reason: "Breaks are not enabled." },
+    ]);
+  });
+
   it("a break stays a break", async () => {
     await db
       .update(workspaceSettings)
