@@ -59,7 +59,13 @@ import type {
 } from "@/lib/tracker-types";
 
 import { WorkspaceAccessError } from "./access-error";
-import { assertWritable, invoicedLockedReason, lockedReasons } from "./entry-guard";
+import {
+  assertWritable,
+  invoicedLockedReason,
+  lockedReasons,
+  type WriteRules,
+  writeRulesOf,
+} from "./entry-guard";
 import { timerLock } from "./person-lock";
 import { DetailUnusableError, TimeEntryError } from "./entry-error";
 import { CatalogError } from "./catalog/errors";
@@ -1193,6 +1199,7 @@ async function applyBulkPatch(
   patch: BulkEntryPatch,
   now: Date,
   note: string | undefined,
+  rules: WriteRules,
 ): Promise<TimeEntryDTO> {
   await lockOwned(tx, scope, entryId);
   const row = await findOwned(tx, scope, entryId);
@@ -1216,7 +1223,7 @@ async function applyBulkPatch(
       before: row.start,
       changes: changesOf({ ...row, tagIds: currentTags }, details),
     },
-    { note, now },
+    { note, now, rules },
   );
   if (row.type === "break" && wantsDetails(details)) {
     throw new TimeEntryError("INVALID", "A break has no project, tags or billing.");
@@ -1289,10 +1296,12 @@ export async function bulkUpdateEntries(
     }
     const failures: string[] = [];
     const updated: TimeEntryDTO[] = [];
+    // The workspace's write rules once for the whole edit, not per entry.
+    const rules = await writeRulesOf(tx, groups[0]!.scope.workspaceId);
     for (const { scope, ids } of groups) {
       for (const id of ids) {
         try {
-          updated.push(await applyBulkPatch(tx, scope, id, patch, now, opts.note));
+          updated.push(await applyBulkPatch(tx, scope, id, patch, now, opts.note, rules));
         } catch (error) {
           // A missing note is asked for once, for the whole edit.
           if (!(error instanceof TimeEntryError) || error.code === "NOTE_REQUIRED") throw error;

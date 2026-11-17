@@ -343,6 +343,16 @@ export async function submitPeriod(
     // The entry guard takes the same lock: an edit either lands before the
     // totals or sees the request and is refused (Review Focus 3).
     await tx.execute(timerLock(viewer.workspaceId, viewer.userId));
+    // The settings as they stand once a save in flight has landed (it holds the
+    // row FOR UPDATE): approval may have been turned off, or the periods moved.
+    await tx.execute(
+      sql`select 1 from ${workspaceSettings} where ${workspaceSettings.workspaceId} = ${viewer.workspaceId} for share`,
+    );
+    const current = await workspaceApproval(tx, viewer.workspaceId);
+    if (!current.enabled) throw new CatalogError("INVALID", "Approval is off in this workspace.");
+    if (periodContaining(periodStart, current.rule).start !== periodStart) {
+      throw new CatalogError("INVALID", "The workspace's periods changed: reload and try again.");
+    }
     const [running] = await tx
       .select({ id: timeEntry.id })
       .from(timeEntry)
@@ -408,7 +418,7 @@ export async function submitPeriod(
     });
     const projectIds = (await projectIdsOf(tx, [requestId])).get(requestId) ?? [];
     const me = await emailOf(tx, viewer.userId);
-    for (const approver of await approversFor(db, viewer.workspaceId, {
+    for (const approver of await approversFor(tx, viewer.workspaceId, {
       userId: viewer.userId,
       projectIds,
     })) {

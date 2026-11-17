@@ -9,10 +9,11 @@ import { loadViewer } from "./authz";
  * Active owners, admins and managers the approvers setting lets review a
  * person's period (`approval.review`, with its projects) or time off
  * (`timeOff.review`, with no projects: ruling R3). Undeliverable addresses
- * are left out.
+ * are left out. Pass the caller's transaction: asking the pool for a second
+ * connection while one is held can exhaust it under load.
  */
 export async function approversFor(
-  db: Database,
+  db: Pick<Database, "select" | "query">,
   workspaceId: string,
   request: { userId: string; projectIds: string[] },
   action: Extract<Action, "approval.review" | "timeOff.review"> = "approval.review",

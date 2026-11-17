@@ -6,7 +6,7 @@ import {
   lockSettingsCheck,
   workspaceSettingsSchema,
 } from "@timekeep/core";
-import { eq, getDb, workspace, workspaceSettings } from "@timekeep/db";
+import { eq, getDb, sql, workspace, workspaceSettings } from "@timekeep/db";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -105,19 +105,21 @@ export async function updateWorkspaceSettingsAction(
       return fail(message, { confirmTaskVisibility: [message] });
     }
     // Phase 5a, decision 2: no new period type while periods are pending; turning
-    // approval off asks first, then withdraws them.
-    const approvalProblem = await checkApprovalSettings(
-      db,
-      ctx.workspace.id,
-      ctx.settings,
-      settings,
-      confirmApprovalOff === true,
-    );
-    if (approvalProblem) {
-      return fail(approvalProblem.message, { [approvalProblem.field]: [approvalProblem.message] });
-    }
+    // approval off asks first, then withdraws them. Checked under the settings
+    // row's lock, which a submit takes FOR SHARE: no submit lands in between.
     const turningOff = ctx.settings.approvalEnabled && !settings.approvalEnabled;
-    await db.transaction(async (tx) => {
+    const approvalProblem = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select 1 from ${workspaceSettings} where ${workspaceSettings.workspaceId} = ${ctx.workspace.id} for update`,
+      );
+      const problem = await checkApprovalSettings(
+        tx,
+        ctx.workspace.id,
+        ctx.settings,
+        settings,
+        confirmApprovalOff === true,
+      );
+      if (problem) return problem;
       if (turningOff) await withdrawPendingRequests(tx, ctx.workspace.id, ctx.user.id);
       await tx.update(workspace).set({ name }).where(eq(workspace.id, ctx.workspace.id));
       await tx
@@ -132,7 +134,11 @@ export async function updateWorkspaceSettingsAction(
           settings.currency,
         );
       }
+      return null;
     });
+    if (approvalProblem) {
+      return fail(approvalProblem.message, { [approvalProblem.field]: [approvalProblem.message] });
+    }
 
     revalidatePath(`/w/${slug}`, "layout");
     return ok({ slug });

@@ -6,6 +6,7 @@ import {
   eq,
   managedUser,
   projectMember,
+  sql,
   workspaceSettings,
 } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -502,6 +503,30 @@ describe("a submit racing an edit", () => {
 });
 
 describe("approval settings", () => {
+  it("a submit waits for a settings change in flight and sees approval off", async () => {
+    const other = connectTestDb();
+    try {
+      const bob = await viewer("bob");
+      let submit: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // The settings save holds the row while it turns approval off.
+        await tx.execute(
+          sql`select 1 from workspace_settings where workspace_id = ${wsId} for update`,
+        );
+        submit = submitPeriod(other.db, bob, LAST_WEEK, NOW);
+        await new Promise((r) => setTimeout(r, 400));
+        await tx
+          .update(workspaceSettings)
+          .set({ approvalEnabled: false })
+          .where(eq(workspaceSettings.workspaceId, wsId));
+      });
+      await expect(submit).rejects.toThrow("Approval is off in this workspace.");
+      expect(await db.select().from(approvalRequest)).toEqual([]);
+    } finally {
+      await other.close();
+    }
+  });
+
   it("refuses a new period type while a request is pending", async () => {
     await submitPeriod(db, await viewer("bob"), LAST_WEEK, NOW);
     const current = {

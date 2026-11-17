@@ -275,7 +275,7 @@ export async function requestTimeOff(
     });
     if (!approved) {
       const approvers = await approversFor(
-        db,
+        tx,
         viewer.workspaceId,
         { userId: viewer.userId, projectIds: [] },
         "timeOff.review",
