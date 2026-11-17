@@ -220,6 +220,30 @@ describe.each(["PENDING", "APPROVED"] as const)("a %s week", (status) => {
     expect(event?.changes).toEqual({ description: { from: "Work", to: "Changed" } });
   });
 
+  it("logs an import into it once, with the number of entries added", async () => {
+    const hour = (n: number) => ({
+      start: new Date(IN.start.getTime() + n * 3_600_000),
+      end: new Date(IN.end.getTime() + n * 3_600_000),
+    });
+    const s = await as("ann");
+    await db.transaction((tx) =>
+      createManualEntries(
+        tx,
+        s,
+        [1, 2, 3].map((n) => ({ ...details, ...hour(n) })),
+        NOW,
+        { note: NOTE },
+      ),
+    );
+    const events = await adminEdits();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      entryId: null,
+      note: NOTE,
+      changes: { entriesAdded: { from: 0, to: 3 } },
+    });
+  });
+
   it("leaves the weeks around it alone", async () => {
     await expect(
       updateEntry(db, await as("bob"), outId, { description: "Fine" }, NOW),
@@ -375,6 +399,33 @@ describe("lock order", () => {
         await tx.execute(sql`select id from time_entry where id = ${inId} for update`);
       });
       await expect(edit).resolves.toMatchObject({ description: "edited" });
+    } finally {
+      await other.close();
+    }
+  });
+
+  it("deleting a project waits for its people's locks, so a submit in flight wins", async () => {
+    const other = connectTestDb();
+    try {
+      const owner = await loadViewer(db, wsId, ids.olga!);
+      const web = await createProject(db, owner, { name: "Web" });
+      await updateEntry(db, await as("bob"), inId, { projectId: web.id }, NOW);
+      let removal: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // Bob's submit holds his lock while it writes the request.
+        await tx.execute(timerLock(wsId, ids.bob!));
+        removal = deleteProject(other.db, owner, web.id, { mode: "delete" });
+        await new Promise((r) => setTimeout(r, 400));
+        await tx.insert(approvalRequest).values({
+          id: randomUUID(),
+          workspaceId: wsId,
+          userId: ids.bob!,
+          periodStart: SUBMITTED.start,
+          periodEnd: SUBMITTED.end,
+          status: "PENDING",
+        });
+      });
+      await expect(removal).rejects.toThrow("Archive it instead");
     } finally {
       await other.close();
     }

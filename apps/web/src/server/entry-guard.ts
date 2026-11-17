@@ -207,6 +207,8 @@ export interface KeyedChange {
   entryId?: string;
   expenseId?: string;
   changes?: Record<string, { from: unknown; to: unknown }>;
+  /** A new entry (nothing before it). Several in one period are logged as one event. */
+  created?: boolean;
 }
 
 /** Phase 6d decision 23: what an invoiced entry or expense answers to every write. */
@@ -313,20 +315,40 @@ export async function assertKeysWritable(
     );
   }
   if (!opts.note) throw new TimeEntryError("NOTE_REQUIRED", NOTE_REQUIRED_MESSAGE);
-  await db.insert(approvalEvent).values(
-    hits.map(({ item, request }) => ({
-      id: randomUUID(),
-      workspaceId: scope.workspaceId,
-      requestId: request.id,
-      userId: scope.userId,
-      actorId: actor.userId,
-      action: "ADMIN_EDIT" as const,
-      note: opts.note,
+  const event = (requestId: string) => ({
+    id: randomUUID(),
+    workspaceId: scope.workspaceId,
+    requestId,
+    userId: scope.userId,
+    actorId: actor.userId,
+    action: "ADMIN_EDIT" as const,
+    note: opts.note,
+  });
+  // Each row is logged with what changed, except a batch of new entries (an
+  // import): several in one period are logged once, counted.
+  const createdIn = new Map<string, number>();
+  for (const { item, request } of hits) {
+    if (item.created) createdIn.set(request.id, (createdIn.get(request.id) ?? 0) + 1);
+  }
+  const batched = (requestId: string) => (createdIn.get(requestId) ?? 0) > 1;
+  const rows = hits
+    .filter(({ item, request }) => !(item.created && batched(request.id)))
+    .map(({ item, request }) => ({
+      ...event(request.id),
       entryId: item.entryId ?? null,
       expenseId: item.expenseId ?? null,
       changes: item.changes ?? null,
-    })),
-  );
+    }));
+  for (const [requestId, count] of createdIn) {
+    if (count < 2) continue;
+    rows.push({
+      ...event(requestId),
+      entryId: null,
+      expenseId: null,
+      changes: { entriesAdded: { from: 0, to: count } },
+    });
+  }
+  await db.insert(approvalEvent).values(rows);
 }
 
 function startsOf(change: WriteChange): Date[] {
@@ -352,6 +374,7 @@ export async function assertWritable(
         instants,
         entryId: change.entryId,
         changes: change.changes,
+        created: change.before === undefined && change.after !== undefined,
       };
     }),
     { ...opts, rules, noun: "Entries" },
