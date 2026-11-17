@@ -493,6 +493,32 @@ export async function reviewRequests(
       throw new CatalogError("INVALID", "Only pending periods can be approved or rejected.");
     }
     const approve = input.decision === "APPROVE";
+    // A timer running in the period (an owner or admin may start one there with a
+    // note) would add time after approval: say who must stop it first.
+    if (approve) {
+      for (const r of rows) {
+        const [running] = await tx
+          .select({ id: timeEntry.id })
+          .from(timeEntry)
+          .where(
+            and(
+              eq(timeEntry.workspaceId, viewer.workspaceId),
+              eq(timeEntry.userId, r.userId),
+              isNull(timeEntry.end),
+              isNull(timeEntry.deletedAt),
+              sql`(${timeEntry.start} at time zone ${ws.rule.timezone})::date between ${r.periodStart} and ${r.periodEnd}`,
+            ),
+          )
+          .limit(1);
+        if (running) {
+          const person = await emailOf(tx, r.userId);
+          throw new CatalogError(
+            "INVALID",
+            `${person?.name ?? "This person"} has a timer running in this period.`,
+          );
+        }
+      }
+    }
     const note = approve ? null : input.note!;
     await tx
       .update(approvalRequest)
@@ -525,7 +551,9 @@ export async function reviewRequests(
         workspaceId: viewer.workspaceId,
         to: person.email,
         kind: approve ? "approval.approved" : "approval.rejected",
-        ...(approve ? approvedEmail(base) : rejectedEmail({ ...base, note: note! })),
+        ...(approve
+          ? approvedEmail({ ...base, requestId: r.id })
+          : rejectedEmail({ ...base, note: note! })),
       });
     }
   });

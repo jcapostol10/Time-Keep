@@ -70,14 +70,24 @@ describe("kioskRequiredGaps", () => {
 
   it("finds a required project with no default", () => {
     expect(
-      kioskRequiredGaps(["project"], { projectId: null, taskId: null, projectHasTasks: false }),
+      kioskRequiredGaps(["project"], {
+        projectId: null,
+        taskId: null,
+        tagId: null,
+        projectHasTasks: false,
+      }),
     ).toEqual(["project"]);
   });
 
   it("wants a default task on a project with tasks, whatever the setting (rule 8)", () => {
     expect(kioskRequiredGaps([], { ...defaults, taskId: null })).toEqual(["task"]);
     expect(
-      kioskRequiredGaps(["task"], { projectId: "p", taskId: null, projectHasTasks: false }),
+      kioskRequiredGaps(["task"], {
+        projectId: "p",
+        taskId: null,
+        tagId: null,
+        projectHasTasks: false,
+      }),
     ).toEqual([]);
   });
 

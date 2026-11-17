@@ -281,6 +281,20 @@ describe("reviewRequests", () => {
     expect(await outboxTo(ids.bob!)).toHaveLength(1);
   });
 
+  it("refuses to approve while the person's timer runs in the period", async () => {
+    await entry("ann", "2026-10-26T03:00:00.000Z", 60);
+    const anns = await submitPeriod(db, await viewer("ann"), "2026-10-26", NOW);
+    // An admin may start a timer into their own pending period, with a note.
+    await startTimer(db, await viewer("ann"), { ...work, projectId: null }, NOW, {
+      note: "On call",
+    });
+    await expect(
+      reviewRequests(db, await viewer("olga"), { ids: [anns.id], decision: "APPROVE" }, NOW),
+    ).rejects.toThrow("Ann Admin has a timer running in this period.");
+    const [row] = await db.select().from(approvalRequest).where(eq(approvalRequest.id, anns.id));
+    expect(row?.status).toBe("PENDING");
+  });
+
   it("never lets a manager approve their own, but lets an admin", async () => {
     await setRules({ approvalReviewers: "TEAM_MANAGERS" });
     await entry("max", "2026-10-20T03:00:00.000Z", 60);

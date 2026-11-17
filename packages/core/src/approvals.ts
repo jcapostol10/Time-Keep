@@ -164,25 +164,3 @@ export function lockBoundary(rule: LockRule, now: Date): Date | null {
   const key = lockDateKey(rule, now);
   return key ? zonedDateTimeToInstant({ date: key, hours: 0, minutes: 0 }, rule.timezone) : null;
 }
-
-type Move = "SUBMIT" | "WITHDRAW" | "APPROVE" | "REJECT" | "REOPEN";
-
-const MOVES: Record<string, ApprovalStatus | "DELETED"> = {
-  "null:SUBMIT": "PENDING",
-  "REJECTED:SUBMIT": "PENDING",
-  "PENDING:WITHDRAW": "DELETED",
-  "PENDING:APPROVE": "APPROVED",
-  "PENDING:REJECT": "REJECTED",
-  // Decision 3: reopening sends an approved period back for correction.
-  "APPROVED:REOPEN": "REJECTED",
-};
-
-/** The request's next status; throws for a move the state machine does not allow. */
-export function transition(
-  status: ApprovalStatus | null,
-  action: Move,
-): ApprovalStatus | "DELETED" {
-  const next = MOVES[`${status}:${action}`];
-  if (!next) throw new Error("Not allowed");
-  return next;
-}

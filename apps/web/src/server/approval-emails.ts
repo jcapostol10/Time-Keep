@@ -16,6 +16,8 @@ interface Base {
 const approvalsUrl = (b: Base) => `${b.appUrl}/w/${b.slug}/approvals`;
 const requestUrl = (b: Base, id: string) => `${b.appUrl}/w/${b.slug}/approvals/${id}`;
 const timesheetUrl = (b: Base) => `${b.appUrl}/w/${b.slug}/timesheet`;
+/** The timesheet at the period's first week, where sent-back time is corrected. */
+const periodWeekUrl = (b: Base) => `${timesheetUrl(b)}?week=${b.period.start}`;
 
 export function submittedEmail(
   b: Base & { requestId: string; personName: string; workSeconds: number },
@@ -29,13 +31,13 @@ export function submittedEmail(
   };
 }
 
-export function approvedEmail(b: Base): Email {
+export function approvedEmail(b: Base & { requestId: string }): Email {
   const when = formatPeriod(b.period);
   return {
     subject: `Your time for ${when} was approved`,
     title: "Your time was approved",
     intro: `Your time for ${when} in ${b.workspaceName} was approved.`,
-    cta: { label: "Open your timesheet", url: timesheetUrl(b) },
+    cta: { label: "Open the period", url: requestUrl(b, b.requestId) },
   };
 }
 
@@ -45,7 +47,7 @@ export function rejectedEmail(b: Base & { note: string }): Email {
     subject: `Your time for ${when} needs changes`,
     title: "Your time needs changes",
     intro: `Your time for ${when} in ${b.workspaceName} was sent back: "${b.note}". Correct it and submit it again.`,
-    cta: { label: "Open your timesheet", url: timesheetUrl(b) },
+    cta: { label: "Correct your time", url: periodWeekUrl(b) },
   };
 }
 
@@ -55,7 +57,7 @@ export function reopenedEmail(b: Base & { note: string }): Email {
     subject: `Your approved time for ${when} was reopened`,
     title: "Your approved time was reopened",
     intro: `Your approved time for ${when} in ${b.workspaceName} was reopened for correction: "${b.note}". Correct it and submit it again.`,
-    cta: { label: "Open your timesheet", url: timesheetUrl(b) },
+    cta: { label: "Correct your time", url: periodWeekUrl(b) },
   };
 }
 

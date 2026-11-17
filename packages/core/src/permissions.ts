@@ -60,7 +60,6 @@ export const ACTIONS = [
   "approval.review",
   /** change time in a submitted or locked period (with a note when submitted) */
   "approval.editLocked",
-  "lock.manage",
   /** ask for time off (Phase 5b) */
   "timeOff.request",
   /** see someone's time off on the calendar, timesheet and Time off page */
@@ -276,7 +275,6 @@ export const PERMISSION_MATRIX: Record<Action, Record<Role, Rule>> = {
   "approval.submit": { owner: "yes", admin: "yes", manager: "own", member: "own" },
   "approval.review": { owner: "yes", admin: "yes", manager: "approvers", member: "no" },
   "approval.editLocked": ADMINS,
-  "lock.manage": ADMINS,
   "timeOff.request": { owner: "own", admin: "own", manager: "own", member: "own" },
   "timeOff.view": {
     owner: "yes",

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  APPROVAL_STATUSES,
   formatPeriod,
   lockBoundary,
   nextPeriod,
@@ -9,7 +8,6 @@ import {
   periodContaining,
   periodOf,
   previousPeriod,
-  transition,
   type PeriodRule,
 } from "./approvals";
 
@@ -142,28 +140,4 @@ describe("lockBoundary", () => {
       lockBoundary({ mode: "FIXED", date: null, days: null, timezone: "UTC" }, now),
     ).toBeNull();
   });
-});
-
-describe("transition", () => {
-  const ALLOWED: Record<string, string> = {
-    "null:SUBMIT": "PENDING",
-    "REJECTED:SUBMIT": "PENDING",
-    "PENDING:WITHDRAW": "DELETED",
-    "PENDING:APPROVE": "APPROVED",
-    "PENDING:REJECT": "REJECTED",
-    "APPROVED:REOPEN": "REJECTED",
-  };
-  const statuses = [null, ...APPROVAL_STATUSES];
-  const actions = ["SUBMIT", "WITHDRAW", "APPROVE", "REJECT", "REOPEN"] as const;
-
-  for (const status of statuses) {
-    for (const action of actions) {
-      const key = `${status}:${action}`;
-      it(key, () => {
-        const expected = ALLOWED[key];
-        if (expected) expect(transition(status, action)).toBe(expected);
-        else expect(() => transition(status, action)).toThrow("Not allowed");
-      });
-    }
-  }
 });
