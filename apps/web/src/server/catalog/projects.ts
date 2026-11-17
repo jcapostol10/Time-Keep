@@ -61,7 +61,7 @@ import { scopeFilter } from "../authz";
 import { projectCurrency, projectsHaveRates, relabelProjectsCurrency } from "../rates";
 import { workspaceCurrency } from "./clients";
 import { grantTaskGroupsAccess, visibleTasksFor } from "./tasks";
-import { type Viewer, visibleProjectFilter, withManagedProject } from "./viewer";
+import { type Viewer, visibleProjectFilter } from "./viewer";
 import { countProjectExpenses, purgeDeletedProjectExpenses } from "../expenses";
 import { type EntryScope, reassignProjectEntries, softDeleteProjectEntries } from "../time-entries";
 
@@ -548,13 +548,6 @@ export async function createProject(
     }
     throw error;
   }
-  // A manager who creates a project manages it (they could not edit it otherwise).
-  const creator = viewer.role === "manager" ? withManagedProject(viewer, id) : viewer;
-  if (creator !== viewer) {
-    await db
-      .insert(projectMember)
-      .values({ projectId: id, userId: viewer.userId, isManager: true });
-  }
   const row = await db.query.project.findFirst({ where: eq(project.id, id) });
   if (!row) throw new Error("Project could not be created");
   return {
@@ -566,7 +559,7 @@ export async function createProject(
     billable: row.billable,
     favorite: false,
     tasks: [],
-    canCreateTask: can(creator.actor, "task.create", { kind: "task", projectId: row.id }),
+    canCreateTask: can(viewer.actor, "task.create", { kind: "task", projectId: row.id }),
   };
 }
 

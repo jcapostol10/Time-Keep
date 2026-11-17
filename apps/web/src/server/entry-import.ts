@@ -215,7 +215,7 @@ async function resolve(
     project: can(viewer.actor, "project.create", { kind: "project", projectId: null }),
     tag: can(viewer.actor, "tag.create", { kind: "none" }),
     // A task on a project the import creates: roles that add tasks anywhere
-    // (decision 11), and a manager, who manages the projects they create.
+    // (decision 11), and a manager, for the projects this import creates.
     taskOnNewProject:
       can(viewer.actor, "task.create", { kind: "task", projectId: "new" }) ||
       viewer.role === "manager",
@@ -511,8 +511,11 @@ export async function commitEntryImport(
       const project = lookup.project(await lookup.projectsFor(r.scope), r.project, r.client);
       if (!project) throw new ImportError(`Project "${r.project}" could not be found.`);
       if (project.tasks.some((t) => lower(t.name) === lower(r.task!))) continue;
-      // A manager manages the projects this import just created.
-      const creator = createdIds.has(project.id) ? withManagedProject(viewer, project.id) : viewer;
+      // A manager may add tasks to a project this import just created (this request only).
+      const creator =
+        viewer.role === "manager" && createdIds.has(project.id)
+          ? withManagedProject(viewer, project.id)
+          : viewer;
       const created = await createTask(tx, creator, project.id, {
         name: r.task,
         groupIds: options.newTaskGroupIds ?? [],

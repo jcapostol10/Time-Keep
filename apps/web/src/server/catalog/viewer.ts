@@ -43,8 +43,10 @@ export function visibleProjectFilter(viewer: Viewer): SQL | undefined {
 }
 
 /**
- * The viewer once they manage `projectId` too: a manager who creates a project
- * becomes its manager in the same request, before the actor is reloaded.
+ * The viewer as if they managed `projectId`, for this request only: the CSV
+ * import lets a manager who may create projects add tasks to a project the
+ * same import just created. Nothing is stored; creating a project never makes
+ * anyone its manager.
  */
 export function withManagedProject(viewer: Viewer, projectId: string): Viewer {
   return {

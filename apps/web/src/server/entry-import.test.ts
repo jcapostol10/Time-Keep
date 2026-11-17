@@ -119,11 +119,13 @@ describe("entry import", () => {
     expect(
       (await db.select().from(task).where(eq(task.projectId, launch!.id))).map((x) => x.name),
     ).toEqual(["Planning"]);
-    const [membership] = await db
+    // The right to add the task lasts for the import only: creating a project
+    // does not make a manager its manager (that would widen their reach).
+    const members = await db
       .select()
       .from(projectMember)
       .where(and(eq(projectMember.projectId, launch!.id), eq(projectMember.userId, ids.max!)));
-    expect(membership?.isManager).toBe(true);
+    expect(members).toEqual([]);
   });
 
   it("a changed fingerprint refuses the commit", async () => {
