@@ -97,6 +97,7 @@ export interface ResolvedKiosk {
   tokenRotatedAt: Date;
   projectId: string | null;
   taskId: string | null;
+  tagId: string | null;
   sessionTimeoutSeconds: number;
   showLogo: boolean;
   photo: boolean;
@@ -117,6 +118,7 @@ export async function resolveKiosk(db: Database, token: string): Promise<Resolve
           tokenRotatedAt: kiosk.tokenRotatedAt,
           projectId: kiosk.projectId,
           taskId: kiosk.taskId,
+          tagId: kiosk.tagId,
           sessionTimeoutSeconds: kiosk.sessionTimeoutSeconds,
           showLogo: kiosk.showLogo,
           photo: kiosk.photo,
@@ -407,7 +409,7 @@ export async function identify(
   };
 }
 
-/** The kiosk's defaults: `Kiosk: <name>`, its project and task, the project's billable default. */
+/** The kiosk's defaults: `Kiosk: <name>`, its project, task and tag, the project's billable default. */
 async function workDetails(db: DbExecutor, k: ResolvedKiosk) {
   let billable = false;
   if (k.projectId) {
@@ -421,7 +423,7 @@ async function workDetails(db: DbExecutor, k: ResolvedKiosk) {
     description: `Kiosk: ${k.name}`,
     projectId: k.projectId,
     taskId: k.taskId,
-    tagIds: [],
+    tagIds: k.tagId ? [k.tagId] : [],
     billable,
     type: "work" as const,
   };

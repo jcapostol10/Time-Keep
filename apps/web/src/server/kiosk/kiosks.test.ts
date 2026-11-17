@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { eq, kiosk } from "@timekeep/db";
+import { eq, kiosk, tag } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { connectTestDb } from "../../../test/db";
@@ -59,6 +59,21 @@ describe("kiosks", () => {
     await expect(
       createKiosk(db, await cast.viewer("ann"), frontDesk(cast, { taskId: cast.taskU })),
     ).rejects.toThrow(/task/i);
+  });
+
+  it("refuse an archived or foreign default tag", async () => {
+    const ann = await cast.viewer("ann");
+    await db
+      .insert(tag)
+      .values([
+        { id: "tag-old", workspaceId: cast.wsId, name: "Old", color: "#0f766e", archived: true },
+      ]);
+    await expect(createKiosk(db, ann, frontDesk(cast, { tagId: "tag-old" }))).rejects.toThrow(
+      /tag/i,
+    );
+    await expect(createKiosk(db, ann, frontDesk(cast, { tagId: "tag-nowhere" }))).rejects.toThrow(
+      /tag/i,
+    );
   });
 
   it("keep the photo setting, people and groups", async () => {

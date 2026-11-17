@@ -8,6 +8,8 @@ import { personalWorkspaceName } from "@timekeep/core";
 import { expect, test } from "./fixtures";
 import { signIn, uniqueEmail } from "./helpers/app";
 import { createProjectViaUi } from "./helpers/catalog";
+import { openSettings, saveSettings } from "./helpers/settings";
+import { createTag } from "./helpers/tracker";
 import {
   addLimitedUserViaUi,
   allowBreaks,
@@ -59,6 +61,35 @@ test.describe("kiosk extras", { tag: "@nightly" }, () => {
 
     await openReport(page, slug, "detailed");
     await expect(detailedRow(page, "Kiosk: Front desk")).toHaveCount(2);
+  });
+
+  test("a kiosk with a default tag clocks out under a required tag", async ({
+    page,
+    freshUser,
+    browser,
+    trackerPage,
+  }) => {
+    const { slug, name } = freshUser;
+    await trackerPage();
+    await createTag(page, "Desk");
+    await openSettings(page, slug);
+    await page
+      .getByRole("group", { name: "Required fields" })
+      .getByRole("checkbox", { name: "Tag" })
+      .check();
+    await saveSettings(page);
+    const url = await createKioskViaUi(page, slug, { name: "Tagged desk", tag: "Desk" });
+    await setOwnPinViaUi(page, personalWorkspaceName(name), "1357");
+
+    const device = await browser.newContext();
+    const kiosk = await device.newPage();
+    await openKiosk(kiosk, url);
+    await kioskPinPunch(kiosk, { name, pin: "1357", action: "CLOCK_IN" });
+    await kiosk.waitForTimeout(1_100);
+    await kioskPinPunch(kiosk, { name, pin: "1357", action: "CLOCK_OUT" });
+    await kioskEnterPin(kiosk, name, "1357");
+    await expect(kiosk.getByRole("button", { name: "Clock in", exact: true })).toBeVisible();
+    await device.close();
   });
 
   test("five wrong PINs lock the person for 15 minutes", async ({ page, freshUser, browser }) => {

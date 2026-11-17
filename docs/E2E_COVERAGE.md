@@ -388,6 +388,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 - [x] A kiosk PIN punch creates a normal entry visible in the Detailed report, and the kiosk sets no cookie — `kiosk.spec.ts` › "a kiosk PIN punch creates a normal entry visible in the Detailed report"
 - [x] Clock in, start and end a break, and clock out on a kiosk — `kiosk-extra.spec.ts` › "clock in, break and clock out on a kiosk"
+- [x] A kiosk with a default tag clocks out where a tag is required — `kiosk-extra.spec.ts` › "a kiosk with a default tag clocks out under a required tag"
 - [x] Five wrong PINs lock the person on the kiosk, even with the right PIN — `kiosk-extra.spec.ts` › "five wrong PINs lock the person for 15 minutes"
 - [x] A personal QR code scanned by the kiosk camera identifies the person — `kiosk-extra.spec.ts` › "a QR code punch through the camera"
 - [x] A limited user is added on the Team page ("Kiosk only"), gets a PIN and punches on a kiosk — `kiosk-extra.spec.ts` › "a limited user punches on a kiosk and shows on the Team page"
