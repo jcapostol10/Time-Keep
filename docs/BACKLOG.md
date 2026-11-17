@@ -27,7 +27,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 
 ### b2 — approvals, time off, attendance, targets, kiosks, the daily cron
 
-- [ ] **b2** Drop `task_assignee` and `workspace_settings.task_creators` (the contract half): branch 1 took them out of the Drizzle schema and stopped reading and writing them (2026-11-17); once that is live everywhere, a migration drops them and `test/db.ts` stops truncating the table.
 - [ ] **b2** Kiosk default tag (ruling 8): with a required tag, nobody can clock out on a kiosk, because a kiosk adds no tags; add `kiosk.tag_id` (additive migration) and a picker.
 - [ ] **b2** Phase 5c review minors:
   - The QR path of `identify` treats any error from `allowedPerson` as "not allowed", so a database error counts as a QR failure; catch only `WorkspaceAccessError`.
@@ -161,6 +160,7 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] Dropped `task_assignee` and `workspace_settings.task_creators`, done 2026-11-17 (backlog cleanup b2, migration 0021): the contract half, after branch 1's code (which no longer reads or writes them) reached production.
 - [x] PDF tests in CI, done 2026-11-17 (backlog cleanup b1): the CI job installs Playwright's Chromium and lifts Ubuntu 24.04's user-namespace restriction, so `report-pdf.test.ts` and `invoices/pdf.test.ts` print PDFs in CI (run 44080024987: both passed, not skipped).
 - [x] Detailed sort in the URL, done 2026-11-17 (backlog cleanup b1): `sort` and `dir` sit beside the report query (unknown values read as start, descending), survive a reload and a filter change, and stay out of share links.
 - [x] Timesheet rows added by hand, done 2026-11-17 (backlog cleanup b1): kept in local storage per workspace, person shown and week; a row on a project no longer offered is dropped.
