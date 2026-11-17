@@ -19,6 +19,7 @@ import { CatalogError, isUniqueViolation } from "./catalog/errors";
 import type { GroupDTO } from "@/lib/team-types";
 
 import type { Viewer } from "./catalog/viewer";
+import { dropOrphanedHolidays, holidaysAssignedTo } from "./time-off/holiday-orphans";
 
 /**
  * User groups: named sets of people for private-project access, report
@@ -125,7 +126,12 @@ export async function renameGroup(
 export async function deleteGroup(db: Database, viewer: Viewer, groupId: string): Promise<void> {
   assertCan(viewer.actor, "group.manage", { kind: "none" });
   await requireGroup(db, viewer, groupId);
-  await db.delete(userGroup).where(eq(userGroup.id, groupId));
+  await db.transaction(async (tx) => {
+    // Its holiday assignments cascade with it: a holiday left with none would apply to everyone.
+    const theirHolidays = await holidaysAssignedTo(tx, viewer.workspaceId, { groupId });
+    await tx.delete(userGroup).where(eq(userGroup.id, groupId));
+    await dropOrphanedHolidays(tx, theirHolidays);
+  });
 }
 
 export async function setGroupMembers(

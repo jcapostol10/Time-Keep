@@ -285,11 +285,11 @@ describe.each(["PENDING", "APPROVED"] as const)("a %s week", (status) => {
       weekStart: 1,
       durationFormat: "hh:mm:ss",
     };
-    const rows = async (who: string) =>
+    const rows = async (who: string, shared = false) =>
       (
         await detailedReport(
           db,
-          await loadViewer(db, wsId, ids[who]!),
+          { ...(await loadViewer(db, wsId, ids[who]!)), shared },
           query,
           prefs,
           { sort: "start", dir: "asc" },
@@ -298,6 +298,8 @@ describe.each(["PENDING", "APPROVED"] as const)("a %s week", (status) => {
       ).entries.filter((e) => e.id === inId);
     expect(await rows("max")).toMatchObject([{ editable: false, lockedReason: reason }]);
     expect(await rows("ann")).toMatchObject([{ editable: true, lockedReason: null }]);
+    // A share link's rows are public: no one's submission status in them.
+    expect(await rows("max", true)).toMatchObject([{ lockedReason: null }]);
   });
 
   it("logs which entry changed and how", async () => {

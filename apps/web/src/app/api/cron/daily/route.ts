@@ -21,7 +21,11 @@ export async function GET(request: Request) {
   }
   const db = getDb();
   const kiosk = await purgeKiosk(db);
-  const blanked = await blankOldBodies(db);
+  // Housekeeping never stops the jobs or the drain.
+  const blanked = await blankOldBodies(db).catch((error: unknown) => {
+    console.error("[cron] blanking old email bodies failed", error);
+    return 0;
+  });
   const jobs = await runDailyJobs(db);
   const mail = await drainAll(db, { budgetMs: 200_000 });
   return Response.json({ ...jobs, kiosk, blanked, ...mail }, { headers: NO_STORE });

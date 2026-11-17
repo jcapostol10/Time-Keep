@@ -798,7 +798,10 @@ export async function detailedReport(
   prefs: ViewerPrefs,
   page: { cursor?: DetailedCursor; sort: DetailedSort; dir: "asc" | "desc"; limit?: number },
   now: Date = new Date(),
+  /** `editing: false` (exports): no editability work, the rows are printed. */
+  opts: { editing?: boolean } = {},
 ): Promise<DetailedPage> {
+  const editing = opts.editing ?? true;
   const eff = effectiveQuery(query, viewer);
   const range = resolveReportRange(eff, prefs, now);
   const base = baseConditions(viewer, eff, range);
@@ -893,8 +896,27 @@ export async function detailedReport(
     list.push({ id: t.id, name: t.name });
     tagsByEntry.set(t.entryId, list);
   }
-  // Locked or submitted time is read-only to members and managers (Phase 5a).
-  const locked = await lockedReasonsForOwners(db, viewer, pageRows, now);
+  // Locked or submitted time is read-only to members and managers (Phase 5a):
+  // asked only for rows the viewer could otherwise edit, never for a share link
+  // (its rows are public) or an export (nothing is edited there).
+  const locked =
+    editing && !viewer.shared
+      ? await lockedReasonsForOwners(
+          db,
+          viewer,
+          pageRows.filter(
+            (r) =>
+              r.ownerStatus === "ACTIVE" &&
+              r.invoiceNumber === null &&
+              can(viewer.actor, "entry.write", {
+                kind: "entry",
+                userId: r.userId,
+                projectId: r.projectId,
+              }),
+          ),
+          now,
+        )
+      : new Map<string, string>();
   const entries: DetailedEntryDTO[] = pageRows.map((r) => {
     const tags = tagsByEntry.get(r.id) ?? [];
     // Invoiced time is read-only for everyone (Phase 6d, decision 23).

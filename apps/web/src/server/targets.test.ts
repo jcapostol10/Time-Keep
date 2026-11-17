@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { connectTestDb } from "../../test/db";
 import { setUpTimeOffCast, type TimeOffCast } from "../../test/time-off-fixtures";
 import { runDailyJobs } from "./daily-jobs";
+import { removeMember } from "./team";
 import { deleteTargetRule, listTargetRules, saveTargetRule } from "./targets";
 import { createManualEntry } from "./time-entries";
 import { saveHoliday } from "./time-off/holidays";
@@ -126,6 +127,18 @@ describe("the daily job's targets", () => {
       .update(membership)
       .set({ createdAt: TUESDAY_MANILA })
       .where(and(eq(membership.workspaceId, cast.wsId), eq(membership.userId, cast.ids.bob)));
+    await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
+    expect(await targetMail()).toEqual([]);
+  });
+
+  it("a rule that named only a removed member applies to nobody, not to everyone", async () => {
+    await saveTargetRule(
+      db,
+      await cast.viewer("ann"),
+      rule({ everyone: false, userIds: [cast.ids.bob] }),
+    );
+    await removeMember(db, await cast.viewer("olga"), cast.ids.bob);
+    // Nobody else tracked anything on Monday: an everyone rule would remind them all.
     await runDailyJobs(db, { force: true, now: TUESDAY_MANILA, workspaceIds: [cast.wsId] });
     expect(await targetMail()).toEqual([]);
   });

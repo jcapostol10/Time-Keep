@@ -28,6 +28,20 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 ### b2 — approvals, time off, attendance, targets, kiosks, the daily cron
 
 
+### b2 review minors (final review, 2026-11-17)
+
+- [ ] `reviewRequests` does not take the owners' person locks, so an owner or admin starting a timer with a note in a PENDING period while another admin approves it can still leave a running timer in an approved period; take the locks, sorted, before the rows.
+- [ ] `addAdjustment` takes no person lock (the comment in `reviewTimeOff` says it does), so a concurrent negative adjustment can slip past the approval balance re-check; the re-check also reads `new Date()` instead of an injectable `now`.
+- [ ] Changing the period type and the timezone in one save skips the R7 confirmation (`moved` picks the first changed field), and a period type change alone with approved periods gives no notice.
+- [ ] A kiosk default tag archived after save: the Select shows blank, every save is refused until it is changed, and nothing on the Kiosks list says clock in now fails; show the archived tag marked and flag archived defaults.
+- [ ] `deleteProject` takes one advisory lock per distinct owner (soft-deleted entries included); a project with thousands of contributors could exhaust the lock table. Use a per-workspace approval lock or cap it.
+- [ ] `blankOldBodies` updates every old row in one statement and seq-scans `email_outbox` hourly; batch it and/or add a partial index.
+- [ ] `restoreEntriesAction` is still one transaction per owner: a multi-owner restore cancelled at the note prompt for one owner leaves the others restored.
+- [ ] `lockedDays` judges a day at 09:00 in the viewer's zone; for a viewer far from the workspace's zone a cell can show read-only when writable, or the reverse (the server still decides).
+- [ ] The approval balance re-check counts other pending requests, and its message does not say they are the cause.
+- [ ] `removeMember` leaves the person's PENDING time-off and approval requests reviewable (and approving the time off then skips the balance re-check); withdraw them on removal.
+- [ ] Small plan deviations: the R8 copy, no `reports.spec.ts` e2e for read-only Detailed rows (an integration test stands in), the timezone e2e lives in `approvals.spec.ts`, `kiosk-extra.spec.ts` waits with `waitForTimeout(1_100)`, and `approvals.spec.ts` adds `86_400_000` to an instant.
+
 ### b3 — money: rates, cost, currencies, budgets, expenses, invoices
 
 - [ ] **b3** **A cost rate applied to past entries re-rates billable snapshots too.** One job re-rates both snapshots from the date. Add a `kinds` column on `rate_recalc_job`.

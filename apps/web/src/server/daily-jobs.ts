@@ -151,11 +151,10 @@ export async function runDailyJobs(
     // One workspace's failure is logged and never stops the others (Phase 6d review).
     const { enabled, period: rule } = approvalRulesOf(ws, ws);
     const today = localDateKey(now, rule.timezone);
-    if (!opts.force) {
-      if (localTimeParts(now, rule.timezone).hours < DAILY_RUN_HOUR) continue;
-      if (!(await claimDailyRun(db, ws.id, today, now))) continue;
-    }
+    if (!opts.force && localTimeParts(now, rule.timezone).hours < DAILY_RUN_HOUR) continue;
     try {
+      // Inside the try: a claim that fails is this workspace's problem, retried next hour.
+      if (!opts.force && !(await claimDailyRun(db, ws.id, today, now))) continue;
       // The period that ended last, reminded within a few days so a missed day is not lost.
       const ended = previousPeriod(periodContaining(today, rule), rule);
       if (enabled && today <= addDaysToKey(ended.end, REMINDER_CATCH_UP_DAYS)) {

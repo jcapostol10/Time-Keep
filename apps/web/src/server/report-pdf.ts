@@ -316,6 +316,7 @@ export async function renderReportHtml(
       req.prefs,
       { cursor, sort: "start", dir: "desc", limit: 200 },
       now,
+      { editing: false },
     );
     entries.push(...p.entries);
     money = p.money;

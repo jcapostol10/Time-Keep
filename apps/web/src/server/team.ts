@@ -48,6 +48,7 @@ import type { Viewer } from "./catalog/viewer";
 import { timerLock } from "./person-lock";
 import { getRunningEntry, stopTimer } from "./time-entries";
 import { WorkspaceAccessError } from "./access-error";
+import { dropOrphanedHolidays, holidaysAssignedTo } from "./time-off/holiday-orphans";
 
 /**
  * Running a team: roles, deactivation, removal, ownership and a manager's
@@ -211,11 +212,13 @@ export async function removeMember(db: Database, viewer: Viewer, userId: string)
           inArray(timeOffPolicyAssignee.policyId, policiesHere),
         ),
       );
+    const theirHolidays = await holidaysAssignedTo(tx, ws, { userId });
     await tx
       .delete(holidayAssignee)
       .where(
         and(eq(holidayAssignee.userId, userId), inArray(holidayAssignee.holidayId, holidaysHere)),
       );
+    await dropOrphanedHolidays(tx, theirHolidays);
     await tx
       .delete(targetRuleAssignee)
       .where(

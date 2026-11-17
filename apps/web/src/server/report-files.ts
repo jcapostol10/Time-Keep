@@ -109,6 +109,7 @@ async function allEntries(
       req.prefs,
       { cursor, sort: "start", dir: "desc", limit: PAGE },
       req.now,
+      { editing: false },
     );
     out.push(...page.entries);
     money = page.money;
@@ -132,6 +133,7 @@ export async function countExportRows(
         req.prefs,
         { sort: "start", dir: "desc", limit: 1 },
         req.now,
+        { editing: false },
       );
       return first.totals?.entryCount ?? 0;
     }
