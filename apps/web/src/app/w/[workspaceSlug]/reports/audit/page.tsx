@@ -1,5 +1,6 @@
 import {
   AUDIT_DEFAULT_PARAMS,
+  parseDetailedSort,
   parseReportQuery,
   reportQueryToSearchParams,
   resolveViewerPrefs,
@@ -49,8 +50,7 @@ export default async function AuditReportPage({
   // Rows per page; also how the e2e suite exercises "Load more" without fifty entries.
   const requested = Number(search.get("limit"));
   const paging: DetailedPaging = {
-    sort: "start",
-    dir: "desc",
+    ...parseDetailedSort(search),
     limit:
       Number.isInteger(requested) && requested >= 1 && requested <= 200 ? requested : DEFAULT_LIMIT,
   };

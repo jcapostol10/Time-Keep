@@ -228,6 +228,38 @@ export function reportQueryToSearchParams(q: ReportQuery): URLSearchParams {
   return params;
 }
 
+/** The Detailed report's sort columns; a fixed vocabulary, never SQL from the URL. */
+export const DETAILED_SORTS = ["start", "duration"] as const;
+export type DetailedSortKey = (typeof DETAILED_SORTS)[number];
+export interface DetailedSortState {
+  sort: DetailedSortKey;
+  dir: "asc" | "desc";
+}
+
+/**
+ * The Detailed report's sort, kept in the URL beside the report query (not in
+ * it, so share links and the other views keep their keys). Unknown values
+ * read as the default, start descending.
+ */
+export function parseDetailedSort(params: URLSearchParams): DetailedSortState {
+  const sort = params.get("sort");
+  const dir = params.get("dir");
+  return {
+    sort: (DETAILED_SORTS as readonly string[]).includes(sort ?? "")
+      ? (sort as DetailedSortKey)
+      : "start",
+    dir: dir === "asc" ? "asc" : "desc",
+  };
+}
+
+/** Writes the sort into `params`, leaving out what is the default. */
+export function writeDetailedSort(params: URLSearchParams, s: DetailedSortState): void {
+  params.delete("sort");
+  params.delete("dir");
+  if (s.sort !== "start") params.set("sort", s.sort);
+  if (s.dir !== "desc") params.set("dir", s.dir);
+}
+
 export interface ReportRange {
   /** Half-open: entries starting in [from, to). */
   from: Date;

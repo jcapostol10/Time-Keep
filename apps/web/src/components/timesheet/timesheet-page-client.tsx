@@ -18,6 +18,7 @@ import { LockNotice } from "@/components/approvals/lock-notice";
 import { PeriodBar } from "@/components/approvals/period-bar";
 import { PeriodNav } from "@/components/period-nav";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { useLocalStorage } from "@/hooks/use-local-storage";
 
 import { useIsSaving } from "../tracker/saving-store";
 import { useCanWriteTimes, useTracker } from "../tracker/tracker-provider";
@@ -27,12 +28,13 @@ import { useTrackerOptions } from "../tracker/use-tracker-cache";
 import { AddRowDialog } from "./add-row-dialog";
 import { CopyLastWeekDialog } from "./copy-last-week-dialog";
 import { buildNameLookup, compareRows, rowLabel, toTimesheetEntries } from "./model";
+import { parseStoredRows, serializeRows, storedRowsKey } from "./stored-rows";
 import { TemplatesMenu } from "./templates-menu";
 import { TimesheetGrid } from "./timesheet-grid";
 import { useTimeOffBands } from "../time-off/use-time-off-bands";
 import { useRangeEntries } from "./use-timesheet";
 
-/** The weekly grid page: week navigation, rows the user added this visit, and the toolbar. */
+/** The weekly grid page: week navigation, rows the user added by hand, and the toolbar. */
 export function TimesheetPageClient({ from, to }: { from: string; to: string }) {
   const { slug, viewer } = useTracker();
   const canWriteTimes = useCanWriteTimes();
@@ -54,9 +56,15 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
     localDateKey(addDaysInZone(weekStart, 6, tz), tz),
     targetKey,
   );
-  // Rows added this visit, per week; they vanish on a full reload (templates persist).
-  const [extraRowsByWeek, setExtraRowsByWeek] = useState<Record<string, TimesheetRowKey[]>>({});
-  const extraRows = useMemo(() => extraRowsByWeek[weekKey] ?? [], [extraRowsByWeek, weekKey]);
+  // Rows added by hand, kept per workspace, person and week (templates keep rows for every week).
+  const [storedRows, setStoredRows] = useLocalStorage<string>(
+    storedRowsKey(slug, targetKey, weekKey),
+    "",
+  );
+  const extraRows = useMemo(
+    () => parseStoredRows(storedRows, new Set((options?.projects ?? []).map((p) => p.id))),
+    [storedRows, options],
+  );
   const [adding, setAdding] = useState(false);
   const [copying, setCopying] = useState(false);
 
@@ -71,20 +79,15 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
   const rows = useMemo(() => [...sheet.rows].sort(compareRows(names)), [sheet.rows, names]);
 
   function addRows(keys: TimesheetRowKey[]) {
-    setExtraRowsByWeek((prev) => {
-      const present = new Set([...(prev[weekKey] ?? []), ...sheet.rows].map(rowKeyString));
-      const fresh = keys.filter((k) => !present.has(rowKeyString(k)));
-      return fresh.length ? { ...prev, [weekKey]: [...(prev[weekKey] ?? []), ...fresh] } : prev;
-    });
+    const present = new Set([...extraRows, ...sheet.rows].map(rowKeyString));
+    const fresh = keys.filter((k) => !present.has(rowKeyString(k)));
+    if (fresh.length) setStoredRows(serializeRows([...extraRows, ...fresh]));
   }
 
-  /** A row whose last entry is being cleared stays for the visit, like an added one. */
+  /** A row whose last entry is being cleared stays, like an added one. */
   function keepRow(key: TimesheetRowKey) {
-    setExtraRowsByWeek((prev) => {
-      const current = prev[weekKey] ?? [];
-      if (current.some((k) => rowKeyString(k) === rowKeyString(key))) return prev;
-      return { ...prev, [weekKey]: [...current, key] };
-    });
+    if (extraRows.some((k) => rowKeyString(k) === rowKeyString(key))) return;
+    setStoredRows(serializeRows([...extraRows, key]));
   }
 
   function goToWeek(anchor: Date | null) {

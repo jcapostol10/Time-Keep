@@ -379,6 +379,15 @@ test.describe("reports", { tag: "@nightly" }, () => {
     await expect.poll(names).toEqual(["Entry Middle", "Entry Long", "Entry Short"]);
     await page.getByRole("button", { name: "Sort by duration" }).click();
     await expect.poll(names).toEqual(["Entry Long", "Entry Middle", "Entry Short"]);
+
+    // The sort is in the URL: a reload keeps it, and so does a filter change.
+    await expect(page).toHaveURL(/sort=duration/);
+    await page.reload();
+    await expect.poll(names).toEqual(["Entry Long", "Entry Middle", "Entry Short"]);
+    await page.getByRole("searchbox", { name: "Description contains" }).fill("o");
+    await expect(page).toHaveURL(/description=o/);
+    await expect(page).toHaveURL(/sort=duration/);
+    await expect.poll(names).toEqual(["Entry Long", "Entry Short"]);
   });
 
   test("the weekly grid by project shows day and row totals that match the summary", async ({

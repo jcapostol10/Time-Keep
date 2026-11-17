@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDuration, formatMoney } from "@timekeep/core";
+import { formatDuration, formatMoney, writeDetailedSort } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import {
   DropdownMenu,
@@ -113,11 +113,12 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
   }
 
   function onSort(sort: DetailedSort) {
-    setPaging((p) => ({
-      ...p,
-      sort,
-      dir: p.sort === sort ? (p.dir === "desc" ? "asc" : "desc") : "desc",
-    }));
+    const dir = paging.sort === sort ? (paging.dir === "desc" ? "asc" : "desc") : "desc";
+    setPaging({ ...paging, sort, dir });
+    // Kept in the URL (replaced, not pushed), so a reload or a shared link keeps the order.
+    const url = new URL(window.location.href);
+    writeDetailedSort(url.searchParams, { sort, dir });
+    window.history.replaceState(null, "", url);
   }
 
   return (

@@ -239,7 +239,6 @@ test.describe("timesheet", () => {
   });
 
   test("save and apply a template", async ({ page, freshUser }) => {
-    const today = dayLabel(new Date(), freshUser.timezone);
     await openTimesheet(page, freshUser.slug);
     await addRow(page, { description: "Planning" });
     await addRow(page, { description: "Support" });
@@ -250,13 +249,29 @@ test.describe("timesheet", () => {
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).toBeHidden();
 
-    await page.reload();
+    // Added rows are kept per week, so apply the template to the next one.
+    await page.getByRole("button", { name: "Next week" }).click();
     await expect(page.locator('[role="grid"][data-hydrated="true"]')).toBeVisible();
-    await expect(cell(page, "No project · Planning", today)).toHaveCount(0);
+    await expect(rowTotal(page, "No project · Planning")).toHaveCount(0);
     await page.getByRole("button", { name: "Templates" }).click();
     await page.getByRole("menuitem", { name: "Apply Usual week" }).click();
-    await expect(cell(page, "No project · Planning", today)).toBeVisible();
-    await expect(cell(page, "No project · Support", today)).toBeVisible();
+    await expect(rowTotal(page, "No project · Planning")).toBeVisible();
+    await expect(rowTotal(page, "No project · Support")).toBeVisible();
+  });
+
+  test("rows added by hand stay after a reload", async ({ page, freshUser }) => {
+    await openTimesheet(page, freshUser.slug);
+    await addRow(page, { description: "Planning" });
+    await expect(rowTotal(page, "No project · Planning")).toBeVisible();
+
+    await page.reload();
+    await expect(page.locator('[role="grid"][data-hydrated="true"]')).toBeVisible();
+    await expect(rowTotal(page, "No project · Planning")).toBeVisible();
+
+    // Kept for that week only.
+    await page.getByRole("button", { name: "Next week" }).click();
+    await expect(page.locator('[role="grid"][data-hydrated="true"]')).toBeVisible();
+    await expect(rowTotal(page, "No project · Planning")).toHaveCount(0);
   });
 
   test("move between cells with the keyboard", async ({ page, freshUser }) => {
