@@ -10,7 +10,7 @@ import {
   type TimesheetRowKey,
 } from "@timekeep/core";
 import { Input } from "@timekeep/ui/components/input";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { TimeEntryDTO } from "@/lib/tracker-types";
@@ -54,6 +54,10 @@ export function TimesheetCell({
   const shown = cell.seconds > 0 ? formatDuration(cell.seconds, viewer.durationFormat) : "";
   // Local text while editing; null means "show the saved value".
   const [text, setText] = useState<string | null>(null);
+  // The value being saved, shown until the write lands; not an edit, so a blur
+  // or a second Enter meanwhile writes nothing.
+  const [pending, setPending] = useState<string | null>(null);
+  const saving = useRef(false);
   const [choosing, setChoosing] = useState<TimesheetEntry[] | null>(null);
   // An entry in a locked day or a submitted period makes the cell read-only (Phase 5a).
   const lockedReason =
@@ -61,20 +65,22 @@ export function TimesheetCell({
   const readOnly = !canWriteTimes || lockedReason !== null;
 
   async function commit(raw: string) {
-    if (readOnly) return;
+    if (readOnly || saving.current) return;
+    setText(null);
     const trimmed = raw.trim();
     const seconds = trimmed === "" ? 0 : parseDuration(trimmed);
     if (seconds === null) {
-      setText(null);
       toast.error("Enter a duration like 1:30, 1.5 or 90m");
       return;
     }
     // The new value shows while the write is in flight; the range cache holds it after.
-    setText(seconds === 0 ? "" : formatDuration(seconds, viewer.durationFormat));
+    saving.current = true;
+    setPending(seconds === 0 ? "" : formatDuration(seconds, viewer.durationFormat));
     try {
       await applyCell(seconds);
     } finally {
-      setText(null);
+      saving.current = false;
+      setPending(null);
     }
   }
 
@@ -126,7 +132,7 @@ export function TimesheetCell({
         data-row={rowIndex}
         data-col={colIndex}
         inputMode="text"
-        value={text ?? shown}
+        value={text ?? pending ?? shown}
         placeholder="0:00"
         onFocus={(e) => e.target.select()}
         onChange={(e) => setText(e.target.value)}
