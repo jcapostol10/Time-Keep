@@ -282,6 +282,39 @@ test.describe("approvals and locks", { tag: "@nightly" }, () => {
     await expect(page.getByText("Workspace settings saved")).toBeVisible();
   });
 
+  test("a member in another time zone submits the workspace's week", async ({
+    page,
+    freshUser,
+    browser,
+    baseURL,
+  }) => {
+    const { slug, timezone } = freshUser;
+    const { last } = weeks(timezone);
+    await enableApproval(page, slug);
+    const mia = await addTeammate(page, browser, baseURL, slug, "Mia Member", "Member");
+    // About half a day from the workspace's zone, either way.
+    const offset = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      timeZoneName: "shortOffset",
+    })
+      .formatToParts(new Date())
+      .find((p) => p.type === "timeZoneName")!.value;
+    const away =
+      offset.startsWith("GMT-") || offset === "GMT" ? "Pacific/Kiritimati" : "Pacific/Pago_Pago";
+    await mia.page.goto("/account");
+    await mia.page.getByRole("combobox", { name: "Timezone" }).click();
+    await mia.page.getByRole("option", { name: away.replaceAll("_", " "), exact: true }).click();
+    await mia.page.getByRole("button", { name: "Save changes" }).click();
+    await expect(mia.page.getByText("Profile saved")).toBeVisible();
+
+    // Her entry on the workspace week's Wednesday; she submits the workspace's period.
+    await addLastWeek(mia.page, slug, timezone, "Far away work");
+    await submitPeriod(mia.page, slug, last);
+    await openApprovals(page, slug);
+    await expect(requestRow(page, "Mia Member", last)).toContainText("2:00:00");
+    await mia.context.close();
+  });
+
   test("a rolling lock blocks a member, not an admin", async ({
     page,
     freshUser,

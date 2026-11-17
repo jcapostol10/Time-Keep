@@ -369,6 +369,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Approvers get the "submitted" email and the member the decision — `approvals.spec.ts` › "approval emails reach approvers and the member"
 - [x] An owner or admin changes approved time only with a note, which the period's history shows — `approvals.spec.ts` › "an admin edits approved time with a note"
 - [x] Changing the workspace timezone with approved periods asks first — `approvals.spec.ts` › "changing the timezone with approved periods asks first"
+- [ ] A member whose own time zone is half a day from the workspace's submits the workspace's week, and it counts their entry — `approvals.spec.ts` › "a member in another time zone submits the workspace's week" (regression test; no single break of the period code models the viewer's zone, so the line stays unticked)
 - [x] Undo after a delete in approved time restores it without asking for the note again — `approvals.spec.ts` › "Undo after a delete in approved time does not ask for the note again"
 - [x] A rolling lock blocks a member's entry in the locked days, not an admin's — `approvals.spec.ts` › "a rolling lock blocks a member, not an admin"
 - [x] The daily job emails a reminder for a closed period with time and no submission — `approvals.spec.ts` › "the daily job reminds an unsubmitted period"
