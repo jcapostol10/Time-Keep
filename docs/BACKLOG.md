@@ -20,6 +20,12 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 - [ ] **b1** The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; install Playwright's Chromium in the CI job.
 
 
+- [ ] **b1 review minors** (final review, 2026-11-17):
+  - Add row does nothing when localStorage throws (blocked site data); fall back to component state for the visit.
+  - `copyWeek` collapses two identical source entries into one, and reads the target week outside its transaction and the person's lock, so two tabs copying at once can still duplicate.
+  - Back after a filter change gives a URL without `sort=` while the Detailed view keeps its sort until a reload.
+  - A member's report filters still come from the picker: archived projects with their old entries are missing, and a client whose only visible projects are archived is still listed.
+
 ### b2 — approvals, time off, attendance, targets, kiosks, the daily cron
 
 - [ ] **b2** Drop `task_assignee` and `workspace_settings.task_creators` (the contract half): branch 1 took them out of the Drizzle schema and stopped reading and writing them (2026-11-17); once that is live everywhere, a migration drops them and `test/db.ts` stops truncating the table.
