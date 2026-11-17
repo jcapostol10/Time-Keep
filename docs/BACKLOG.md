@@ -17,7 +17,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 
 ### b1 — tracker, timesheet, calendar, catalog, auth, CI
 
-- [ ] **b1** `sign-up-form.tsx` maps `USER_ALREADY_EXISTS` to the email field, but Better Auth 1.7.7 emits `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`; moot while `requireEmailVerification` answers a duplicate sign-up with a generic success. (A refused password-reset send also looks like success, by Better Auth's design, which keeps account existence private: unchanged.)
 - [ ] **b1** After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
 - [ ] **b1** Timesheet rows added by hand live only for the page visit (templates persist); keep them per week in local storage.
 - [ ] **b1** Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands. Timesheet cells likewise show the old value until the refetch lands. Patch the range query before the write.
@@ -169,6 +168,7 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] Sign-up error codes, done 2026-11-17 (backlog cleanup b1): `signUpErrorField` puts Better Auth's `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL` (and `INVALID_EMAIL`) on the email field. A duplicate still gets the generic success while email verification is on.
 - [x] Closed by ruling in the backlog cleanup, 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-design.md`):
   - "Should cost follow the report rounding rule?" Yes (ruling 1): profit is amount less cost over the same hours.
   - "With approvals on, approved time can never be costed after the fact." Kept (ruling 2): approval freezes the period, money included.
