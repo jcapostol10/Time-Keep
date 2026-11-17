@@ -4,7 +4,6 @@ import { AVATAR_MAX_BYTES, AVATAR_MIME_TYPES } from "@timekeep/core";
 import { Avatar, AvatarFallback, AvatarImage } from "@timekeep/ui/components/avatar";
 import { Button } from "@timekeep/ui/components/button";
 import { Loader2Icon, Trash2Icon, UploadIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,7 +11,6 @@ import { initials } from "@/lib/initials";
 import { removeAvatarAction, uploadAvatarAction } from "@/server/actions/profile";
 
 export function AvatarUploader({ name, image }: { name: string; image: string | null }) {
-  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(image);
   const [busy, setBusy] = useState(false);
@@ -34,7 +32,6 @@ export function AvatarUploader({ name, image }: { name: string; image: string | 
     }
     setPreview(result.data.url);
     toast.success("Photo updated");
-    router.refresh();
   }
 
   async function handleRemove() {
@@ -47,7 +44,6 @@ export function AvatarUploader({ name, image }: { name: string; image: string | 
     }
     setPreview(null);
     toast.success("Photo removed");
-    router.refresh();
   }
 
   return (

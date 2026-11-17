@@ -15,7 +15,6 @@ import { Label } from "@timekeep/ui/components/label";
 import { RadioGroup, RadioGroupItem } from "@timekeep/ui/components/radio-group";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2Icon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 
@@ -63,7 +62,6 @@ export function RateDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const router = useRouter();
   const qc = useQueryClient();
   const id = useId();
   const history = useRateHistory(slug, target, open);
@@ -114,7 +112,6 @@ export function RateDialog({
     );
     setAmount("");
     onOpenChange(false);
-    router.refresh();
   }
 
   return (

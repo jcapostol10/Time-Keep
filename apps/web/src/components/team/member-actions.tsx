@@ -31,7 +31,6 @@ import { Input } from "@timekeep/ui/components/input";
 import { Label } from "@timekeep/ui/components/label";
 import { RadioGroup, RadioGroupItem } from "@timekeep/ui/components/radio-group";
 import { MoreHorizontalIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 
@@ -78,7 +77,6 @@ type Open =
 
 /** The row menu on the Team page and the dialogs it opens. */
 export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) {
-  const router = useRouter();
   const [open, setOpen] = useState<Open>(null);
   const { permissions } = ctx;
 
@@ -90,7 +88,6 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
     }
     toast.success(done);
     setOpen(null);
-    router.refresh();
     return true;
   }
 
@@ -368,7 +365,6 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
           onDone={() => {
             toast.success(`${row.name} now owns the workspace`);
             setOpen(null);
-            router.refresh();
           }}
         />
       ) : null}

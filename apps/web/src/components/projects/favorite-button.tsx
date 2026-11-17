@@ -3,7 +3,6 @@
 import { Button } from "@timekeep/ui/components/button";
 import { cn } from "@timekeep/ui/lib/utils";
 import { StarIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useOptimistic, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -21,7 +20,6 @@ export function FavoriteButton({
   name: string;
   favorite: boolean;
 }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [shown, setShown] = useOptimistic(favorite);
 
@@ -30,8 +28,8 @@ export function FavoriteButton({
     startTransition(async () => {
       setShown(next);
       const result = await setFavoriteAction(slug, projectId, next);
+      // On failure the optimistic star falls back to the prop when the transition ends.
       if (!result.ok) toast.error(result.error);
-      router.refresh();
     });
   }
 

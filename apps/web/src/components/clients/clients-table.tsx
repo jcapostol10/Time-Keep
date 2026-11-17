@@ -28,7 +28,6 @@ import {
   TableRow,
 } from "@timekeep/ui/components/table";
 import { Building2Icon, MoreHorizontalIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -56,7 +55,6 @@ export function ClientsTable({
   /** What a client without a currency of its own is billed in. */
   workspaceCurrency: string;
 }) {
-  const router = useRouter();
   const [, startTransition] = useTransition();
   const [editing, setEditing] = useState<ClientDTO | null>(null);
   const [deleting, setDeleting] = useState<ClientDTO | null>(null);
@@ -67,7 +65,6 @@ export function ClientsTable({
       if (!result.ok) toast.error(result.error ?? "Something went wrong.");
       else {
         toast.success(success);
-        router.refresh();
       }
     });
   }

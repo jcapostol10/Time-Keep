@@ -21,7 +21,6 @@ import {
   TableRow,
 } from "@timekeep/ui/components/table";
 import { FileUpIcon, Loader2Icon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 
@@ -39,7 +38,6 @@ const STATUS_LABELS: Record<UserImportStatus, string> = {
 
 /** A CSV of email, role and groups: preview every row, then invite the ready ones. */
 export function ImportUsersDialog({ slug }: { slug: string }) {
-  const router = useRouter();
   const id = useId();
   const [open, setOpen] = useState(false);
   const [csv, setCsv] = useState<string | null>(null);
@@ -80,7 +78,6 @@ export function ImportUsersDialog({ slug }: { slug: string }) {
       result.data.invited === 1 ? "1 invitation sent" : `${result.data.invited} invitations sent`,
     );
     reset(false);
-    router.refresh();
   }
 
   return (

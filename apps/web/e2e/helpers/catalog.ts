@@ -32,8 +32,8 @@ export async function createClientViaUi(
 
 /**
  * Opens the "More actions" menu of a row and clicks an item. A re-render that
- * lands right after the menu opens (a server action's revalidation followed by
- * router.refresh) can close it again; a person would reopen it, so this retries.
+ * lands right after the menu opens (a server action's revalidation, a refetch)
+ * can close it again; a person would reopen it, so this retries.
  */
 export async function rowAction(page: Page, row: ReturnType<Page["getByRole"]>, item: string) {
   await expect(async () => {

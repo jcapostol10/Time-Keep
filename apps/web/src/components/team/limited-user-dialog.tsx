@@ -12,7 +12,6 @@ import {
 } from "@timekeep/ui/components/dialog";
 import { Input } from "@timekeep/ui/components/input";
 import { Label } from "@timekeep/ui/components/label";
-import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { toast } from "sonner";
 
@@ -20,7 +19,6 @@ import { addLimitedUserAction } from "@/server/actions/team";
 
 /** Adds a kiosk-only member: a name, no email and no login (decision 18). */
 export function LimitedUserDialog({ slug }: { slug: string }) {
-  const router = useRouter();
   const id = useId();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -39,7 +37,6 @@ export function LimitedUserDialog({ slug }: { slug: string }) {
     toast.success(`${parsed.data.name} added`);
     setOpen(false);
     setName("");
-    router.refresh();
   }
 
   return (

@@ -17,7 +17,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 
 ### b1 — tracker, timesheet, calendar, catalog, auth, CI
 
-- [ ] **b1** After a server action that calls `revalidatePath`, the client components also call `router.refresh()`, so each change renders twice; the second render can close a menu that was just opened (the e2e `rowAction` helper retries for this). Drop the redundant refresh where the action already revalidates.
 - [ ] **b1** Timesheet rows added by hand live only for the page visit (templates persist); keep them per week in local storage.
 - [ ] **b1** Calendar moves and resizes are not optimistic: the block jumps back until the refetch lands. Timesheet cells likewise show the old value until the refetch lands. Patch the range query before the write.
 - [ ] **b1** Calendar blocks have `role=button` and `tabIndex=0` but no Enter/Space handler, so they cannot be opened from the keyboard.
@@ -166,6 +165,7 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] One render per revalidating action, done 2026-11-17 (backlog cleanup b1): the client no longer calls `router.refresh()` after the 30 actions that already revalidate (the action's response re-renders the page). Kept where the action does not revalidate: the project and tag dialogs (their actions also serve the pickers' inline create, which must not re-render the tracker), targets, periods, share-link revoke, the project access tab's failure path and the once-a-session timezone detector. `rowAction` keeps its retry: tracker rows and expense categories need it too.
 - [x] Timesheet arrows, done 2026-11-17 (backlog cleanup b1): Left and Right leave a cell only at the text's edge or with the whole value selected (`movesHorizontally`), so the caret moves within "1:30".
 - [x] Copy last week, done 2026-11-17 (backlog cleanup b1): an entry already in the target week with the same times and details is not copied again, an entry whose details can no longer take time is skipped with its reason (the toast names the first), and a break stays a break (it was copied as work). A period refusal still fails the whole copy.
 - [x] Sign-up error codes, done 2026-11-17 (backlog cleanup b1): `signUpErrorField` puts Better Auth's `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL` (and `INVALID_EMAIL`) on the email field. A duplicate still gets the generic success while email verification is on.

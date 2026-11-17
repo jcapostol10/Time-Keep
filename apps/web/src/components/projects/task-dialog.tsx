@@ -22,7 +22,6 @@ import {
 import { Input } from "@timekeep/ui/components/input";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -62,7 +61,6 @@ export function TaskDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const router = useRouter();
   const estimateId = useId();
   // The optional time estimate (Phase 6b): hours typed as a duration.
   const [estimate, setEstimate] = useState(hoursText(task?.estimateSeconds ?? null));
@@ -98,7 +96,6 @@ export function TaskDialog({
     }
     toast.success(task ? "Task updated" : `Task "${values.name}" added`);
     onOpenChange(false);
-    router.refresh();
   }
 
   return (

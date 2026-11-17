@@ -29,7 +29,6 @@ import {
 import { Textarea } from "@timekeep/ui/components/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon, PlusIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -63,7 +62,6 @@ export function ClientDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const router = useRouter();
   // A new currency relabels the rates and amounts of the client's projects: the server asks first.
   const [confirm, setConfirm] = useState<{ message: string; values: ClientInput } | null>(null);
   const form = useForm<FormValues, unknown, ClientInput>({
@@ -100,7 +98,6 @@ export function ClientDialog({
     toast.success(client ? "Client updated" : `Client "${values.name}" created`);
     onOpenChange(false);
     form.reset();
-    router.refresh();
   }
 
   return (
