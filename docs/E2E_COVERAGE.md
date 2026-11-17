@@ -362,6 +362,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Approvals and locks
 
 - [x] An approved week cannot be edited by its member (tracker row, timesheet cell, an import) — `approvals.spec.ts` › "an approved week cannot be edited by its member"
+- [x] An empty cell in an approved week is read-only too — `approvals.spec.ts` › "an approved week cannot be edited by its member"
+- [x] A locked row's menu disables Duplicate, Split and Delete and says why — `approvals.spec.ts` › "an approved week cannot be edited by its member"
 - [x] Submit a week, withdraw it, and resubmit it after a rejection whose note is shown — `approvals.spec.ts` › "submit, withdraw and resubmit after a rejection"
 - [x] Approve several periods at once from the Pending tab; they move to the Archive — `approvals.spec.ts` › "bulk approve from the Pending tab"
 - [x] Approvers get the "submitted" email and the member the decision — `approvals.spec.ts` › "approval emails reach approvers and the member"

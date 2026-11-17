@@ -11,6 +11,9 @@ export const trackerKeys = {
   /** Under the `entries` prefix, so one invalidation refreshes the list, the grid and the calendar. */
   range: (slug: string, from: string, to: string, userId = "me") =>
     ["tracker", slug, "entries", userId, "range", from, to] as const,
+  /** The days closed to new time (lock date, submitted periods); under `entries` too. */
+  lockedDays: (slug: string, from: string, to: string, userId = "me") =>
+    ["tracker", slug, "entries", userId, "locked-days", from, to] as const,
   allOptions: (slug: string) => ["tracker", slug, "options"] as const,
   options: (slug: string, userId = "me") => ["tracker", slug, "options", userId] as const,
   people: (slug: string) => ["tracker", slug, "people"] as const,
@@ -139,6 +142,8 @@ export const trackerUrls = {
   running: (slug: string) => `/api/w/${slug}/time-entries/running`,
   range: (slug: string, from: string, to: string, userId = "me") =>
     `/api/w/${slug}/time-entries/range?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${forUser(userId, false)}`,
+  lockedDays: (slug: string, from: string, to: string, userId = "me") =>
+    `/api/w/${slug}/time-entries/locked-days?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${forUser(userId, false)}`,
   options: (slug: string, userId = "me") =>
     `/api/w/${slug}/tracker-options${forUser(userId, true)}`,
   people: (slug: string) => `/api/w/${slug}/people`,

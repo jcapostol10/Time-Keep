@@ -27,6 +27,20 @@ export function useRangeEntries(
   });
 }
 
+/** Why each day of [from, to) is closed to new time for the person shown; `{}` for owners and admins. */
+export function useLockedDays(slug: string, from: string, to: string, userId = "me") {
+  return useQuery({
+    queryKey: trackerKeys.lockedDays(slug, from, to, userId),
+    queryFn: async () =>
+      (
+        await fetchJson<{ days: Record<string, string> }>(
+          trackerUrls.lockedDays(slug, from, to, userId),
+        )
+      ).days,
+    staleTime: 30_000,
+  });
+}
+
 export function useTemplates(slug: string) {
   return useQuery({
     queryKey: trackerKeys.templates(slug),

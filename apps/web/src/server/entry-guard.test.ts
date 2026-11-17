@@ -13,7 +13,7 @@ import {
   timeEntry,
   workspaceSettings,
 } from "@timekeep/db";
-import { taskInputSchema } from "@timekeep/core";
+import { DEFAULT_REPORT_QUERY, taskInputSchema, type ViewerPrefs } from "@timekeep/core";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -24,7 +24,9 @@ import {
   truncateAll,
 } from "../../test/db";
 import { loadViewer, scopeForUser } from "./authz";
+import { APPROVED_MESSAGE, lockedDays, PENDING_MESSAGE } from "./entry-guard";
 import { timerLock } from "./person-lock";
+import { detailedReport } from "./reports";
 import { createProject, deleteProject, updateProject } from "./catalog/projects";
 import { createTag, deleteTag } from "./catalog/tags";
 import { createTask, deleteTask } from "./catalog/tasks";
@@ -241,6 +243,61 @@ describe.each(["PENDING", "APPROVED"] as const)("a %s week", (status) => {
     await expect(deleteEntriesOfOwners(db, groups, { note: NOTE })).resolves.toMatchObject({
       deleted: expect.arrayContaining([maxEntry.id, inId]),
     });
+  });
+
+  it("lockedDays gives a member the reason of each day, empty ones included", async () => {
+    const reason = status === "PENDING" ? PENDING_MESSAGE : APPROVED_MESSAGE;
+    const days = await lockedDays(
+      db,
+      await as("bob"),
+      { from: new Date("2026-10-18T16:00:00.000Z"), to: new Date("2026-10-27T16:00:00.000Z") },
+      "Asia/Manila",
+      NOW,
+    );
+    expect(days["2026-10-19"]).toBeDefined();
+    expect(Object.keys(days).sort()).toEqual([
+      "2026-10-19",
+      "2026-10-20",
+      "2026-10-21",
+      "2026-10-22",
+      "2026-10-23",
+      "2026-10-24",
+      "2026-10-25",
+    ]);
+    expect(new Set(Object.values(days))).toEqual(new Set([reason]));
+    expect(
+      await lockedDays(db, await as("ann"), { from: IN.start, to: IN.end }, "Asia/Manila"),
+    ).toEqual({});
+  });
+
+  it("marks the entry read-only, with why, in a manager's Detailed report", async () => {
+    const reason = status === "PENDING" ? PENDING_MESSAGE : APPROVED_MESSAGE;
+    const query = {
+      ...DEFAULT_REPORT_QUERY,
+      preset: "custom" as const,
+      from: "2026-10-18T16:00:00.000Z",
+      to: "2026-10-25T16:00:00.000Z",
+    };
+    const prefs: ViewerPrefs = {
+      timezone: "Asia/Manila",
+      timeFormat: "24h",
+      dateFormat: "yyyy-MM-dd",
+      weekStart: 1,
+      durationFormat: "hh:mm:ss",
+    };
+    const rows = async (who: string) =>
+      (
+        await detailedReport(
+          db,
+          await loadViewer(db, wsId, ids[who]!),
+          query,
+          prefs,
+          { sort: "start", dir: "asc" },
+          NOW,
+        )
+      ).entries.filter((e) => e.id === inId);
+    expect(await rows("max")).toMatchObject([{ editable: false, lockedReason: reason }]);
+    expect(await rows("ann")).toMatchObject([{ editable: true, lockedReason: null }]);
   });
 
   it("logs which entry changed and how", async () => {

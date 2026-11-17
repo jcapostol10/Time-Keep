@@ -79,6 +79,7 @@ import type {
 import { assertCan, scopeFilter } from "./authz";
 import { listFilterClients } from "./catalog/clients";
 import { listPickerProjects } from "./catalog/projects";
+import { lockedReasonsForOwners } from "./entry-guard";
 import { listTagOptions } from "./catalog/tags";
 import type { Viewer } from "./catalog/viewer";
 import { progressForProjects } from "./estimates";
@@ -892,12 +893,15 @@ export async function detailedReport(
     list.push({ id: t.id, name: t.name });
     tagsByEntry.set(t.entryId, list);
   }
+  // Locked or submitted time is read-only to members and managers (Phase 5a).
+  const locked = await lockedReasonsForOwners(db, viewer, pageRows, now);
   const entries: DetailedEntryDTO[] = pageRows.map((r) => {
     const tags = tagsByEntry.get(r.id) ?? [];
     // Invoiced time is read-only for everyone (Phase 6d, decision 23).
     const editable =
       r.ownerStatus === "ACTIVE" &&
       r.invoiceNumber === null &&
+      !locked.has(r.id) &&
       can(viewer.actor, "entry.write", { kind: "entry", userId: r.userId, projectId: r.projectId });
     // The currency its amount was rated in; unrated, its project's client's, else the workspace's.
     const currency = money ? (r.rateCurrency ?? r.clientCurrency ?? money.currency) : null;
@@ -940,6 +944,7 @@ export async function detailedReport(
         }),
       photo: withPhoto.has(r.id),
       invoiceNumber: r.invoiceNumber ?? null,
+      lockedReason: locked.get(r.id) ?? null,
     };
   });
   const last = pageRows[pageRows.length - 1];

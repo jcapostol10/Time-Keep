@@ -3,10 +3,12 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  addDaysInZone,
   approvalRulesOf,
   can,
   formatDateKey,
   localDateKey,
+  zonedDateTimeToInstant,
   lockBoundary,
   lockDateKey,
   type LockRule,
@@ -196,6 +198,60 @@ export async function lockedReasons(
     "Entries",
     now,
   );
+}
+
+/**
+ * Why each day of `[from, to)` (the viewer's days) is closed to the scope's
+ * actor, for cells with no entry yet (backlog ruling R9): a new entry there
+ * would start at 09:00, so the day is judged at that instant. Owners and
+ * admins get none.
+ */
+export async function lockedDays(
+  db: Pick<DbExecutor, "select">,
+  scope: EntryScope,
+  range: { from: Date; to: Date },
+  viewerTimezone: string,
+  now: Date = new Date(),
+): Promise<Record<string, string>> {
+  const actor = scope.actedBy ?? scope.actor;
+  if (can(actor, "approval.editLocked", { kind: "none" })) return {};
+  const { timezone } = await writeRulesOf(db, scope.workspaceId);
+  const items: { id: string; key: string; instant: Date }[] = [];
+  for (let day = range.from; day < range.to; day = addDaysInZone(day, 1, viewerTimezone)) {
+    const dayKey = localDateKey(day, viewerTimezone);
+    const instant = zonedDateTimeToInstant({ date: dayKey, hours: 9, minutes: 0 }, viewerTimezone);
+    items.push({ id: dayKey, key: localDateKey(instant, timezone), instant });
+  }
+  return Object.fromEntries(await lockedReasonsForKeys(db, scope, items, "Entries", now));
+}
+
+/**
+ * `lockedReasons` over the entries of several people, as one viewer edits
+ * them (the Detailed report): each owner's submitted periods, the viewer's
+ * privilege. Owners and admins get none.
+ */
+export async function lockedReasonsForOwners(
+  db: Pick<DbExecutor, "select">,
+  viewer: EntryScope,
+  entries: { id: string; userId: string; start: Date }[],
+  now: Date = new Date(),
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (entries.length === 0 || can(viewer.actor, "approval.editLocked", { kind: "none" })) {
+    return out;
+  }
+  const byOwner = new Map<string, { id: string; start: string }[]>();
+  for (const e of entries) {
+    byOwner.set(e.userId, [
+      ...(byOwner.get(e.userId) ?? []),
+      { id: e.id, start: e.start.toISOString() },
+    ]);
+  }
+  for (const [userId, owned] of byOwner) {
+    const reasons = await lockedReasons(db, { ...viewer, userId }, owned, now);
+    for (const [id, reason] of reasons) out.set(id, reason);
+  }
+  return out;
 }
 
 /** One guarded item: its local date keys before and after the change, and what to log. */

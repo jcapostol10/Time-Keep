@@ -83,11 +83,27 @@ test.describe("approvals and locks", { tag: "@nightly" }, () => {
     await expect(periodGroup(mia.page, last)).toContainText("Approved");
     const day = dayLabel(noonOn(lastWednesday, timezone), timezone);
     await expect(cell(mia.page, "No project · Approved work", day)).toHaveAttribute("readonly", "");
+    // An empty cell of the week too: no new time there.
+    const nextDay = dayLabel(
+      new Date(noonOn(lastWednesday, timezone).getTime() + 86_400_000),
+      timezone,
+    );
+    await expect(cell(mia.page, "No project · Approved work", nextDay)).toHaveValue("");
+    await expect(cell(mia.page, "No project · Approved work", nextDay)).toHaveAttribute(
+      "readonly",
+      "",
+    );
 
-    // The tracker row: every field disabled.
+    // The tracker row: every field disabled, and its menu's writes too.
     await openTracker(mia.page, slug);
     const row = await revealRow(mia.page, "Approved work");
     await expect(row.getByRole("textbox", { name: "Description" })).toBeDisabled();
+    await row.getByRole("button", { name: "More actions" }).click();
+    for (const item of ["Duplicate", "Split…", "Delete"]) {
+      await expect(mia.page.getByRole("menuitem", { name: item })).toBeDisabled();
+    }
+    await expect(mia.page.getByRole("menu")).toContainText("This period is approved.");
+    await mia.page.keyboard.press("Escape");
 
     // A crafted import into the week is refused by the server.
     const csv = `Date,Start,Duration,Description\n${lastWednesday},14:00,1:00,Sneaked in\n`;
