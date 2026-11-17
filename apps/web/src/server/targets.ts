@@ -348,17 +348,18 @@ export async function evaluateTargets(
   let sent = 0;
   for (const window of windows) {
     for (const person of people) {
-      // Not a window that starts before the person joined: those days were not theirs.
-      if (window.from < person.joinedOn) continue;
+      const seconds = work
+        .filter(
+          (w) => w.userId === person.userId && w.dateKey >= window.from && w.dateKey <= window.to,
+        )
+        .reduce((n, w) => n + w.workSeconds, 0);
+      // Days before the person joined were not theirs: no reminder about an empty
+      // one (time they logged there, backdated, still counts).
+      if (window.from < person.joinedOn && seconds === 0) continue;
       for (const assigned of rules.filter((r) => r.period === window.period)) {
         if (!targetApplies(assigned, person)) continue;
         const rule = effective(assigned, person, window);
         if (!rule) continue;
-        const seconds = work
-          .filter(
-            (w) => w.userId === person.userId && w.dateKey >= window.from && w.dateKey <= window.to,
-          )
-          .reduce((n, w) => n + w.workSeconds, 0);
         if (!targetBreached(rule, seconds)) continue;
         const kind = `target:${rule.id}:${person.userId}:${window.from}`;
         const base = {
