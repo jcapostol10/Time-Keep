@@ -24,8 +24,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 - [ ] **b1** The PDF integration test skips when no local Chrome is found, so CI never prints a PDF; install Playwright's Chromium in the CI job.
 - [ ] **b1** The Detailed report's sort is per visit, not in the URL.
 
-- [ ] **b1** `ci.yml` skips its pull_request job for same-repository PRs (the push already ran). GitHub counts a skipped job as a passing required check, so if branch protection is ever added, require the push run's check explicitly. Move this note into CLAUDE.md's Deployment section.
-- [ ] **b1** The suite runs spec files with 3 workers; the demo-account specs are read-mostly (profile.spec renames member2 and restores it). Move the "a new spec that writes to the demo tenant needs checking" note into CLAUDE.md's e2e bullets.
 
 ### b2 — approvals, time off, attendance, targets, kiosks, the daily cron
 
@@ -163,6 +161,8 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] The three-workers note, done 2026-11-17 (backlog cleanup b1): it lives in CLAUDE.md's e2e bullets (a spec that writes to the demo tenant must be checked against the read-mostly demo specs).
+- [x] `ci.yml`'s skipped pull_request job, done 2026-11-17 (backlog cleanup b1): the note lives in CLAUDE.md's Deployment section (require the push run's check if branch protection is added).
 - [x] Tasks by group follow-ups, done 2026-11-17 (backlog cleanup b1): the report filters keep a project whose tasks are all hidden from the member (rule 8 is about tracking, not reading); a project that turns private gives its tasks' groups access in the same transaction (`grantTaskGroupsAccess`, rule 9); a manager who creates a project becomes its manager (`project_member.is_manager`), so the CSV import can create a new project's tasks for them in one go. Ruling: becoming the project's manager also opens approvals of other people's time on it, by the existing project-manager rule; intended, as for any project manager.
 - [x] Client filters, done 2026-11-17 (backlog cleanup b1): `listFilterClients` gives the projects toolbar and every report's filters the live clients of projects the viewer can see (owners and admins every live client); the create and edit dialogs keep the full list.
 - [x] Flaky reassign test, done 2026-11-17 (backlog cleanup b1): the test stamps the entry an hour back before the reassign, so a database clock that steps back a little between transactions cannot fail it; it still fails if the reassign leaves `updated_at` alone.
