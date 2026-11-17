@@ -75,5 +75,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # The PDF tests (reports, invoices) print through headless Chromium and
+      # skip without it; the full browser, so playwright-core's executablePath()
+      # resolves.
+      - name: Install Chromium for the PDF tests
+        run: pnpm --filter @timekeep/web exec playwright install --with-deps chromium
+
       - name: Unit and integration tests
         run: pnpm test
