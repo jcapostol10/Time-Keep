@@ -2,11 +2,17 @@ import type { TimesheetRowKey } from "@timekeep/core";
 
 /**
  * Rows added by hand on the timesheet are kept in local storage per
- * workspace, person shown and week, so they survive a reload (templates are
- * the server-side way to keep rows for every week).
+ * workspace, viewer (another account on the same browser never sees them),
+ * person shown and week, so they survive a reload (templates are the
+ * server-side way to keep rows for every week).
  */
-export function storedRowsKey(slug: string, target: string, weekKey: string): string {
-  return `timekeep:timesheet-rows:${slug}:${target}:${weekKey}`;
+export function storedRowsKey(
+  slug: string,
+  viewerId: string,
+  target: string,
+  weekKey: string,
+): string {
+  return `timekeep:timesheet-rows:${slug}:${viewerId}:${target}:${weekKey}`;
 }
 
 export function serializeRows(rows: TimesheetRowKey[]): string {

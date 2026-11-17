@@ -3,11 +3,14 @@
 import {
   addDaysInZone,
   formatDuration,
+  rowKeyString,
   type Timesheet,
   type TimesheetRow,
   type TimesheetRowKey,
 } from "@timekeep/core";
+import { Button } from "@timekeep/ui/components/button";
 import { cn } from "@timekeep/ui/lib/utils";
+import { XIcon } from "lucide-react";
 import type { KeyboardEvent } from "react";
 
 import type { TimeEntryDTO } from "@/lib/tracker-types";
@@ -62,6 +65,8 @@ export function TimesheetGrid({
   hydrated,
   labelOf,
   onKeepRow,
+  removableRows,
+  onRemoveRow,
   bands = [],
 }: {
   sheet: Timesheet;
@@ -72,6 +77,9 @@ export function TimesheetGrid({
   hydrated: boolean;
   labelOf: (row: TimesheetRow) => string;
   onKeepRow?: (key: TimesheetRowKey) => void;
+  /** Rows added by hand (`rowKeyString`); one with no time can be removed. */
+  removableRows?: ReadonlySet<string>;
+  onRemoveRow?: (key: TimesheetRowKey) => void;
   /** Approved time off and holidays: read-only, never in the totals (decision 8). */
   bands?: TimeOffBand[];
 }) {
@@ -134,7 +142,7 @@ export function TimesheetGrid({
                 <tr key={row.key} className="border-t">
                   <th
                     scope="row"
-                    className="bg-background sticky left-0 z-10 w-56 min-w-56 px-3 py-1.5 text-left font-normal"
+                    className="bg-background sticky left-0 z-10 w-56 min-w-56 px-3 py-1.5 pr-8 text-left font-normal"
                   >
                     <div className="flex items-center gap-2 truncate">
                       {project ? <ColorDot color={project.color} /> : null}
@@ -144,6 +152,20 @@ export function TimesheetGrid({
                       <div className="text-muted-foreground truncate text-xs">
                         {row.description}
                       </div>
+                    ) : null}
+                    {onRemoveRow &&
+                    row.totalSeconds === 0 &&
+                    removableRows?.has(rowKeyString(row)) ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove row ${label}`}
+                        className="absolute right-1 top-1 size-6"
+                        onClick={() => onRemoveRow(row)}
+                      >
+                        <XIcon className="size-3.5" />
+                      </Button>
                     ) : null}
                   </th>
                   {sheet.days.map((day, colIndex) => (

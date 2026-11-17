@@ -161,6 +161,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 - [x] The week's entries show as rows with day, row and grand totals — `timesheet.spec.ts` › "the week's entries show as rows with totals"
 - [x] Typing a duration in an empty cell creates an entry at 09:00 — `timesheet.spec.ts` › "typing in an empty cell creates an entry at 09:00"
+- [x] Enter then Tab while the save is in flight writes one entry, not two — `timesheet.spec.ts` › "Enter then Tab while the save is in flight writes one entry"
 - [x] A second cell on the same day starts after the day's last entry — `timesheet.spec.ts` › "a second cell on the same day starts after the day's last entry"
 - [x] Increasing a cell extends its entry — `timesheet.spec.ts` › "increasing a cell extends its entry"
 - [x] Lowering a cell below its other entries opens the entries list — `timesheet.spec.ts` › "lowering a cell below its other entries opens the list"
@@ -173,6 +174,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Copy last week, rows and time — `timesheet.spec.ts` › "copy last week with time"
 - [x] Save and apply a template — `timesheet.spec.ts` › "save and apply a template"
 - [x] Rows added by hand stay after a reload, for that week only — `timesheet.spec.ts` › "rows added by hand stay after a reload"
+- [x] A row added by hand with no time can be removed — `timesheet.spec.ts` › "a row added by hand can be removed"
 - [x] Move between cells with the keyboard — `timesheet.spec.ts` › "move between cells with the keyboard"
 - [x] Navigate weeks and back to today — `timesheet.spec.ts` › "navigate weeks"
 
@@ -186,6 +188,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Enter or Space on a focused block opens the editor — `calendar.spec.ts` › "open a block with the keyboard"
 - [x] A moved block shows where it was dropped before the save lands — `calendar.spec.ts` › "a moved block stays where it was dropped while saving"
 - [x] A move the server refuses goes back, with an error — `calendar.spec.ts` › "a refused move goes back"
+- [x] A refused move puts back only its own block; a later move keeps its place — `calendar.spec.ts` › "a refused move puts back only its own block"
 - [x] An entry begun the evening before the week is drawn on the week's first day — `calendar.spec.ts` › "an entry that crosses into the week is drawn on its first day"
 - [x] The running timer shows as a growing block — `calendar.spec.ts` › "the running timer shows as a block"
 - [x] Overlapping entries sit side by side — `calendar.spec.ts` › "overlapping entries sit side by side"

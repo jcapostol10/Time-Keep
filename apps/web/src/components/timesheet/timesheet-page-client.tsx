@@ -35,7 +35,16 @@ import { useTimeOffBands } from "../time-off/use-time-off-bands";
 import { useRangeEntries } from "./use-timesheet";
 
 /** The weekly grid page: week navigation, rows the user added by hand, and the toolbar. */
-export function TimesheetPageClient({ from, to }: { from: string; to: string }) {
+export function TimesheetPageClient({
+  from,
+  to,
+  viewerId,
+}: {
+  from: string;
+  to: string;
+  /** Keys the rows kept in this browser, so another account never sees them. */
+  viewerId: string;
+}) {
   const { slug, viewer } = useTracker();
   const canWriteTimes = useCanWriteTimes();
   const target = useTarget();
@@ -56,15 +65,23 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
     localDateKey(addDaysInZone(weekStart, 6, tz), tz),
     targetKey,
   );
-  // Rows added by hand, kept per workspace, person and week (templates keep rows for every week).
+  // Rows added by hand, kept per workspace, viewer, person and week (templates keep rows for every week).
   const [storedRows, setStoredRows] = useLocalStorage<string>(
-    storedRowsKey(slug, targetKey, weekKey),
+    storedRowsKey(slug, viewerId, targetKey, weekKey),
     "",
   );
-  const extraRows = useMemo(
+  const addedRows = useMemo(
     () => parseStoredRows(storedRows, new Set((options?.projects ?? []).map((p) => p.id))),
     [storedRows, options],
   );
+  // A row whose last entry was cleared stays for the visit (per person and week), not stored.
+  const visitKey = `${targetKey}:${weekKey}`;
+  const [keptByVisit, setKeptByVisit] = useState<Record<string, TimesheetRowKey[]>>({});
+  const extraRows = useMemo(
+    () => [...addedRows, ...(keptByVisit[visitKey] ?? [])],
+    [addedRows, keptByVisit, visitKey],
+  );
+  const removable = useMemo(() => new Set(addedRows.map(rowKeyString)), [addedRows]);
   const [adding, setAdding] = useState(false);
   const [copying, setCopying] = useState(false);
 
@@ -81,13 +98,23 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
   function addRows(keys: TimesheetRowKey[]) {
     const present = new Set([...extraRows, ...sheet.rows].map(rowKeyString));
     const fresh = keys.filter((k) => !present.has(rowKeyString(k)));
-    if (fresh.length) setStoredRows(serializeRows([...extraRows, ...fresh]));
+    if (fresh.length) setStoredRows(serializeRows([...addedRows, ...fresh]));
   }
 
-  /** A row whose last entry is being cleared stays, like an added one. */
+  /** A row whose last entry is being cleared stays for the visit, like an added one. */
   function keepRow(key: TimesheetRowKey) {
     if (extraRows.some((k) => rowKeyString(k) === rowKeyString(key))) return;
-    setStoredRows(serializeRows([...extraRows, key]));
+    setKeptByVisit((prev) => ({ ...prev, [visitKey]: [...(prev[visitKey] ?? []), key] }));
+  }
+
+  /** Takes an added row with no time off the sheet (and out of storage). */
+  function removeRow(key: TimesheetRowKey) {
+    const gone = rowKeyString(key);
+    setStoredRows(serializeRows(addedRows.filter((k) => rowKeyString(k) !== gone)));
+    setKeptByVisit((prev) => ({
+      ...prev,
+      [visitKey]: (prev[visitKey] ?? []).filter((k) => rowKeyString(k) !== gone),
+    }));
   }
 
   function goToWeek(anchor: Date | null) {
@@ -159,6 +186,8 @@ export function TimesheetPageClient({ from, to }: { from: string; to: string }) 
         hydrated={hydrated}
         labelOf={(row) => rowLabel(row, names)}
         onKeepRow={keepRow}
+        removableRows={removable}
+        onRemoveRow={removeRow}
         bands={bands}
       />
 

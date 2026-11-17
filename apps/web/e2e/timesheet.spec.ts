@@ -79,6 +79,32 @@ test.describe("timesheet", () => {
     );
   });
 
+  test("Enter then Tab while the save is in flight writes one entry", async ({
+    page,
+    freshUser,
+  }) => {
+    const today = dayLabel(new Date(), freshUser.timezone);
+    await openTimesheet(page, freshUser.slug);
+    await addRow(page, { description: "Once" });
+    // Hold every server action, so the blur lands before the first save does.
+    await page.route("**/*", async (route) => {
+      const action = await route.request().headerValue("next-action");
+      if (route.request().method() === "POST" && action) {
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+      }
+      await route.fallback();
+    });
+    const target = cell(page, "No project · Once", today);
+    await target.click();
+    await target.fill("2");
+    await target.press("Enter");
+    await target.press("Tab");
+    await waitForSaves(page);
+    await page.reload();
+    await expect(page.locator('[role="grid"][data-hydrated="true"]')).toBeVisible();
+    await expect(cell(page, "No project · Once", today)).toHaveValue("2:00:00");
+  });
+
   test("a second cell on the same day starts after the day's last entry", async ({
     page,
     freshUser,
@@ -272,6 +298,18 @@ test.describe("timesheet", () => {
     await page.getByRole("button", { name: "Next week" }).click();
     await expect(page.locator('[role="grid"][data-hydrated="true"]')).toBeVisible();
     await expect(rowTotal(page, "No project · Planning")).toHaveCount(0);
+  });
+
+  test("a row added by hand can be removed", async ({ page, freshUser }) => {
+    await openTimesheet(page, freshUser.slug);
+    await addRow(page, { description: "Typo" });
+    await expect(rowTotal(page, "No project · Typo")).toBeVisible();
+
+    await page.getByRole("button", { name: "Remove row No project · Typo" }).click();
+    await expect(rowTotal(page, "No project · Typo")).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator('[role="grid"][data-hydrated="true"]')).toBeVisible();
+    await expect(rowTotal(page, "No project · Typo")).toHaveCount(0);
   });
 
   test("move between cells with the keyboard", async ({ page, freshUser }) => {

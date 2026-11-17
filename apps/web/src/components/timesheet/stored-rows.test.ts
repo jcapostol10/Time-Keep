@@ -5,16 +5,17 @@ import { parseStoredRows, serializeRows, storedRowsKey } from "./stored-rows";
 const offered = new Set(["p1"]);
 
 describe("stored timesheet rows", () => {
-  it("keys rows by workspace, person and week", () => {
+  it("keys rows by workspace, viewer, person shown and week", () => {
     const keys = new Set([
-      storedRowsKey("acme", "me", "2026-03-09"),
-      storedRowsKey("acme", "me", "2026-03-16"),
-      storedRowsKey("acme", "u2", "2026-03-09"),
-      storedRowsKey("other", "me", "2026-03-09"),
+      storedRowsKey("acme", "v1", "me", "2026-03-09"),
+      storedRowsKey("acme", "v1", "me", "2026-03-16"),
+      storedRowsKey("acme", "v1", "u2", "2026-03-09"),
+      storedRowsKey("acme", "v2", "me", "2026-03-09"),
+      storedRowsKey("other", "v1", "me", "2026-03-09"),
     ]);
-    expect(keys.size).toBe(4);
-    expect(storedRowsKey("acme", "me", "2026-03-09")).toBe(
-      "timekeep:timesheet-rows:acme:me:2026-03-09",
+    expect(keys.size).toBe(5);
+    expect(storedRowsKey("acme", "v1", "me", "2026-03-09")).toBe(
+      "timekeep:timesheet-rows:acme:v1:me:2026-03-09",
     );
   });
 
