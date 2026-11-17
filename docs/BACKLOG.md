@@ -27,7 +27,6 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 
 ### b2 — approvals, time off, attendance, targets, kiosks, the daily cron
 
-- [ ] **b2** Phase 5a: auth (verification, reset, magic link) and invitation emails are still sent inside the request; move them to the outbox (`enqueueEmail` + `drainSoon`).
 
 ### b3 — money: rates, cost, currencies, budgets, expenses, invoices
 
@@ -140,6 +139,7 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] Auth and invitation emails in the request, closed by ruling 2026-11-17 (backlog cleanup b2, R1): they stay in the request. Through the outbox they would retry after their links expire (magic link 15 minutes, verification and reset an hour; retries at 30 and 120 minutes), store live tokens in plain HTML, and lose the per-address "failed" the invites and the user import show; Better Auth already logs and swallows a verification or reset send failure.
 - [x] A web-level test with the viewer's zone unlike the workspace's, done 2026-11-17 (backlog cleanup b2): e2e "a member in another time zone submits the workspace's week" (half a day apart) passes; its coverage line stays unticked, since no single break of the period code models the viewer's zone.
 - [x] Timezone change with approved periods, done 2026-11-17 (backlog cleanup b2, rulings 5 and R7): still allowed, after the settings page says how many approved periods move and asks (`confirmTimezoneChange`); a week start change asks the same.
 - [x] Phase 5b review minors, done 2026-11-17 (backlog cleanup b2): target reminders skip days before the person joined and read only this run's outbox kinds (see the hourly cron); an HOURS request over days with no working day is refused; saving a holiday clears Estimated; members get holidays without their people and groups; the Attendance tab (page, route, export) needs the Reports page too; the time-off group lookups are scoped by workspace; `requestTimeOff` asks for approvers on its transaction; Attendance and the target job read two days either side; the preview answers an unavailable policy in words; approval re-checks the balance under the people's locks (R6).
