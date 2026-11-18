@@ -307,6 +307,31 @@ describe("currency relabels", () => {
     }
   });
 
+  it("a stale edit cannot move a project back over a move that just committed", async () => {
+    const other = connectTestDb();
+    try {
+      let edit: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // Another request is moving Us to Globex (EUR) and holds the currency lock.
+        await tx.execute(currencyLock(wsId));
+        // Meanwhile a tab that still shows Acme saves the project with the client it knows.
+        edit = updateProject(other.db, owner, ids.Us!, { name: "Us", clientId: ids.Acme! });
+        edit.catch(() => undefined);
+        await new Promise((r) => setTimeout(r, 400));
+        await tx.update(project).set({ clientId: ids.Globex! }).where(eq(project.id, ids.Us!));
+      });
+      // Under the lock the project is Globex's: sending Acme is a move, and it asks first.
+      await expect(edit).rejects.toMatchObject({ code: "CONFIRM" });
+      const [row] = await db
+        .select({ clientId: project.clientId })
+        .from(project)
+        .where(eq(project.id, ids.Us!));
+      expect(row?.clientId).toBe(ids.Globex);
+    } finally {
+      await other.close();
+    }
+  });
+
   it("moving a project to a client in another currency relabels the project", async () => {
     await expect(
       updateProject(db, owner, ids.Us!, { clientId: ids.Globex! }),

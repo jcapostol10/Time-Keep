@@ -51,7 +51,7 @@ const PURGE_BATCH = 1000;
 
 /**
  * New object keys for a receipt. Every upload gets its own (a version under
- * the expense), so the row always names bytes that match its MIME: a write
+ * the expense's name), so the row always names bytes that match its MIME: a write
  * that fails after the upload leaves the old receipt untouched. Rows saved
  * before this keep `receipts/<ws>/<expense>`; every reader uses the stored key.
  */
@@ -59,7 +59,9 @@ export function newReceiptKeys(
   workspaceId: string,
   expenseId: string,
 ): { file: string; thumb: string } {
-  const file = `receipts/${workspaceId}/${expenseId}/${randomUUID()}`;
+  // A sibling of the old key, not a child: an object store that keeps keys as
+  // paths refuses `a/b/c` while `a/b` is itself an object.
+  const file = `receipts/${workspaceId}/${expenseId}.${randomUUID()}`;
   return { file, thumb: `${file}.thumb.jpg` };
 }
 

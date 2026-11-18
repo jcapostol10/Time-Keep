@@ -592,7 +592,17 @@ export async function updateProject(
       // A move to another client decides what to relabel: read it under the lock.
       if (patch.clientId !== undefined) await tx.execute(currencyLock(viewer.workspaceId));
       let relabelTo: string | null = null;
-      if (patch.clientId !== undefined && patch.clientId !== before.clientId) {
+      // The client the project has now, not the one read before the lock: a move that
+      // committed while this request waited must not be undone by a stale form.
+      let currentClientId = before.clientId;
+      if (patch.clientId !== undefined) {
+        const [now] = await tx
+          .select({ clientId: project.clientId })
+          .from(project)
+          .where(and(eq(project.id, projectId), eq(project.workspaceId, viewer.workspaceId)));
+        if (now) currentClientId = now.clientId;
+      }
+      if (patch.clientId !== undefined && patch.clientId !== currentClientId) {
         // Invoiced time and expenses belong to their client's invoice (Phase 6d): they do not move.
         const [invoicedTime] = await tx
           .select({ id: timeEntry.id })

@@ -187,7 +187,9 @@ describe("buildReceiptsZip", () => {
 
   it("a receipt whose object is gone is named in the manifest; the others still come", async () => {
     const fetch = async (key: string) => {
-      if (key === keyOf[ids.bobs!]) throw new Error("NoSuchKey");
+      if (key === keyOf[ids.bobs!]) {
+        throw Object.assign(new Error("The specified key does not exist."), { name: "NoSuchKey" });
+      }
       return new TextEncoder().encode("pdf bytes");
     };
     const file = buildReceiptsZip(
@@ -205,6 +207,19 @@ describe("buildReceiptsZip", () => {
       .split("\r\n")
       .find((line) => line.includes("airport"));
     expect(taxi?.endsWith(",(missing)")).toBe(true);
+  });
+
+  it("fails on a storage error that is not a missing object, rather than call the receipt missing", async () => {
+    const fetch = async () => {
+      throw new Error("socket hang up");
+    };
+    const file = buildReceiptsZip(
+      db,
+      await viewer("olga"),
+      { query: QUERY, prefs: PREFS, now: NOW },
+      fetch,
+    );
+    await expect(bodyOf(file)).rejects.toThrow("socket hang up");
   });
 
   it("leaves in chunks as it is written: the first file is out before the second is fetched", async () => {

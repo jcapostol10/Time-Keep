@@ -159,8 +159,11 @@ describe("saveReceipt", () => {
     );
     expect(saved.receipt).toEqual({ mime: "image/jpeg", thumb: true });
     const first = await stored(e.id);
-    // A version under the expense, never a key another upload could reuse.
-    expect(first.key).toMatch(new RegExp(`^receipts/${wsId}/${e.id}/[0-9a-f-]{36}$`));
+    // A version beside the expense's old key, never a key another upload could reuse,
+    // and never "under" the old key: some object stores refuse a key whose parent
+    // path is itself an object.
+    expect(first.key).toMatch(new RegExp(`^receipts/${wsId}/${e.id}\\.[0-9a-f-]{36}$`));
+    expect(first.key?.startsWith(`receipts/${wsId}/${e.id}/`)).toBe(false);
     expect(first.thumb).toBe(`${first.key}.thumb.jpg`);
     expect(store.uploads.map((u) => [u.key, u.contentType])).toEqual([
       [first.key, "image/jpeg"],

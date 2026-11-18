@@ -99,6 +99,16 @@ async function* expensePages(
   } while (cursor);
 }
 
+/** The limits of a zip without ZIP64, with room for the manifest. */
+const MAX_ENTRIES = 65_000;
+const MAX_BYTES = 4_000_000_000;
+
+/** S3's "no such object", as the SDK reports it. */
+function isMissingObject(error: unknown): boolean {
+  const e = error as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
+  return e?.name === "NoSuchKey" || e?.name === "NotFound" || e?.$metadata?.httpStatusCode === 404;
+}
+
 /** What the manifest says in place of a file name when the receipt's object is gone. */
 export const MISSING_RECEIPT = "(missing)";
 
@@ -136,6 +146,7 @@ export function buildReceiptsZip(
 
     const rows: (ExpenseDTO & { file: string })[] = [];
     let currency = "";
+    let bytes = 0;
     for await (const page of expensePages(db, viewer, { ...req, now })) {
       currency = page.currency;
       for (const e of page.expenses) {
@@ -148,10 +159,18 @@ export function buildReceiptsZip(
         try {
           data = await fetch(key);
         } catch (error) {
-          // One lost object does not cost the person every other receipt.
+          // One lost object does not cost the person every other receipt. Anything
+          // else (a timeout, throttling, credentials) fails the job: a zip that calls
+          // receipts missing when they are only unreachable would read as complete.
+          if (!isMissingObject(error)) throw error;
           console.error("[receipts] missing object", key, error);
           rows.push({ ...e, file: MISSING_RECEIPT });
           continue;
+        }
+        // This writer has no ZIP64: past these the archive would be corrupt, silently.
+        bytes += data.byteLength;
+        if (count + 1 > MAX_ENTRIES || bytes > MAX_BYTES) {
+          throw new Error("Too many receipts for one zip: narrow the date range.");
         }
         const name = receiptFileName(e);
         add(name, data);

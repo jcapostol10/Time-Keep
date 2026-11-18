@@ -227,6 +227,20 @@ describe("recurring invoices", () => {
 });
 
 describe("recurring invoices, when something goes wrong", () => {
+  it("a weekly template catches up one week, not a month of them", async () => {
+    // Started long ago and not run for weeks (paused, or the job was down).
+    await createRecurring(
+      db,
+      owner,
+      template({ schedule: "WEEKLY", weekday: 1, dayOfMonth: null, startDate: "2026-09-28" }),
+      NOW,
+    );
+    expect(await run("2026-11-02")).toEqual({ created: 1, sent: 0 });
+    expect((await invoices(noon("2026-11-02"))).map((i) => i.periodKey)).toEqual(["2026-10-26"]);
+    // A run two days late still bills that week.
+    expect(await run("2026-11-11")).toEqual({ created: 1, sent: 0 });
+  });
+
   it("a day the job missed is caught up within 31 days, and no further", async () => {
     await createRecurring(db, owner, template({ dayOfMonth: 1 }), NOW);
     // The 1st was missed; the 4th still bills January, once.

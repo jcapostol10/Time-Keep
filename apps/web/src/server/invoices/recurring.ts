@@ -284,16 +284,19 @@ async function runAs(db: Database, workspaceId: string, createdBy: string | null
 }
 
 /**
- * A run the job missed is caught up for this many days (ruling 13): any monthly
- * template after an outage of up to a month. Older periods are not back-filled.
+ * A run the job missed is caught up for one cycle of the template: 31 days for
+ * a monthly one (ruling 13: any monthly template after an outage of up to a
+ * month), 7 for a weekly one. One cycle, so a template paused for weeks and
+ * switched on again bills its latest period, not every one it skipped. Older
+ * periods are not back-filled.
  */
-const CATCH_UP_DAYS = 31;
+const CATCH_UP_DAYS = { MONTHLY: 31, WEEKLY: 7 } as const;
 
-/** The periods due over the last 31 days up to today, oldest first, each once. */
+/** The periods due over the template's catch-up window up to today, oldest first, each once. */
 function duePeriods(t: RecurringInvoice, today: string) {
   const schedule = scheduleOf(t);
   const seen = new Map<string, NonNullable<ReturnType<typeof recurringDue>>>();
-  for (let i = CATCH_UP_DAYS - 1; i >= 0; i--) {
+  for (let i = CATCH_UP_DAYS[schedule.kind] - 1; i >= 0; i--) {
     const due = recurringDue(schedule, addDaysToKey(today, -i));
     if (due && !seen.has(due.periodKey)) seen.set(due.periodKey, due);
   }

@@ -480,6 +480,7 @@ Rulings made while building branch 1, beyond the design:
 - **Invoices:**
   - The PDF prints before the send transaction; an invoice edited meanwhile is refused.
   - The owners and admins hear when a client's invoice email cannot be delivered.
-  - A 31-day recurring catch-up, bounded amounts, notes frozen at send, dates read when a dialog opens.
+  - A recurring catch-up of one cycle (31 days monthly, 7 weekly), bounded amounts, notes frozen at send, dates read when a dialog opens.
 - **Perf (local, 1,000,000 entries):** see `DATA_MODEL.md`; a workspace currency relabel takes 32 s.
+- **Final review (2026-11-18):** four findings fixed in one pass: a stale project edit could undo a client move that had just committed (the client is now re-read under the currency lock); receipt keys sat under the old key's name; a weekly template caught up a month of weeks; the zip called any storage error a missing receipt. The minors are in `BACKLOG.md`.
 - **Rulings:** R-A to R-H in the plan; the follow-ups are in `BACKLOG.md`.
