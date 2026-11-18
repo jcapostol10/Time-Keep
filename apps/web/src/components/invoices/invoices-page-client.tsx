@@ -25,13 +25,14 @@ export function InvoicesPageClient({
   slug,
   tab,
   clients,
-  today,
+  timezone,
   currency,
 }: {
   slug: string;
   tab: InvoicesTab;
   clients: { id: string; name: string }[];
-  today: string;
+  /** The workspace timezone: a dialog reads today's date when it opens, not when the page loaded. */
+  timezone: string;
   currency: string;
 }) {
   const [creating, setCreating] = useState(false);
@@ -60,7 +61,7 @@ export function InvoicesPageClient({
         ))}
       </nav>
       {tab === "recurring" ? (
-        <RecurringTab slug={slug} clients={clients} today={today} currency={currency} />
+        <RecurringTab slug={slug} clients={clients} timezone={timezone} currency={currency} />
       ) : tab === "settings" ? (
         <InvoiceSettingsTab slug={slug} />
       ) : (
@@ -70,7 +71,7 @@ export function InvoicesPageClient({
         <NewInvoiceDialog
           slug={slug}
           clients={clients}
-          today={today}
+          timezone={timezone}
           onClose={() => setCreating(false)}
         />
       ) : null}

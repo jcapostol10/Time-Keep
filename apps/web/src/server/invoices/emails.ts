@@ -63,6 +63,22 @@ export function invoiceOverdueEmail(b: {
   };
 }
 
+/** To the owners and admins, once, when the client's email of a sent invoice could not be delivered. */
+export function invoiceSendFailedEmail(b: {
+  appUrl: string;
+  slug: string;
+  invoiceId: string;
+  number: string;
+  clientName: string;
+}): Email {
+  return {
+    subject: `${b.number} could not be emailed to ${b.clientName}`,
+    title: `${b.number} was not delivered`,
+    intro: `The invoice ${b.number} is marked as sent, but its email to ${b.clientName} could not be delivered after several tries. Check the client's email address, then send them the invoice's link or PDF yourself.`,
+    cta: { label: "Open invoice", url: `${b.appUrl}/w/${b.slug}/invoices/${b.invoiceId}` },
+  };
+}
+
 /** To the owners and admins, once per template and period, when a recurring template could not run. */
 export function recurringFailedEmail(b: {
   appUrl: string;
@@ -75,7 +91,7 @@ export function recurringFailedEmail(b: {
   return {
     subject: `${b.templateName}: the recurring invoice could not be created`,
     title: "A recurring invoice was not created",
-    intro: `The recurring invoice "${b.templateName}" for ${b.clientName} could not be created: ${b.reason} The daily job tries again for a week; fix the template or create the invoice by hand.`,
+    intro: `The recurring invoice "${b.templateName}" for ${b.clientName} could not be created: ${b.reason} The daily job tries again for a month; fix the template or create the invoice by hand.`,
     cta: {
       label: "Open recurring invoices",
       url: `${b.appUrl}/w/${b.slug}/invoices?tab=recurring`,

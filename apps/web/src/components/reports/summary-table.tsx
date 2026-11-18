@@ -54,10 +54,10 @@ export function SummaryTable({
   const costCells = (t: ReportTotals) =>
     money && costs ? (
       <>
-        <TableCell className="hidden text-right tabular-nums sm:table-cell">
+        <TableCell className="text-right tabular-nums">
           {formatMoney(t.costMinor, money.currency)}
         </TableCell>
-        <TableCell className="hidden text-right tabular-nums sm:table-cell">
+        <TableCell className="text-right tabular-nums">
           {hasProfit(t) ? formatMoney(t.profitMinor, money.currency) : "—"}
         </TableCell>
       </>
@@ -159,8 +159,8 @@ export function SummaryTable({
             {money ? <TableHead className="text-right">Amount</TableHead> : null}
             {costs ? (
               <>
-                <TableHead className="hidden text-right sm:table-cell">Cost</TableHead>
-                <TableHead className="hidden text-right sm:table-cell">Profit</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                <TableHead className="text-right">Profit</TableHead>
               </>
             ) : null}
           </TableRow>

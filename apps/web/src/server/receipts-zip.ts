@@ -11,21 +11,22 @@ import {
   type ViewerPrefs,
 } from "@timekeep/core";
 import type { Database } from "@timekeep/db";
-import { zipSync, type Zippable } from "fflate";
+import { Zip, ZipPassThrough } from "fflate";
 
 import type { ExpenseDTO } from "@/lib/expense-types";
 
 import type { Viewer } from "./catalog/viewer";
-import { receiptKeys } from "./expense-receipts";
-import { listExpenses } from "./expenses";
-import { type ExportFile, exportFilename } from "./report-files";
+import { listExpenses, receiptKeysOf } from "./expenses";
+import { exportFilename, type StreamedExportFile } from "./report-files";
 import { getExport } from "./storage";
 
 /**
  * "Download receipts" (Phase 6c decision 18): every receipt of the expenses
  * the viewer may see for the query, zipped with a manifest, always as an
- * export job (the files are fetched one by one from the private bucket).
- * Receipts are stored already compressed, so they go in uncompressed.
+ * export job. It is never held whole: the receipts are fetched one page of
+ * expenses at a time, one file at a time, and the zip leaves in chunks as it
+ * is written. Receipts are stored already compressed, so they go in as they
+ * are. A receipt whose object is missing is named in the manifest and skipped.
  */
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
@@ -72,14 +73,12 @@ function manifestColumns(currency: string): ExportColumn<ExpenseDTO & { file: st
   ];
 }
 
-/** Every expense of the query the viewer may see, over every page. */
-async function allExpenses(
+/** The expenses of the query the viewer may see, a page at a time, each with its receipt's key. */
+async function* expensePages(
   db: Executor,
   viewer: Viewer,
   req: ReceiptsZipRequest,
-): Promise<{ expenses: ExpenseDTO[]; currency: string }> {
-  const out: ExpenseDTO[] = [];
-  let currency = "";
+): AsyncGenerator<{ expenses: ExpenseDTO[]; keys: Map<string, string>; currency: string }> {
   let cursor: string | undefined;
   do {
     const page = await listExpenses(
@@ -90,40 +89,105 @@ async function allExpenses(
       { cursor, limit: PAGE },
       req.now,
     );
-    out.push(...page.expenses);
-    currency = page.currency;
+    const keys = await receiptKeysOf(
+      db,
+      viewer.workspaceId,
+      page.expenses.filter((e) => e.receipt).map((e) => e.id),
+    );
+    yield { expenses: page.expenses, keys, currency: page.currency };
     cursor = page.nextCursor ?? undefined;
   } while (cursor);
-  return { expenses: out, currency };
 }
 
-export async function buildReceiptsZip(
+/** The limits of a zip without ZIP64, with room for the manifest. */
+const MAX_ENTRIES = 65_000;
+const MAX_BYTES = 4_000_000_000;
+
+/** S3's "no such object", as the SDK reports it. */
+function isMissingObject(error: unknown): boolean {
+  const e = error as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
+  return e?.name === "NoSuchKey" || e?.name === "NotFound" || e?.$metadata?.httpStatusCode === 404;
+}
+
+/** What the manifest says in place of a file name when the receipt's object is gone. */
+export const MISSING_RECEIPT = "(missing)";
+
+export function buildReceiptsZip(
   db: Executor,
   viewer: Viewer,
   req: ReceiptsZipRequest,
   fetch: (key: string) => Promise<Uint8Array> = getExport,
-): Promise<ExportFile> {
+): StreamedExportFile {
   const now = req.now ?? new Date();
   const range = resolveReportRange(req.query, req.prefs, now);
-  const { expenses, currency } = await allExpenses(db, viewer, { ...req, now });
-  const files: Zippable = {};
-  const rows: (ExpenseDTO & { file: string })[] = [];
   let count = 0;
-  for (const e of expenses) {
-    if (!e.receipt) {
-      rows.push({ ...e, file: "" });
-      continue;
+
+  async function* chunks(): AsyncGenerator<Uint8Array> {
+    // fflate hands each piece of the archive to this callback as soon as it is
+    // written; pass-through entries are written synchronously, so the queue is
+    // drained after every file.
+    let queue: Uint8Array[] = [];
+    let failure: Error | null = null;
+    const zip = new Zip((error, chunk) => {
+      if (error) failure = error;
+      else queue.push(chunk);
+    });
+    const add = (name: string, data: Uint8Array) => {
+      const entry = new ZipPassThrough(name);
+      zip.add(entry);
+      entry.push(data, true);
+    };
+    function* drain(): Generator<Uint8Array> {
+      if (failure) throw failure;
+      const out = queue;
+      queue = [];
+      yield* out;
     }
-    const name = receiptFileName(e);
-    files[name] = [await fetch(receiptKeys(viewer.workspaceId, e.id).file), { level: 0 }];
-    rows.push({ ...e, file: name });
-    count++;
+
+    const rows: (ExpenseDTO & { file: string })[] = [];
+    let currency = "";
+    let bytes = 0;
+    for await (const page of expensePages(db, viewer, { ...req, now })) {
+      currency = page.currency;
+      for (const e of page.expenses) {
+        const key = page.keys.get(e.id);
+        if (!e.receipt || !key) {
+          rows.push({ ...e, file: "" });
+          continue;
+        }
+        let data: Uint8Array;
+        try {
+          data = await fetch(key);
+        } catch (error) {
+          // One lost object does not cost the person every other receipt. Anything
+          // else (a timeout, throttling, credentials) fails the job: a zip that calls
+          // receipts missing when they are only unreachable would read as complete.
+          if (!isMissingObject(error)) throw error;
+          console.error("[receipts] missing object", key, error);
+          rows.push({ ...e, file: MISSING_RECEIPT });
+          continue;
+        }
+        // This writer has no ZIP64: past these the archive would be corrupt, silently.
+        bytes += data.byteLength;
+        if (count + 1 > MAX_ENTRIES || bytes > MAX_BYTES) {
+          throw new Error("Too many receipts for one zip: narrow the date range.");
+        }
+        const name = receiptFileName(e);
+        add(name, data);
+        rows.push({ ...e, file: name });
+        count++;
+        yield* drain();
+      }
+    }
+    add("expenses.csv", new TextEncoder().encode(toCsv(rows, manifestColumns(currency))));
+    zip.end();
+    yield* drain();
   }
-  files["expenses.csv"] = new TextEncoder().encode(toCsv(rows, manifestColumns(currency)));
+
   return {
     filename: exportFilename("receipts", range, req.prefs.timezone, "zip"),
     contentType: "application/zip",
-    body: zipSync(files),
-    rowCount: count,
+    chunks: chunks(),
+    rowCount: () => count,
   };
 }

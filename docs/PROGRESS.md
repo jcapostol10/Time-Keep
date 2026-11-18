@@ -461,3 +461,26 @@ Rulings made while building branch 1, beyond the design:
 - **R8:** assignment stays the rule for time-off policies.
 - **R9:** a `lockedDays` read.
 - **Untested changes:** a few have no failing test. These are the workspace scoping of group lookups, the ±2-day windows, the Attendance Reports gate, the preview message and the QR error narrowing. Each is recorded in the ledger.
+
+### Branch 3: money: rates, cost, currencies, budgets, expenses, invoices (migration 0023; plan `docs/superpowers/plans/2026-11-18-backlog-3.md`)
+
+- **Migration 0023 (additive):** `rate_recalc_job.kinds` and `captured_email.attachments`.
+- **Rates and currencies:**
+  - A recalculation re-rates only the kinds it was asked for.
+  - One static ISO 4217 list with a searchable picker.
+  - Currency decisions are made under `currencyLock`, inside the transaction that writes them.
+- **Reports and budgets:**
+  - A zero in another currency keeps its currency; Cost and Profit show at every width.
+  - The Budget chart ends on the bar's number; `hasRates` counts only rates that can apply.
+  - Exports and the Profit tab skip the budget progress read.
+- **Expenses:**
+  - Receipts get a key per upload, a lighter read, a 30-day purge and a zip that streams.
+  - A period with only expenses is unsubmitted too.
+  - The dialog asks for a note once and offers the right person's projects.
+- **Invoices:**
+  - The PDF prints before the send transaction; an invoice edited meanwhile is refused.
+  - The owners and admins hear when a client's invoice email cannot be delivered.
+  - A recurring catch-up of one cycle (31 days monthly, 7 weekly), bounded amounts, notes frozen at send, dates read when a dialog opens.
+- **Perf (local, 1,000,000 entries):** see `DATA_MODEL.md`; a workspace currency relabel takes 32 s.
+- **Final review (2026-11-18):** four findings fixed in one pass: a stale project edit could undo a client move that had just committed (the client is now re-read under the currency lock); receipt keys sat under the old key's name; a weekly template caught up a month of weeks; the zip called any storage error a missing receipt. The minors are in `BACKLOG.md`.
+- **Rulings:** R-A to R-H in the plan; the follow-ups are in `BACKLOG.md`.

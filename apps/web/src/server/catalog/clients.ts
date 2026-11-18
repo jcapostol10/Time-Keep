@@ -24,6 +24,7 @@ import type { ClientDTO } from "@/lib/catalog-types";
 
 import { projectsHaveRates, relabelProjectsCurrency } from "../rates";
 import { type Viewer, visibleProjectFilter } from "./viewer";
+import { currencyLock } from "../currency-lock";
 import { CatalogError, isUniqueViolation } from "./errors";
 
 type Executor = Pick<Database, "query" | "select" | "insert" | "update" | "delete" | "execute">;
@@ -42,7 +43,17 @@ async function projectCounts(db: Executor, workspaceId: string): Promise<Map<str
   return new Map(rows.flatMap((r) => (r.clientId ? [[r.clientId, r.n] as const] : [])));
 }
 
-function toDTO(row: Client, counts: Map<string, number>): ClientDTO {
+/** The clients with an invoice that is not void: their currency cannot change. */
+async function invoicedClients(db: Executor, workspaceId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ clientId: invoice.clientId })
+    .from(invoice)
+    .where(and(eq(invoice.workspaceId, workspaceId), ne(invoice.status, "VOID")))
+    .groupBy(invoice.clientId);
+  return new Set(rows.map((r) => r.clientId));
+}
+
+function toDTO(row: Client, counts: Map<string, number>, invoiced: Set<string>): ClientDTO {
   return {
     id: row.id,
     name: row.name,
@@ -52,6 +63,7 @@ function toDTO(row: Client, counts: Map<string, number>): ClientDTO {
     currency: row.currency,
     archived: row.archived,
     projectCount: counts.get(row.id) ?? 0,
+    hasInvoices: invoiced.has(row.id),
   };
 }
 
@@ -84,8 +96,11 @@ export async function listClients(
     ),
     orderBy: asc(client.name),
   });
-  const counts = await projectCounts(db, workspaceId);
-  return rows.map((r) => toDTO(r, counts));
+  const [counts, invoiced] = await Promise.all([
+    projectCounts(db, workspaceId),
+    invoicedClients(db, workspaceId),
+  ]);
+  return rows.map((r) => toDTO(r, counts, invoiced));
 }
 
 /** Every client, for selects: the project dialog hides archived ones unless already chosen. */
@@ -147,7 +162,7 @@ export async function createClient(
     }
     throw error;
   }
-  return toDTO(await findOwned(db, workspaceId, id), new Map());
+  return toDTO(await findOwned(db, workspaceId, id), new Map(), new Set());
 }
 
 /** The workspace's currency, which a client without one of its own follows. */
@@ -175,50 +190,52 @@ export async function updateClient(
   patch: Partial<ClientInput> & { archived?: boolean },
   options: { confirmCurrencyChange?: boolean } = {},
 ): Promise<ClientDTO> {
-  const before = await findOwned(db, workspaceId, id);
-  let relabel: { projectIds: string[]; to: string } | null = null;
-  if (patch.currency !== undefined && patch.currency !== before.currency) {
-    const base = await workspaceCurrency(db, workspaceId);
-    const to = entryCurrency(patch.currency, base);
-    const from = entryCurrency(before.currency, base);
-    if (to !== from) {
-      // An invoice keeps its currency for good (Phase 6d, decision 20): relabelling the
-      // client under it would make the invoice and its time disagree.
-      const [invoiced] = await db
-        .select({ id: invoice.id })
-        .from(invoice)
-        .where(
-          and(
-            eq(invoice.workspaceId, workspaceId),
-            eq(invoice.clientId, id),
-            ne(invoice.status, "VOID"),
-          ),
-        )
-        .limit(1);
-      if (invoiced) {
-        throw new CatalogError(
-          "CONFLICT",
-          `This client has invoices in ${from}; its currency cannot change.`,
-        );
-      }
-      const projects = await db
-        .select({ id: project.id })
-        .from(project)
-        .where(and(eq(project.workspaceId, workspaceId), eq(project.clientId, id)));
-      const projectIds = projects.map((p) => p.id);
-      if (await projectsHaveRates(db, workspaceId, projectIds)) {
-        if (!options.confirmCurrencyChange) {
-          throw new CatalogError(
-            "CONFIRM",
-            `Rates and amounts on this client's projects will show in ${to}; they are not converted.`,
-          );
-        }
-        relabel = { projectIds, to };
-      }
-    }
-  }
   try {
     await db.transaction(async (tx) => {
+      // The decision is read under the lock, so it holds until the write commits.
+      if (patch.currency !== undefined) await tx.execute(currencyLock(workspaceId));
+      const before = await findOwned(tx, workspaceId, id);
+      let relabel: { projectIds: string[]; to: string } | null = null;
+      if (patch.currency !== undefined && patch.currency !== before.currency) {
+        const base = await workspaceCurrency(tx, workspaceId);
+        const to = entryCurrency(patch.currency, base);
+        const from = entryCurrency(before.currency, base);
+        if (to !== from) {
+          // An invoice keeps its currency for good (Phase 6d, decision 20): relabelling the
+          // client under it would make the invoice and its time disagree.
+          const [invoiced] = await tx
+            .select({ id: invoice.id })
+            .from(invoice)
+            .where(
+              and(
+                eq(invoice.workspaceId, workspaceId),
+                eq(invoice.clientId, id),
+                ne(invoice.status, "VOID"),
+              ),
+            )
+            .limit(1);
+          if (invoiced) {
+            throw new CatalogError(
+              "CONFLICT",
+              `This client has invoices in ${from}; its currency cannot change.`,
+            );
+          }
+          const projects = await tx
+            .select({ id: project.id })
+            .from(project)
+            .where(and(eq(project.workspaceId, workspaceId), eq(project.clientId, id)));
+          const projectIds = projects.map((p) => p.id);
+          if (await projectsHaveRates(tx, workspaceId, projectIds)) {
+            if (!options.confirmCurrencyChange) {
+              throw new CatalogError(
+                "CONFIRM",
+                `Rates and amounts on this client's projects will show in ${to}; they are not converted.`,
+              );
+            }
+            relabel = { projectIds, to };
+          }
+        }
+      }
       await tx
         .update(client)
         .set({
@@ -238,7 +255,11 @@ export async function updateClient(
     }
     throw error;
   }
-  return toDTO(await findOwned(db, workspaceId, id), await projectCounts(db, workspaceId));
+  return toDTO(
+    await findOwned(db, workspaceId, id),
+    await projectCounts(db, workspaceId),
+    await invoicedClients(db, workspaceId),
+  );
 }
 
 /** Deletes a client that has no projects; otherwise IN_USE. */

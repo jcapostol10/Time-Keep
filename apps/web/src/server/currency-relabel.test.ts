@@ -20,8 +20,9 @@ import {
   truncateAll,
 } from "../../test/db";
 import { loadViewer } from "./authz";
+import { currencyLock } from "./currency-lock";
 import { createClient, updateClient } from "./catalog/clients";
-import { createProject, updateProject } from "./catalog/projects";
+import { createProject, deleteProject, updateProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { requestRateRecalc, runRateRecalcJob } from "./rate-recalc";
 import { relabelWorkspaceCurrency, setRate } from "./rates";
@@ -246,6 +247,89 @@ describe("currency relabels", () => {
     await updateClient(db, wsId, ids.Acme!, { notes: "Net 30" });
     expect(await rates()).toEqual(BEFORE_RATES);
     expect(await entries()).toEqual(BEFORE_ENTRIES);
+  });
+
+  it("deleting a project re-rates the entries it moves in their new project's currency", async () => {
+    const costOf = async (name: string) =>
+      (
+        await db
+          .select({ rate: timeEntry.costRateMinor, amount: timeEntry.costAmountMinor })
+          .from(timeEntry)
+          .where(eq(timeEntry.id, entryOf[name]!))
+      )[0];
+    // On Us the cost came from the project-member cost rate.
+    expect(await costOf("Us")).toEqual({ rate: 70_000, amount: 70_000 });
+
+    // USD → EUR: the EUR project rate applies; cost falls back to the member's.
+    await deleteProject(db, owner, ids.Us!, { mode: "reassign", projectId: ids.Eu! });
+    expect((await entries()).Us).toEqual(["EUR", 3000, 3000]);
+    expect(await costOf("Us")).toEqual({ rate: 60_000, amount: 60_000 });
+
+    // PHP → a USD project with no USD rate: unrated, never a PHP number read as USD.
+    await deleteProject(db, owner, ids.Home!, { mode: "reassign", projectId: ids.Us2! });
+    expect((await entries()).Home).toEqual([null, null, null]);
+    expect(await costOf("Home")).toEqual({ rate: 60_000, amount: 60_000 });
+  });
+
+  it("decides on what is committed once it holds the currency lock", async () => {
+    const fresh = await createClient(db, wsId, {
+      name: "Fresh",
+      address: "",
+      email: "",
+      notes: "",
+      currency: null,
+    });
+    const quiet = await createProject(db, owner, { name: "Quiet" });
+    await db.update(project).set({ clientId: fresh.id }).where(eq(project.id, quiet.id));
+    const other = connectTestDb();
+    try {
+      let change: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // Another currency writer is mid-flight: it gives the project a rate.
+        await tx.execute(currencyLock(wsId));
+        change = updateClient(other.db, wsId, fresh.id, { currency: "USD" });
+        change.catch(() => undefined);
+        await new Promise((r) => setTimeout(r, 400));
+        await tx.insert(rate).values({
+          id: randomUUID(),
+          workspaceId: wsId,
+          level: "project",
+          projectId: quiet.id,
+          currency: "PHP",
+          amountMinor: 80_000,
+          effectiveFrom: JAN,
+        });
+      });
+      // The rate committed before the change could look: it must ask first.
+      await expect(change).rejects.toMatchObject({ code: "CONFIRM" });
+    } finally {
+      await other.close();
+    }
+  });
+
+  it("a stale edit cannot move a project back over a move that just committed", async () => {
+    const other = connectTestDb();
+    try {
+      let edit: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // Another request is moving Us to Globex (EUR) and holds the currency lock.
+        await tx.execute(currencyLock(wsId));
+        // Meanwhile a tab that still shows Acme saves the project with the client it knows.
+        edit = updateProject(other.db, owner, ids.Us!, { name: "Us", clientId: ids.Acme! });
+        edit.catch(() => undefined);
+        await new Promise((r) => setTimeout(r, 400));
+        await tx.update(project).set({ clientId: ids.Globex! }).where(eq(project.id, ids.Us!));
+      });
+      // Under the lock the project is Globex's: sending Acme is a move, and it asks first.
+      await expect(edit).rejects.toMatchObject({ code: "CONFIRM" });
+      const [row] = await db
+        .select({ clientId: project.clientId })
+        .from(project)
+        .where(eq(project.id, ids.Us!));
+      expect(row?.clientId).toBe(ids.Globex);
+    } finally {
+      await other.close();
+    }
   });
 
   it("moving a project to a client in another currency relabels the project", async () => {

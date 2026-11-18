@@ -63,6 +63,12 @@ test.describe("cost, profit and currencies", { tag: "@nightly" }, () => {
     await expect(totalRow(page)).toContainText("$30.00");
     await expect(totalRow(page)).toContainText("$20.00");
 
+    // On a phone the notes under the table talk about cost: the columns stay with them.
+    await page.setViewportSize({ width: 375, height: 760 });
+    await expect(page.getByRole("columnheader", { name: "Cost", exact: true })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Profit", exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 1280, height: 720 });
+
     await openReport(page, freshUser.slug, "detailed");
     const row = page.getByRole("row", { name: /Client call/ });
     await expect(row).toContainText("$30.00");

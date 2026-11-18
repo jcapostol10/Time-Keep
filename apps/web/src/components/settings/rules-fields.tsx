@@ -109,6 +109,15 @@ function toggled<T extends string>(list: T[], item: T, on: boolean): T[] {
  * The budget thresholds as one text field ("50, 80, 100"): the typed text is
  * kept while editing, and the parsed numbers go to the form on every change.
  */
+/** The numbers in the text; anything that is not a number makes the whole value invalid. */
+function parseThresholds(text: string): number[] {
+  const parsed = text
+    .split(/[,\s]+/)
+    .filter(Boolean)
+    .map(Number);
+  return parsed.every(Number.isFinite) ? parsed : [Number.NaN];
+}
+
 function ThresholdsInput({
   value,
   onChange,
@@ -119,6 +128,15 @@ function ThresholdsInput({
   invalid: boolean;
 }) {
   const [text, setText] = useState(value.join(", "));
+  // A save normalises the value (sorted, no repeats): show that, not what was typed.
+  // While typing, the value is the text's own numbers and nothing is replaced.
+  const [seen, setSeen] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    const typed = parseThresholds(text);
+    const same = typed.length === value.length && typed.every((n, i) => Object.is(n, value[i]));
+    if (!same) setText(value.join(", "));
+  }
   return (
     <Input
       aria-label="Budget alert thresholds"
@@ -127,11 +145,7 @@ function ThresholdsInput({
       aria-invalid={invalid || undefined}
       onChange={(e) => {
         setText(e.target.value);
-        const parsed = e.target.value
-          .split(/[,\s]+/)
-          .filter(Boolean)
-          .map(Number);
-        onChange(parsed.every(Number.isFinite) ? parsed : [Number.NaN]);
+        onChange(parseThresholds(e.target.value));
       }}
       className="max-w-xs"
     />
@@ -440,10 +454,21 @@ export function RulesFields() {
                 can arrive the morning after.
               </FormDescription>
               <FormMessage />
+              {/* A bad number is an error on that item of the array, which FormMessage does not read. */}
+              {itemMessage(fieldState.error) ? (
+                <p className="text-destructive text-sm">{itemMessage(fieldState.error)}</p>
+              ) : null}
             </FormItem>
           )}
         />
       </SettingsSection>
     </div>
   );
+}
+
+/** The first message among an array field's item errors, when the field itself has none. */
+function itemMessage(error: unknown): string | undefined {
+  if (!Array.isArray(error)) return undefined;
+  const first = (error as ({ message?: string } | undefined)[]).find((e) => e?.message);
+  return first?.message;
 }

@@ -44,6 +44,13 @@ export interface ExportFile {
   rowCount: number;
 }
 
+/** A file too large to hold whole (the receipts zip): its bytes arrive in chunks. */
+export type StreamedExportFile = Omit<ExportFile, "body" | "rowCount"> & {
+  chunks: AsyncIterable<Uint8Array>;
+  /** Known only once the chunks are read to the end. */
+  rowCount: () => number;
+};
+
 /**
  * The reports that export to a file: the three report tabs, Attendance
  * (Phase 5b), Profit (Phase 6a) and Expenses (Phase 6c). The receipts zip is
@@ -138,7 +145,9 @@ export async function countExportRows(
       return first.totals?.entryCount ?? 0;
     }
     case "summary": {
-      const report = await summaryReport(db, viewer, req.query, req.prefs, req.now);
+      const report = await summaryReport(db, viewer, req.query, req.prefs, req.now, {
+        progress: false,
+      });
       return flattenGroups(report.groups, report.groupBy).length;
     }
     case "weekly": {
@@ -176,7 +185,9 @@ async function exportTable(
 ): Promise<{ rows: unknown[]; columns: ExportColumn<unknown>[] }> {
   switch (req.report) {
     case "summary": {
-      const report = await summaryReport(db, viewer, req.query, req.prefs, req.now);
+      const report = await summaryReport(db, viewer, req.query, req.prefs, req.now, {
+        progress: false,
+      });
       return {
         rows: flattenGroups(report.groups, report.groupBy),
         columns: summaryColumns(

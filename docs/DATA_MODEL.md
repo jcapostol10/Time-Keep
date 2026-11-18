@@ -330,6 +330,7 @@ Outgoing email stored instead of sent, on Vercel preview deployments only (`MAIL
 | --- | --- | --- |
 | id | text PK | UUID |
 | to_address | text | lower-cased recipient; index `(to_address, created_at desc)` |
+| attachments | jsonb, default `[]` | 0023: what the email carried as files, as `[{ filename, contentType, size }]`; never the bytes (the table is shared with production) |
 | subject | text | |
 | html | text | |
 | text | text | |
@@ -369,6 +370,8 @@ Rows are never edited: a change adds a row, so the table is the history. `rate_l
 ### rate_recalc_job
 
 "Apply to past entries": `id`, `workspace_id`, `created_by`, `from`, `status` (`queued` | `running` | `done` | `failed`), `total`, `processed`, `cursor_start` + `cursor_id` (the last entry done, so Retry resumes there), `error`, `created_at`, `started_at`, `finished_at`. Index on `(workspace_id, created_at DESC)`. Run after the response in keyset batches; one job runs per workspace, and a second request lowers the queued job's `from` instead of adding another.
+
+`kinds` (`text[]`, default `{billable,cost}`, 0023): which snapshots the job re-rates. A cost rate applied to past entries queues `{cost}`, a billable one `{billable}`; a request folded into a waiting or failed job unions its kinds with theirs, and rows from before the column mean both.
 
 ## Row-level security
 
@@ -516,7 +519,7 @@ Every email the app sends. A row is written in the same transaction as its cause
 | attempts | smallint | |
 | next_attempt_at | timestamptz | due time, or the lease's end while a sender holds it |
 | last_error | text? | |
-| attachment_key, attachment_name | text? | Phase 6d: a file in the private export bucket attached when sending (the invoice PDF), read by the sender; `captured_email` keeps no attachment |
+| attachment_key, attachment_name | text? | Phase 6d: a file in the private export bucket attached when sending (the invoice PDF), read by the sender; `captured_email` keeps its name, type and size (0023) |
 | created_at, sent_at | timestamptz | |
 
 ### time_off_policy (Phase 5b)
@@ -691,7 +694,7 @@ One client, that client's currency when created (`client.currency`, else the wor
 | status | enum `invoice_status` (`DRAFT`, `SENT`, `VOID`) | |
 | discount_bps | integer | default 0; a percent of the subtotal |
 | tax1_name, tax1_bps, tax2_name, tax2_bps | text?, integer? | each tax is a percent of (subtotal − discount), not compounded |
-| notes | text | editable after sending too |
+| notes | text | printed on the PDF; frozen once the invoice is sent (2026-11-18) |
 | subtotal_minor, total_minor | bigint | cached from the lines by `recomputeTotals` (core `invoiceTotals`) |
 | sent_at | timestamptz? | |
 | pdf_key | text? | the frozen PDF in `S3_EXPORT_BUCKET` (`invoices/<workspace>/<invoice>.pdf`), written on send and kept on void |
@@ -832,6 +835,19 @@ Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf` after
 - "Apply to past entries" over every entry: 115.4 s for 1,000,000 entries (the rated set now excludes entries in approved periods through an `EXISTS` on `approval_request`; earlier runs 76–117 s), inside the 300 s budget.
 - One-year Summary with amounts: owner median 435 ms, manager 206 ms, member 31 ms; rounded to 15 minutes, owner 456 ms. The report engine does not read approvals.
 - The write guard adds two indexed reads per entry write (the workspace's settings row and the person's covering requests, `approval_request_cover_idx`) and the person's advisory lock.
+
+Measured on the perf tenant with `pnpm --filter @timekeep/web report:perf`, 2026-11-18 (backlog cleanup branch 3; the seed now has two estimated projects, so the Summary computes two progress bars, and one client billed in EUR), with the machine busy:
+
+| What | Result |
+| --- | --- |
+| Rating every entry (the recalculation job) | 189 s |
+| One-year Summary: owner / manager / member | 868 / 331 / 122 ms |
+| One-year Summary, rounded to 15 min (owner) | 467 ms |
+| One-year Attendance: owner / manager | 566 / 207 ms |
+| Member picker (tasks by group) | 6 ms |
+| Workspace currency relabel (in a transaction that is rolled back) | 32.0 s |
+
+The relabel runs inside the settings request and holds the settings row for that long: `report:perf` fails it over 60 s, and `BACKLOG.md` keeps the follow-up to batch it.
 
 ## Planned (later phases)
 

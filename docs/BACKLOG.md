@@ -42,46 +42,24 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 - [ ] `removeMember` leaves the person's PENDING time-off and approval requests reviewable (and approving the time off then skips the balance re-check); withdraw them on removal.
 - [ ] Small plan deviations: the R8 copy, no `reports.spec.ts` e2e for read-only Detailed rows (an integration test stands in), the timezone e2e lives in `approvals.spec.ts`, `kiosk-extra.spec.ts` waits with `waitForTimeout(1_100)`, and `approvals.spec.ts` adds `86_400_000` to an instant.
 
-### b3 — money: rates, cost, currencies, budgets, expenses, invoices
+### b3 follow-ups (found while fixing, 2026-11-18)
 
-- [ ] **b3** **A cost rate applied to past entries re-rates billable snapshots too.** One job re-rates both snapshots from the date. Add a `kinds` column on `rate_recalc_job`.
-- [ ] **b3** **Client currencies come from the short list** (`COMMON_CURRENCIES`, about twenty codes), though the server accepts any ISO 4217 code. Offer a searchable list of all of them.
-- [ ] **b3** **Phase 6a review minors** (final review, 2026-11-06):
-  - The relabel decisions (`updateClient`, `updateProject`, `setRate`'s currency) are read before the transaction opens; lock the client row or take a workspace advisory lock inside the transaction.
-  - The client dialog still says "Its projects are not affected" when editing; a currency change does affect them.
-  - The Summary hides Cost and Profit under 640px while the cost notes still show.
-  - A row billed only in another currency with nothing rated prints a workspace-currency zero, and the export has no column for that currency.
-  - The Status tab has its own "is there a profit" rule instead of core `hasProfit`, and no note about entries without a cost rate.
-  - Core has two constants named `COMMON_CURRENCIES` (`currencies.ts`, `money.ts`), and `isCurrencyCode` depends on the runtime's Intl list, so browser and server can disagree.
-  - Only owners and admins see the "Set a project rate" notice; a project's manager is not told their project is unrated.
-  - On a Profit row that mixes currencies, Cost includes the hours profit leaves out, so Amount less Cost is not Profit; the note should say so.
-  - Untested: `deleteProject` reassigning entries across currencies (the code re-rates both snapshots).
-  - A relabel is one `UPDATE time_entry` inside the request; not measured on a large workspace.
-- [ ] **b3** **Phase 6b review minors** (final review, 2026-11-09):
-  - The alert dedupe loads every `budget:%` outbox row of the workspace on every daily run; narrow it to the candidate kinds computed from `crossedThresholds`.
-  - `ThresholdsInput` keeps its typed text after a save normalises the value, and a non-numeric token shows the default zod message.
-  - The Budget chart bounds its series at local tomorrow while a whole-project bar has no upper bound, so a future-dated entry shows in the bar and not in the chart's last point.
-  - `getProjectBudget` reads `workspace_settings` twice; the page already holds `ctx.settings`.
-  - `hasRates` counts any non-null billable row in force in the project's currency, so the "no rate" notice can hide when nobody on the project is rated.
-  - `summaryReport` computes budget progress for exports and the Profit tab, which never render it. Pass a flag.
-  - The perf seed has no estimated project, so `report:perf` does not exercise the Summary with the progress path.
-  - No advisory lock around `evaluateBudgets`: two concurrent daily runs could double-send.
-  - The Budget chart samples weekly past 62 days instead of bucketing by week.
-- [ ] **b3** **Phase 6c review minors** (final review, 2026-11-10):
-  - Expense writes are authorised through `scopeForUser`'s `entry.write`; `expense.write` is read only for the `editable` flag.
-  - `expenseCategoryPatchSchema` validates the patch, not the merged row: `{ unitPriceMinor: null }` on a UNIT category passes.
-  - `usableProject` does not refuse a template project the way the entry service does.
-  - Receipt keys are deterministic, so a failed transaction after the upload leaves the new bytes under the old row's MIME; the upload also holds the connection and the person's lock for the S3 round trip. Use a versioned key.
-  - Each receipt thumbnail runs `getExpense` → `toDTOs` → `expenseLockedReasons` (about six queries) and mints a new presigned URL; use a lighter read.
-  - `lockedReasons` reads `writeRulesOf` twice per tracker or timesheet read; `myPeriods` runs the expense totals it never uses.
-  - The period page's "changed since submission" flag compares work seconds only, not expenses.
-  - The edit dialog removes a receipt before the save (a failed save loses it) and can ask an admin for a note up to three times.
-  - A `projectIds=none` carried from another report tab matches nothing on the Expenses tab, which hides the "Without project" option.
-  - `parseQuantity(".5")` is refused; `fflate` is `^0.8.3`, not pinned exactly; `createExpense` checks the project and category outside its transaction; one missing receipt object fails the whole zip job.
-  - No integration test of the Profit tab for a manager with expenses in and out of scope.
-- [ ] **b3** **Phase 6c, expenses:** the unsubmitted-period reminder counts time only; receipts of soft-deleted expenses are never purged; the receipts zip is built in memory (stream it); EXIF orientation is not read when a photo is shrunk; the expense dialog's project picker lists the viewer's own projects when adding for someone else.
-- [ ] **b3** **Phase 6d, invoicing:** a recurring template catches up only 7 days (ruling 13: 31); `captured_email` keeps no attachment, so the PDF attachment is checked in the nightly lane only; the client dialog does not warn before a currency change on a client with invoices; a page left open past midnight defaults its date fields to the day it was opened.
-- [ ] **b3** **Phase 6d review minors** (final review, 2026-11-10): the editor's "sent" date is the UTC date of `sent_at`, not the viewer's; a quantity of 1e9 at a price of 1e13 overflows `bigint` (an opaque error), many such lines pass `Number.MAX_SAFE_INTEGER` in `invoiceTotals`, and `next_number` has no upper bound on an `int4`; a client email whose PDF attachment is missing fails after its retries while the invoice reads Sent and no admin is told; a public PDF download bumps `invoice.updated_at`; Chromium renders the frozen PDF inside the send transaction, holding the row lock and a pooled connection for seconds; notes edited after sending show on the public page but not in the frozen PDF; `deleteProject`'s invoiced-time check has the same lock-free window against a concurrent import that the guard had.
+- [ ] **A workspace currency change relabels inside the settings request**, holding the settings row: 32 s for 1,000,000 entries on the local perf tenant (`report:perf`, budget 60 s). Fine for today's workspaces; a large one would block submits for that long. Batch it like the rate job.
+- [ ] The receipts purge and `deleteProject` delete objects one by one; an object that cannot be deleted from a deleted project's purged expenses is logged and left in the bucket (no row names it any more).
+- [ ] A recurring template's catch-up is one cycle (31 days monthly, 7 weekly), bounded below by its start date only: a monthly template paused and switched on again within a month still bills the period it skipped. Record when a template was last activated if anyone is surprised.
+- [ ] The receipts zip counts a receipt as a row before knowing its object exists only in the manifest; the job's row count is the files actually written, read after the upload.
+- [ ] The note under mixed-currency Profit rows ("Amount less Cost is not Profit") has no test.
+
+### b3 review minors (final review, 2026-11-18)
+
+- [ ] The static currency list leaves out codes the runtime's Intl still accepted (HRK, SLL, ZWL, CUC and other retired ones). A workspace or client stored with one cannot save its settings until it picks a current currency. Check production with the Phase 6 data query (`select distinct currency from workspace_settings union select distinct currency from client`).
+- [ ] The Weekly report still drops a zero in another currency (`reports.ts`, the weekly rows) while the Summary keeps it, so their exports can differ by a column; and a group with unrated time in both the workspace currency and another shows only the other currency's zero (`amountLines`).
+- [ ] `ClientDTO.hasInvoices` reaches whoever may open the Clients page, including managers or members when "who can create" is opened to them; only `invoice.manage` otherwise learns that a client has invoices.
+- [ ] `createInvoice` reads the client's currency outside `currencyLock`, so it can race a client's currency change; `deleteProject` reads the project's client before taking `clientLock` and re-rates without `currencyLock`.
+- [ ] `purgeDeletedReceipts` can race an Undo landing between its object delete and its row update, and has no ordering: over 1,000 rows that fail for good would block later ones.
+- [ ] A thumbnail upload that fails leaves the receipt's file object without a row (the cleanup starts after both uploads); a failed receipt removal toasts its error and then "Expense saved".
+- [ ] `hasBillableRate` picks each target's latest row and then checks the currency, while `rateEntriesSql` filters by currency first: they differ only when one target holds rows in two currencies.
+- [ ] Untested: `setRate` passing its kind to the job (only `requestRateRecalc` is tested with kinds), `uploadExportStream` itself (part sizes, abort), and the zip's size limits (65,000 files or 4 GB, where it now fails instead of writing a corrupt archive).
 
 ### b4 — schedule and forecast
 
@@ -153,6 +131,14 @@ Moved here by the cleanup of 2026-11-17. A Phase 8 or 9 entry is picked up by th
 
 ## Done
 
+- [x] Cost-only and billable-only recalculation, done 2026-11-18 (backlog cleanup b3, migration 0023): `rate_recalc_job.kinds`; a job re-rates only the snapshots its request asked for, and a request folded into a waiting or failed job unions its kinds with theirs.
+- [x] The full ISO 4217 list, done 2026-11-18 (backlog cleanup b3): one static `CURRENCIES` list in core (157 codes with names; `isCurrencyCode` no longer asks the runtime's Intl), offered through a searchable picker in the client dialog and the workspace settings.
+- [x] Phase 6a review minors, done 2026-11-18 (backlog cleanup b3): currency decisions are read inside the transaction under `currencyLock` (clients, projects, rates, the settings save, which relabels from the locked row's currency); the client dialog no longer says its projects are not affected; the Summary keeps Cost and Profit at every width; a row billed only in another currency with nothing rated reads zero in that currency and keeps its export column; the Status tab uses core `hasProfit`, shows the cost notes and tells whoever sees amounts when the project has no rate in its currency; the mixed-currency note says Amount less Cost is not Profit; `deleteProject` across currencies is tested; a relabel is measured by `report:perf` (see the follow-up above).
+- [x] Phase 6b review minors, done 2026-11-18 (backlog cleanup b3): the alert dedupe reads only this run's kinds; the thresholds field shows the saved value and refuses text in plain words; the Budget chart ends on the bar's number (later days fold into today) and keeps week ends past 62 days; `getProjectBudget` takes the settings the page holds; `hasRates` resolves the latest row per target and counts only people on the project; exports and the Profit tab skip the progress read; the perf seed has two estimated projects. "No advisory lock around `evaluateBudgets`" closed by ruling R-A: the daily claim in `daily_job_run` lets one run in.
+- [x] Phase 6c review minors, done 2026-11-18 (backlog cleanup b3): `expenseScope` and the create action ask for `expense.write`; a unit category cannot lose its unit or price; a template project takes no expense; receipts get a key per upload (`receipts/<ws>/<expense>.<uuid>`, beside the old key and never under it), uploaded outside the transaction after a dry run of the guard; a receipt link is one narrow read; the guard's rules are read once; the period page compares expenses too; the dialog saves before it touches the receipt and asks for a note once; a "without project" filter is ignored on the Expenses tab; `parseQuantity(".5")`; fflate pinned; `createExpense` checks inside its transaction; one missing receipt no longer fails the zip; the manager's Profit tab with expenses is tested.
+- [x] Phase 6c, expenses, done 2026-11-18 (backlog cleanup b3): the unsubmitted reminder and the Unsubmitted tab count a period that holds only expenses; receipts of expenses deleted over 30 days ago are purged by the cron, and a deleted project's purged expenses lose their objects; the receipts zip streams into a multipart upload; `createImageBitmap` is asked for the image's orientation (ruling R-D: no fixture test); the expense dialog offers the projects of the person the expense is for.
+- [x] Phase 6d, invoicing, done 2026-11-18 (backlog cleanup b3): a recurring template catches up one cycle, 31 days for a monthly one (ruling 13) and 7 for a weekly one; captured mail keeps each attachment's name, type and size, so the PDF attachment is checked on previews; a client with invoices shows its currency locked with the reason; the invoice dialogs read today when they open.
+- [x] Phase 6d review minors, done 2026-11-18 (backlog cleanup b3): the "sent" date is the workspace's (ruling R-E); a line's amount, an invoice's total and the next number are bounded with messages; an invoice email the outbox gives up on tells the owners and admins once; a public download leaves `updated_at` alone; Chromium prints before the send transaction and an invoice edited meanwhile is refused; notes freeze when the invoice is sent (ruling R-F); `deleteProject` takes the client's invoice lock.
 - [x] Auth and invitation emails in the request, closed by ruling 2026-11-17 (backlog cleanup b2, R1): they stay in the request. Through the outbox they would retry after their links expire (magic link 15 minutes, verification and reset an hour; retries at 30 and 120 minutes), store live tokens in plain HTML, and lose the per-address "failed" the invites and the user import show; Better Auth already logs and swallows a verification or reset send failure.
 - [x] A web-level test with the viewer's zone unlike the workspace's, done 2026-11-17 (backlog cleanup b2): e2e "a member in another time zone submits the workspace's week" (half a day apart) passes; its coverage line stays unticked, since no single break of the period code models the viewer's zone.
 - [x] Timezone change with approved periods, done 2026-11-17 (backlog cleanup b2, rulings 5 and R7): still allowed, after the settings page says how many approved periods move and asks (`confirmTimezoneChange`); a week start change asks the same.

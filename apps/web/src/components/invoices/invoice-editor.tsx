@@ -47,12 +47,13 @@ export function InvoiceEditor({
   slug,
   invoiceId,
   projects,
-  today,
+  timezone,
 }: {
   slug: string;
   invoiceId: string;
   projects: { id: string; name: string }[];
-  today: string;
+  /** The workspace timezone: a dialog reads today's date when it opens, not when the page loaded. */
+  timezone: string;
 }) {
   const { data: invoice } = useInvoice(slug, invoiceId);
   const write = useInvoiceWrite(slug);
@@ -86,7 +87,7 @@ export function InvoiceEditor({
           </div>
           <p className="text-muted-foreground text-sm">
             {invoice.clientName} · {invoice.currency}
-            {invoice.sentAt ? ` · sent ${formatDateKey(invoice.sentAt.slice(0, 10))}` : ""}
+            {invoice.sentDate ? ` · sent ${formatDateKey(invoice.sentDate)}` : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -175,6 +176,8 @@ export function InvoiceEditor({
             defaultValue={invoice.notes}
             maxLength={2000}
             rows={4}
+            // The notes are on the PDF the client has: they freeze when it is sent.
+            disabled={invoice.status !== "DRAFT"}
             onBlur={(e) => {
               if (e.target.value.trim() !== invoice.notes) void patch({ notes: e.target.value });
             }}
@@ -184,7 +187,7 @@ export function InvoiceEditor({
       </div>
 
       {invoice.status !== "DRAFT" ? (
-        <PaymentsCard slug={slug} invoice={invoice} today={today} />
+        <PaymentsCard slug={slug} invoice={invoice} timezone={timezone} />
       ) : null}
 
       {dialog === "import" ? (
@@ -192,7 +195,7 @@ export function InvoiceEditor({
           slug={slug}
           invoice={invoice}
           projects={projects}
-          today={today}
+          timezone={timezone}
           onClose={() => setDialog(null)}
         />
       ) : null}

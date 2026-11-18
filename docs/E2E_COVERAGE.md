@@ -108,6 +108,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Archive a client and find it under the archived filter; unarchive it — `clients.spec.ts` › "archive and unarchive a client"
 - [x] Delete an unused client — `clients.spec.ts` › "delete an unused client"
 - [x] A client with projects cannot be deleted — `projects.spec.ts` › "create a project from the projects page"
+- [x] Bill a client in any ISO 4217 currency, found by searching its name — `clients.spec.ts` › "a client can be billed in any ISO currency"
+- [x] A client with invoices shows its currency locked, with the reason — `clients.spec.ts` › "a client with invoices cannot change currency"
 - [x] Members cannot open the clients page and do not see it in the sidebar — `clients.spec.ts` › "members cannot open the clients page"
 
 ## Projects
@@ -263,6 +265,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Cost, profit and currencies
 
 - [x] An admin sets a member's cost rate and sees Cost and Profit in the Summary and Detailed reports — `profit.spec.ts` › "a cost rate shows cost and profit to an admin"
+- [x] The Summary keeps its Cost and Profit columns at 375px — `profit.spec.ts` › "a cost rate shows cost and profit to an admin"
 - [x] A member never sees cost or profit, in a report, a tab or the route — `profit.spec.ts` › "a member sees no cost or profit"
 - [x] A manager sees cost only when the workspace setting is on — `profit.spec.ts` › "the setting opens cost to managers"
 - [x] A client billed in EUR shows its amounts in EUR beside the workspace's USD, never one sum — `profit.spec.ts` › "a EUR client's amounts stay in EUR"
@@ -283,6 +286,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A fixed expense with a receipt is listed with its amount, Billable and the receipt thumbnail; the footer totals it — `expenses.spec.ts` › "a fixed expense with a receipt is listed with its thumbnail"
 - [x] A per-unit category computes the amount from the quantity, snapshotting the price so a later price change leaves the expense alone — `expenses.spec.ts` › "a unit category computes the amount from the quantity"
 - [x] A submitted period locks the member's expenses; an owner edits one with a note, which the period page shows beside the expense — `expenses.spec.ts` › "a submitted period locks the member's expenses, and an admin edits with a note"
+- [x] An owner changing a submitted expense and its receipt is asked for a note once, and the period page says the expenses changed since submission — `expenses.spec.ts` › "a submitted period locks the member's expenses, and an admin edits with a note"
+- [x] Adding an expense for someone else offers that person's projects, not the viewer's — `expenses.spec.ts` › "adding an expense for someone else offers that person's projects"
 - [x] The Expenses report totals by category or project and exports a CSV with its four columns — `expenses.spec.ts` › "the Expenses report totals by category and exports a CSV"
 - [x] A member sees only their own expenses on the page and in the report; an owner sees everyone's — `expenses.spec.ts` › "a member sees only their own expenses"
 - [x] The Profit tab counts expenses: billable ones as revenue, all of them as cost — `profit.spec.ts` › "the Profit tab counts expenses"
@@ -291,8 +296,9 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 - [x] An invoice imported from this week's billable time equals the Summary report; the imported entries are locked in the tracker and badged in Detailed — `invoices.spec.ts` › "an invoice imported from this week's billable time equals the Summary report"
 - [x] Sending freezes the invoice; the emailed public link shows it without a session and downloads its PDF once per 10 s; payments move it to Partially paid, then Paid — `invoices.spec.ts` › "sending freezes the invoice, the public link shows it, and a payment moves the balance"
+- [x] A page left open past midnight offers the new day in the New invoice dialog — `invoices.spec.ts` › "a page left open past midnight offers the new day"
 - [x] A manager and a member see no Invoices link; the page is not found and the route forbidden — `invoices.spec.ts` › "a member and a manager see no Invoices page"
-- [x] The sent email carries the invoice PDF as an attachment — `invoices-extra.spec.ts` › "the sent email carries the PDF"
+- [x] The sent email carries the invoice PDF as an attachment (on previews too: captured mail keeps the attachment's name, type and size) — `invoices.spec.ts` › "the sent email carries the PDF"
 - [x] A recurring invoice appears after the daily job on its day, and not twice — `invoices-extra.spec.ts` › "a recurring invoice appears after the daily job and not twice"
 - [x] An overdue invoice emails the owner once — `invoices-extra.spec.ts` › "an overdue invoice emails the admins once"
 - [x] Voiding a sent invoice releases its time, which can be edited again; the invoice reads Void — `invoices-extra.spec.ts` › "voiding releases the time and the number stays"
@@ -326,6 +332,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A required field blocks Stop and manual Add until it is filled — `settings.spec.ts` › "a required project blocks Stop until it is picked"
 - [x] Force timer hides manual mode and makes the timesheet read-only for a member — `settings.spec.ts` › "force timer takes manual entry away from a member"
 - [x] A break entry is tracked with the Break switch and stays out of the Summary by default — `settings.spec.ts` › "a break stays out of the Summary unless the Type filter asks"
+- [x] Budget alert thresholds show sorted and without repeats after a save, and text that is not a number is refused in plain words — `settings.spec.ts` › "budget thresholds show as they were saved"
 - [x] Report rounding rounds the Summary and the Raw toggle shows real time — `settings.spec.ts` › "rounding rounds the Summary and Raw shows real time"
 
 ## Add time for others

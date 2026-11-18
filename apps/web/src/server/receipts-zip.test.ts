@@ -14,7 +14,7 @@ import { loadViewer } from "./authz";
 import { createProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { createExpenseCategory } from "./expense-categories";
-import { receiptKeys } from "./expense-receipts";
+import { newReceiptKeys } from "./expense-receipts";
 import { createExpense, setReceipt } from "./expenses";
 import { buildReceiptsZip } from "./receipts-zip";
 
@@ -34,6 +34,8 @@ const QUERY: ReportQuery = { ...DEFAULT_REPORT_QUERY, preset: "this-month" };
 
 let wsId: string;
 let ids: Record<string, string>;
+/** The stored receipt key of each expense that has one. */
+const keyOf: Record<string, string> = {};
 const viewer = (who: string): Promise<Viewer> => loadViewer(db, wsId, ids[who]!);
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
@@ -82,7 +84,8 @@ beforeEach(async () => {
       { now: NOW },
     );
     if (mime) {
-      const keys = receiptKeys(wsId, e.id);
+      const keys = newReceiptKeys(wsId, e.id);
+      keyOf[e.id] = keys.file;
       await setReceipt(db, v, e.id, { fileKey: keys.file, thumbKey: null, mime }, { now: NOW });
     }
     return e;
@@ -92,6 +95,19 @@ beforeEach(async () => {
   await spend("olga", 500, "No receipt");
 });
 
+/** The whole archive, read to the end (a test may hold it; the job never does). */
+async function bodyOf(file: { chunks: AsyncIterable<Uint8Array> }): Promise<Uint8Array> {
+  const parts: Uint8Array[] = [];
+  for await (const chunk of file.chunks) parts.push(chunk);
+  const out = new Uint8Array(parts.reduce((n, c) => n + c.length, 0));
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.length;
+  }
+  return out;
+}
+
 describe("buildReceiptsZip", () => {
   it("zips every receipt in scope with a manifest", async () => {
     const fetched: string[] = [];
@@ -99,7 +115,7 @@ describe("buildReceiptsZip", () => {
       fetched.push(key);
       return new TextEncoder().encode(`bytes of ${key}`);
     };
-    const file = await buildReceiptsZip(
+    const file = buildReceiptsZip(
       db,
       await viewer("olga"),
       { query: QUERY, prefs: PREFS, now: NOW },
@@ -107,8 +123,8 @@ describe("buildReceiptsZip", () => {
     );
     expect(file.filename).toBe("timekeep-receipts-2026-10-01-2026-10-31.zip");
     expect(file.contentType).toBe("application/zip");
-    expect(file.rowCount).toBe(2);
-    const entries = unzipSync(file.body);
+    const entries = unzipSync(await bodyOf(file));
+    expect(file.rowCount()).toBe(2);
     const names = Object.keys(entries).sort();
     expect(names).toEqual(
       [
@@ -117,11 +133,9 @@ describe("buildReceiptsZip", () => {
         `2026-10-20-Carol_Member-Travel_Taxi-${ids.carols!.slice(0, 8)}.pdf`,
       ].sort(),
     );
-    expect(fetched.sort()).toEqual(
-      [receiptKeys(wsId, ids.bobs!).file, receiptKeys(wsId, ids.carols!).file].sort(),
-    );
+    expect(fetched.sort()).toEqual([keyOf[ids.bobs!]!, keyOf[ids.carols!]!].sort());
     // Sorted: Bob's file first.
-    expect(text(entries[names[0]!]!)).toBe(`bytes of ${receiptKeys(wsId, ids.bobs!).file}`);
+    expect(text(entries[names[0]!]!)).toBe(`bytes of ${keyOf[ids.bobs!]}`);
     // TextDecoder consumes the BOM the manifest starts with.
     const manifest = text(entries["expenses.csv"]!).split("\r\n");
     expect(manifest[0]).toBe(
@@ -139,33 +153,96 @@ describe("buildReceiptsZip", () => {
 
   it("holds only the viewer's receipts: a member's own, a manager's people's", async () => {
     const fetch = async () => new Uint8Array([1]);
-    const bob = await buildReceiptsZip(
+    const bob = buildReceiptsZip(
       db,
       await viewer("bob"),
       { query: QUERY, prefs: PREFS, now: NOW },
       fetch,
     );
-    expect(bob.rowCount).toBe(1);
-    expect(Object.keys(unzipSync(bob.body)).filter((n) => n !== "expenses.csv")).toEqual([
+    expect(Object.keys(unzipSync(await bodyOf(bob))).filter((n) => n !== "expenses.csv")).toEqual([
       `2026-10-20-Bob_Member-Travel_Taxi-${ids.bobs!.slice(0, 8)}.jpg`,
     ]);
-    const max = await buildReceiptsZip(
+    expect(bob.rowCount()).toBe(1);
+    const max = buildReceiptsZip(
       db,
       await viewer("max"),
       { query: QUERY, prefs: PREFS, now: NOW },
       fetch,
     );
-    expect(max.rowCount).toBe(1);
+    await bodyOf(max);
+    expect(max.rowCount()).toBe(1);
     // A person filter outside a member's own narrows to nothing it may not see.
-    const carolsView = await buildReceiptsZip(
+    const carolsView = buildReceiptsZip(
       db,
       await viewer("carol"),
       { query: { ...QUERY, userIds: [ids.bob!] }, prefs: PREFS, now: NOW },
       fetch,
     );
-    expect(carolsView.rowCount).toBe(1);
-    expect(Object.keys(unzipSync(carolsView.body))).toContain(
+    const carolsFiles = Object.keys(unzipSync(await bodyOf(carolsView)));
+    expect(carolsView.rowCount()).toBe(1);
+    expect(carolsFiles).toContain(
       `2026-10-20-Carol_Member-Travel_Taxi-${ids.carols!.slice(0, 8)}.pdf`,
     );
+  });
+
+  it("a receipt whose object is gone is named in the manifest; the others still come", async () => {
+    const fetch = async (key: string) => {
+      if (key === keyOf[ids.bobs!]) {
+        throw Object.assign(new Error("The specified key does not exist."), { name: "NoSuchKey" });
+      }
+      return new TextEncoder().encode("pdf bytes");
+    };
+    const file = buildReceiptsZip(
+      db,
+      await viewer("olga"),
+      { query: QUERY, prefs: PREFS, now: NOW },
+      fetch,
+    );
+    const entries = unzipSync(await bodyOf(file));
+    expect(Object.keys(entries).sort()).toEqual(
+      ["expenses.csv", `2026-10-20-Carol_Member-Travel_Taxi-${ids.carols!.slice(0, 8)}.pdf`].sort(),
+    );
+    expect(file.rowCount()).toBe(1);
+    const taxi = text(entries["expenses.csv"]!)
+      .split("\r\n")
+      .find((line) => line.includes("airport"));
+    expect(taxi?.endsWith(",(missing)")).toBe(true);
+  });
+
+  it("fails on a storage error that is not a missing object, rather than call the receipt missing", async () => {
+    const fetch = async () => {
+      throw new Error("socket hang up");
+    };
+    const file = buildReceiptsZip(
+      db,
+      await viewer("olga"),
+      { query: QUERY, prefs: PREFS, now: NOW },
+      fetch,
+    );
+    await expect(bodyOf(file)).rejects.toThrow("socket hang up");
+  });
+
+  it("leaves in chunks as it is written: the first file is out before the second is fetched", async () => {
+    const fetched: string[] = [];
+    const fetch = async (key: string) => {
+      fetched.push(key);
+      return new Uint8Array(1024);
+    };
+    const file = buildReceiptsZip(
+      db,
+      await viewer("olga"),
+      { query: QUERY, prefs: PREFS, now: NOW },
+      fetch,
+    );
+    // Nothing is read until someone asks for bytes.
+    expect(fetched).toHaveLength(0);
+    const reader = file.chunks[Symbol.asyncIterator]();
+    const first = await reader.next();
+    expect(first.done).toBe(false);
+    expect(fetched).toHaveLength(1);
+    let chunks = 1;
+    while (!(await reader.next()).done) chunks++;
+    expect(fetched).toHaveLength(2);
+    expect(chunks).toBeGreaterThan(2);
   });
 });

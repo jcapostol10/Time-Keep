@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import { DEFAULT_REPORT_QUERY, type ReportQuery, type ViewerPrefs } from "@timekeep/core";
 import {
@@ -7,6 +8,7 @@ import {
   approvalRequest,
   eq,
   managedUser,
+  project,
   projectMember,
   workspaceSettings,
 } from "@timekeep/db";
@@ -278,6 +280,39 @@ describe("createExpense and updateExpense", () => {
     ).resolves.toMatchObject({ kind: "FIXED", unitName: null, unitPriceMinor: null });
   });
 
+  it("a unit category cannot lose its unit or its price", async () => {
+    const owner = await viewer("olga");
+    for (const patch of [{ unitPriceMinor: null }, { unitName: null }, { unitName: " " }]) {
+      await expect(updateExpenseCategory(db, owner, mileageId, patch)).rejects.toMatchObject({
+        code: "INVALID",
+        message: "A unit category needs a unit name and a price.",
+      });
+    }
+    await expect(
+      updateExpenseCategory(db, owner, mileageId, { unitPriceMinor: 250 }),
+    ).resolves.toMatchObject({ kind: "UNIT", unitPriceMinor: 250 });
+  });
+
+  it("a template project takes no expense", async () => {
+    const owner = await viewer("olga");
+    const template = await createProject(db, owner, { name: "Starter" });
+    await db.update(project).set({ isTemplate: true }).where(eq(project.id, template.id));
+    await expect(
+      createExpense(db, await as("olga"), fixed(template.id, 500, "2026-10-27"), { now: NOW }),
+    ).rejects.toMatchObject({ code: "INVALID", message: "This project is not available." });
+  });
+
+  it("write scopes are checked against expense.write", () => {
+    // The matrix rows for entry.write and expense.write are the same today, so no
+    // behaviour can tell them apart: the guard is that the expense rule is the one asked.
+    const source = readFileSync(new URL("./expenses.ts", import.meta.url), "utf8");
+    const scope = source.slice(source.indexOf("export async function expenseScope"));
+    expect(scope.slice(0, scope.indexOf("\n}\n"))).toContain('"expense.write"');
+    const actions = readFileSync(new URL("./actions/expenses.ts", import.meta.url), "utf8");
+    const create = actions.slice(actions.indexOf("export async function createExpenseAction"));
+    expect(create.slice(0, create.indexOf("\n}\n"))).toContain('"expense.write"');
+  });
+
   it("a member records only their own; a manager for their people", async () => {
     await expect(as("bob", "carol")).rejects.toMatchObject({ status: 404 });
     await expect(as("max", "carol")).rejects.toMatchObject({ status: 404 });
@@ -385,6 +420,12 @@ describe("listExpenses", () => {
     const third = await list("olga", {}, { limit: 2, cursor: second.nextCursor! });
     expect(third.expenses.map((e) => e.amountMinor)).toEqual([100]);
     expect(third.nextCursor).toBeNull();
+  });
+
+  it("a 'without project' filter carried from a time report is ignored: every expense has a project", async () => {
+    await createExpense(db, await as("bob"), fixed(webId, 100, "2026-10-27"), { now: NOW });
+    expect((await list("olga", { projectIds: ["none"] })).expenses).toHaveLength(1);
+    expect((await list("olga", { projectIds: ["none", mobileId] })).expenses).toHaveLength(0);
   });
 
   it("a member sees own expenses only, even when the team's time is shown", async () => {

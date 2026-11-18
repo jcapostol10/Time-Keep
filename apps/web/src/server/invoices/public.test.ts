@@ -1,3 +1,4 @@
+import { eq, invoice } from "@timekeep/db";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { connectTestDb } from "../../../test/db";
@@ -16,7 +17,11 @@ vi.mock("../storage", () => ({
     `https://signed.test/${key}?ttl=${ttl}&name=${encodeURIComponent(filename)}`,
   getExport: async () => store.pdf,
 }));
-vi.mock("./pdf", () => ({ buildInvoicePdf: async () => store.pdf }));
+vi.mock("./pdf", () => ({
+  buildInvoicePdf: async () => store.pdf,
+  invoiceHtml: async () => "<html></html>",
+  printInvoiceHtml: async () => store.pdf,
+}));
 
 const h = connectTestDb();
 const db = h.db;
@@ -101,7 +106,13 @@ describe("the public invoice link", () => {
       balanceMinor: 15000,
     });
 
+    // A client's download is not a change to the invoice.
+    const stamp = async () =>
+      (await db.select({ at: invoice.updatedAt }).from(invoice).where(eq(invoice.id, inv.id)))[0]
+        ?.at;
+    const before = await stamp();
     expect(await claimInvoiceDownload(db, inv.id, NOW)).toBe(true);
+    expect(await stamp()).toEqual(before);
     expect(await claimInvoiceDownload(db, inv.id, new Date(NOW.getTime() + 5_000))).toBe(false);
     expect(await claimInvoiceDownload(db, inv.id, new Date(NOW.getTime() + 11_000))).toBe(true);
     expect(await publicPdfUrl(db, inv.id)).toBe(

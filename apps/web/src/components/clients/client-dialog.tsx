@@ -1,6 +1,6 @@
 "use client";
 
-import { type ClientInput, clientInputSchema, COMMON_CURRENCIES } from "@timekeep/core";
+import { type ClientInput, clientInputSchema } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import {
   Dialog,
@@ -19,13 +19,6 @@ import {
   FormMessage,
 } from "@timekeep/ui/components/form";
 import { Input } from "@timekeep/ui/components/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@timekeep/ui/components/select";
 import { Textarea } from "@timekeep/ui/components/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2Icon, PlusIcon } from "lucide-react";
@@ -38,8 +31,7 @@ import type { ClientDTO } from "@/lib/catalog-types";
 import { createClientAction, updateClientAction } from "@/server/actions/clients";
 
 import { CurrencyConfirm } from "../currency-confirm";
-
-const NO_CURRENCY = "__none__";
+import { CurrencySelect } from "../currency-select";
 
 /** What the fields hold (defaults optional) vs what the schema produces. */
 type FormValues = z.input<typeof clientInputSchema>;
@@ -107,7 +99,7 @@ export function ClientDialog({
           <DialogTitle>{client ? "Edit client" : "New client"}</DialogTitle>
           <DialogDescription>
             {client
-              ? "Change the client's details. Its projects are not affected."
+              ? "Change the client's details. A new currency also changes what its projects are billed in."
               : "A client groups projects and, later, receives invoices."}
           </DialogDescription>
         </DialogHeader>
@@ -176,31 +168,18 @@ export function ClientDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Currency</FormLabel>
-                    <Select
-                      value={field.value ?? NO_CURRENCY}
-                      onValueChange={(value) =>
-                        field.onChange(value === NO_CURRENCY ? null : value)
-                      }
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={NO_CURRENCY}>
-                          Workspace currency ({workspaceCurrency})
-                        </SelectItem>
-                        {COMMON_CURRENCIES.map((c) => (
-                          <SelectItem key={c.code} value={c.code}>
-                            {c.code} · {c.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <CurrencySelect
+                        value={field.value ?? null}
+                        onChange={field.onChange}
+                        none={`Workspace currency (${workspaceCurrency})`}
+                        disabled={Boolean(client?.hasInvoices)}
+                      />
+                    </FormControl>
                     <p className="text-muted-foreground text-xs">
-                      What this client is billed in. Its projects&apos; rates and amounts are in
-                      this currency; nothing is converted.
+                      {client?.hasInvoices
+                        ? `This client has invoices in ${client.currency ?? workspaceCurrency}; its currency cannot change.`
+                        : "What this client is billed in. Its projects' rates and amounts are in this currency; nothing is converted."}
                     </p>
                     <FormMessage />
                   </FormItem>

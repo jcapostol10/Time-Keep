@@ -61,12 +61,30 @@ export function reopenedEmail(b: Base & { note: string }): Email {
   };
 }
 
-export function unsubmittedReminderEmail(b: Base & { workSeconds: number }): Email {
+export function unsubmittedReminderEmail(
+  b: Base & { workSeconds: number; expenseCount?: number },
+): Email {
   const when = formatPeriod(b.period);
+  const expenses = b.expenseCount ?? 0;
+  const expenseText = `${expenses} ${expenses === 1 ? "expense" : "expenses"}`;
+  // A period can hold time, expenses or both: the email names what is waiting.
+  if (b.workSeconds <= 0 && expenses > 0) {
+    return {
+      subject: `Submit your expenses for ${when}`,
+      title: "Your expenses are waiting to be submitted",
+      intro: `You recorded ${expenseText} in ${b.workspaceName} for ${when} and have not submitted ${expenses === 1 ? "it" : "them"} for approval yet.`,
+      cta: { label: "Submit your period", url: timesheetUrl(b) },
+      outro: "You can turn these reminders off in your profile settings.",
+    };
+  }
+  const tracked = `You tracked ${formatDuration(b.workSeconds, "hh:mm")}`;
   return {
     subject: `Submit your time for ${when}`,
     title: "Your time is waiting to be submitted",
-    intro: `You tracked ${formatDuration(b.workSeconds, "hh:mm")} in ${b.workspaceName} for ${when} and have not submitted it for approval yet.`,
+    intro:
+      expenses > 0
+        ? `${tracked} and recorded ${expenseText} in ${b.workspaceName} for ${when} and have not submitted them for approval yet.`
+        : `${tracked} in ${b.workspaceName} for ${when} and have not submitted it for approval yet.`,
     cta: { label: "Submit your time", url: timesheetUrl(b) },
     outro: "You can turn these reminders off in your profile settings.",
   };

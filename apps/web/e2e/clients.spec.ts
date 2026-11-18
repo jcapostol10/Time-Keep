@@ -1,5 +1,6 @@
 import { expect, test } from "./fixtures";
 import { clientRow, createClientViaUi, rowAction } from "./helpers/catalog";
+import { createInvoice } from "./helpers/invoices";
 
 /** The Clients page: admins keep the companies they work for in one list. */
 test.describe("clients", () => {
@@ -20,6 +21,37 @@ test.describe("clients", () => {
     await expect(dialog).toBeHidden();
     await expect(clientRow(page, "Acme Corporation")).toBeVisible();
     await expect(clientRow(page, "Acme Corp")).toHaveCount(0);
+  });
+
+  test("a client can be billed in any ISO currency", async ({ page, freshUser }) => {
+    await page.goto(`/w/${freshUser.slug}/clients`);
+    await page.getByRole("button", { name: "New client" }).click();
+    const dialog = page.getByRole("dialog", { name: "New client" });
+    await dialog.getByLabel("Name").fill("Dakar Studio");
+    await dialog.getByRole("combobox", { name: "Currency" }).click();
+    // Not one of the dozen the short list had: found by its name.
+    await page.getByRole("combobox", { name: "Search currencies" }).fill("west african");
+    await page.getByRole("option", { name: /^XOF\b/ }).click();
+    await expect(dialog.getByRole("combobox", { name: "Currency" })).toContainText("XOF");
+    await dialog.getByRole("button", { name: "Create client" }).click();
+    await expect(dialog).toBeHidden();
+
+    await rowAction(page, clientRow(page, "Dakar Studio"), "Edit");
+    const edit = page.getByRole("dialog", { name: "Edit client" });
+    await expect(edit.getByRole("combobox", { name: "Currency" })).toContainText("XOF");
+  });
+
+  test("a client with invoices cannot change currency", async ({ page, freshUser }) => {
+    await createClientViaUi(page, freshUser.slug, "Billed Ltd");
+    await createInvoice(page, freshUser.slug, "Billed Ltd");
+
+    await page.goto(`/w/${freshUser.slug}/clients`);
+    await rowAction(page, clientRow(page, "Billed Ltd"), "Edit");
+    const dialog = page.getByRole("dialog", { name: "Edit client" });
+    await expect(dialog.getByRole("combobox", { name: "Currency" })).toBeDisabled();
+    await expect(
+      dialog.getByText("This client has invoices in USD; its currency cannot change."),
+    ).toBeVisible();
   });
 
   test("search clients", async ({ page, freshUser }) => {

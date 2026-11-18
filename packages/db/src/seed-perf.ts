@@ -1,7 +1,8 @@
 /**
  * A large tenant for report performance work: workspace "perf", 25
  * @perf.test people, 12 projects, 1,000,000 stopped entries over three
- * years (about a third tagged), rates at every level, a manager (person 2)
+ * years (about a third tagged), rates at every level, two estimated projects,
+ * one client billed in EUR, a manager (person 2)
  * who manages people 3–8 and project 1, and tasks by group (three groups,
  * five tasks per project). Local databases only; the e2e seed and cleanup
  * never touch @perf.test. Rebuilds from scratch each run.
@@ -56,6 +57,16 @@ async function main() {
       select 'perf-p-' || g, 'perf-ws', 'Project ' || g, '#1f8a8a',
              case when g <= 8 then 'perf-c-' || (1 + g % 4) end, g <= 8
       from generate_series(1, 12) g`);
+    // Two estimated projects, so the Summary's progress path runs over the million
+    // entries: a whole-project time estimate (no date bound) and a monthly money one.
+    await db.execute(sql`
+      update project set estimate_kind = 'TIME', estimate_seconds = 36000000, estimate_reset = 'NONE'
+      where id = 'perf-p-1'`);
+    await db.execute(sql`
+      update project set estimate_kind = 'MONEY', estimate_minor = 500000000, estimate_reset = 'MONTHLY'
+      where id = 'perf-p-2'`);
+    // One client billed in its own currency: a workspace relabel must leave its projects alone.
+    await db.execute(sql`update client set currency = 'EUR' where id = 'perf-c-4'`);
     await db.execute(sql`
       insert into tag (id, workspace_id, name, color)
       select 'perf-t-' || g, 'perf-ws', 'tag ' || g, '#7b5cc4' from generate_series(1, 6) g`);

@@ -30,9 +30,20 @@ import type { Viewer } from "./catalog/viewer";
 import { env } from "./env";
 import { sendEmail } from "./mail";
 import { buildReceiptsZip } from "./receipts-zip";
-import { buildExport, type ExportFile, type FileReport } from "./report-files";
+import {
+  buildExport,
+  type ExportFile,
+  type FileReport,
+  type StreamedExportFile,
+} from "./report-files";
 import { buildPdfExport } from "./report-pdf";
-import { deleteExport, presignedExportUrl, sweepExports, uploadExport } from "./storage";
+import {
+  deleteExport,
+  presignedExportUrl,
+  sweepExports,
+  uploadExport,
+  uploadExportStream,
+} from "./storage";
 
 /**
  * Exports too large to stream back. A job is built after the response
@@ -156,14 +167,14 @@ export interface RunOptions {
   /** Tells the owner; defaults to an email. A failure here never fails the job. */
   notify?: (job: ExportJobDTO) => Promise<void>;
   /** Builds the file; defaults to buildExport (PDF: report-pdf). */
-  build?: (job: ExportJob, request: StoredRequest) => Promise<ExportFile>;
+  build?: (job: ExportJob, request: StoredRequest) => Promise<ExportFile | StreamedExportFile>;
 }
 
 async function defaultBuild(
   db: Database,
   job: ExportJob,
   request: StoredRequest,
-): Promise<ExportFile> {
+): Promise<ExportFile | StreamedExportFile> {
   // The creator's role and scope at build time decide whose time is in the file.
   const viewer: Viewer = await loadViewer(db, job.workspaceId, job.userId).catch(() => {
     throw new Error("The creator is no longer a member");
@@ -211,12 +222,17 @@ export async function runExportJob(db: Database, jobId: string, options: RunOpti
       : defaultBuild(db, job, request));
     const ext = file.filename.split(".").pop() ?? job.format;
     const key = `exports/${job.workspaceId}/${job.id}.${ext}`;
-    await uploadExport({ key, body: file.body, contentType: file.contentType });
+    // A streamed file (the receipts zip) is stored as it is written, never held whole.
+    if ("chunks" in file) {
+      await uploadExportStream({ key, chunks: file.chunks, contentType: file.contentType });
+    } else {
+      await uploadExport({ key, body: file.body, contentType: file.contentType });
+    }
     const [done] = await db
       .update(exportJob)
       .set({
         status: "done",
-        rowCount: file.rowCount,
+        rowCount: typeof file.rowCount === "function" ? file.rowCount() : file.rowCount,
         objectKey: key,
         finishedAt: options.now ?? new Date(),
       })

@@ -7,7 +7,7 @@ import { getDb } from "@timekeep/db";
 
 import { env } from "./env";
 import { mailSenderProblem } from "./mail-config";
-import { captureEmail, previewMailMode } from "./mail-capture";
+import { attachmentMeta, captureEmail, previewMailMode } from "./mail-capture";
 
 let transporter: Transporter | undefined;
 
@@ -96,7 +96,7 @@ export interface RenderedEmail {
   subject: string;
   html: string;
   text: string;
-  /** Files to attach (Phase 6d: the invoice PDF); the capture path records none. */
+  /** Files to attach (Phase 6d: the invoice PDF); the capture path records their name, type and size. */
   attachments?: { filename: string; content: Uint8Array }[];
 }
 
@@ -115,7 +115,13 @@ export async function sendRenderedEmail(
   const mode = previewMailMode(env(), args.to);
   if (mode === "capture") {
     // Preview deployments: store e2e mail instead of sending; e2e reads /api/test/emails.
-    await captureEmail(getDb(), { to: args.to, subject: args.subject, html, text });
+    await captureEmail(getDb(), {
+      to: args.to,
+      subject: args.subject,
+      html,
+      text,
+      attachments: attachmentMeta(args.attachments),
+    });
     return "captured";
   }
   if (mode === "drop") {

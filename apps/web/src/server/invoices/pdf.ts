@@ -109,7 +109,32 @@ ${invoice.notes ? `<div class="notes">${esc(invoice.notes)}</div>` : ""}
 </body></html>`;
 }
 
-/** The invoice as the printer sees it now: the frozen file on send, a live render for a draft. */
+/**
+ * The invoice's page as it reads now, from the database: cheap, no browser.
+ * A send renders it twice (before printing, and again under the row lock) and
+ * compares the two, so the PDF it froze is the invoice it marks sent.
+ */
+export async function invoiceHtml(
+  db: Pick<DbExecutor, "select" | "insert" | "update">,
+  viewer: Viewer,
+  id: string,
+  now: Date = new Date(),
+  opts: { frozen?: boolean } = {},
+): Promise<string> {
+  const [invoice, settings, ws] = await Promise.all([
+    getInvoice(db, viewer, id, now),
+    getInvoiceSettings(db, viewer),
+    invoiceWorkspace(db, viewer.workspaceId),
+  ]);
+  return renderInvoiceHtml({ invoice, settings, workspaceName: ws.name, frozen: opts.frozen });
+}
+
+/** Prints a rendered invoice page in headless Chromium: seconds, so never inside a transaction. */
+export async function printInvoiceHtml(html: string): Promise<Uint8Array> {
+  return htmlToPdf(html);
+}
+
+/** The invoice as the printer sees it now: a live render for a draft's preview. */
 export async function buildInvoicePdf(
   db: Pick<DbExecutor, "select" | "insert" | "update">,
   viewer: Viewer,
@@ -117,12 +142,5 @@ export async function buildInvoicePdf(
   now: Date = new Date(),
   opts: { frozen?: boolean } = {},
 ): Promise<Uint8Array> {
-  const [invoice, settings, ws] = await Promise.all([
-    getInvoice(db, viewer, id, now),
-    getInvoiceSettings(db, viewer),
-    invoiceWorkspace(db, viewer.workspaceId),
-  ]);
-  return htmlToPdf(
-    renderInvoiceHtml({ invoice, settings, workspaceName: ws.name, frozen: opts.frozen }),
-  );
+  return printInvoiceHtml(await invoiceHtml(db, viewer, id, now, opts));
 }

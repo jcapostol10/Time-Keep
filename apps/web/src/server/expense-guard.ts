@@ -1,6 +1,6 @@
 import "server-only";
 
-import { zonedDateTimeToInstant } from "@timekeep/core";
+import { can, zonedDateTimeToInstant } from "@timekeep/core";
 import type { DbExecutor } from "@timekeep/db";
 
 import {
@@ -69,12 +69,15 @@ export async function expenseLockedReasons(
   now: Date = new Date(),
 ): Promise<Map<string, string>> {
   if (expenses.length === 0) return new Map();
-  const { timezone } = await writeRulesOf(db, scope.workspaceId);
+  // Owners and admins are never locked out: no rules to read.
+  if (can(scope.actedBy ?? scope.actor, "approval.editLocked", { kind: "none" })) return new Map();
+  const rules = await writeRulesOf(db, scope.workspaceId);
   return lockedReasonsForKeys(
     db,
     scope,
-    expenses.map((e) => ({ id: e.id, key: e.date, instant: midnight(e.date, timezone) })),
+    expenses.map((e) => ({ id: e.id, key: e.date, instant: midnight(e.date, rules.timezone) })),
     "Expenses",
     now,
+    rules,
   );
 }

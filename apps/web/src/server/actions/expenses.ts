@@ -6,7 +6,7 @@ import { getDb } from "@timekeep/db";
 import { type ActionResult, fromZodError, ok } from "@/lib/action-result";
 import type { ExpenseDTO } from "@/lib/expense-types";
 import { actionFailure } from "@/server/actions/errors";
-import { targetScope, viewerFor } from "@/server/authz";
+import { authorize, targetScope, viewerFor } from "@/server/authz";
 import {
   createExpense,
   deleteExpense,
@@ -30,7 +30,14 @@ export async function createExpenseAction(
     const ctx = await requireWorkspaceAccess(slug);
     const parsed = expenseInputSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    const scope = await targetScope(ctx, parsed.data.userId ?? ctx.user.id);
+    const userId = parsed.data.userId ?? ctx.user.id;
+    // Someone outside the caller's people is not found (targetScope); then the expense rule.
+    const scope = await targetScope(ctx, userId);
+    await authorize(ctx, "expense.write", {
+      kind: "entry",
+      userId,
+      projectId: parsed.data.projectId,
+    });
     return ok(await createExpense(getDb(), scope, parsed.data));
   } catch (error) {
     return actionFailure(error);

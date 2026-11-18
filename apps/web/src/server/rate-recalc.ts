@@ -3,6 +3,8 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import {
+  BOTH_RATE_KINDS,
+  type RateKinds,
   and,
   asc,
   type Database,
@@ -52,6 +54,19 @@ export interface RunOptions {
 const lockWorkspace = (workspaceId: string) =>
   sql`select pg_advisory_xact_lock(hashtext(${`rate-recalc:${workspaceId}`}))`;
 
+/** The job row's `kinds` as the rating SQL takes them. */
+export function kindsFromColumn(kinds: string[]): RateKinds {
+  return { billable: kinds.includes("billable"), cost: kinds.includes("cost") };
+}
+
+function kindsToColumn(kinds: RateKinds): string[] {
+  return [...(kinds.billable ? ["billable"] : []), ...(kinds.cost ? ["cost"] : [])];
+}
+
+function unionKinds(a: RateKinds, b: RateKinds): RateKinds {
+  return { billable: Boolean(a.billable || b.billable), cost: Boolean(a.cost || b.cost) };
+}
+
 /**
  * Queues a recalculation from `from`. A job already waiting, and any failed
  * ones, are folded in: one waiting job from the earliest date, started over
@@ -62,11 +77,17 @@ export async function requestRateRecalc(
   workspaceId: string,
   userId: string,
   from: Date,
+  kinds: RateKinds = BOTH_RATE_KINDS,
 ): Promise<{ jobId: string; merged: boolean }> {
   return db.transaction(async (tx) => {
     await tx.execute(lockWorkspace(workspaceId));
     const pending = await tx
-      .select({ id: rateRecalcJob.id, from: rateRecalcJob.from, status: rateRecalcJob.status })
+      .select({
+        id: rateRecalcJob.id,
+        from: rateRecalcJob.from,
+        status: rateRecalcJob.status,
+        kinds: rateRecalcJob.kinds,
+      })
       .from(rateRecalcJob)
       .where(
         and(
@@ -77,16 +98,30 @@ export async function requestRateRecalc(
     const queued = pending.find((j) => j.status === "queued");
     const failed = pending.filter((j) => j.status === "failed").map((j) => j.id);
     const earliest = pending.reduce((min, j) => (j.from < min ? j.from : min), from);
+    // The folded jobs' kinds join this request's: a cost change waiting behind a
+    // billable one re-rates both, from the earliest date.
+    const merged = kindsToColumn(
+      pending.reduce<RateKinds>((all, j) => unionKinds(all, kindsFromColumn(j.kinds)), kinds),
+    );
     if (failed.length > 0) await tx.delete(rateRecalcJob).where(inArray(rateRecalcJob.id, failed));
     if (queued) {
       await tx
         .update(rateRecalcJob)
-        .set({ from: earliest, cursorStart: null, cursorId: null, processed: 0, total: 0 })
+        .set({
+          from: earliest,
+          kinds: merged,
+          cursorStart: null,
+          cursorId: null,
+          processed: 0,
+          total: 0,
+        })
         .where(eq(rateRecalcJob.id, queued.id));
       return { jobId: queued.id, merged: true };
     }
     const id = randomUUID();
-    await tx.insert(rateRecalcJob).values({ id, workspaceId, createdBy: userId, from: earliest });
+    await tx
+      .insert(rateRecalcJob)
+      .values({ id, workspaceId, createdBy: userId, from: earliest, kinds: merged });
     return { jobId: id, merged: failed.length > 0 };
   });
 }
@@ -236,6 +271,7 @@ export async function runRateRecalcJob(
                 timeEntry.id,
                 rows.map((r) => r.id),
               ),
+              kindsFromColumn(job.kinds),
             ),
           );
           await tx

@@ -26,6 +26,7 @@ import {
   setProjectsArchived,
   updateProject,
 } from "@/server/catalog/projects";
+import { deleteReceiptObjects } from "@/server/expense-receipts";
 import { countProjectEntries } from "@/server/time-entries";
 import { authorize, authorizeProject } from "@/server/authz";
 import { requireWorkspaceAccess } from "@/server/workspace-access";
@@ -134,7 +135,8 @@ export async function deleteProjectAction(
     const viewer = await authorizeProject(ctx, "project.delete", projectId);
     const parsed = deleteProjectSchema.safeParse(input);
     if (!parsed.success) return fromZodError(parsed.error);
-    await deleteProject(getDb(), viewer, projectId, parsed.data);
+    const { orphanedReceipts } = await deleteProject(getDb(), viewer, projectId, parsed.data);
+    await deleteReceiptObjects(orphanedReceipts);
     refresh(slug);
     return ok(null);
   } catch (error) {

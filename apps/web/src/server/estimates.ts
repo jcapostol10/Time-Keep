@@ -229,3 +229,56 @@ export async function progressForProjects(
   const progress = await progressFor(db, viewer.workspaceId, subjects, now, zone.timezone);
   return visibleProgress(viewer, subjects, progress);
 }
+
+/**
+ * Whether anything on the project is rated in its currency today: the
+ * workspace's rate, the project's own or one of its tasks', or the rate of
+ * someone who is on the project (a member of it or of one of its groups;
+ * every active member when it is public). Each target counts by its latest
+ * row in force, so a rate cleared later ("no rate from this date") is no rate.
+ */
+export async function hasBillableRate(
+  db: Pick<DbExecutor, "execute">,
+  workspaceId: string,
+  projectId: string,
+  currency: string,
+  now: Date,
+): Promise<boolean> {
+  const result = await db.execute<{ rated: boolean }>(sql`
+    with onproject as (
+      select m.user_id
+      from membership m
+      where m.workspace_id = ${workspaceId} and m.status = 'ACTIVE'
+        and (
+          exists (select 1 from project p where p.id = ${projectId} and p.visibility = 'PUBLIC')
+          or exists (
+            select 1 from project_member pm
+            where pm.project_id = ${projectId} and pm.user_id = m.user_id
+          )
+          or exists (
+            select 1 from project_group pg
+            join user_group_member gm on gm.group_id = pg.group_id
+            where pg.project_id = ${projectId} and gm.user_id = m.user_id
+          )
+        )
+    ),
+    latest as (
+      select distinct on (r.level, r.user_id, r.project_id, r.task_id)
+             r.amount_minor, r.currency
+      from rate r
+      where r.workspace_id = ${workspaceId} and r.kind = 'billable'
+        and r.effective_from <= ${now}
+        and (
+          r.level = 'workspace'
+          or (r.level in ('project', 'task') and r.project_id = ${projectId})
+          or (r.level = 'project_member' and r.project_id = ${projectId}
+              and r.user_id in (select user_id from onproject))
+          or (r.level = 'member' and r.user_id in (select user_id from onproject))
+        )
+      order by r.level, r.user_id, r.project_id, r.task_id, r.effective_from desc
+    )
+    select exists (
+      select 1 from latest where amount_minor is not null and currency = ${currency}
+    ) as rated`);
+  return Boolean(result.rows[0]?.rated);
+}

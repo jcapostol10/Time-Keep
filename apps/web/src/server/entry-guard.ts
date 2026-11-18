@@ -151,12 +151,14 @@ export async function lockedReasonsForKeys(
   items: { id: string; key: string; instant: Date }[],
   noun: GuardedNoun,
   now: Date = new Date(),
+  /** The workspace's write rules when the caller has read them already. */
+  known?: Awaited<ReturnType<typeof writeRulesOf>>,
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (items.length === 0) return out;
   const actor = scope.actedBy ?? scope.actor;
   if (can(actor, "approval.editLocked", { kind: "none" })) return out;
-  const rules = await writeRulesOf(db, scope.workspaceId);
+  const rules = known ?? (await writeRulesOf(db, scope.workspaceId));
   const boundary = lockBoundary(rules.lock, now);
   const lockMessage = boundary
     ? `${noun} before ${formatDateKey(lockDateKey(rules.lock, now)!)} are locked.`
@@ -187,16 +189,17 @@ export async function lockedReasons(
   if (entries.length === 0) return new Map();
   const actor = scope.actedBy ?? scope.actor;
   if (can(actor, "approval.editLocked", { kind: "none" })) return new Map();
-  const { timezone } = await writeRulesOf(db, scope.workspaceId);
+  const rules = await writeRulesOf(db, scope.workspaceId);
   return lockedReasonsForKeys(
     db,
     scope,
     entries.map((e) => {
       const instant = new Date(e.start);
-      return { id: e.id, key: localDateKey(instant, timezone), instant };
+      return { id: e.id, key: localDateKey(instant, rules.timezone), instant };
     }),
     "Entries",
     now,
+    rules,
   );
 }
 
@@ -215,14 +218,15 @@ export async function lockedDays(
 ): Promise<Record<string, string>> {
   const actor = scope.actedBy ?? scope.actor;
   if (can(actor, "approval.editLocked", { kind: "none" })) return {};
-  const { timezone } = await writeRulesOf(db, scope.workspaceId);
+  const rules = await writeRulesOf(db, scope.workspaceId);
+  const { timezone } = rules;
   const items: { id: string; key: string; instant: Date }[] = [];
   for (let day = range.from; day < range.to; day = addDaysInZone(day, 1, viewerTimezone)) {
     const dayKey = localDateKey(day, viewerTimezone);
     const instant = zonedDateTimeToInstant({ date: dayKey, hours: 9, minutes: 0 }, viewerTimezone);
     items.push({ id: dayKey, key: localDateKey(instant, timezone), instant });
   }
-  return Object.fromEntries(await lockedReasonsForKeys(db, scope, items, "Entries", now));
+  return Object.fromEntries(await lockedReasonsForKeys(db, scope, items, "Entries", now, rules));
 }
 
 /**

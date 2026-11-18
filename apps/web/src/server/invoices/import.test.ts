@@ -27,7 +27,11 @@ vi.mock("../storage", () => ({
   presignedExportUrl: async (key: string) => `https://signed.test/${key}`,
   getExport: async () => store.pdf,
 }));
-vi.mock("./pdf", () => ({ buildInvoicePdf: async () => store.pdf }));
+vi.mock("./pdf", () => ({
+  buildInvoicePdf: async () => store.pdf,
+  invoiceHtml: async () => "<html></html>",
+  printInvoiceHtml: async () => store.pdf,
+}));
 
 const h = connectTestDb();
 const h2 = connectTestDb();

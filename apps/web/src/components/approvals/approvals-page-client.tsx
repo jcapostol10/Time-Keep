@@ -269,6 +269,7 @@ function UnsubmittedTable({ rows }: { rows: UnsubmittedPeriodDTO[] }) {
             <TableHead>Person</TableHead>
             <TableHead>Period</TableHead>
             <TableHead className="text-right">Time</TableHead>
+            <TableHead className="text-right">Expenses</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -279,6 +280,7 @@ function UnsubmittedTable({ rows }: { rows: UnsubmittedPeriodDTO[] }) {
               <TableCell className="text-right tabular-nums">
                 {formatDuration(r.workSeconds, viewer.durationFormat)}
               </TableCell>
+              <TableCell className="text-right tabular-nums">{r.expenseCount}</TableCell>
             </TableRow>
           ))}
         </TableBody>

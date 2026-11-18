@@ -42,6 +42,9 @@ describe("invoice settings (Phase 6d)", () => {
 
   it("the next number starts at 1 and a percent stops at 100", () => {
     expect(invoiceSettingsSchema.safeParse({ nextNumber: 0 }).success).toBe(false);
+    // The column is a 32-bit integer and every invoice adds one.
+    expect(invoiceSettingsSchema.safeParse({ nextNumber: 2_147_483_647 }).success).toBe(false);
+    expect(invoiceSettingsSchema.safeParse({ nextNumber: 999_999_999 }).success).toBe(true);
     expect(invoiceSettingsSchema.safeParse({ tax1Name: "VAT", tax1Bps: 10001 }).success).toBe(
       false,
     );
@@ -180,6 +183,27 @@ describe("recurring invoice", () => {
       importGroupBy: "project",
       mode: "DRAFT",
       active: true,
+    });
+  });
+
+  describe("an invoice line's amount", () => {
+    it("is bounded, with a sentence a person can read", () => {
+      // Each field is within its own limit; the product is not an amount anyone bills.
+      const huge = invoiceLineSchema.safeParse({
+        description: "Everything",
+        quantityCenti: 1_000_000_000,
+        unitPriceMinor: 10_000_000_000_000,
+      });
+      expect(huge.success ? null : huge.error.issues[0]?.message).toBe(
+        "This line's amount is too large.",
+      );
+      expect(
+        invoiceLineSchema.safeParse({
+          description: "A lot",
+          quantityCenti: 100,
+          unitPriceMinor: 10_000_000_000_000,
+        }).success,
+      ).toBe(true);
     });
   });
 });

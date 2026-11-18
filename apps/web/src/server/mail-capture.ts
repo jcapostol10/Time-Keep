@@ -1,6 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 
-import { capturedEmail, type Database, desc, eq } from "@timekeep/db";
+import { type CapturedAttachment, capturedEmail, type Database, desc, eq } from "@timekeep/db";
 import { isE2eEmail } from "@timekeep/db/e2e-tenant";
 
 /**
@@ -49,6 +49,25 @@ export interface OutgoingEmail {
   subject: string;
   html: string;
   text: string;
+  /** What the email carried as files: metadata only (see `attachmentMeta`). */
+  attachments?: CapturedAttachment[];
+}
+
+/**
+ * What a captured email keeps of its attachments: the name, the type and the
+ * size, never the bytes. The table is shared with production, and the e2e
+ * suite only needs to know that the PDF went out.
+ */
+export function attachmentMeta(
+  attachments: { filename: string; content: Uint8Array }[] | undefined,
+): CapturedAttachment[] {
+  return (attachments ?? []).map((a) => ({
+    filename: a.filename,
+    contentType: a.filename.toLowerCase().endsWith(".pdf")
+      ? "application/pdf"
+      : "application/octet-stream",
+    size: a.content.byteLength,
+  }));
 }
 
 export async function captureEmail(db: Database, msg: OutgoingEmail): Promise<void> {
@@ -58,12 +77,14 @@ export async function captureEmail(db: Database, msg: OutgoingEmail): Promise<vo
     subject: msg.subject,
     html: msg.html,
     text: msg.text,
+    attachments: msg.attachments ?? [],
   });
 }
 
 export interface CapturedMessage extends OutgoingEmail {
   id: string;
   createdAt: string;
+  attachments: CapturedAttachment[];
 }
 
 /** A recipient's captured messages, newest first; `subject` is a case-insensitive regex. */
@@ -93,6 +114,7 @@ export async function listCapturedEmails(
       subject: r.subject,
       html: r.html,
       text: r.text,
+      attachments: r.attachments,
       createdAt: r.createdAt.toISOString(),
     }));
 }

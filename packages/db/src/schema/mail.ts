@@ -1,4 +1,12 @@
-import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+
+/** What a captured email says about a file it carried: never the bytes. */
+export interface CapturedAttachment {
+  filename: string;
+  contentType: string;
+  size: number;
+}
 
 /**
  * Outgoing email stored instead of sent, on preview deployments only
@@ -14,6 +22,11 @@ export const capturedEmail = pgTable(
     subject: text("subject").notNull(),
     html: text("html").notNull(),
     text: text("text").notNull(),
+    /** Metadata of the attachments, so e2e can check a PDF went out. */
+    attachments: jsonb("attachments")
+      .$type<CapturedAttachment[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("captured_email_to_created_idx").on(t.toAddress, t.createdAt.desc())],

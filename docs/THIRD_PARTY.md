@@ -22,3 +22,8 @@ dates are computed and marked "Estimated: confirm the proclaimed date".
   code on the account page, and the fake camera stream of the QR e2e test.
 - [jsQR](https://github.com/cozmo/jsQR) 1.4.0 (Apache-2.0): reads QR codes from the kiosk
   camera's frames in the browser.
+
+## Zip files: fflate (Phase 6c)
+
+- [fflate](https://github.com/101arrowz/fflate) 0.8.3 (MIT): builds the receipts zip on the
+  server. Pinned exactly, like the other libraries that read or write files.

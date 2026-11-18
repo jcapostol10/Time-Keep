@@ -27,6 +27,7 @@ import {
 
 import type { InvoiceDTO } from "@/lib/invoice-types";
 
+import { clientLock } from "../invoice-lock";
 import { CatalogError, isUniqueViolation } from "../catalog/errors";
 import type { Viewer } from "../catalog/viewer";
 import { env } from "../env";
@@ -35,7 +36,7 @@ import { enqueueEmail } from "../outbox";
 import { uploadExport } from "../storage";
 import { releaseInvoiced } from "../time-entries";
 import { invoiceSentEmail } from "./emails";
-import { buildInvoicePdf } from "./pdf";
+import { invoiceHtml, printInvoiceHtml } from "./pdf";
 import { findOwned, getInvoice, listInvoices, loadDTO, requireManage } from "./read";
 import { invoiceWorkspace, readInvoiceSettings, takeInvoiceNumber } from "./settings";
 import { hashInvoiceToken, newInvoiceToken, publicInvoicePath } from "./tokens";
@@ -54,12 +55,10 @@ type Executor = DbExecutor;
 
 export const DRAFT_ONLY = "Only a draft can be changed.";
 const ALREADY_SENT = "This invoice was already sent.";
+const TOTAL_TOO_LARGE = "This invoice's total is too large.";
 const IS_VOID = "This invoice is void.";
 
-/** One import per client at a time (decision 23): a transaction-scoped advisory lock. */
-export function clientLock(clientId: string) {
-  return sql`SELECT pg_advisory_xact_lock(hashtext(${`invoice:${clientId}`}))`;
-}
+export { clientLock };
 
 /** The lines' sum through core `invoiceTotals`, cached on the row for the list. */
 export async function recomputeTotals(tx: Executor, id: string): Promise<void> {
@@ -76,7 +75,13 @@ export async function recomputeTotals(tx: Executor, id: string): Promise<void> {
     .select({ amountMinor: invoiceItem.amountMinor })
     .from(invoiceItem)
     .where(eq(invoiceItem.invoiceId, id));
-  const totals = invoiceTotals(lines, inv);
+  let totals;
+  try {
+    totals = invoiceTotals(lines, inv);
+  } catch {
+    // Imported lines are not bounded by the line schema: say it, rather than overflow.
+    throw new CatalogError("INVALID", TOTAL_TOO_LARGE);
+  }
   await tx
     .update(invoice)
     .set({ subtotalMinor: totals.subtotalMinor, totalMinor: totals.totalMinor })
@@ -177,11 +182,12 @@ export async function createInvoice(
   return getInvoice(db, viewer, id, now);
 }
 
-const AFTER_SEND = new Set<keyof InvoicePatch>(["notes", "externalRef"]);
+// The notes are printed on the frozen PDF, so they freeze with it (backlog ruling R-F).
+const AFTER_SEND = new Set<keyof InvoicePatch>(["externalRef"]);
 
 /**
- * A draft takes every field; a sent or void invoice only its notes and the
- * accounting reference. A tax applies only with both a name and a rate.
+ * A draft takes every field; a sent or void invoice only the accounting
+ * reference. A tax applies only with both a name and a rate.
  */
 export async function updateInvoice(
   db: Database,
@@ -411,12 +417,46 @@ export async function voidInvoice(
   return getInvoice(db, viewer, id, now);
 }
 
+/** What a send needs to be true, read from `db` (the row locked when `lock`). */
+async function sendable(
+  db: Executor,
+  workspaceId: string,
+  id: string,
+  opts: { email: boolean; lock: boolean },
+): Promise<{ row: Invoice; to: string }> {
+  const row = await findOwned(db, workspaceId, id, opts.lock);
+  if (row.status === "VOID") throw new CatalogError("INVALID", IS_VOID);
+  if (row.status !== "DRAFT") throw new CatalogError("INVALID", ALREADY_SENT);
+  const [lines] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(invoiceItem)
+    .where(eq(invoiceItem.invoiceId, id));
+  if (!lines || Number(lines.n) === 0) {
+    throw new CatalogError("INVALID", "Add a line before sending.");
+  }
+  const [c] = await db
+    .select({ email: client.email, name: client.name })
+    .from(client)
+    .where(eq(client.id, row.clientId));
+  const to = c?.email.trim() ?? "";
+  if (opts.email && !to) throw new CatalogError("INVALID", "This client has no email address.");
+  return { row, to };
+}
+
+const CHANGED_WHILE_SENDING = "The invoice changed while it was being sent. Try again.";
+
 /**
  * Decision 24: freezes the PDF in the private bucket, mints the public token
  * (the sha256 stored, the token returned once as `publicPath`), marks the
  * invoice sent and, with `email`, enqueues the client's email with the PDF
- * attached, all in one transaction under the row lock, so two sends make one
- * PDF and one email. "Mark as sent" is the same without the email.
+ * attached. "Mark as sent" is the same without the email.
+ *
+ * Chromium prints before the transaction, so the row lock and a pooled
+ * connection are not held for the seconds it takes. Under the lock the page
+ * is rendered again (no browser) and must equal what was printed: an invoice
+ * edited meanwhile is refused, never sent with a PDF that does not match it.
+ * A second send waits on the lock, finds the invoice sent and uploads
+ * nothing, so two sends still make one PDF and one email.
  */
 export async function sendInvoice(
   db: Database,
@@ -427,25 +467,15 @@ export async function sendInvoice(
   requireManage(viewer);
   const now = opts.now ?? new Date();
   const ws = await invoiceWorkspace(db, viewer.workspaceId);
+  // Refused before the printer starts when it cannot be sent anyway.
+  await sendable(db, ws.id, id, { email: opts.email, lock: false });
+  const printed = await invoiceHtml(db, viewer, id, now, { frozen: true });
+  const pdf = await printInvoiceHtml(printed);
   const token = await db.transaction(async (tx) => {
-    const row = await findOwned(tx, ws.id, id, true);
-    if (row.status === "VOID") throw new CatalogError("INVALID", IS_VOID);
-    if (row.status !== "DRAFT") throw new CatalogError("INVALID", ALREADY_SENT);
-    const [lines] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(invoiceItem)
-      .where(eq(invoiceItem.invoiceId, id));
-    if (!lines || Number(lines.n) === 0) {
-      throw new CatalogError("INVALID", "Add a line before sending.");
+    const { row, to } = await sendable(tx, ws.id, id, { email: opts.email, lock: true });
+    if ((await invoiceHtml(tx, viewer, id, now, { frozen: true })) !== printed) {
+      throw new CatalogError("CONFLICT", CHANGED_WHILE_SENDING);
     }
-    const [c] = await tx
-      .select({ email: client.email, name: client.name })
-      .from(client)
-      .where(eq(client.id, row.clientId));
-    const to = c?.email.trim() ?? "";
-    if (opts.email && !to) throw new CatalogError("INVALID", "This client has no email address.");
-
-    const pdf = await buildInvoicePdf(tx, viewer, id, now, { frozen: true });
     const key = `invoices/${ws.id}/${id}.pdf`;
     await uploadExport({ key, body: pdf, contentType: "application/pdf" });
     const token = newInvoiceToken();

@@ -40,7 +40,14 @@ async function mailpitMessage(id: string): Promise<Message> {
   return (await res.json()) as Message;
 }
 
-async function capturedMessages(to: string, subject?: RegExp): Promise<Message[]> {
+interface CapturedMessage {
+  subject: string;
+  text: string;
+  html: string;
+  attachments?: { filename: string; contentType: string; size: number }[];
+}
+
+async function capturedRaw(to: string, subject?: RegExp): Promise<CapturedMessage[]> {
   const params = new URLSearchParams({ to });
   if (subject) params.set("subject", subject.source);
   const res = await fetch(`${REMOTE_URL}/api/test/emails?${params}`, {
@@ -50,10 +57,15 @@ async function capturedMessages(to: string, subject?: RegExp): Promise<Message[]
     },
   });
   if (!res.ok) throw new Error(`Captured email lookup failed: ${res.status}`);
-  const body = (await res.json()) as {
-    messages: { subject: string; text: string; html: string }[];
-  };
-  return body.messages.map((m) => ({ Subject: m.subject, Text: m.text, HTML: m.html }));
+  return ((await res.json()) as { messages: CapturedMessage[] }).messages;
+}
+
+async function capturedMessages(to: string, subject?: RegExp): Promise<Message[]> {
+  return (await capturedRaw(to, subject)).map((m) => ({
+    Subject: m.subject,
+    Text: m.text,
+    HTML: m.html,
+  }));
 }
 
 /**
@@ -104,18 +116,29 @@ export interface MailAttachment {
 }
 
 /**
- * The attachments of the newest email to `to` matching `subject` (Phase 6d).
- * Mailpit only: captured email on a preview keeps no attachments, so this
- * runs in the nightly lane.
+ * The attachments of the newest email to `to` matching `subject` (Phase 6d):
+ * from Mailpit locally, and on a preview from the captured email, which keeps
+ * each attachment's name, type and size (never its bytes).
  */
 export async function waitForEmailAttachments(
   to: string,
   subject: RegExp,
   timeoutMs = 15_000,
 ): Promise<MailAttachment[]> {
-  if (REMOTE_URL) throw new Error("Attachments are only readable through Mailpit");
-  const deadline = Date.now() + timeoutMs;
+  const deadline = Date.now() + (REMOTE_URL ? Math.max(timeoutMs, 30_000) : timeoutMs);
   while (Date.now() < deadline) {
+    if (REMOTE_URL) {
+      const [captured] = await capturedRaw(to, subject);
+      if (captured) {
+        return (captured.attachments ?? []).map((a) => ({
+          FileName: a.filename,
+          ContentType: a.contentType,
+          Size: a.size,
+        }));
+      }
+      await new Promise((r) => setTimeout(r, 500));
+      continue;
+    }
     const hit = (await mailpitSearch(to)).find((m) => subject.test(m.Subject));
     if (hit) {
       const res = await fetch(`${MAILPIT_URL}/api/v1/message/${hit.ID}`);

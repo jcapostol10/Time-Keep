@@ -9,7 +9,7 @@ import {
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 
-import { askForNote, needsNote, withNoteRetry } from "@/components/approvals/note-prompt";
+import { withNote, withNoteRetry } from "@/components/approvals/note-prompt";
 import type { ActionResult } from "@/lib/action-result";
 import type { ExpenseCategoryDTO, ExpenseDTO, ExpensePage } from "@/lib/expense-types";
 import { fetchJson } from "@/lib/fetch-json";
@@ -47,17 +47,18 @@ export function useExpenseCategories(slug: string, archived = false, enabled = t
   });
 }
 
-/** Sends a prepared receipt; a write into a submitted period asks the admin for a note once. */
+/** Sends a prepared receipt; `note` goes from the start when the save before it was asked for one. */
 async function uploadReceipt(
   slug: string,
   expenseId: string,
   receipt: PreparedReceipt,
+  note?: string,
 ): Promise<ActionResult<ExpenseDTO>> {
-  const send = async (note?: string): Promise<ActionResult<ExpenseDTO>> => {
+  const send = async (withNote?: string): Promise<ActionResult<ExpenseDTO>> => {
     const form = new FormData();
     form.append("file", receipt.file, `receipt.${receipt.extension}`);
     if (receipt.thumb) form.append("thumb", receipt.thumb, "thumb.jpg");
-    if (note) form.append("note", note);
+    if (withNote) form.append("note", withNote);
     const res = await fetch(expenseUrls.receipt(slug, expenseId), { method: "POST", body: form });
     const body = (await res.json().catch(() => ({}))) as {
       error?: string;
@@ -70,11 +71,30 @@ async function uploadReceipt(
       fieldErrors: body.fieldErrors,
     };
   };
-  const first = await send();
-  if (!needsNote(first)) return first;
-  const note = await askForNote();
-  if (note === null) return { ok: false, error: "Not changed: no reason was given." };
-  return send(note);
+  return withNoteRetry(send, note);
+}
+
+/** Removes the receipt only; `note` as for `uploadReceipt`. */
+async function deleteReceipt(
+  slug: string,
+  expenseId: string,
+  note?: string,
+): Promise<ActionResult<ExpenseDTO>> {
+  const send = async (withNote?: string): Promise<ActionResult<ExpenseDTO>> => {
+    const url = `${expenseUrls.receipt(slug, expenseId)}${withNote ? `?note=${encodeURIComponent(withNote)}` : ""}`;
+    const res = await fetch(url, { method: "DELETE" });
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      fieldErrors?: Record<string, string[]>;
+    };
+    if (res.ok) return { ok: true, data: body as unknown as ExpenseDTO };
+    return {
+      ok: false,
+      error: body.error ?? "The receipt could not be removed.",
+      fieldErrors: body.fieldErrors,
+    };
+  };
+  return withNoteRetry(send, note);
 }
 
 /**
@@ -97,16 +117,22 @@ export function useExpenseWrites(slug: string) {
       settle();
     };
     return {
-      /** Saves a new or edited expense, then its receipt when one was chosen. */
+      /**
+       * Saves a new or edited expense, then its receipt: a new file, or the
+       * removal of the old one. The expense goes first, so a save that fails
+       * has not already cost the receipt, and a note asked for by the save is
+       * sent with the receipt write too (one prompt for the whole save).
+       */
       async save(
         input: Record<string, unknown>,
         expenseId: string | null,
         receipt: PreparedReceipt | null,
+        removeReceipt = false,
       ): Promise<ExpenseDTO | null> {
-        const result = await withNoteRetry((note) =>
+        const { result, note } = await withNote((withNote) =>
           expenseId
-            ? updateExpenseAction(slug, expenseId, { ...input, note })
-            : createExpenseAction(slug, { ...input, note }),
+            ? updateExpenseAction(slug, expenseId, { ...input, note: withNote })
+            : createExpenseAction(slug, { ...input, note: withNote }),
         );
         if (!result.ok) {
           toast.error(result.error);
@@ -114,9 +140,12 @@ export function useExpenseWrites(slug: string) {
         }
         let saved = result.data;
         if (receipt) {
-          const uploaded = await uploadReceipt(slug, saved.id, receipt);
+          const uploaded = await uploadReceipt(slug, saved.id, receipt, note);
           if (uploaded.ok) saved = uploaded.data;
           else toast.error("The receipt could not be uploaded.");
+        } else if (removeReceipt) {
+          const removed = await deleteReceipt(slug, saved.id, note);
+          if (!removed.ok) toast.error(removed.error);
         }
         toast.success("Expense saved");
         settle();
@@ -136,30 +165,6 @@ export function useExpenseWrites(slug: string) {
           duration: UNDO_MS,
           action: { label: "Undo", onClick: () => void restore(expense.id) },
         });
-        return true;
-      },
-      /** Removes the receipt only. */
-      async removeReceipt(expenseId: string): Promise<boolean> {
-        const send = async (note?: string): Promise<ActionResult<ExpenseDTO>> => {
-          const url = `${expenseUrls.receipt(slug, expenseId)}${note ? `?note=${encodeURIComponent(note)}` : ""}`;
-          const res = await fetch(url, { method: "DELETE" });
-          const body = (await res.json().catch(() => ({}))) as {
-            error?: string;
-            fieldErrors?: Record<string, string[]>;
-          };
-          if (res.ok) return { ok: true, data: body as unknown as ExpenseDTO };
-          return {
-            ok: false,
-            error: body.error ?? "The receipt could not be removed.",
-            fieldErrors: body.fieldErrors,
-          };
-        };
-        const result = await withNoteRetry(send);
-        if (!result.ok) {
-          toast.error(result.error);
-          return false;
-        }
-        settle();
         return true;
       },
     };

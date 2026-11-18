@@ -50,7 +50,7 @@ export async function prepareReceipt(file: File): Promise<PreparedReceipt> {
   }
   const declared = IMAGE_TYPES.find((t) => t === file.type);
   if (!declared) throw new Error("Receipts are JPEG, PNG, WebP or PDF files.");
-  const image = await createImageBitmap(file);
+  const image = await createImageBitmap(file, { imageOrientation: "from-image" });
   try {
     const thumb = await drawJpeg(image, THUMB_MAX_SIDE, 0.8);
     const tooBig =

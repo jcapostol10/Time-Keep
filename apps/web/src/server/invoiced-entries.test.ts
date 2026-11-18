@@ -12,7 +12,8 @@ import {
   truncateAll,
 } from "../../test/db";
 import { loadViewer, scopeForUser } from "./authz";
-import { createClient, deleteClient, updateClient } from "./catalog/clients";
+import { clientLock } from "./invoice-lock";
+import { createClient, deleteClient, listClients, updateClient } from "./catalog/clients";
 import { createProject, deleteProject, updateProject } from "./catalog/projects";
 import type { Viewer } from "./catalog/viewer";
 import { createExpenseCategory } from "./expense-categories";
@@ -294,6 +295,31 @@ describe("an invoiced entry", () => {
   });
 });
 
+describe("deleting a project while an import is marking its time", () => {
+  it("waits for the import and then refuses", async () => {
+    const other = connectTestDb();
+    try {
+      const e = await entry("bob");
+      const inv = await invoiceRow();
+      const owner = await viewer("olga");
+      let removal: Promise<unknown> | undefined;
+      await db.transaction(async (tx) => {
+        // The import holds the client's lock while it marks its rows.
+        await tx.execute(clientLock(acmeId));
+        removal = deleteProject(other.db, owner, webId, { mode: "delete" });
+        removal.catch(() => undefined);
+        await new Promise((r) => setTimeout(r, 400));
+        await markInvoiced(tx, wsId, [e.id], inv);
+      });
+      await expect(removal).rejects.toThrow(
+        "This project has invoiced time. Void the invoices first.",
+      );
+    } finally {
+      await other.close();
+    }
+  });
+});
+
 describe("an invoiced expense", () => {
   it("is read-only and filtered, until released", async () => {
     const owner = await viewer("olga");
@@ -381,6 +407,16 @@ describe("a client with invoices", () => {
     });
     // A currency it already has is no change.
     await expect(updateClient(db, wsId, acmeId, { currency: null })).resolves.toBeTruthy();
+  });
+
+  it("is listed as having invoices until they are all void", async () => {
+    const listed = async () =>
+      (await listClients(db, wsId, {})).find((c) => c.id === acmeId)?.hasInvoices;
+    expect(await listed()).toBe(false);
+    const inv = await invoiceRow("INV-0009", "SENT");
+    expect(await listed()).toBe(true);
+    await db.update(invoice).set({ status: "VOID" }).where(eq(invoice.id, inv));
+    expect(await listed()).toBe(false);
   });
 
   it("may change its currency once its only invoice is void", async () => {

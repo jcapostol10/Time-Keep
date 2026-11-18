@@ -152,13 +152,19 @@ test.describe("expenses", () => {
     await expenseAction(page, "Lunch", "Edit");
     const dialog = page.getByRole("dialog", { name: "Edit expense" });
     await dialog.getByRole("textbox", { name: /^Amount/ }).fill("30");
+    // The receipt too: two writes (the expense, then its file), one question.
+    await dialog.getByLabel("Receipt").setInputFiles(RECEIPT);
     await dialog.getByRole("button", { name: "Save expense" }).click();
     const prompt = page.getByRole("dialog", { name: "Why are you changing submitted time?" });
     await prompt.getByRole("textbox", { name: "Note" }).fill("The receipt said 30");
     await prompt.getByRole("button", { name: "Save change" }).click();
     await expect(prompt).toBeHidden();
+    // A second question would hold the edit dialog open behind it.
     await expect(dialog).toBeHidden();
+    await expect(page.getByText("Expense saved").first()).toBeVisible();
+    await expect(prompt).toBeHidden();
     await expect(expenseRow(page, "Lunch")).toContainText("$30.00");
+    await expect(expenseRow(page, "Lunch").getByRole("img", { name: "Receipt" })).toBeVisible();
 
     // The period page lists the expense and the change.
     await openApprovals(page, slug, "pending");
@@ -166,11 +172,44 @@ test.describe("expenses", () => {
     await waitForApp(page);
     await expect(page.getByRole("region", { name: "Expenses" })).toContainText("Lunch");
     await expect(page.getByRole("region", { name: "Expenses" })).toContainText("$30.00");
+    // The time is as submitted; the expense is not, and the page says so.
+    await expect(page.getByText(/after changes/)).toContainText("1 expense · $30.00");
     await expect(page.getByRole("region", { name: "History" })).toContainText("changed an expense");
     await expect(page.getByRole("region", { name: "History" })).toContainText(
       "The receipt said 30",
     );
     await mel.context.close();
+  });
+
+  test("adding an expense for someone else offers that person's projects", async ({
+    page,
+    freshUser,
+    browser,
+    baseURL,
+  }) => {
+    const { slug } = freshUser;
+    await createProjectViaUi(page, slug, "Website");
+    // Private, and Mel is not on it: the owner sees it, Mel does not.
+    await createProjectViaUi(page, slug, "Board only", { visibility: "Private" });
+    const mel = await addTeammate(page, browser, baseURL, slug, "Mel Member", "Member");
+    await mel.context.close();
+
+    await openExpenses(page, slug);
+    await page.getByRole("button", { name: "Add expense" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add expense" });
+    const options = async () => {
+      await dialog.getByRole("button", { name: /^Project:/ }).click();
+      await expect(page.getByRole("option", { name: "Website", exact: true })).toBeVisible();
+      const board = await page.getByRole("option", { name: "Board only", exact: true }).count();
+      await page.keyboard.press("Escape");
+      return board;
+    };
+    // For themselves: both projects.
+    expect(await options()).toBe(1);
+    await dialog.getByRole("combobox", { name: "Person" }).click();
+    await page.getByRole("option", { name: "Mel Member", exact: true }).click();
+    // For Mel: only what Mel may record on.
+    expect(await options()).toBe(0);
   });
 
   test("the Expenses report totals by category and exports a CSV", async ({ page, freshUser }) => {

@@ -15,6 +15,8 @@ export interface ClientDTO {
   currency: string | null;
   archived: boolean;
   projectCount: number;
+  /** An invoice that is not void: the currency cannot change. */
+  hasInvoices: boolean;
 }
 
 export interface ProjectListItem {
@@ -68,6 +70,10 @@ export interface BudgetDTO {
 }
 
 export interface ProjectStatus {
+  /** The stopped entries in the range (core `hasProfit` needs the count). */
+  entryCount: number;
+  /** The project's currency when nothing on it is rated in that currency; null otherwise, and for viewers who see no amounts. */
+  unratedIn: string | null;
   from: string;
   to: string;
   /** Time per week of the range when it is longer than a month; null otherwise. */

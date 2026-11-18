@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   char,
@@ -73,6 +74,11 @@ export const rateRecalcJob = pgTable(
       .references(() => workspace.id, { onDelete: "cascade" }),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     from: timestamp("from", { withTimezone: true }).notNull(),
+    /** Which snapshots the job re-rates: "billable", "cost" or both (the default). */
+    kinds: text("kinds")
+      .array()
+      .notNull()
+      .default(sql`'{billable,cost}'::text[]`),
     status: rateRecalcStatusEnum("status").notNull().default("queued"),
     total: integer("total"),
     processed: integer("processed").notNull().default(0),

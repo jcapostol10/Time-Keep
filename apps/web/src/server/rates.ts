@@ -38,6 +38,7 @@ import { CatalogError } from "./catalog/errors";
 import type { RateDTO } from "@/lib/rate-types";
 
 import type { Viewer } from "./catalog/viewer";
+import { currencyLock } from "./currency-lock";
 import { requestRateRecalc } from "./rate-recalc";
 
 export type { RateDTO };
@@ -186,24 +187,6 @@ export async function setRate(
   const target = await resolveTarget(db, viewer, input);
   const settings = await settingsOf(db, viewer.workspaceId);
   const timezone = settings.timezone;
-  // A rate is in the currency of what it prices; cost is what the company pays.
-  const currency =
-    kind === "billable" && target.projectId
-      ? await projectCurrency(db, viewer.workspaceId, target.projectId)
-      : settings.currency;
-
-  const typed = input.amount?.trim() ?? "";
-  let amountMinor: number | null = null;
-  if (typed !== "") {
-    amountMinor = parseMoney(typed, currency);
-    if (amountMinor === null) {
-      const decimals = currencyExponent(currency);
-      throw new CatalogError(
-        "INVALID",
-        `Enter an hourly amount in ${currency} with at most ${decimals} decimal${decimals === 1 ? "" : "s"}.`,
-      );
-    }
-  }
   if (input.apply === "from" && !input.from) {
     throw new CatalogError("INVALID", "Choose the date the rate applies from.");
   }
@@ -211,6 +194,27 @@ export async function setRate(
 
   const id = randomUUID();
   const [row] = await db.transaction(async (tx) => {
+    // The currency is read under the lock: a relabel in flight finishes first.
+    await tx.execute(currencyLock(viewer.workspaceId));
+    // A rate is in the currency of what it prices; cost is what the company pays.
+    const currency =
+      kind === "billable" && target.projectId
+        ? await projectCurrency(tx, viewer.workspaceId, target.projectId)
+        : (await settingsOf(tx, viewer.workspaceId)).currency;
+
+    const typed = input.amount?.trim() ?? "";
+    let amountMinor: number | null = null;
+    if (typed !== "") {
+      amountMinor = parseMoney(typed, currency);
+      if (amountMinor === null) {
+        const decimals = currencyExponent(currency);
+        throw new CatalogError(
+          "INVALID",
+          `Enter an hourly amount in ${currency} with at most ${decimals} decimal${decimals === 1 ? "" : "s"}.`,
+        );
+      }
+    }
+
     // From its date on, this rate replaces whatever the level said: a later row
     // would otherwise keep winning for the entries after it.
     await tx
@@ -251,7 +255,11 @@ export async function setRate(
   const jobId =
     input.apply === "new"
       ? null
-      : (await requestRateRecalc(db, viewer.workspaceId, viewer.userId, effectiveFrom)).jobId;
+      : (
+          await requestRateRecalc(db, viewer.workspaceId, viewer.userId, effectiveFrom, {
+            [kind]: true,
+          })
+        ).jobId;
   return { rate: toDTO(row, null), jobId };
 }
 

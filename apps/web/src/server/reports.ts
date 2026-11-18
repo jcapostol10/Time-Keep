@@ -267,7 +267,9 @@ function totalsOfRow(row: MeasureRow, workspaceCurrency: string): ReportTotals {
     billableSeconds: Number(row.billableSeconds),
     entryCount,
     amountMinor: own ? amount : 0,
-    otherAmounts: own || amount === 0 ? [] : [{ currency, amountMinor: amount }],
+    // A zero stays in its own currency: a row billed only in EUR never reads as a
+    // workspace-currency zero, and the export keeps its column.
+    otherAmounts: own ? [] : [{ currency, amountMinor: amount }],
     unratedCount: Number(row.unratedCount),
     costMinor: cost,
     uncostedCount: Number(row.uncostedCount),
@@ -589,6 +591,8 @@ export async function summaryReport(
   query: ReportQuery,
   prefs: ViewerPrefs,
   now: Date = new Date(),
+  /** `progress: false` for callers that never render the budget bars (exports, Profit). */
+  opts: { progress?: boolean } = {},
 ): Promise<SummaryReport> {
   const eff = effectiveQuery(query, viewer);
   const range = resolveReportRange(eff, prefs, now);
@@ -616,7 +620,8 @@ export async function summaryReport(
     groupBy: eff.groupBy,
     groups: maskGroups(groups, money),
     totals: maskTotals(totals, money),
-    progress: await progressOfGroups(db, viewer, eff.groupBy, groups, now),
+    progress:
+      opts.progress === false ? null : await progressOfGroups(db, viewer, eff.groupBy, groups, now),
   };
 }
 
@@ -678,7 +683,7 @@ export async function profitReport(
   const timeOnly =
     query.taskIds.length > 0 || query.tagIds.length > 0 || query.description.trim() !== "";
   const [report, spent] = await Promise.all([
-    summaryReport(db, viewer, { ...query, groupBy: [key] }, prefs, now),
+    summaryReport(db, viewer, { ...query, groupBy: [key] }, prefs, now, { progress: false }),
     timeOnly
       ? new Map<string | null, ExpenseGroupTotals>()
       : expenseTotalsBy(db, viewer, key, query, prefs, now),

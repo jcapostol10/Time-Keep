@@ -167,7 +167,7 @@ export const workspaceSettingsSchema = z.object({
   budgetThresholds: z
     .array(
       z
-        .number()
+        .number({ error: THRESHOLD_MESSAGE })
         .int(THRESHOLD_MESSAGE)
         .min(1, THRESHOLD_MESSAGE)
         .max(BUDGET_THRESHOLD_MAX, THRESHOLD_MESSAGE),
@@ -1002,7 +1002,8 @@ export const invoiceSettingsSchema = z
     notes: z.string().trim().max(2000).default(""),
     paymentTermsDays: z.int().min(0).max(365).default(30),
     numberPrefix: z.string().trim().max(10).default("INV-"),
-    nextNumber: z.int().min(1).default(1),
+    // The column is a 32-bit integer and each invoice takes the next one.
+    nextNumber: z.int().min(1).max(999_999_999).default(1),
     numberPadding: z.int().min(0).max(8).default(4),
     tax1Name: taxNameSchema,
     tax1Bps: taxBpsSchema,
@@ -1043,11 +1044,24 @@ export const invoicePatchSchema = z
   });
 export type InvoicePatch = z.infer<typeof invoicePatchSchema>;
 
-export const invoiceLineSchema = z.object({
-  description: z.string().trim().min(1).max(500),
-  quantityCenti: z.int().min(1).max(1_000_000_000),
-  unitPriceMinor: z.int().min(0).max(10_000_000_000_000),
-});
+/** The most one line may come to, in minor units (the cap a payment has too). */
+export const INVOICE_LINE_MAX_MINOR = 10_000_000_000_000;
+const LINE_TOO_LARGE = "This line's amount is too large.";
+
+export const invoiceLineSchema = z
+  .object({
+    description: z.string().trim().min(1).max(500),
+    quantityCenti: z.int().min(1).max(1_000_000_000),
+    unitPriceMinor: z.int().min(0).max(10_000_000_000_000),
+  })
+  // Each field fits on its own; their product must still be an amount the
+  // database column and a JavaScript number hold exactly.
+  .refine(
+    (line) =>
+      BigInt(line.quantityCenti) * BigInt(line.unitPriceMinor) <=
+      BigInt(INVOICE_LINE_MAX_MINOR) * BigInt(100),
+    { message: LINE_TOO_LARGE, path: ["unitPriceMinor"] },
+  );
 export type InvoiceLineInput = z.infer<typeof invoiceLineSchema>;
 
 export const invoiceImportSchema = z

@@ -47,6 +47,9 @@ describe("expenseAmount", () => {
 describe("parseQuantity", () => {
   it("takes up to two decimals, comma or point", () => {
     expect(parseQuantity("12.5")).toBe(1250);
+    expect(parseQuantity(".5")).toBe(50);
+    expect(parseQuantity(",25")).toBe(25);
+    expect(parseQuantity(".")).toBeNull();
     expect(parseQuantity("1,5")).toBe(150);
     expect(parseQuantity("12")).toBe(1200);
     expect(parseQuantity(" 3.25 ")).toBe(325);

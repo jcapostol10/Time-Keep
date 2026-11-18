@@ -220,7 +220,7 @@ export async function renderReportHtml(
   const fmt = (s: number) => formatDuration(s, req.prefs.durationFormat);
 
   if (req.report === "summary") {
-    const report = await summaryReport(db, viewer, req.query, req.prefs, now);
+    const report = await summaryReport(db, viewer, req.query, req.prefs, now, { progress: false });
     const rows = flattenGroups(report.groups, report.groupBy);
     const body = `<div class="charts">${barChart(report.series, req.prefs.durationFormat)}${donut(slicesOf(report))}</div>${table(rows, summaryColumns(report.groupBy, req.prefs, exportMoney(report.money, [report.totals])))}`;
     const html = page({

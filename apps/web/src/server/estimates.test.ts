@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
 
 import { type Estimate, NO_ESTIMATE } from "@timekeep/core";
-import { client, eq, projectMember, rate, timeEntry, workspaceSettings } from "@timekeep/db";
+import {
+  client,
+  eq,
+  project,
+  projectMember,
+  rate,
+  timeEntry,
+  workspaceSettings,
+} from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -198,6 +206,9 @@ describe("progressFor", () => {
   });
 });
 
+/** What the Budget page passes from the workspace settings it already holds. */
+const SETTINGS = { timezone: TZ, budgetThresholds: [50, 80, 100], weekStart: 1 };
+
 describe("setProjectEstimate and getProjectBudget", () => {
   let memberViewer: Viewer;
   let managerViewer: Viewer;
@@ -278,7 +289,7 @@ describe("setProjectEstimate and getProjectBudget", () => {
     // Nov 3 and Nov 5 in Manila; now is Nov 8.
     await entry(p.id, new Date("2026-11-03T02:00:00Z"), 1);
     await entry(p.id, new Date("2026-11-05T02:00:00Z"), 2);
-    const budget = await getProjectBudget(db, owner, p.id, NOW);
+    const budget = await getProjectBudget(db, owner, p.id, NOW, SETTINGS);
     expect(budget.progress).toMatchObject({ used: 10_800, percent: 30 });
     expect(budget.currency).toBe("USD");
     expect(budget.thresholds).toEqual([50, 80, 100]);
@@ -294,6 +305,88 @@ describe("setProjectEstimate and getProjectBudget", () => {
     ]);
   });
 
+  it("the chart ends on the bar's number when an entry is dated ahead", async () => {
+    for (const reset of ["MONTHLY", "NONE"] as const) {
+      const p = await createProject(db, owner, { name: `Site ${reset}` });
+      await setProjectEstimate(db, owner, p.id, {
+        kind: "TIME",
+        seconds: 36_000,
+        minor: null,
+        reset,
+        alerts: true,
+      });
+      await entry(p.id, new Date("2026-11-03T02:00:00Z"), 1);
+      // Later this month: after "now" (Nov 8), inside the period.
+      await entry(p.id, new Date("2026-11-20T02:00:00Z"), 2);
+      const budget = await getProjectBudget(db, owner, p.id, NOW, SETTINGS);
+      expect(budget.progress?.used).toBe(10_800);
+      expect(budget.series.at(-1)).toMatchObject({ key: "2026-11-08", value: 10_800 });
+      expect(budget.series.at(-2)?.value).toBe(3_600);
+    }
+  });
+
+  it("a long chart keeps the last day of each workspace week, and today", async () => {
+    const p = await createProject(db, owner, { name: "Long" });
+    await setProjectEstimate(db, owner, p.id, {
+      kind: "TIME",
+      seconds: 360_000,
+      minor: null,
+      reset: "NONE",
+      alerts: true,
+    });
+    // Sat Aug 1: over 62 days before Nov 8, and not on a week boundary.
+    await entry(p.id, new Date("2026-08-01T02:00:00Z"), 1);
+    await entry(p.id, new Date("2026-11-07T02:00:00Z"), 2);
+    const { series, progress } = await getProjectBudget(db, owner, p.id, NOW, SETTINGS);
+    // Weeks start on Monday here, so every point is a Sunday; today (Nov 8) is one too.
+    expect(series.map((s) => new Date(`${s.key}T00:00:00Z`).getUTCDay())).toEqual(
+      Array(series.length).fill(0),
+    );
+    expect(series[0]?.key).toBe("2026-08-02");
+    expect(series.at(-1)).toMatchObject({ key: "2026-11-08", value: progress?.used });
+    // With weeks starting on Sunday the points are Saturdays, and today closes the chart.
+    const sunday = await getProjectBudget(db, owner, p.id, NOW, { ...SETTINGS, weekStart: 0 });
+    expect(sunday.series[0]?.key).toBe("2026-08-01");
+    expect(sunday.series.at(-1)?.key).toBe("2026-11-08");
+  });
+
+  it("hasRates counts only rates that can apply to the project today", async () => {
+    const p = await createProject(db, owner, { name: "Private" });
+    await db.update(project).set({ visibility: "PRIVATE" }).where(eq(project.id, p.id));
+    const hasRates = async () => (await getProjectBudget(db, owner, p.id, NOW, SETTINGS)).hasRates;
+    const add = (over: Partial<typeof rate.$inferInsert>) =>
+      db.insert(rate).values({
+        id: randomUUID(),
+        workspaceId: wsId,
+        level: "member",
+        currency: "USD",
+        amountMinor: 5_000,
+        effectiveFrom: new Date("2026-01-01T00:00:00Z"),
+        ...over,
+      });
+    // Bob has a rate but is not on this private project.
+    await add({ userId: memberViewer.userId });
+    expect(await hasRates()).toBe(false);
+    await db.insert(projectMember).values({ projectId: p.id, userId: memberViewer.userId });
+    expect(await hasRates()).toBe(true);
+    // His rate was cleared from June: the latest row in force says "no rate".
+    await add({
+      userId: memberViewer.userId,
+      amountMinor: null,
+      effectiveFrom: new Date("2026-06-01T00:00:00Z"),
+    });
+    expect(await hasRates()).toBe(false);
+    // A project rate in another currency is not a rate in the project's.
+    await add({ level: "project", projectId: p.id, currency: "EUR" });
+    expect(await hasRates()).toBe(false);
+    await add({
+      level: "project",
+      projectId: p.id,
+      effectiveFrom: new Date("2026-02-01T00:00:00Z"),
+    });
+    expect(await hasRates()).toBe(true);
+  });
+
   it("getProjectBudget lists only tasks with an estimate", async () => {
     const p = await createProject(db, owner, { name: "Site" });
     const design = await createTask(db, owner, p.id, {
@@ -302,7 +395,7 @@ describe("setProjectEstimate and getProjectBudget", () => {
     });
     await createTask(db, owner, p.id, { name: "QA" });
     await entry(p.id, new Date("2026-11-03T02:00:00Z"), 1, { taskId: design.id });
-    const budget = await getProjectBudget(db, owner, p.id, NOW);
+    const budget = await getProjectBudget(db, owner, p.id, NOW, SETTINGS);
     expect(budget.tasks).toEqual([
       {
         id: design.id,
@@ -316,7 +409,7 @@ describe("setProjectEstimate and getProjectBudget", () => {
 
   it("getProjectBudget says when the project has no rate in force", async () => {
     const p = await createProject(db, owner, { name: "Site" });
-    expect((await getProjectBudget(db, owner, p.id, NOW)).hasRates).toBe(false);
+    expect((await getProjectBudget(db, owner, p.id, NOW, SETTINGS)).hasRates).toBe(false);
     await db.insert(rate).values({
       id: randomUUID(),
       workspaceId: wsId,
@@ -325,6 +418,6 @@ describe("setProjectEstimate and getProjectBudget", () => {
       amountMinor: 5_000,
       effectiveFrom: new Date("2026-01-01T00:00:00Z"),
     });
-    expect((await getProjectBudget(db, owner, p.id, NOW)).hasRates).toBe(true);
+    expect((await getProjectBudget(db, owner, p.id, NOW, SETTINGS)).hasRates).toBe(true);
   });
 });

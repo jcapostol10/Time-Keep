@@ -78,6 +78,8 @@ export interface InvoiceListItem {
   paidMinor: number;
   balanceMinor: number;
   sentAt: string | null;
+  /** The day it was sent, in the workspace timezone (as every invoice date is). */
+  sentDate: string | null;
   hasPdf: boolean;
   /** `/invoice/<token>`, only in the answer to a send: the token is shown once. */
   publicPath: string | null;

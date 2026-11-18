@@ -17,12 +17,14 @@ import {
   type Database,
   emailOutbox,
   eq,
+  expense,
   gte,
   inArray,
   invoice,
   isNotNull,
   isNull,
   lt,
+  lte,
   membership,
   or,
   project,
@@ -247,7 +249,49 @@ async function remindUnsubmitted(
       ),
     )
     .groupBy(timeEntry.userId, user.email);
-  if (people.length === 0) return 0;
+  // The same people rule over expenses dated in the period: someone with only
+  // expenses there has something to submit too.
+  const spenders = await db
+    .select({
+      userId: expense.userId,
+      email: user.email,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(expense)
+    .innerJoin(
+      membership,
+      and(eq(membership.workspaceId, expense.workspaceId), eq(membership.userId, expense.userId)),
+    )
+    .innerJoin(user, eq(user.id, expense.userId))
+    .leftJoin(userSettings, eq(userSettings.userId, expense.userId))
+    .where(
+      and(
+        eq(expense.workspaceId, ws.id),
+        isNull(expense.deletedAt),
+        gte(expense.date, period.start),
+        lte(expense.date, period.end),
+        eq(membership.status, "ACTIVE"),
+        sql`coalesce(${userSettings.muteTargetReminders}, false) = false`,
+        sql`not exists (
+          select 1 from approval_request r
+          where r.workspace_id = ${ws.id}
+            and r.user_id = ${expense.userId}
+            and r.status in ('PENDING', 'APPROVED')
+            and r.period_start <= ${period.end}
+            and r.period_end >= ${period.start}
+        )`,
+      ),
+    )
+    .groupBy(expense.userId, user.email);
+  const waiting = new Map<string, { email: string; seconds: number; expenses: number }>();
+  for (const p of people)
+    waiting.set(p.userId, { email: p.email, seconds: p.seconds, expenses: 0 });
+  for (const p of spenders) {
+    const known = waiting.get(p.userId);
+    if (known) known.expenses = p.count;
+    else waiting.set(p.userId, { email: p.email, seconds: 0, expenses: p.count });
+  }
+  if (waiting.size === 0) return 0;
 
   const already = new Set(
     (
@@ -258,8 +302,9 @@ async function remindUnsubmitted(
     ).map((r) => r.to.toLowerCase()),
   );
   let sent = 0;
-  for (const p of people) {
-    if (p.seconds <= 0 || isUndeliverable(p.email) || already.has(p.email.toLowerCase())) continue;
+  for (const p of waiting.values()) {
+    if (p.seconds <= 0 && p.expenses <= 0) continue;
+    if (isUndeliverable(p.email) || already.has(p.email.toLowerCase())) continue;
     await enqueueEmail(db, {
       workspaceId: ws.id,
       to: p.email,
@@ -270,6 +315,7 @@ async function remindUnsubmitted(
         workspaceName: ws.name,
         period,
         workSeconds: p.seconds,
+        expenseCount: p.expenses,
       }),
     });
     sent++;

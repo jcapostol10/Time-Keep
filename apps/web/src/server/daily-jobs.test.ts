@@ -23,7 +23,10 @@ import {
 import { submitPeriod } from "./approvals";
 import { loadViewer } from "./authz";
 import { createClient } from "./catalog/clients";
+import { createProject } from "./catalog/projects";
 import { e2eWorkspaceId, runDailyJobs } from "./daily-jobs";
+import { createExpenseCategory } from "./expense-categories";
+import { createExpense } from "./expenses";
 import type * as Recurring from "./invoices/recurring";
 import { createManualEntry } from "./time-entries";
 
@@ -136,6 +139,40 @@ describe("runDailyJobs", () => {
     expect(await remindersTo(ids.sue!)).toEqual([]);
     expect(await remindersTo(ids.max!)).toEqual([]);
     expect(await remindersTo(ids.nia!)).toEqual([]);
+  });
+
+  it("reminds someone whose closed period holds only an expense", async () => {
+    const eve = await createTestUser(db, "Eve Expenses");
+    await addMember(db, manila, eve.id, "member");
+    const owner = await loadViewer(db, manila, ids.owner!);
+    const web = await createProject(db, owner, { name: "Web" });
+    const travel = await createExpenseCategory(db, owner, {
+      name: "Travel",
+      kind: "FIXED",
+      unitName: null,
+      unitPriceMinor: null,
+      billableDefault: true,
+    });
+    await createExpense(
+      db,
+      await loadViewer(db, manila, eve.id),
+      {
+        projectId: web.id,
+        categoryId: travel.id,
+        date: "2026-10-21",
+        amountMinor: 2_500,
+        billable: true,
+        description: "Taxi",
+      },
+      { now: MONDAY_MANILA },
+    );
+    expect((await runDailyJobs(db, { force: true, now: MONDAY_MANILA })).reminders).toBe(2);
+    const [reminder] = await remindersTo(eve.id);
+    expect(reminder?.kind).toBe("approval.unsubmitted:2026-10-19");
+    expect(reminder?.text).toContain("1 expense");
+    // Tom has time and no expenses: his email says nothing about them.
+    const [toms] = await remindersTo(ids.tom!);
+    expect(toms?.text).not.toContain("expense");
   });
 
   it("sends each reminder once", async () => {

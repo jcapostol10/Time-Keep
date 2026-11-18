@@ -6,7 +6,16 @@ import {
   type ReportQuery,
   type ViewerPrefs,
 } from "@timekeep/core";
-import { client, eq, managedUser, project, rate, workspaceSettings } from "@timekeep/db";
+import {
+  client,
+  eq,
+  expenseCategory,
+  managedUser,
+  project,
+  projectMember,
+  rate,
+  workspaceSettings,
+} from "@timekeep/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -56,7 +65,12 @@ let wsId: string;
 let ids: Record<string, string>;
 const viewer = (who: string): Promise<Viewer> => loadViewer(db, wsId, ids[who]!);
 
-async function entry(who: string, projectName: "web" | "us", hours: number, billable = true) {
+async function entry(
+  who: string,
+  projectName: "web" | "us" | "eu",
+  hours: number,
+  billable = true,
+) {
   const start = new Date("2026-03-10T09:00:00Z");
   await createManualEntry(db, await viewer(who), {
     description: `${who} ${projectName} ${billable ? "billable" : "internal"}`,
@@ -526,6 +540,81 @@ describe("cost, profit and currencies in reports", () => {
     expect(after.totals).toMatchObject({ unratedCount: 1, profitExcludedCount: 3 });
   });
 
+  /** A project of a client billed in EUR, with no rate in EUR, and one billable hour on it. */
+  async function unratedEuroProject() {
+    const owner = await viewer("olga");
+    ids.eu = (await createProject(db, owner, { name: "Eu" })).id;
+    const globex = randomUUID();
+    await db
+      .insert(client)
+      .values({ id: globex, workspaceId: wsId, name: "Globex", currency: "EUR" });
+    await db.update(project).set({ clientId: globex }).where(eq(project.id, ids.eu));
+    await entry("olga", "eu", 1);
+  }
+
+  it("a row billed only in another currency with nothing rated reads zero in that currency", async () => {
+    await unratedEuroProject();
+    const owner = await viewer("olga");
+    const report = await summaryReport(db, owner, q({ groupBy: ["project"] }), PREFS, NOW);
+    expect(report.groups.find((g) => g.label === "Eu")?.totals).toMatchObject({
+      amountMinor: 0,
+      otherAmounts: [{ currency: "EUR", amountMinor: 0 }],
+      unratedCount: 1,
+    });
+    const file = await buildExport(db, owner, {
+      report: "summary",
+      format: "csv",
+      query: q({ groupBy: ["project"] }),
+      prefs: PREFS,
+      now: NOW,
+    });
+    expect(csvHeader(file.body)).toContain("Amount (EUR)");
+    // Someone who sees no amounts still gets none.
+    const masked = await summaryReport(
+      db,
+      await viewer("carol"),
+      q({ groupBy: ["project"] }),
+      PREFS,
+      NOW,
+    );
+    expect(masked.groups.every((g) => g.totals.otherAmounts.length === 0)).toBe(true);
+  });
+
+  it("skips budget progress where nothing renders it", async () => {
+    const owner = await viewer("olga");
+    await setProjectEstimate(db, owner, ids.web!, {
+      kind: "TIME",
+      seconds: 36_000,
+      minor: null,
+      reset: "NONE",
+      alerts: true,
+    });
+    const query = q({ groupBy: ["project"] });
+    expect((await summaryReport(db, owner, query, PREFS, NOW)).progress).not.toBeNull();
+    expect(
+      (await summaryReport(db, owner, query, PREFS, NOW, { progress: false })).progress,
+    ).toBeNull();
+    expect((await profitReport(db, owner, query, PREFS, NOW)).progress).toBeNull();
+  });
+
+  it("a project's status counts its entries and says when it has no rate in its currency", async () => {
+    await unratedEuroProject();
+    const range = { from: new Date(q().from!), to: new Date(q().to!) };
+    const owner = await viewer("olga");
+    expect(await getProjectStatus(db, owner, ids.us!, range, PREFS)).toMatchObject({
+      entryCount: 2,
+      unratedIn: null,
+    });
+    expect(await getProjectStatus(db, owner, ids.eu!, range, PREFS)).toMatchObject({
+      entryCount: 1,
+      unratedIn: "EUR",
+    });
+    // A member sees no amounts, so nothing about rates either.
+    expect(
+      (await getProjectStatus(db, await viewer("carol"), ids.eu!, range, PREFS)).unratedIn,
+    ).toBeNull();
+  });
+
   it("keeps two currencies apart under a tag, and counts a two-tag entry once in the total", async () => {
     const a = await createTag(db, wsId, { name: "alpha" });
     const b = await createTag(db, wsId, { name: "beta" });
@@ -719,6 +808,46 @@ describe("expenses in the Profit tab (Phase 6c)", () => {
       // Web 400 + Us −200 + Ops 0.
       profitMinor: 20_000,
     });
+  });
+
+  it("a manager's Profit tab counts the expenses of their people and their projects only", async () => {
+    const max = await createTestUser(db, "Max Manager");
+    await addMember(db, wsId, max.id, "manager");
+    ids.max = max.id;
+    await db.insert(managedUser).values({ workspaceId: wsId, managerId: max.id, userId: ids.bob! });
+    await db.insert(projectMember).values({ projectId: ids.ops!, userId: max.id, isManager: true });
+    await setSettings({ managersSeeCosts: true });
+    const [travel] = await db
+      .select()
+      .from(expenseCategory)
+      .where(eq(expenseCategory.workspaceId, wsId));
+    const spend = async (who: string, projectId: string, amountMinor: number) =>
+      createExpense(
+        db,
+        await viewer(who),
+        {
+          projectId,
+          categoryId: travel!.id,
+          date: "2026-03-10",
+          amountMinor,
+          billable: false,
+          description: "",
+        },
+        { now: NOW },
+      );
+    await spend("bob", ids.web!, 10_000); // his person, on a project he does not manage
+    await spend("carol", ids.ops!, 7_000); // not his person, on his project
+    await spend("carol", ids.web!, 5_000); // neither: out of his scope
+
+    const report = await profitReport(db, await viewer("max"), q(), PREFS, NOW);
+    const expensesOf = (label: string) =>
+      report.groups.find((g) => g.label === label)?.totals.expenseMinor ?? 0;
+    // Web: Bob's only (not Olga's 500, not Carol's 50).
+    expect(expensesOf("Web")).toBe(10_000);
+    // Ops is his project: Olga's 150 and Carol's 70.
+    expect(expensesOf("Ops")).toBe(22_000);
+    expect(expensesOf("Us")).toBe(0);
+    expect(report.totals.expenseMinor).toBe(32_000);
   });
 
   it("expenses on a project billed in USD still adjust that group's profit", async () => {
