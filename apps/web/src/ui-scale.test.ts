@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { cn } from "@timekeep/ui/lib/utils";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -41,6 +42,17 @@ describe("the type scale", () => {
       /(?<![\w-])text-(lg|3xl|4xl|5xl|6xl|7xl|8xl|9xl)(?![\w-])|text-\[\d+(\.\d+)?(px|rem)\]/;
     expect(offenders(offScale)).toEqual([]);
   });
+
+  it("has no inline size under 12px (chart axes and labels)", () => {
+    // Recharts takes its sizes as numbers, where no class rule can see them.
+    expect(offenders(/fontSize:\s*(?:\d|1[01])(?![\d.])/)).toEqual([]);
+  });
+
+  it("merges its own size names as sizes, not as colours", () => {
+    expect(cn("text-muted-foreground", "text-meta")).toBe("text-muted-foreground text-meta");
+    expect(cn("text-sm", "text-meta")).toBe("text-meta");
+    expect(cn("text-display", "text-display-lg")).toBe("text-display-lg");
+  });
 });
 
 describe("depth", () => {
@@ -56,5 +68,18 @@ describe("depth", () => {
       return floats.test(unix) || layers.test(unix);
     };
     expect(offenders(shadow, floating)).toEqual([]);
+  });
+});
+
+describe("the selected tab", () => {
+  it("stands out by a border and the card fill, now that it has no shadow", () => {
+    const tabs = readFileSync(
+      path.resolve(__dirname, "../../../packages/ui/src/components/tabs.tsx"),
+      "utf8",
+    );
+    expect(tabs).toContain("data-[state=active]:border-border");
+    expect(tabs).toContain("data-[state=active]:bg-card");
+    // A class the shadow clean-up once glued together; it matched nothing.
+    expect(tabs).not.toContain("tabs-list:group-data-");
   });
 });

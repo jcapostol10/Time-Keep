@@ -61,6 +61,23 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 - [ ] `hasBillableRate` picks each target's latest row and then checks the currency, while `rateEntriesSql` filters by currency first: they differ only when one target holds rows in two currencies.
 - [ ] Untested: `setRate` passing its kind to the job (only `requestRateRecalc` is tested with kinds), `uploadExportStream` itself (part sizes, abort), and the zip's size limits (65,000 files or 4 GB, where it now fails instead of writing a corrupt archive).
 
+### UI foundation review minors (final review, 2026-11-21)
+
+- [ ] `e2e/visual/snapshots.spec.ts` leaves soft-deleted "Visual snapshot timer" rows in the demo workspace and does not refuse a non-local base URL.
+- [ ] The guard regexes have gaps: `ui-scale.test.ts` reads `.tsx` only (a class built in a `.ts` helper passes) and misses `text-[0.7rem]`-style sizes written with `em`.
+- [ ] The kiosk's `text-2xl` is now 28px; its PIN pad keys are `h-8`. Check the pad on a small tablet.
+- [ ] Line height 1.5 on `text-xs`/`text-sm` makes the timesheet and schedule grids a little taller than before; decide whether dense grids get a tighter line.
+- [ ] Left-overs of the focus and shadow clean-up in `packages/ui`: an empty class string in `input.tsx`, and `aria-invalid:ring-*` classes that no longer do anything.
+- [ ] The focus outline is clipped at the edge of scrolling containers (table frames, the sidebar).
+- [ ] `TimerChip`'s `aria-label` changes every second; a screen reader on the link hears a new name each time. Use a static label and `aria-describedby`, or a `timer` role.
+- [ ] The top bar's phone padding is `px-3`, the content's `px-4`: the two left edges are 4px apart under 768px.
+- [ ] The tooltip keeps a 6px radius while other floating layers use 10px.
+- [ ] `docs/E2E_COVERAGE.md`: the empty-state lines for Tracker and Projects sit under "Shell"; move them to their own sections.
+- [ ] `e2e/ui-floor.spec.ts` adds 14 page loads to the preview lane; move it to `@nightly` if the lane nears its 10-minute budget.
+- [ ] The Team activity table is clipped, not scrolled, at 375px.
+- [ ] The project colour palette (`packages/core/src/colors.ts`) contains an amber (`#d97706`); as stored data it stays, but a project in that colour sits near the live colour. Consider replacing it in the palette for new projects.
+- [ ] The dashboard's Me tab is a grid of seven bordered stat cards; the owner decides whether it is restyled with the timer work.
+
 ### b4 — schedule and forecast
 
 - [ ] **b4** **Phase 7a deferred:** split only by right-click on the team grid (add Split to the bar menu); the Calendar band shows the viewer's own plan only, never the person shown by add-for-others; a removed or deactivated member's assignments stay in the table with no row on the grid; the Team tab has no group or project filters yet, and Previous / Next do not prefetch the adjacent range.

@@ -49,11 +49,11 @@ A new token pair that carries text goes into the script's list.
 
 `--live` means **time is running**, and nothing else. It appears in exactly these places:
 
-- the running timer: the timer bar (`components/tracker/timer-bar.tsx`) and the chip in the top bar (`components/shell/timer-chip.tsx`);
+- the running timer: the chip in the top bar (`components/shell/timer-chip.tsx`). The timer bar (`components/tracker/timer-bar.tsx`) is on the list and does not use it yet; that is the next piece of work;
 - the calendar's now-line (`components/calendar/now-line.tsx`), as `live-line`;
 - the dot beside "Tracking now" on Team activity (`components/dashboard/live-dot.tsx`).
 
-`apps/web/src/live-token.test.ts` fails on a use anywhere else. A second meaning would cost the colour its first, so to add a place, change this list first, then the test's.
+`apps/web/src/live-token.test.ts` fails on a use anywhere else, and on any raw amber, yellow or orange utility: a warning, a draft notice or a star in amber would be a second meaning. Near-limit budgets are ink, a draft notice is the accent tint, a favourite is the primary. A project's own colour is data (the palette in `packages/core/src/colors.ts` has an amber) and is left alone. A second meaning would cost the colour its first, so to add a place, change this list first, then the test's.
 
 `live` is a fill with `live-foreground` text on it; amber text on a light surface does not pass contrast, which is why the dot's label is ink. `live-line` is the amber darkened for the light theme, so a 2px line clears 3:1.
 
@@ -70,15 +70,16 @@ The scale is closed. These are the only sizes; Tailwind's other names (`text-lg`
 | `text-sm` | 14 | 1.5 | body: tables, forms, menus |
 | `text-base` | 16 | 1.5 | section and dialog headings (600) |
 | `text-xl` | 20 | 1.2 | page titles (600) |
-| `text-2xl` | 28 | 1.2 | dashboard figures |
+| `text-2xl` | 28 | 1.2 | dashboard figures, the kiosk's clock and keypad |
 | `text-display` | 32 | 1.2 | report totals, in `font-display` |
-| `text-display-lg` | 48 | 1.1 | the running clock, in `font-display` |
+| `text-display-lg` | 48 | 1.1 | kept for the running clock, in `font-display`; nothing uses it yet |
 
-`apps/web/src/ui-scale.test.ts` fails on a size class outside the scale, or a pixel size, in `apps/web/src` or `packages/ui/src`.
+`apps/web/src/ui-scale.test.ts` fails on a size class outside the scale, a pixel size, or an inline `fontSize` under 12 (chart axes), in `apps/web/src` or `packages/ui/src`. `cn` knows the three added names as sizes (`packages/ui/src/lib/utils.ts`).
 
 ## Radius and depth
 
 - 6px on controls (`rounded-md`), 10px on what floats or frames a region (`rounded-lg`, `rounded-xl`: dialogs, popovers, menus, cards), 4px on small marks. Table rows have none.
+- A selected tab or segment is the card fill inside one border.
 - Shadows only on what floats: popovers, menus, tooltips, dialogs, sheets, and the tracker's two floating layers. Bars, cards and controls are separated by a border and space. The same test fails on a shadow class anywhere else.
 
 ## Layout
@@ -110,7 +111,7 @@ Someone who may not create sees the title as a statement ("No projects yet") and
 
 Checked by `apps/web/e2e/ui-floor.spec.ts`:
 
-- **Focus:** whatever the keyboard reaches shows a 2px outline in the ring colour, 2px off the element. One rule in the theme, outside any CSS layer, so no component can switch it off.
+- **Focus:** whatever the keyboard reaches shows a 2px outline in the ring colour, 2px off the element. One rule in the theme, outside any CSS layer, so a component's utility classes cannot switch it off. It leaves out what takes focus without being a control (dialogs, menus, listboxes, `tabindex="-1"`), and a scrolling container can clip it at its edge.
 - **Motion:** with "reduce motion" on, animations and transitions end at once.
 - **Width:** no main page scrolls sideways at 375px; a wide table scrolls inside its own frame.
 

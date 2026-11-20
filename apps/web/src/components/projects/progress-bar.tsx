@@ -12,7 +12,8 @@ export function progressText(progress: Progress, durationFormat: DurationFormat)
 
 /**
  * A project's budget progress (Phase 6b): the fill is capped at the full
- * width, the label says the real percent; amber from 80%, red from 100%.
+ * width, the label says the real percent; ink from 80%, red from 100%
+ * (never amber: that colour means a timer is running).
  */
 export function ProgressBar({
   progress,
@@ -30,7 +31,7 @@ export function ProgressBar({
     progress.percent >= 100
       ? "bg-destructive"
       : progress.percent >= 80
-        ? "bg-amber-500"
+        ? "bg-foreground/70"
         : "bg-primary";
   return (
     <div className={cn("space-y-1", className)}>

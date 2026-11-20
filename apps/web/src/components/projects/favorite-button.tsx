@@ -44,7 +44,7 @@ export function FavoriteButton({
       onClick={toggle}
       className="size-8"
     >
-      <StarIcon className={cn("size-4", shown && "fill-amber-400 text-amber-400")} />
+      <StarIcon className={cn("size-4", shown && "fill-primary text-primary")} />
     </Button>
   );
 }

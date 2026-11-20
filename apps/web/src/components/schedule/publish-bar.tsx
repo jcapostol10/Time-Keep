@@ -38,7 +38,7 @@ export function PublishBar({
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm dark:border-amber-700 dark:bg-amber-950"
+      className="border-primary/40 bg-accent flex flex-wrap items-center gap-2 rounded-md border px-3 py-1.5 text-sm"
     >
       <span>
         {draftCount} unpublished {draftCount === 1 ? "change" : "changes"}

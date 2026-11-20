@@ -334,7 +334,7 @@ export function ScheduleGrid({
                               "absolute inset-x-0 bottom-0 h-1",
                               heat === "over" && "bg-red-500",
                               heat === "at" && "bg-emerald-500",
-                              heat === "under" && "bg-amber-400",
+                              heat === "under" && "bg-chart-2",
                             )}
                           />
                         ) : null}

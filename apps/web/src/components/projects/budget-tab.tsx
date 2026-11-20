@@ -117,14 +117,14 @@ export function BudgetTab({
             <AreaChart data={chart} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <XAxis
                 dataKey="label"
-                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
                 tickLine={false}
                 axisLine={{ stroke: "var(--border)" }}
                 minTickGap={24}
               />
               <YAxis
                 tickFormatter={axis}
-                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
                 width={64}
@@ -147,7 +147,7 @@ export function BudgetTab({
                 y={progress.estimate}
                 stroke="var(--destructive)"
                 strokeDasharray="4 4"
-                label={{ value: "Estimate", fill: "var(--muted-foreground)", fontSize: 11 }}
+                label={{ value: "Estimate", fill: "var(--muted-foreground)", fontSize: 12 }}
               />
               <Area
                 type="monotone"

@@ -64,4 +64,15 @@ describe("the live colour", () => {
     // The theme defines the tokens; no shared component may spend them.
     expect(uses(UI).filter((file) => file !== "styles/globals.css")).toEqual([]);
   });
+
+  it("has no other amber beside it: no raw amber, yellow or orange utility", () => {
+    // An amber warning or star would give the colour a second meaning.
+    const raw = /(?<![\w])(?:amber|yellow|orange)-\d{2,3}(?![\w])/;
+    const found = [SRC, UI].flatMap((root) =>
+      sources(root)
+        .filter((file) => raw.test(readFileSync(file, "utf8")))
+        .map((file) => path.relative(root, file).replaceAll("\\", "/")),
+    );
+    expect(found).toEqual([]);
+  });
 });

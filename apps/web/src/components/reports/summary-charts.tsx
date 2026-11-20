@@ -59,14 +59,14 @@ export function SummaryCharts({
           <BarChart data={bars} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <XAxis
               dataKey="label"
-              tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+              tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
               tickLine={false}
               axisLine={{ stroke: "var(--border)" }}
               interval="preserveStartEnd"
             />
             <YAxis
               tickFormatter={hours}
-              tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+              tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
               tickLine={false}
               axisLine={false}
               width={40}
