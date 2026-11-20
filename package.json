@@ -20,7 +20,7 @@
     "db:studio": "pnpm --filter @timekeep/db db:studio",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "contrast:check": "node scripts/check-contrast.ts",
+    "contrast:check": "node scripts/check-contrast.mts",
     "storage:init": "pnpm --filter @timekeep/web storage:init",
     "permissions:doc": "pnpm --filter @timekeep/web permissions:doc",
     "bootstrap": "docker compose up -d --wait && pnpm storage:init && pnpm db:migrate && pnpm db:seed",

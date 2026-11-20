@@ -3,7 +3,7 @@
  * text pair is under WCAG AA (4.5:1), or a graphic that carries meaning is
  * under 3:1, in either theme. Run by CI and `pnpm contrast:check`.
  *
- *   node scripts/check-contrast.ts
+ *   node scripts/check-contrast.mts
  *
  * Tokens are hex or rgba(); a translucent colour is blended over the theme's
  * background first. Anything else is an error, so a token cannot quietly

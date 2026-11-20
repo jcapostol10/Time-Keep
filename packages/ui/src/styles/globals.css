@@ -7,7 +7,7 @@
  * TimeKeep theme: a punch clock's palette. Cool paper surfaces, ink text, a
  * deep teal for what the person can act on, and one amber that means "time is
  * running" and nothing else. Token names follow shadcn/ui so its components
- * work unchanged. Values are hex (or rgba) so `scripts/check-contrast.ts` can
+ * work unchanged. Values are hex (or rgba) so `scripts/check-contrast.mts` can
  * read them; it fails CI when a text pair drops under WCAG AA.
  */
 :root {
