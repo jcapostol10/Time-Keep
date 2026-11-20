@@ -13,7 +13,7 @@ import {
 import { Button } from "@timekeep/ui/components/button";
 import { Checkbox } from "@timekeep/ui/components/checkbox";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Loader2Icon, TimerIcon, Trash2Icon, XIcon, PencilIcon } from "lucide-react";
+import { Loader2Icon, Trash2Icon, XIcon, PencilIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/empty-state";
@@ -214,7 +214,7 @@ function DaySection({
 }
 
 export function EntryList() {
-  const { slug, viewer, running } = useTracker();
+  const { slug, viewer, running, focusDescription } = useTracker();
   const { remove, bulkUpdate } = useEntryMutations();
   const selection = useSelection();
   const [editing, setEditing] = useState(false);
@@ -270,9 +270,9 @@ export function EntryList() {
   if (!hasEntries && !hasNextPage) {
     return running ? null : (
       <EmptyState
-        icon={TimerIcon}
-        title="No time entries yet"
-        description="Start the timer or switch to manual mode to add your first entry."
+        title="Track your first entry"
+        description="Type what you're working on and start the timer, or switch to manual mode to add time you already worked."
+        action={<Button onClick={focusDescription}>Start timer</Button>}
       />
     );
   }

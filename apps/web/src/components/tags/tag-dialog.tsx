@@ -122,12 +122,12 @@ export function TagDialog({
   );
 }
 
-export function NewTagButton({ slug }: { slug: string }) {
+export function NewTagButton({ slug, label = "New tag" }: { slug: string; label?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <Button onClick={() => setOpen(true)}>
-        <PlusIcon /> New tag
+        <PlusIcon /> {label}
       </Button>
       {open ? <TagDialog slug={slug} open={open} onOpenChange={setOpen} /> : null}
     </>

@@ -212,10 +212,12 @@ export function ClientDialog({
 }
 
 export function NewClientButton({
+  label = "New client",
   slug,
   workspaceCurrency,
   canSetCurrency,
 }: {
+  label?: string;
   slug: string;
   workspaceCurrency: string;
   canSetCurrency: boolean;
@@ -224,7 +226,7 @@ export function NewClientButton({
   return (
     <>
       <Button onClick={() => setOpen(true)}>
-        <PlusIcon /> New client
+        <PlusIcon /> {label}
       </Button>
       {open ? (
         <ClientDialog

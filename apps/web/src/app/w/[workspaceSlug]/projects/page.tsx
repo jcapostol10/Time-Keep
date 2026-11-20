@@ -80,6 +80,16 @@ export default async function ProjectsPage({
         query={query}
         canManage={canManage}
         editableIds={editableIds}
+        emptyAction={
+          canCreate ? (
+            <NewProjectButton
+              label="Create project"
+              slug={workspaceSlug}
+              clients={clients}
+              templates={templates}
+            />
+          ) : null
+        }
       />
     </>
   );

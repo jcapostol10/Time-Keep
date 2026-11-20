@@ -39,6 +39,7 @@ import { useId, useState } from "react";
 import { toast } from "sonner";
 
 import type { ActionResult } from "@/lib/action-result";
+import { EmptyState } from "@/components/empty-state";
 import type { GroupDTO } from "@/lib/team-types";
 import {
   createGroupAction,
@@ -79,10 +80,15 @@ export function GroupsTab({ ctx }: { ctx: TeamContext }) {
         </div>
       ) : null}
       {ctx.groups.length === 0 ? (
-        <p className="text-muted-foreground rounded-lg border border-dashed p-8 text-center text-sm">
-          No groups yet. A group gives its members access to private projects and lets a manager
-          look after a whole team.
-        </p>
+        ctx.permissions.groups ? (
+          <EmptyState
+            title="Create a group"
+            description="A group gives its members access to private projects and lets a manager look after a whole team."
+            action={<Button onClick={() => setOpen("new")}>Create group</Button>}
+          />
+        ) : (
+          <EmptyState title="No groups yet" description="An owner or admin creates groups." />
+        )
       ) : (
         <div className="overflow-hidden rounded-lg border">
           <Table>

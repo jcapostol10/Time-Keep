@@ -52,6 +52,8 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 
 ## Time Tracker: timer bar
 
+- [x] An empty tracker says what to do and its button puts the cursor in the timer bar's description — `tracker.spec.ts` › "an empty tracker offers to start the first entry"
+- [x] An empty projects list offers to create one, and the button opens the project dialog — `projects.spec.ts` › "an empty projects list offers to create one"
 - [x] Start a timer, keep it running across a reload, stop it; the tab title shows the clock — `tracker.spec.ts` › "start, reload and stop a timer"
 - [x] Pressing Enter twice quickly starts only one timer — `tracker.spec.ts` › "a double Enter starts only one timer"
 - [x] Two browser tabs never show two running timers — `tracker.spec.ts` › "two tabs never show two running timers"

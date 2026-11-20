@@ -38,7 +38,7 @@ export default async function ProjectLayout({
         mark={<ColorDot color={project.color} className="size-3.5" />}
         meta={
           project.archived ? (
-            <Badge variant="outline" className="font-normal">
+            <Badge variant="outline" className="font-normal" data-testid="project-archived">
               Archived
             </Badge>
           ) : null

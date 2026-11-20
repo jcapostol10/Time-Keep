@@ -19,12 +19,13 @@ import {
   TableHeader,
   TableRow,
 } from "@timekeep/ui/components/table";
-import { FolderKanbanIcon, MoreHorizontalIcon } from "lucide-react";
+import { MoreHorizontalIcon } from "lucide-react";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ColorDot } from "@/components/tracker/project-picker";
+import { EmptyNote, EmptyState } from "@/components/empty-state";
 import type { ProjectListItem } from "@/lib/catalog-types";
 import { workspaceRoutes } from "@/lib/routes";
 import {
@@ -45,6 +46,7 @@ export function ProjectsTable({
   clients,
   query,
   canManage,
+  emptyAction,
   editableIds = [],
 }: {
   slug: string;
@@ -52,6 +54,8 @@ export function ProjectsTable({
   clients: ClientOption[];
   query: ProjectListQuery;
   canManage: boolean;
+  /** The create button, for whoever may create: shown when there are no projects at all. */
+  emptyAction?: React.ReactNode;
   /** Projects the viewer manages without being an admin: their names link to the detail page. */
   editableIds?: string[];
 }) {
@@ -81,18 +85,18 @@ export function ProjectsTable({
   const selectedIds = projects.filter((p) => selected.has(p.id)).map((p) => p.id);
 
   if (projects.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-16 text-center">
-        <FolderKanbanIcon className="text-muted-foreground mb-3 size-8" />
-        <p className="font-medium">{filtered ? "No projects match" : "No projects yet"}</p>
-        <p className="text-muted-foreground mt-1 max-w-sm text-sm">
-          {filtered
-            ? "Try another search or filter."
-            : canManage
-              ? "Create a project, or type a new name in the timer bar's project picker."
-              : "Ask an admin to create projects or add you to private ones."}
-        </p>
-      </div>
+    if (filtered) return <EmptyNote>No projects match. Try another search or filter.</EmptyNote>;
+    return emptyAction ? (
+      <EmptyState
+        title="Create a project"
+        description="Projects are what time is tracked against. Group them by client and choose who can see them."
+        action={emptyAction}
+      />
+    ) : (
+      <EmptyState
+        title="No projects yet"
+        description="Ask an admin to create projects or add you to private ones."
+      />
     );
   }
 

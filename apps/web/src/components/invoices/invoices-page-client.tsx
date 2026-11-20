@@ -65,7 +65,7 @@ export function InvoicesPageClient({
       ) : tab === "settings" ? (
         <InvoiceSettingsTab slug={slug} />
       ) : (
-        <InvoiceTable slug={slug} clients={clients} />
+        <InvoiceTable slug={slug} clients={clients} onCreate={() => setCreating(true)} />
       )}
       {creating ? (
         <NewInvoiceDialog
