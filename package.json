@@ -13,6 +13,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "e2e": "turbo run e2e",
+    "e2e:visual": "pnpm --filter @timekeep/web e2e:visual",
     "db:generate": "pnpm --filter @timekeep/db db:generate",
     "db:migrate": "pnpm --filter @timekeep/db db:migrate",
     "db:seed": "pnpm --filter @timekeep/db db:seed",
