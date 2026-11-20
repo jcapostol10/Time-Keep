@@ -129,7 +129,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
       <section
         aria-label="Timer"
         data-hydrated={hydrated}
-        className="bg-card shadow-xs flex flex-wrap items-center gap-1 rounded-lg border p-2 md:flex-nowrap"
+        className="bg-card flex flex-wrap items-center gap-1 rounded-lg border p-2 md:flex-nowrap"
       >
         {running ? (
           <RunningDescription

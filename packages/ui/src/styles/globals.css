@@ -108,10 +108,15 @@
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /*
+   * Radius: 6px for controls (rounded-md), 10px for what floats or frames a
+   * region (rounded-lg and rounded-xl: dialogs, popovers, menus, cards), 4px
+   * for small marks. Table rows have none.
+   */
+  --radius-sm: 4px;
+  --radius-md: var(--radius);
+  --radius-lg: 10px;
+  --radius-xl: 10px;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);

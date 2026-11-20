@@ -42,3 +42,19 @@ describe("the type scale", () => {
     expect(offenders(offScale)).toEqual([]);
   });
 });
+
+describe("depth", () => {
+  it("keeps shadows for what floats: popovers, menus, tooltips, dialogs and sheets", () => {
+    // Bars, cards and controls are separated by a border and space, not a shadow.
+    const floats =
+      /packages\/ui\/src\/components\/(dialog|alert-dialog|sheet|popover|dropdown-menu|select|tooltip|command|sonner)\.tsx$/;
+    // The tracker's own floating layers: the description's suggestions and the bulk bar.
+    const layers = /components\/tracker\/(description-input|entry-list)\.tsx$/;
+    const shadow = /(?<![\w-])shadow(-(2xs|xs|sm|md|lg|xl|2xl))?(?![\w-])/;
+    const floating = (file: string) => {
+      const unix = file.replaceAll("\\", "/");
+      return floats.test(unix) || layers.test(unix);
+    };
+    expect(offenders(shadow, floating)).toEqual([]);
+  });
+});

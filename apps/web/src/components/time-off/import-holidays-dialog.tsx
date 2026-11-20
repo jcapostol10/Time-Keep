@@ -26,7 +26,7 @@ import { timeOffKeys, timeOffUrls } from "../tracker/query-keys";
 
 const ESTIMATED = "Estimated: confirm the proclaimed date";
 const SELECT =
-  "border-input bg-background h-9 w-full rounded-md border px-3 text-sm shadow-xs focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none";
+  "border-input bg-background h-9 w-full rounded-md border px-3 text-sm focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none";
 
 type Row = ImportCandidateDTO & { label: string };
 

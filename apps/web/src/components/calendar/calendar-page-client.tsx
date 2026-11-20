@@ -136,7 +136,7 @@ export function CalendarPageClient({
                 onClick={() => go(viewParam || dateKey !== today ? dayStart : null, v)}
                 className={cn(
                   "rounded px-3 py-1 capitalize",
-                  view === v ? "bg-background shadow-xs font-medium" : "text-muted-foreground",
+                  view === v ? "bg-background font-medium" : "text-muted-foreground",
                 )}
               >
                 {v}
