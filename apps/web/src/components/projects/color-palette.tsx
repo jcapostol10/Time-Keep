@@ -27,7 +27,7 @@ export function ColorPalette({
             aria-label={color}
             onClick={() => onChange(color)}
             className={cn(
-              "focus-visible:ring-ring/50 flex size-7 items-center justify-center rounded-full outline-none transition-transform focus-visible:ring-[3px]",
+              "flex size-7 items-center justify-center rounded-full outline-none transition-transform",
               selected
                 ? "ring-offset-background scale-110 ring-2 ring-offset-2"
                 : "hover:scale-105",

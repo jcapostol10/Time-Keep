@@ -196,3 +196,39 @@
     font-feature-settings: "tnum" 1; /* tabular numbers: timers and totals line up */
   }
 }
+
+/*
+ * The quality floor (docs/UI.md). Outside any layer on purpose: an unlayered
+ * rule wins over every utility, so no component can lose its focus ring by
+ * carrying `outline-none`.
+ *
+ * Focus: a 2px ring in the ring colour, 2px off the element, on whatever the
+ * keyboard reaches. Containers that only hold focus for their children (a
+ * dialog, a menu, a list of options) are not rings themselves.
+ */
+:focus-visible:not(
+  [role="dialog"],
+  [role="alertdialog"],
+  [role="menu"],
+  [role="listbox"],
+  [tabindex="-1"]
+) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/*
+ * Reduced motion: animations and transitions end at once. Not `none`: an
+ * animation that never runs fires no end event, and a closing popover would
+ * wait for one.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
