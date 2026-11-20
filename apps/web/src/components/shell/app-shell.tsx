@@ -13,6 +13,7 @@ import { workspaceRoutes } from "@/lib/routes";
 
 import { HelpMenu } from "./help-menu";
 import { SidebarNav } from "./sidebar-nav";
+import { TimerChip } from "./timer-chip";
 import { UserMenu } from "./user-menu";
 import { WorkspaceSwitcher, type WorkspaceOption } from "./workspace-switcher";
 
@@ -45,7 +46,7 @@ export function AppShell({ user, workspace, workspaces, hiddenNav, children }: A
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="bg-background/95 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 backdrop-blur sm:px-4">
+        <header className="bg-background/95 sticky top-0 z-30 flex h-14 items-center gap-2 border-b px-3 backdrop-blur md:px-8">
           {/* Mobile menu */}
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
@@ -68,15 +69,24 @@ export function AppShell({ user, workspace, workspaces, hiddenNav, children }: A
 
           <WorkspaceSwitcher current={workspace} workspaces={workspaces} />
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex min-w-0 items-center gap-1">
+            <TimerChip slug={workspace.slug} />
             <HelpMenu />
             <ThemeToggle />
             <UserMenu user={user} />
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8" data-hydrated={hydrated}>
-          <div className="mx-auto w-full max-w-6xl">{children}</div>
+        {/*
+          Content starts at the sidebar's edge, with one gutter (32px; 16px on a
+          phone), and stops at 1200px: lines stay readable and the eye has one
+          left edge to return to. A page of wide tables (reports, timesheet,
+          team) marks its root `data-layout="wide"` and takes the full width.
+        */}
+        <main className="flex-1 px-4 py-6 md:px-8" data-hydrated={hydrated}>
+          <div className="w-full max-w-[1200px] has-[[data-layout=wide]]:max-w-none">
+            {children}
+          </div>
         </main>
       </div>
     </div>

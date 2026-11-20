@@ -100,6 +100,11 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [ ] Pomodoro notice at the end of a focus block — gap
 - [ ] Reminder when no timer runs during working hours — gap
 
+## Shell
+
+- [x] A running timer shows a chip with its clock and description in the top bar on every page; it opens the tracker and goes when the timer stops — `shell.spec.ts` › "a running timer shows a chip in the top bar that links to the tracker"
+- [x] The sidebar marks the current page — `shell.spec.ts` › "the sidebar marks the page the person is on"
+
 ## Clients
 
 - [x] Create a client with name, email and notes — `clients.spec.ts` › "create and edit a client"

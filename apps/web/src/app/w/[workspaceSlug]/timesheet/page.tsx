@@ -58,7 +58,7 @@ export default async function TimesheetPage({
 
   return (
     <>
-      <PageHeader title="Timesheet" />
+      <PageHeader title="Timesheet" wide />
       <HydrationBoundary state={dehydrate(queryClient)}>
         <TargetProvider target={target}>
           <TimesheetPageClient from={from} to={to} viewerId={ctx.user.id} />

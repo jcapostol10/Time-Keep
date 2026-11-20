@@ -3,6 +3,7 @@ import { getDb } from "@timekeep/db";
 import { Badge } from "@timekeep/ui/components/badge";
 import { notFound } from "next/navigation";
 
+import { PageHeader } from "@/components/page-header";
 import { ProgressBar } from "@/components/projects/progress-bar";
 import { ProjectTabs } from "@/components/projects/project-tabs";
 import { ColorDot } from "@/components/tracker/project-picker";
@@ -31,21 +32,25 @@ export default async function ProjectLayout({
 
   return (
     <>
-      <div className="mb-4">
-        <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <ColorDot color={project.color} className="size-3.5" />
-          <span>{project.name}</span>
-          {project.archived ? (
-            <Badge variant="outline" className="ml-1 font-normal">
+      <PageHeader
+        className="mb-4"
+        title={project.name}
+        mark={<ColorDot color={project.color} className="size-3.5" />}
+        meta={
+          project.archived ? (
+            <Badge variant="outline" className="font-normal">
               Archived
             </Badge>
-          ) : null}
-        </h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {project.clientName ?? "No client"} ·{" "}
-          {project.visibility === "PRIVATE" ? "Private" : "Public"}
-          {project.billable ? " · Billable by default" : ""}
-        </p>
+          ) : null
+        }
+        description={
+          <>
+            {project.clientName ?? "No client"} ·{" "}
+            {project.visibility === "PRIVATE" ? "Private" : "Public"}
+            {project.billable ? " · Billable by default" : ""}
+          </>
+        }
+      >
         {project.progress ? (
           <div className="mt-2 max-w-md" data-testid="project-progress">
             <ProgressBar
@@ -54,7 +59,7 @@ export default async function ProjectLayout({
             />
           </div>
         ) : null}
-      </div>
+      </PageHeader>
       <ProjectTabs
         slug={workspaceSlug}
         projectId={projectId}

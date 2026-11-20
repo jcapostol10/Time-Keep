@@ -17,6 +17,7 @@ export default async function ScheduleLayout({
   return (
     <div>
       <PageHeader
+        wide
         title="Schedule"
         description={
           planner
