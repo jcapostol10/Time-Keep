@@ -43,8 +43,8 @@ const SCREENS: { name: string; path: string }[] = [
 async function settle(page: Page) {
   await expect(page.locator('main[data-hydrated="true"]')).toBeVisible({ timeout: 90_000 });
   await page.waitForLoadState("networkidle");
-  // Charts and skeletons: let the last frame land.
-  await page.waitForTimeout(400);
+  // Charts animate in over about a second and a half: let the last frame land.
+  await page.waitForTimeout(1_800);
 }
 
 async function shoot(page: Page, name: string, width: number, scheme: string) {

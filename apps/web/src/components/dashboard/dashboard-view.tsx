@@ -18,6 +18,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { fetchJson } from "@/lib/fetch-json";
+import { LiveDot } from "@/components/dashboard/live-dot";
 import { detailedHref } from "@/lib/report-links";
 import type { DashboardMe, TeamMember } from "@/server/dashboard";
 
@@ -210,12 +211,7 @@ function TeamTab({ slug, params }: { slug: string; params: string }) {
               <TableCell className="whitespace-nowrap font-medium">
                 <span className="flex items-center gap-2">
                   {m.name}
-                  {m.running ? (
-                    <span className="text-primary flex items-center gap-1 text-xs font-medium">
-                      <span className="bg-primary size-2 animate-pulse rounded-full" aria-hidden />
-                      Tracking now
-                    </span>
-                  ) : null}
+                  {m.running ? <LiveDot label="Tracking now" /> : null}
                 </span>
               </TableCell>
               <TableCell className="text-muted-foreground">

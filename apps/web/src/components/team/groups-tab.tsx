@@ -204,7 +204,7 @@ export function GroupsTab({ ctx }: { ctx: TeamContext }) {
           <AlertDialogFooter>
             <AlertDialogCancel>Keep</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive hover:bg-destructive/90 text-white"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               onClick={() => {
                 if (open && open !== "new") {
                   void run(() => deleteGroupAction(ctx.slug, open.group.id), "Group deleted");

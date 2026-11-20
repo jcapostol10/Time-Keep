@@ -55,6 +55,10 @@ jobs:
       - name: Formatting
         run: pnpm format:check
 
+      # The theme's text pairs must meet WCAG AA in both themes (docs/UI.md).
+      - name: Colour contrast
+        run: pnpm contrast:check
+
       # e2e runs against Vercel previews (e2e-preview.yml); Docker serves the
       # integration tests only.
       - name: Start Postgres, Mailpit and object storage

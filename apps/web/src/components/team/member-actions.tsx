@@ -346,7 +346,7 @@ export function MemberActions({ row, ctx }: { row: TeamRow; ctx: TeamContext }) 
           <AlertDialogFooter>
             <AlertDialogCancel>Keep</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive hover:bg-destructive/90 text-white"
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
               onClick={() =>
                 void run(() => removeMemberAction(ctx.slug, userId), `${row.name} removed`)
               }
