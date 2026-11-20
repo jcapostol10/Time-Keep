@@ -22,7 +22,7 @@ export function SidebarNav({
     <nav aria-label="Main" className="flex flex-col gap-5 px-3 py-4">
       {NAV_GROUPS.map((group) => (
         <div key={group.label}>
-          <p className="text-muted-foreground mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider">
+          <p className="text-muted-foreground mb-1 px-3 text-xs font-semibold uppercase tracking-wider">
             {group.label}
           </p>
           <ul className="flex flex-col gap-0.5">

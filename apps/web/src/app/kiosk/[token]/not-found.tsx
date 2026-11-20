@@ -4,7 +4,7 @@ import { KIOSK_UNAVAILABLE } from "@timekeep/core";
 export default function KioskNotFound() {
   return (
     <main className="flex min-h-dvh items-center justify-center p-6 text-center">
-      <p className="text-lg font-medium">{KIOSK_UNAVAILABLE}</p>
+      <p className="text-xl font-medium">{KIOSK_UNAVAILABLE}</p>
     </main>
   );
 }

@@ -56,7 +56,7 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
             <CardTitle className="text-muted-foreground text-sm font-medium">Total time</CardTitle>
           </CardHeader>
           <CardContent
-            className="text-2xl font-semibold tabular-nums"
+            className="font-display text-2xl font-semibold tabular-nums"
             data-testid="dashboard-total"
           >
             {fmt(data.totals.durationSeconds)}
@@ -66,7 +66,7 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
           <CardHeader className="pb-2">
             <CardTitle className="text-muted-foreground text-sm font-medium">Billable</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold tabular-nums">
+          <CardContent className="font-display text-2xl font-semibold tabular-nums">
             {billableShare}%
           </CardContent>
         </Card>
@@ -76,7 +76,7 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
               <CardTitle className="text-muted-foreground text-sm font-medium">Amount</CardTitle>
             </CardHeader>
             <CardContent
-              className="text-2xl font-semibold tabular-nums"
+              className="font-display text-2xl font-semibold tabular-nums"
               data-testid="dashboard-amount"
             >
               <MoneyCell amounts={data.totals} currency={data.money.currency} />
@@ -88,7 +88,7 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
             <CardTitle className="text-muted-foreground text-sm font-medium">Top project</CardTitle>
           </CardHeader>
           <CardContent data-testid="dashboard-top-project">
-            <p className="truncate text-lg font-semibold">{data.topProject?.label ?? "—"}</p>
+            <p className="truncate text-base font-semibold">{data.topProject?.label ?? "—"}</p>
             {data.topProject ? (
               <p className="text-muted-foreground text-sm tabular-nums">
                 {fmt(data.topProject.seconds)}
@@ -108,7 +108,7 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
             <CardTitle className="text-muted-foreground text-sm font-medium">Top client</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="truncate text-lg font-semibold">{data.topClient?.label ?? "—"}</p>
+            <p className="truncate text-base font-semibold">{data.topClient?.label ?? "—"}</p>
             {data.topClient ? (
               <p className="text-muted-foreground text-sm tabular-nums">
                 {fmt(data.topClient.seconds)}

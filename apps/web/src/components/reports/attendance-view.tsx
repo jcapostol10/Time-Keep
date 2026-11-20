@@ -57,7 +57,10 @@ export function AttendanceView() {
     <div className="space-y-6">
       <div className="flex items-baseline gap-2">
         <span className="text-muted-foreground text-sm">{data.label}</span>
-        <span data-testid="report-total" className="text-2xl font-semibold tabular-nums">
+        <span
+          data-testid="report-total"
+          className="font-display text-display font-semibold tabular-nums"
+        >
           {fmt(work)}
         </span>
       </div>

@@ -32,7 +32,7 @@ export default async function ProjectLayout({
   return (
     <>
       <div className="mb-4">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+        <h1 className="flex items-center gap-2 text-xl font-semibold">
           <ColorDot color={project.color} className="size-3.5" />
           <span>{project.name}</span>
           {project.archived ? (

@@ -86,7 +86,7 @@ export function CalendarGrid({
       </div>
       {bands.length > 0 ? (
         <div className="flex border-b">
-          <div className="text-muted-foreground w-14 shrink-0 px-1 py-1 text-right text-[11px]">
+          <div className="text-muted-foreground w-14 shrink-0 px-1 py-1 text-right text-xs">
             All day
           </div>
           <ul aria-label="All-day" className="flex flex-1">
@@ -121,7 +121,7 @@ export function CalendarGrid({
             {hours.map((h) => (
               <div
                 key={h}
-                className="text-muted-foreground absolute right-2 -translate-y-1/2 text-[11px] tabular-nums"
+                className="text-muted-foreground absolute right-2 -translate-y-1/2 text-xs tabular-nums"
                 style={{ top: minutesToPx(h * 60) }}
               >
                 {h === 0 ? "" : hourLabel(h)}

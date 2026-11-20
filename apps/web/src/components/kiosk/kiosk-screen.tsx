@@ -51,7 +51,7 @@ function KioskClock({ offsetMs, timezone }: { offsetMs: number; timezone: string
   const now = useNow();
   if (now === 0) return null;
   return (
-    <p className="text-muted-foreground text-lg tabular-nums">
+    <p className="text-muted-foreground text-xl tabular-nums">
       {new Intl.DateTimeFormat(undefined, {
         hour: "numeric",
         minute: "2-digit",
@@ -149,13 +149,13 @@ export function KioskScreen({ token, initial }: { token: string; initial: KioskS
         data-hydrated={hydrated}
         className="flex min-h-dvh items-center justify-center p-6 text-center"
       >
-        <p className="text-lg font-medium">{KIOSK_UNAVAILABLE}</p>
+        <p className="text-xl font-medium">{KIOSK_UNAVAILABLE}</p>
       </main>
     );
   }
 
   const alert = error ? (
-    <p role="alert" className="text-destructive text-center text-lg font-medium">
+    <p role="alert" className="text-destructive text-center text-xl font-medium">
       {error}
     </p>
   ) : null;
@@ -186,7 +186,7 @@ export function KioskScreen({ token, initial }: { token: string; initial: KioskS
           <Button
             size="lg"
             variant="outline"
-            className="h-14 w-full max-w-xs text-lg"
+            className="h-14 w-full max-w-xs text-xl"
             onClick={() => {
               setError(null);
               setView({ kind: "scan" });
@@ -200,7 +200,7 @@ export function KioskScreen({ token, initial }: { token: string; initial: KioskS
               <li key={person.userId}>
                 <Button
                   variant="outline"
-                  className="h-16 w-full justify-start gap-3 text-lg"
+                  className="h-16 w-full justify-start gap-3 text-xl"
                   onClick={() => {
                     setError(person.hasPin ? null : NO_PIN);
                     setView({ kind: "pin", person });
@@ -220,7 +220,7 @@ export function KioskScreen({ token, initial }: { token: string; initial: KioskS
 
       {view.kind === "pin" ? (
         <>
-          <p className="text-lg">{view.person.name}</p>
+          <p className="text-xl">{view.person.name}</p>
           {view.person.hasPin ? <h2 className="text-2xl font-semibold">Enter your PIN</h2> : null}
           {alert}
           {view.person.hasPin ? (
@@ -253,7 +253,7 @@ export function KioskScreen({ token, initial }: { token: string; initial: KioskS
       {view.kind === "actions" ? (
         <>
           <h2 className="text-2xl font-semibold">{view.visit.person.name}</h2>
-          <p className="text-lg">{workedLine(view.visit.workedTodaySeconds)}</p>
+          <p className="text-xl">{workedLine(view.visit.workedTodaySeconds)}</p>
           {screen.photo && view.visit.actions.includes("CLOCK_IN") ? (
             <p className="text-muted-foreground">{KIOSK_PHOTO_NOTICE}</p>
           ) : null}
@@ -285,7 +285,7 @@ export function KioskScreen({ token, initial }: { token: string; initial: KioskS
             <h2 className="text-2xl font-semibold">
               {CONFIRMED[view.action]}, {view.visit.person.name}
             </h2>
-            <p className="text-lg">{workedLine(view.visit.workedTodaySeconds)}</p>
+            <p className="text-xl">{workedLine(view.visit.workedTodaySeconds)}</p>
           </div>
           <Button size="lg" className="h-14 w-full max-w-xs" onClick={() => void backToPeople()}>
             Done

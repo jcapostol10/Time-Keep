@@ -126,8 +126,34 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  /* Clocks and totals: the condensed cut, always with tabular figures. */
+  --font-display: var(--font-plex-condensed), var(--font-plex-sans), ui-sans-serif, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /*
+   * The type scale, and nothing else: 12 / 13 / 14 (body) / 16 / 20 / 28, and
+   * 32 and 48 for clocks and totals. Body sizes read at 1.5, headings at 1.2.
+   * Tailwind's other sizes (text-lg, text-3xl, ...) are cleared on purpose;
+   * `ui-scale.test.ts` fails on a class outside this list.
+   */
+  --text-*: initial;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.5;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.2;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 1.2;
+  --text-display: 2rem;
+  --text-display--line-height: 1.2;
+  --text-display-lg: 3rem;
+  --text-display-lg--line-height: 1.1;
 }
 
 @layer base {

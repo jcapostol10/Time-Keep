@@ -23,7 +23,10 @@ export function SummaryView() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-muted-foreground text-sm">{data?.range.label ?? "…"}</p>
-          <p className="text-3xl font-semibold tabular-nums" data-testid="report-total">
+          <p
+            className="font-display text-display font-semibold tabular-nums"
+            data-testid="report-total"
+          >
             {data ? formatDuration(data.totals.durationSeconds, viewer.durationFormat) : "…"}
           </p>
           {data ? (

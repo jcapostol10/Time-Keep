@@ -45,7 +45,7 @@ function LiveClock() {
     <span
       role="timer"
       aria-label="Elapsed time"
-      className="min-w-[5.5rem] px-2 text-right text-lg font-semibold tabular-nums"
+      className="min-w-[5.5rem] px-2 text-right text-xl font-semibold tabular-nums"
     >
       {formatClock(elapsedSeconds)}
     </span>

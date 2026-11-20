@@ -109,7 +109,7 @@ export function AccessTab({
                 <li key={m.id} className="flex items-center gap-3 px-3 py-2">
                   <Avatar className="size-7">
                     {m.image ? <AvatarImage src={m.image} alt="" /> : null}
-                    <AvatarFallback className="text-[10px]">{initials(m.name)}</AvatarFallback>
+                    <AvatarFallback className="text-xs">{initials(m.name)}</AvatarFallback>
                   </Avatar>
                   <span className="flex-1 truncate text-sm">
                     {m.name} <span className="text-muted-foreground text-xs">{m.email}</span>

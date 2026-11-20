@@ -77,7 +77,7 @@ export function InvoiceEditor({
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Invoice {invoice.number}</h1>
+            <h1 className="text-xl font-semibold">Invoice {invoice.number}</h1>
             <Badge
               data-testid="invoice-status"
               variant={invoice.computedStatus === "OVERDUE" ? "destructive" : "secondary"}

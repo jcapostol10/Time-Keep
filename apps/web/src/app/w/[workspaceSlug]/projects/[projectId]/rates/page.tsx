@@ -57,7 +57,7 @@ export default async function ProjectRatesPage({
     <div className="space-y-8">
       <RecalcBanner slug={workspaceSlug} />
       <section aria-labelledby="project-rate" className="space-y-2">
-        <h2 id="project-rate" className="text-lg font-semibold">
+        <h2 id="project-rate" className="text-base font-semibold">
           Project rate
         </h2>
         <p className="text-muted-foreground text-sm">
@@ -83,7 +83,7 @@ export default async function ProjectRatesPage({
       </section>
 
       <section aria-labelledby="member-rates" className="space-y-2">
-        <h2 id="member-rates" className="text-lg font-semibold">
+        <h2 id="member-rates" className="text-base font-semibold">
           Member rates on this project
         </h2>
         <div className="overflow-x-auto rounded-lg border">
@@ -134,7 +134,7 @@ export default async function ProjectRatesPage({
       </section>
 
       <section aria-labelledby="task-rates" className="space-y-2">
-        <h2 id="task-rates" className="text-lg font-semibold">
+        <h2 id="task-rates" className="text-base font-semibold">
           Task rates
         </h2>
         {tasks.length === 0 ? (
