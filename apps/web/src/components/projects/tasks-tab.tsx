@@ -30,11 +30,12 @@ import {
   TableHeader,
   TableRow,
 } from "@timekeep/ui/components/table";
-import { ListChecksIcon, MoreHorizontalIcon, PlusIcon, UsersIcon } from "lucide-react";
+import { MoreHorizontalIcon, PlusIcon, UsersIcon } from "lucide-react";
 import { useId, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import type { TaskDTO } from "@/lib/catalog-types";
+import { EmptyState } from "@/components/empty-state";
 import { deleteTaskAction, setTaskGroupsAction, updateTaskAction } from "@/server/actions/tasks";
 
 import { ChecklistDialog } from "../shared/checklist-dialog";
@@ -257,13 +258,11 @@ export function TasksTab({
       ) : null}
 
       {active.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-12 text-center">
-          <ListChecksIcon className="text-muted-foreground mb-3 size-8" />
-          <p className="font-medium">No tasks yet</p>
-          <p className="text-muted-foreground mt-1 max-w-sm text-sm">
-            Tasks split a project into pieces people pick in the timer bar.
-          </p>
-        </div>
+        <EmptyState
+          title="Add a task"
+          description="Tasks split a project into pieces people pick in the timer bar."
+          action={<Button onClick={() => setCreating(true)}>Add first task</Button>}
+        />
       ) : (
         renderTable(shown)
       )}

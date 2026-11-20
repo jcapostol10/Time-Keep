@@ -79,7 +79,7 @@ export function DescriptionInput({
         aria-autocomplete="list"
         aria-activedescendant={showList && active >= 0 ? `${listId}-${active}` : undefined}
         autoComplete="off"
-        className="focus-visible:border-ring border-transparent shadow-none"
+        className="border-transparent shadow-none"
         onChange={(e) => {
           onChange(e.target.value);
           setOpen(true);

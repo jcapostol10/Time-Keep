@@ -22,9 +22,7 @@ export function SidebarNav({
     <nav aria-label="Main" className="flex flex-col gap-5 px-3 py-4">
       {NAV_GROUPS.map((group) => (
         <div key={group.label}>
-          <p className="text-muted-foreground mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider">
-            {group.label}
-          </p>
+          <p className="text-muted-foreground mb-1 px-3 text-xs font-medium">{group.label}</p>
           <ul className="flex flex-col gap-0.5">
             {group.items
               .filter((item) => !hidden.includes(item.label))
@@ -38,10 +36,12 @@ export function SidebarNav({
                       onClick={onNavigate}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                        "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                        "focus-visible:ring-sidebar-ring focus-visible:outline-none focus-visible:ring-2",
-                        active && "bg-sidebar-accent text-sidebar-accent-foreground",
+                        // Quiet until it is the page: then ink text and a 2px bar on the
+                        // left edge, never a filled pill.
+                        "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                        "text-muted-foreground hover:text-foreground",
+                        active &&
+                          "text-foreground before:bg-primary before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full",
                       )}
                     >
                       <item.icon className="size-4 shrink-0" />

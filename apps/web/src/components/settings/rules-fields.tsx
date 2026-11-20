@@ -91,7 +91,7 @@ export function SettingsSection({
   return (
     <section aria-labelledby={id} className="space-y-4">
       <div className="space-y-1">
-        <h2 id={id} className="text-lg font-semibold">
+        <h2 id={id} className="text-base font-semibold">
           {title}
         </h2>
         <p className="text-muted-foreground text-sm">{description}</p>

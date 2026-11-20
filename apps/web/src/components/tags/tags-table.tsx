@@ -27,15 +27,16 @@ import {
   TableHeader,
   TableRow,
 } from "@timekeep/ui/components/table";
-import { MoreHorizontalIcon, TagIcon } from "lucide-react";
+import { MoreHorizontalIcon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { ColorDot } from "@/components/tracker/project-picker";
+import { EmptyNote, EmptyState } from "@/components/empty-state";
 import type { TagDTO } from "@/lib/catalog-types";
 import { deleteTagAction, updateTagAction } from "@/server/actions/tags";
 
-import { TagDialog } from "./tag-dialog";
+import { NewTagButton, TagDialog } from "./tag-dialog";
 
 export function TagsTable({
   slug,
@@ -64,16 +65,13 @@ export function TagsTable({
   }
 
   if (tags.length === 0) {
+    if (status !== "active") return <EmptyNote>No tags match. Try another status.</EmptyNote>;
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-16 text-center">
-        <TagIcon className="text-muted-foreground mb-3 size-8" />
-        <p className="font-medium">{status !== "active" ? "No tags match" : "No tags yet"}</p>
-        <p className="text-muted-foreground mt-1 max-w-sm text-sm">
-          {status !== "active"
-            ? "Try another status."
-            : "Create a tag here or from the timer bar's tag picker."}
-        </p>
-      </div>
+      <EmptyState
+        title="Create a tag"
+        description="Tags label entries across projects, so reports can be filtered by them."
+        action={<NewTagButton label="Create tag" slug={slug} />}
+      />
     );
   }
 

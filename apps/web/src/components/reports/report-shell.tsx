@@ -67,6 +67,7 @@ export function ReportShell({
   return (
     <div className="space-y-4">
       <PageHeader
+        wide
         title="Reports"
         actions={
           <>

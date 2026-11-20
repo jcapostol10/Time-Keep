@@ -192,9 +192,10 @@ test.describe("project detail", () => {
     await expect(page.getByLabel("Note")).toHaveValue("Relaunch");
 
     await page.getByRole("button", { name: "Archive project" }).click();
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Archived");
+    // The badge sits beside the title, outside the heading (the shared page header).
+    await expect(page.getByTestId("project-archived")).toHaveText("Archived");
     await page.getByRole("button", { name: "Unarchive project" }).click();
-    await expect(page.getByRole("heading", { level: 1 })).not.toContainText("Archived");
+    await expect(page.getByTestId("project-archived")).toHaveCount(0);
   });
 
   test("the Rates tab sets rates", async ({ page, freshUser }) => {

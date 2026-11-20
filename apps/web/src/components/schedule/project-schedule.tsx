@@ -128,8 +128,8 @@ export function ProjectSchedule({
                           title={label}
                           className={
                             m.editable
-                              ? "block size-3 rotate-45 cursor-pointer border border-amber-700 bg-amber-400"
-                              : "block size-3 rotate-45 border border-amber-700 bg-amber-400"
+                              ? "border-foreground bg-chart-2 block size-3 rotate-45 cursor-pointer border"
+                              : "border-foreground bg-chart-2 block size-3 rotate-45 border"
                           }
                           onClick={() => (m.editable ? setMilestone(m) : undefined)}
                         />

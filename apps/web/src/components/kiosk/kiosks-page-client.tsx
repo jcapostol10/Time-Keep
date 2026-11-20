@@ -45,7 +45,7 @@ import {
   TableHeader,
   TableRow,
 } from "@timekeep/ui/components/table";
-import { CopyIcon, MonitorSmartphoneIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
+import { CopyIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -141,9 +141,9 @@ export function KiosksPageClient({
 
       {kiosks.length === 0 ? (
         <EmptyState
-          icon={MonitorSmartphoneIcon}
-          title="No kiosks yet"
-          description="Create one, then open its device URL on a shared tablet or computer."
+          title="Add a kiosk"
+          description="A kiosk is a shared tablet or computer where people clock in with a PIN or a QR code. Add one, then open its device URL there."
+          action={<Button onClick={() => setEditing("new")}>Add kiosk</Button>}
         />
       ) : (
         <div className="rounded-lg border">

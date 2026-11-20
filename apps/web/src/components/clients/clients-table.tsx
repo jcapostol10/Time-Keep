@@ -27,14 +27,15 @@ import {
   TableHeader,
   TableRow,
 } from "@timekeep/ui/components/table";
-import { Building2Icon, MoreHorizontalIcon } from "lucide-react";
+import { MoreHorizontalIcon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import type { ClientDTO } from "@/lib/catalog-types";
+import { EmptyNote, EmptyState } from "@/components/empty-state";
 import { deleteClientAction, updateClientAction } from "@/server/actions/clients";
 
-import { ClientDialog } from "./client-dialog";
+import { ClientDialog, NewClientButton } from "./client-dialog";
 
 const DELETE_BLOCKED = "Move or delete its projects first";
 
@@ -70,18 +71,22 @@ export function ClientsTable({
   }
 
   if (clients.length === 0) {
+    if (query || status !== "active") {
+      return <EmptyNote>No clients match. Try another search or status.</EmptyNote>;
+    }
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-16 text-center">
-        <Building2Icon className="text-muted-foreground mb-3 size-8" />
-        <p className="font-medium">
-          {query || status !== "active" ? "No clients match" : "No clients yet"}
-        </p>
-        <p className="text-muted-foreground mt-1 max-w-sm text-sm">
-          {query || status !== "active"
-            ? "Try another search or status."
-            : "Add the companies you work for, then put projects under them."}
-        </p>
-      </div>
+      <EmptyState
+        title="Add a client"
+        description="Clients are the companies you work for. Put projects under them, and bill them later."
+        action={
+          <NewClientButton
+            label="Add client"
+            slug={slug}
+            workspaceCurrency={workspaceCurrency}
+            canSetCurrency={canManage}
+          />
+        }
+      />
     );
   }
 

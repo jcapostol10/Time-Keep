@@ -126,7 +126,10 @@ export function DetailedView({ initialPaging }: { initialPaging: DetailedPaging 
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-muted-foreground text-sm">{first?.range.label ?? "…"}</p>
-          <p className="text-3xl font-semibold tabular-nums" data-testid="report-total">
+          <p
+            className="font-display text-display font-semibold tabular-nums"
+            data-testid="report-total"
+          >
             {first?.totals
               ? formatDuration(first.totals.durationSeconds, viewer.durationFormat)
               : "…"}

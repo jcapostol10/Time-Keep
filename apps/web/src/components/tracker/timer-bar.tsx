@@ -45,7 +45,7 @@ function LiveClock() {
     <span
       role="timer"
       aria-label="Elapsed time"
-      className="min-w-[5.5rem] px-2 text-right text-lg font-semibold tabular-nums"
+      className="min-w-[5.5rem] px-2 text-right text-xl font-semibold tabular-nums"
     >
       {formatClock(elapsedSeconds)}
     </span>
@@ -129,7 +129,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
       <section
         aria-label="Timer"
         data-hydrated={hydrated}
-        className="bg-card shadow-xs flex flex-wrap items-center gap-1 rounded-lg border p-2 md:flex-nowrap"
+        className="bg-card flex flex-wrap items-center gap-1 rounded-lg border p-2 md:flex-nowrap"
       >
         {running ? (
           <RunningDescription

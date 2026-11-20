@@ -19,11 +19,11 @@ import {
   TableHeader,
   TableRow,
 } from "@timekeep/ui/components/table";
-import { FileTextIcon } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { workspaceRoutes } from "@/lib/routes";
+import { EmptyNote, EmptyState } from "@/components/empty-state";
 
 import { INVOICE_STATUS_LABELS } from "./status";
 import { useInvoiceList } from "./use-invoices";
@@ -34,9 +34,12 @@ const ALL = "all";
 export function InvoiceTable({
   slug,
   clients,
+  onCreate,
 }: {
   slug: string;
   clients: { id: string; name: string }[];
+  /** Opens the New invoice dialog (the empty list's button). */
+  onCreate: () => void;
 }) {
   const [status, setStatus] = useState<string>(ALL);
   const [clientId, setClientId] = useState<string>(ALL);
@@ -88,13 +91,15 @@ export function InvoiceTable({
       {!data ? (
         <Skeleton className="h-48 w-full" />
       ) : invoices.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-16 text-center">
-          <FileTextIcon className="text-muted-foreground mb-3 size-8" />
-          <p className="font-medium">No invoices yet</p>
-          <p className="text-muted-foreground mt-1 max-w-sm text-sm">
-            Create one for a client, then import their billable time and expenses.
-          </p>
-        </div>
+        status !== ALL || clientId !== ALL ? (
+          <EmptyNote>No invoices match. Try another status or client.</EmptyNote>
+        ) : (
+          <EmptyState
+            title="Create an invoice"
+            description="Pick a client, then import their billable time and expenses."
+            action={<Button onClick={onCreate}>Create invoice</Button>}
+          />
+        )
       ) : (
         <div className="overflow-x-auto rounded-md border">
           <Table aria-label="Invoices">

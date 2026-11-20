@@ -194,7 +194,7 @@ export function PeriodView({ slug, view }: { slug: string; view: PeriodViewDTO }
 
       {view.expenses.length > 0 ? (
         <section aria-label="Expenses" className="space-y-2">
-          <h2 className="text-lg font-semibold">Expenses</h2>
+          <h2 className="text-base font-semibold">Expenses</h2>
           <ul className="divide-y rounded-md border">
             {view.expenses.map((e) => (
               <li key={e.id} className="flex flex-wrap gap-x-3 px-3 py-2 text-sm">
@@ -214,7 +214,7 @@ export function PeriodView({ slug, view }: { slug: string; view: PeriodViewDTO }
       ) : null}
 
       <section aria-label="History" className="space-y-2">
-        <h2 className="text-lg font-semibold">History</h2>
+        <h2 className="text-base font-semibold">History</h2>
         <ol className="space-y-2 text-sm">
           {view.events.map((e) => (
             <li key={e.id}>

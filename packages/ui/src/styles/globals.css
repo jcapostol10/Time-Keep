@@ -4,94 +4,119 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * TimeKeep theme. Our own palette: a deep teal primary on neutral surfaces.
- * Tokens follow the shadcn/ui naming so components work unchanged.
+ * TimeKeep theme: a punch clock's palette. Cool paper surfaces, ink text, a
+ * deep teal for what the person can act on, and one amber that means "time is
+ * running" and nothing else. Token names follow shadcn/ui so its components
+ * work unchanged. Values are hex (or rgba) so `scripts/check-contrast.mts` can
+ * read them; it fails CI when a text pair drops under WCAG AA.
  */
 :root {
-  --radius: 0.5rem;
+  /* Controls. Dialogs and popovers use --radius-lg; table rows have none. */
+  --radius: 0.375rem;
 
-  --background: oklch(0.995 0.002 200);
-  --foreground: oklch(0.2 0.015 230);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.015 230);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.015 230);
+  --background: #f6f7f9;
+  --foreground: #1e2430;
+  --card: #ffffff;
+  --card-foreground: #1e2430;
+  --popover: #ffffff;
+  --popover-foreground: #1e2430;
 
-  --primary: oklch(0.52 0.11 195);
-  --primary-foreground: oklch(0.99 0.01 195);
-  --secondary: oklch(0.96 0.01 210);
-  --secondary-foreground: oklch(0.28 0.02 230);
-  --muted: oklch(0.96 0.008 210);
-  --muted-foreground: oklch(0.5 0.02 230);
-  --accent: oklch(0.94 0.03 195);
-  --accent-foreground: oklch(0.25 0.04 200);
-  --destructive: oklch(0.58 0.22 25);
-  --destructive-foreground: oklch(0.99 0 0);
+  --primary: #0f6e66;
+  --primary-foreground: #ffffff;
+  --secondary: #e9ecf0;
+  --secondary-foreground: #1e2430;
+  --muted: #edeff2;
+  --muted-foreground: #5b6472;
+  --accent: #e3f0ee;
+  --accent-foreground: #0b4f49;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
 
-  --border: oklch(0.91 0.01 220);
-  --input: oklch(0.91 0.01 220);
-  --ring: oklch(0.62 0.1 195);
+  --border: #dce0e6;
+  --input: #cdd2da;
+  --ring: #0f6e66;
 
-  --chart-1: oklch(0.6 0.12 195);
-  --chart-2: oklch(0.65 0.17 55);
-  --chart-3: oklch(0.55 0.18 290);
-  --chart-4: oklch(0.7 0.15 130);
-  --chart-5: oklch(0.6 0.2 350);
+  /*
+   * Live: time is running. Only the running timer (the timer bar and the top
+   * bar's chip), the calendar's now-line and the live dot on Team activity
+   * use it; `live-token.test.ts` fails on a use anywhere else. --live is a
+   * fill behind --live-foreground; --live-line is the same amber darkened to
+   * read as a thin line on the light surfaces (3:1).
+   */
+  --live: #d9910b;
+  --live-foreground: #1e1400;
+  --live-line: #b07400;
 
-  --sidebar: oklch(0.975 0.006 210);
-  --sidebar-foreground: oklch(0.25 0.015 230);
-  --sidebar-primary: oklch(0.52 0.11 195);
-  --sidebar-primary-foreground: oklch(0.99 0.01 195);
-  --sidebar-accent: oklch(0.93 0.025 195);
-  --sidebar-accent-foreground: oklch(0.22 0.04 200);
-  --sidebar-border: oklch(0.9 0.01 220);
-  --sidebar-ring: oklch(0.62 0.1 195);
+  /* Charts: the primary first, then steel, olive, brick and slate. No amber: a chart is never "live". */
+  --chart-1: #0f6e66;
+  --chart-2: #3e6fa8;
+  --chart-3: #6f8231;
+  --chart-4: #a8553d;
+  --chart-5: #5b6472;
+
+  --sidebar: #f6f7f9;
+  --sidebar-foreground: #1e2430;
+  --sidebar-primary: #0f6e66;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #edeff2;
+  --sidebar-accent-foreground: #1e2430;
+  --sidebar-border: #dce0e6;
+  --sidebar-ring: #0f6e66;
 }
 
 .dark {
-  --background: oklch(0.17 0.012 230);
-  --foreground: oklch(0.95 0.008 210);
-  --card: oklch(0.21 0.013 230);
-  --card-foreground: oklch(0.95 0.008 210);
-  --popover: oklch(0.21 0.013 230);
-  --popover-foreground: oklch(0.95 0.008 210);
+  --background: #12161c;
+  --foreground: #e6e9ee;
+  --card: #181d24;
+  --card-foreground: #e6e9ee;
+  --popover: #1c222a;
+  --popover-foreground: #e6e9ee;
 
-  --primary: oklch(0.76 0.1 195);
-  --primary-foreground: oklch(0.17 0.03 210);
-  --secondary: oklch(0.27 0.015 230);
-  --secondary-foreground: oklch(0.95 0.008 210);
-  --muted: oklch(0.26 0.012 230);
-  --muted-foreground: oklch(0.7 0.015 220);
-  --accent: oklch(0.3 0.03 200);
-  --accent-foreground: oklch(0.95 0.01 200);
-  --destructive: oklch(0.68 0.19 25);
-  --destructive-foreground: oklch(0.99 0 0);
+  --primary: #3fb8ac;
+  --primary-foreground: #0b1f1d;
+  --secondary: #242b34;
+  --secondary-foreground: #e6e9ee;
+  --muted: #20262e;
+  --muted-foreground: #a3abb7;
+  --accent: #1e3331;
+  --accent-foreground: #cfede9;
+  --destructive: #f0776a;
+  --destructive-foreground: #2a0a06;
 
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.66 0.09 195);
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: #3fb8ac;
 
-  --chart-1: oklch(0.72 0.11 195);
-  --chart-2: oklch(0.75 0.16 55);
-  --chart-3: oklch(0.68 0.16 290);
-  --chart-4: oklch(0.78 0.14 130);
-  --chart-5: oklch(0.7 0.18 350);
+  --live: #f0b23a;
+  --live-foreground: #2a1c00;
+  --live-line: #f0b23a;
 
-  --sidebar: oklch(0.2 0.013 230);
-  --sidebar-foreground: oklch(0.93 0.008 210);
-  --sidebar-primary: oklch(0.76 0.1 195);
-  --sidebar-primary-foreground: oklch(0.17 0.03 210);
-  --sidebar-accent: oklch(0.28 0.025 205);
-  --sidebar-accent-foreground: oklch(0.95 0.01 200);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.66 0.09 195);
+  --chart-1: #3fb8ac;
+  --chart-2: #6fa3db;
+  --chart-3: #a9bc62;
+  --chart-4: #e08a6e;
+  --chart-5: #9aa4b2;
+
+  --sidebar: #12161c;
+  --sidebar-foreground: #e6e9ee;
+  --sidebar-primary: #3fb8ac;
+  --sidebar-primary-foreground: #0b1f1d;
+  --sidebar-accent: #20262e;
+  --sidebar-accent-foreground: #e6e9ee;
+  --sidebar-border: rgba(255, 255, 255, 0.09);
+  --sidebar-ring: #3fb8ac;
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /*
+   * Radius: 6px for controls (rounded-md), 10px for what floats or frames a
+   * region (rounded-lg and rounded-xl: dialogs, popovers, menus, cards), 4px
+   * for small marks. Table rows have none.
+   */
+  --radius-sm: 4px;
+  --radius-md: var(--radius);
+  --radius-lg: 10px;
+  --radius-xl: 10px;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -112,6 +137,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-live: var(--live);
+  --color-live-foreground: var(--live-foreground);
+  --color-live-line: var(--live-line);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -126,8 +154,34 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  /* Clocks and totals: the condensed cut, always with tabular figures. */
+  --font-display: var(--font-plex-condensed), var(--font-plex-sans), ui-sans-serif, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  /*
+   * The type scale, and nothing else: 12 / 13 / 14 (body) / 16 / 20 / 28, and
+   * 32 and 48 for clocks and totals. Body sizes read at 1.5, headings at 1.2.
+   * Tailwind's other sizes (text-lg, text-3xl, ...) are cleared on purpose;
+   * `ui-scale.test.ts` fails on a class outside this list.
+   */
+  --text-*: initial;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.5;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.2;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 1.2;
+  --text-display: 2rem;
+  --text-display--line-height: 1.2;
+  --text-display-lg: 3rem;
+  --text-display-lg--line-height: 1.1;
 }
 
 @layer base {
@@ -140,5 +194,41 @@
   body {
     @apply bg-background text-foreground min-h-full antialiased;
     font-feature-settings: "tnum" 1; /* tabular numbers: timers and totals line up */
+  }
+}
+
+/*
+ * The quality floor (docs/UI.md). Outside any layer on purpose: an unlayered
+ * rule wins over every utility, so no component can lose its focus ring by
+ * carrying `outline-none`.
+ *
+ * Focus: a 2px ring in the ring colour, 2px off the element, on whatever the
+ * keyboard reaches. Containers that only hold focus for their children (a
+ * dialog, a menu, a list of options) are not rings themselves.
+ */
+:focus-visible:not(
+  [role="dialog"],
+  [role="alertdialog"],
+  [role="menu"],
+  [role="listbox"],
+  [tabindex="-1"]
+) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/*
+ * Reduced motion: animations and transitions end at once. Not `none`: an
+ * animation that never runs fires no end event, and a closing popover would
+ * wait for one.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

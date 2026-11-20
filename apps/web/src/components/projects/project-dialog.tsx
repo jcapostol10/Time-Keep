@@ -191,10 +191,13 @@ export function ProjectDialog({
 }
 
 export function NewProjectButton({
+  label = "New project",
   slug,
   clients,
   templates = [],
 }: {
+  /** The button's text; the empty state says "Create project". */
+  label?: string;
   slug: string;
   clients: ClientOption[];
   templates?: ProjectListItem[];
@@ -203,7 +206,7 @@ export function NewProjectButton({
   return (
     <>
       <Button onClick={() => setOpen(true)}>
-        <PlusIcon /> New project
+        <PlusIcon /> {label}
       </Button>
       {open ? (
         <ProjectDialog

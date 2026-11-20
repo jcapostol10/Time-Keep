@@ -19,6 +19,24 @@ import {
  * `trackerPage`.
  */
 test.describe("time tracker", () => {
+  test("an empty tracker offers to start the first entry", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    const empty = page.getByRole("heading", { name: "Track your first entry" });
+    await expect(empty).toBeVisible();
+    const description = timer(page).getByRole("combobox", { name: "Description" });
+    // Somewhere else first, so the focus below is the button's doing.
+    await empty.click();
+    await expect(description).not.toBeFocused();
+    await page.getByRole("button", { name: "Start timer" }).click();
+    await expect(description).toBeFocused();
+    // It points at the timer bar; it does not start a timer on its own.
+    await expect(timer(page).getByRole("button", { name: "Start" })).toBeVisible();
+  });
+
   test("start, reload and stop a timer", async ({ page, freshUser: _user, trackerPage }) => {
     await trackerPage();
     await timer(page).getByRole("combobox", { name: "Description" }).fill("Design review");

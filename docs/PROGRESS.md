@@ -484,3 +484,16 @@ Rulings made while building branch 1, beyond the design:
 - **Perf (local, 1,000,000 entries):** see `DATA_MODEL.md`; a workspace currency relabel takes 32 s.
 - **Final review (2026-11-18):** four findings fixed in one pass: a stale project edit could undo a client move that had just committed (the client is now re-read under the currency lock); receipt keys sat under the old key's name; a weekly template caught up a month of weeks; the zip called any storage error a missing receipt. The minors are in `BACKLOG.md`.
 - **Rulings:** R-A to R-H in the plan; the follow-ups are in `BACKLOG.md`.
+
+## UI foundation (2026-11-20; brief `docs/superpowers/specs/2026-11-18-ui-foundation-brief.md`, plan `docs/superpowers/plans/2026-11-18-ui-foundation.md`)
+
+A refresh of the look, with no change of behaviour, data or permissions. `docs/UI.md` is the reference.
+
+- **Baseline:** `pnpm e2e:visual` and 60 screenshots before any style change, 60 after.
+- **Type:** IBM Plex Sans and Plex Sans Condensed on a closed scale (12 to 48); nothing under 12px.
+- **Colour:** the owner's palette in hex, `--live` for running time only, five chart tokens without purple, pink or amber, and a contrast check in CI.
+- **Depth:** 6px controls, 10px overlays and cards; shadows only on what floats.
+- **Shell:** a quiet sidebar, a left-aligned 1200px column, the running-timer chip, one page header.
+- **Empty states:** a title that says what to do and the button that does it, on eight lists.
+- **Floor:** one focus outline rule, reduced motion, nothing wider than 375px.
+- **Next (Prompt 2):** the running timer as the one bold element.

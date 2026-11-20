@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import type { InvoiceDTO } from "@/lib/invoice-types";
+import { PageHeader } from "@/components/page-header";
 import { workspaceRoutes } from "@/lib/routes";
 import {
   deleteInvoiceAction,
@@ -74,48 +75,51 @@ export function InvoiceEditor({
       >
         <ArrowLeftIcon className="size-4" /> Invoices
       </Link>
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">Invoice {invoice.number}</h1>
-            <Badge
-              data-testid="invoice-status"
-              variant={invoice.computedStatus === "OVERDUE" ? "destructive" : "secondary"}
-            >
-              {INVOICE_STATUS_LABELS[invoice.computedStatus]}
-            </Badge>
-          </div>
-          <p className="text-muted-foreground text-sm">
+      <PageHeader
+        className="mb-0"
+        title={`Invoice ${invoice.number}`}
+        meta={
+          <Badge
+            data-testid="invoice-status"
+            variant={invoice.computedStatus === "OVERDUE" ? "destructive" : "secondary"}
+          >
+            {INVOICE_STATUS_LABELS[invoice.computedStatus]}
+          </Badge>
+        }
+        description={
+          <>
             {invoice.clientName} · {invoice.currency}
             {invoice.sentDate ? ` · sent ${formatDateKey(invoice.sentDate)}` : ""}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {draft ? <Button onClick={() => setDialog("send")}>Send…</Button> : null}
-          <Button asChild variant="outline">
-            <a href={invoiceUrls.pdf(slug, invoice.id)} target="_blank" rel="noreferrer">
-              Download PDF
-            </a>
-          </Button>
-          {publicPath ? (
+          </>
+        }
+        actions={
+          <>
+            {draft ? <Button onClick={() => setDialog("send")}>Send…</Button> : null}
             <Button asChild variant="outline">
-              <a href={publicPath} target="_blank" rel="noreferrer">
-                Open public link
+              <a href={invoiceUrls.pdf(slug, invoice.id)} target="_blank" rel="noreferrer">
+                Download PDF
               </a>
             </Button>
-          ) : null}
-          {invoice.status === "SENT" ? (
-            <Button variant="outline" onClick={() => setDialog("void")}>
-              Void
-            </Button>
-          ) : null}
-          {draft ? (
-            <Button variant="outline" onClick={() => setDialog("delete")}>
-              Delete
-            </Button>
-          ) : null}
-        </div>
-      </header>
+            {publicPath ? (
+              <Button asChild variant="outline">
+                <a href={publicPath} target="_blank" rel="noreferrer">
+                  Open public link
+                </a>
+              </Button>
+            ) : null}
+            {invoice.status === "SENT" ? (
+              <Button variant="outline" onClick={() => setDialog("void")}>
+                Void
+              </Button>
+            ) : null}
+            {draft ? (
+              <Button variant="outline" onClick={() => setDialog("delete")}>
+                Delete
+              </Button>
+            ) : null}
+          </>
+        }
+      />
 
       {publicPath ? (
         <p role="status" className="bg-muted rounded-md px-3 py-2 text-sm">

@@ -18,6 +18,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { fetchJson } from "@/lib/fetch-json";
+import { LiveDot } from "@/components/dashboard/live-dot";
 import { detailedHref } from "@/lib/report-links";
 import type { DashboardMe, TeamMember } from "@/server/dashboard";
 
@@ -56,7 +57,7 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
             <CardTitle className="text-muted-foreground text-sm font-medium">Total time</CardTitle>
           </CardHeader>
           <CardContent
-            className="text-2xl font-semibold tabular-nums"
+            className="font-display text-2xl font-semibold tabular-nums"
             data-testid="dashboard-total"
           >
             {fmt(data.totals.durationSeconds)}
@@ -66,7 +67,7 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
           <CardHeader className="pb-2">
             <CardTitle className="text-muted-foreground text-sm font-medium">Billable</CardTitle>
           </CardHeader>
-          <CardContent className="text-2xl font-semibold tabular-nums">
+          <CardContent className="font-display text-2xl font-semibold tabular-nums">
             {billableShare}%
           </CardContent>
         </Card>
@@ -76,7 +77,7 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
               <CardTitle className="text-muted-foreground text-sm font-medium">Amount</CardTitle>
             </CardHeader>
             <CardContent
-              className="text-2xl font-semibold tabular-nums"
+              className="font-display text-2xl font-semibold tabular-nums"
               data-testid="dashboard-amount"
             >
               <MoneyCell amounts={data.totals} currency={data.money.currency} />
@@ -88,7 +89,7 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
             <CardTitle className="text-muted-foreground text-sm font-medium">Top project</CardTitle>
           </CardHeader>
           <CardContent data-testid="dashboard-top-project">
-            <p className="truncate text-lg font-semibold">{data.topProject?.label ?? "—"}</p>
+            <p className="truncate text-base font-semibold">{data.topProject?.label ?? "—"}</p>
             {data.topProject ? (
               <p className="text-muted-foreground text-sm tabular-nums">
                 {fmt(data.topProject.seconds)}
@@ -108,7 +109,7 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
             <CardTitle className="text-muted-foreground text-sm font-medium">Top client</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="truncate text-lg font-semibold">{data.topClient?.label ?? "—"}</p>
+            <p className="truncate text-base font-semibold">{data.topClient?.label ?? "—"}</p>
             {data.topClient ? (
               <p className="text-muted-foreground text-sm tabular-nums">
                 {fmt(data.topClient.seconds)}
@@ -123,13 +124,13 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
             <BarChart data={bars} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <XAxis
                 dataKey="label"
-                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
                 tickLine={false}
                 axisLine={{ stroke: "var(--border)" }}
               />
               <YAxis
                 tickFormatter={(s: number) => `${Math.round(s / 360) / 10}h`}
-                tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
                 tickLine={false}
                 axisLine={false}
                 width={40}
@@ -210,12 +211,7 @@ function TeamTab({ slug, params }: { slug: string; params: string }) {
               <TableCell className="whitespace-nowrap font-medium">
                 <span className="flex items-center gap-2">
                   {m.name}
-                  {m.running ? (
-                    <span className="text-primary flex items-center gap-1 text-xs font-medium">
-                      <span className="bg-primary size-2 animate-pulse rounded-full" aria-hidden />
-                      Tracking now
-                    </span>
-                  ) : null}
+                  {m.running ? <LiveDot label="Tracking now" /> : null}
                 </span>
               </TableCell>
               <TableCell className="text-muted-foreground">

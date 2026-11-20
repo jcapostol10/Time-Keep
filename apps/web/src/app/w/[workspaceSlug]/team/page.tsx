@@ -61,6 +61,7 @@ export default async function TeamPage({
   return (
     <>
       <PageHeader
+        wide
         title="Team"
         description={`Everyone in ${ctx.workspace.name}, their roles, groups and rates.`}
       />

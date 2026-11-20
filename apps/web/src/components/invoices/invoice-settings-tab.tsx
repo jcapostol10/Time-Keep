@@ -104,7 +104,7 @@ function SettingsForm({ slug, settings }: { slug: string; settings: InvoiceSetti
       }}
     >
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Company</h2>
+        <h2 className="text-base font-semibold">Company</h2>
         {field("companyName", "Company name", { maxLength: 120 })}
         <div className="space-y-2">
           <Label htmlFor="invoice-settings-address">Address</Label>
@@ -122,7 +122,7 @@ function SettingsForm({ slug, settings }: { slug: string; settings: InvoiceSetti
         </p>
       </section>
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Numbering and terms</h2>
+        <h2 className="text-base font-semibold">Numbering and terms</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           {field("numberPrefix", "Number prefix", { maxLength: 10 })}
           {field("nextNumber", "Next number", { inputMode: "numeric" })}
@@ -144,7 +144,7 @@ function SettingsForm({ slug, settings }: { slug: string; settings: InvoiceSetti
         </div>
       </section>
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Default taxes</h2>
+        <h2 className="text-base font-semibold">Default taxes</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {field("tax1Name", "Tax 1 name", { maxLength: 40 })}
           {field("tax1Percent", "Tax 1 %", { inputMode: "decimal" })}

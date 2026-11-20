@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "dotenv -e ../../.env -- vitest run",
     "e2e": "dotenv -e ../../.env -- playwright test",
+    "e2e:visual": "dotenv -e ../../.env -- playwright test -c playwright.visual.config.ts",
     "storage:init": "dotenv -e ../../.env -- tsx scripts/storage-init.ts",
     "vercel-build": "tsx scripts/vercel-build.ts",
     "e2e:coverage": "tsx scripts/coverage-check.ts",

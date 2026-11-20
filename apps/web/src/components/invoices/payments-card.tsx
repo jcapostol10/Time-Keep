@@ -42,7 +42,7 @@ export function PaymentsCard({
   return (
     <section aria-label="Payments" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Payments</h2>
+        <h2 className="text-base font-semibold">Payments</h2>
         {invoice.status === "SENT" && invoice.balanceMinor > 0 ? (
           <Button variant="outline" onClick={() => setRecording(true)}>
             Record payment

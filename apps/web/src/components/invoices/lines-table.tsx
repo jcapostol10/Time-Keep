@@ -53,7 +53,7 @@ export function LinesTable({
   return (
     <section aria-label="Invoice lines" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold">Lines</h2>
+        <h2 className="text-base font-semibold">Lines</h2>
         {draft ? (
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={onImport}>

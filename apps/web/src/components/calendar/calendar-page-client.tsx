@@ -135,8 +135,10 @@ export function CalendarPageClient({
                 aria-checked={view === v}
                 onClick={() => go(viewParam || dateKey !== today ? dayStart : null, v)}
                 className={cn(
-                  "rounded px-3 py-1 capitalize",
-                  view === v ? "bg-background shadow-xs font-medium" : "text-muted-foreground",
+                  "rounded border px-3 py-1 capitalize",
+                  view === v
+                    ? "border-border bg-card font-medium"
+                    : "text-muted-foreground border-transparent",
                 )}
               >
                 {v}

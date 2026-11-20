@@ -1,12 +1,22 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Sans_Condensed } from "next/font/google";
 
 import { Providers } from "@/components/providers";
 
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+// The UI face, and a condensed cut for clocks and totals. Both have tabular
+// figures by default, so digits never shift as a timer ticks.
+const plexSans = IBM_Plex_Sans({
+  variable: "--font-plex-sans",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+const plexCondensed = IBM_Plex_Sans_Condensed({
+  variable: "--font-plex-condensed",
+  subsets: ["latin"],
+  weight: ["600"],
+});
 
 export const metadata: Metadata = {
   title: { default: "TimeKeep", template: "%s · TimeKeep" },
@@ -18,7 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable}`}
+      className={`${plexSans.variable} ${plexCondensed.variable}`}
     >
       <body className="flex min-h-full flex-col font-sans">
         <Providers>{children}</Providers>

@@ -21,7 +21,8 @@ const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 export default defineConfig({
   testDir: "./e2e",
   // Vitest unit tests of e2e helpers live next to them.
-  testIgnore: "**/*.unit.test.ts",
+  // and the visual snapshots have their own config (`pnpm e2e:visual`).
+  testIgnore: ["**/*.unit.test.ts", "**/visual/**"],
   // Spec files run in parallel; tests inside a file stay serial. Fresh-user
   // specs are independent and the demo-account specs only read shared data
   // (profile.spec renames member2 and restores it), so three workers keep the

@@ -18,10 +18,10 @@ export function NowLine({ dayKey }: { dayKey: string }) {
     <div
       data-testid="now-line"
       aria-hidden
-      className="pointer-events-none absolute inset-x-0 z-20 border-t-2 border-red-500"
+      className="border-live-line pointer-events-none absolute inset-x-0 z-20 border-t-2"
       style={{ top: minutesToPx(minutesSinceMidnight(instant, viewer.timezone)) }}
     >
-      <span className="absolute -left-1.5 -top-1.5 size-3 rounded-full bg-red-500" />
+      <span className="bg-live-line absolute -left-1.5 -top-1.5 size-3 rounded-full" />
     </div>
   );
 }

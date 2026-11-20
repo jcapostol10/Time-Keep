@@ -68,7 +68,7 @@ export default async function SettingsPage({ params }: PageProps<"/w/[workspaceS
       />
       {showRates ? (
         <section aria-labelledby="billable-rate" className="mt-10 max-w-xl space-y-2">
-          <h2 id="billable-rate" className="text-lg font-semibold">
+          <h2 id="billable-rate" className="text-base font-semibold">
             Billable rate
           </h2>
           <p className="text-muted-foreground text-sm">

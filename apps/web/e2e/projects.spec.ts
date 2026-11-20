@@ -11,6 +11,14 @@ import { addManualEntry, entry, pickProject, projectButton, timer, today } from 
 
 /** The Projects page: list, filters, favourites, bulk archive and delete. */
 test.describe("projects", () => {
+  test("an empty projects list offers to create one", async ({ page, freshUser }) => {
+    await page.goto(`/w/${freshUser.slug}/projects`);
+    await waitForApp(page);
+    await expect(page.getByRole("heading", { name: "Create a project" })).toBeVisible();
+    await page.getByRole("button", { name: "Create project" }).click();
+    await expect(page.getByRole("dialog", { name: "New project" })).toBeVisible();
+  });
+
   test("create a project from the projects page", async ({ page, freshUser }) => {
     await createClientViaUi(page, freshUser.slug, "Acme Corp");
     await page.goto(`/w/${freshUser.slug}/projects`);

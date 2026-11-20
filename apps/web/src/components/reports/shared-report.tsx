@@ -51,12 +51,15 @@ export function SharedReport({
         <p className="text-primary text-xs font-semibold uppercase tracking-wide">
           {link.workspaceName}
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight">{link.title}</h1>
+        <h1 className="text-xl font-semibold">{link.title}</h1>
         <p className="text-muted-foreground text-sm">
           {formatRangeLabel(range.from, range.to, prefs.timezone)}
         </p>
       </header>
-      <p className="text-3xl font-semibold tabular-nums" data-testid="report-total">
+      <p
+        className="font-display text-display font-semibold tabular-nums"
+        data-testid="report-total"
+      >
         {fmt(total)}
       </p>
       {data.kind === "summary" ? (

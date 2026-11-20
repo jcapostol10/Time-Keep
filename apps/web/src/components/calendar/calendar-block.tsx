@@ -53,7 +53,7 @@ export function CalendarBlock({
       data-column={layout.column}
       data-columns={layout.columns}
       className={cn(
-        "shadow-xs absolute z-10 cursor-grab touch-none select-none overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-xs",
+        "absolute z-10 cursor-grab touch-none select-none overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-xs",
         geometry.clippedStart && "rounded-t-none",
         geometry.clippedEnd && "rounded-b-none",
       )}

@@ -75,7 +75,10 @@ export function WeeklyView() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-muted-foreground text-sm">Week of {data?.dayKeys[0] ?? "…"}</p>
-          <p className="text-3xl font-semibold tabular-nums" data-testid="report-total">
+          <p
+            className="font-display text-display font-semibold tabular-nums"
+            data-testid="report-total"
+          >
             {data ? fmt(data.total) : "…"}
           </p>
         </div>

@@ -67,7 +67,7 @@ export function TargetsCard({
   return (
     <section aria-labelledby="targets" className="mt-10 max-w-xl space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 id="targets" className="text-lg font-semibold">
+        <h2 id="targets" className="text-base font-semibold">
           Targets
         </h2>
         <Button size="sm" onClick={() => setEditing("new")}>
