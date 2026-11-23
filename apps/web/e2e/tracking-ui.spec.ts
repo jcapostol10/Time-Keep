@@ -361,8 +361,16 @@ test.describe("tracking UI", () => {
     const day = calendar.locator("[data-day]").filter({ has: page.getByTestId("now-line") });
     const off = day.locator("[data-off-hours]");
     await expect(off).toHaveCount(2);
-    expect(await off.first().evaluate((el) => [el.offsetTop, el.offsetHeight])).toEqual([0, 512]);
-    expect(await off.nth(1).evaluate((el) => [el.offsetTop, el.offsetHeight])).toEqual([1152, 384]);
+    expect(
+      await off
+        .first()
+        .evaluate((el) => [(el as HTMLElement).offsetTop, (el as HTMLElement).offsetHeight]),
+    ).toEqual([0, 512]);
+    expect(
+      await off
+        .nth(1)
+        .evaluate((el) => [(el as HTMLElement).offsetTop, (el as HTMLElement).offsetHeight]),
+    ).toEqual([1152, 384]);
     expect(await style(off.first(), "background-color")).not.toBe("rgba(0, 0, 0, 0)");
   });
 });

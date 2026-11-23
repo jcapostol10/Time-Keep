@@ -143,13 +143,79 @@ Checked by `apps/web/e2e/ui-floor.spec.ts`:
 
 ## Before and after
 
-`pnpm e2e:visual` saves full-page screenshots of fifteen screens at 1440 and 375 wide, in light and dark, into `apps/web/e2e/visual/__screenshots__/<set>/` (`VISUAL_SET=before` or `after`; JPEG at quality 85). They are for people to compare, not a pixel test. The `before` set is the app on 2026-11-20, ahead of this refresh.
+`pnpm e2e:visual` saves full-page screenshots of fifteen screens at 1440 and 375 wide, in light and dark, into `apps/web/e2e/visual/__screenshots__/<set>/` (`VISUAL_SET=before` or `after`; JPEG at quality 85). They are for people to compare, not a pixel test. The `before` set is the app on 2026-11-20, ahead of this refresh. `VISUAL_ONLY=tracker,timesheet` shoots some screens; `VISUAL_WEEK=2026-11-18` shows the timesheet, calendar and dashboard for that day's week, which the `after` set uses (shot on a Monday, when this week was still empty) so both sets show the same week of time.
 
 ### Tracker, a timer running
 
 | Before                                                                                          | After                                                                                         |
 | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | ![Tracker before](../apps/web/e2e/visual/__screenshots__/before/tracker-running-1440-light.jpg) | ![Tracker after](../apps/web/e2e/visual/__screenshots__/after/tracker-running-1440-light.jpg) |
+
+### Tracker, a timer running, dark
+
+| Before | After |
+| --- | --- |
+| ![Tracker, a timer running, dark before](../apps/web/e2e/visual/__screenshots__/before/tracker-running-1440-dark.jpg) | ![Tracker, a timer running, dark after](../apps/web/e2e/visual/__screenshots__/after/tracker-running-1440-dark.jpg) |
+
+### Tracker on a phone
+
+| Before | After |
+| --- | --- |
+| ![Tracker on a phone before](../apps/web/e2e/visual/__screenshots__/before/tracker-idle-375-light.jpg) | ![Tracker on a phone after](../apps/web/e2e/visual/__screenshots__/after/tracker-idle-375-light.jpg) |
+
+### Tracker on a phone, a timer running, dark
+
+| Before | After |
+| --- | --- |
+| ![Tracker on a phone, a timer running, dark before](../apps/web/e2e/visual/__screenshots__/before/tracker-running-375-dark.jpg) | ![Tracker on a phone, a timer running, dark after](../apps/web/e2e/visual/__screenshots__/after/tracker-running-375-dark.jpg) |
+
+### Timesheet
+
+| Before | After |
+| --- | --- |
+| ![Timesheet before](../apps/web/e2e/visual/__screenshots__/before/timesheet-1440-light.jpg) | ![Timesheet after](../apps/web/e2e/visual/__screenshots__/after/timesheet-1440-light.jpg) |
+
+### Timesheet, dark
+
+| Before | After |
+| --- | --- |
+| ![Timesheet, dark before](../apps/web/e2e/visual/__screenshots__/before/timesheet-1440-dark.jpg) | ![Timesheet, dark after](../apps/web/e2e/visual/__screenshots__/after/timesheet-1440-dark.jpg) |
+
+### Timesheet on a phone
+
+| Before | After |
+| --- | --- |
+| ![Timesheet on a phone before](../apps/web/e2e/visual/__screenshots__/before/timesheet-375-light.jpg) | ![Timesheet on a phone after](../apps/web/e2e/visual/__screenshots__/after/timesheet-375-light.jpg) |
+
+### Timesheet on a phone, dark
+
+| Before | After |
+| --- | --- |
+| ![Timesheet on a phone, dark before](../apps/web/e2e/visual/__screenshots__/before/timesheet-375-dark.jpg) | ![Timesheet on a phone, dark after](../apps/web/e2e/visual/__screenshots__/after/timesheet-375-dark.jpg) |
+
+### Calendar
+
+| Before | After |
+| --- | --- |
+| ![Calendar before](../apps/web/e2e/visual/__screenshots__/before/calendar-week-1440-light.jpg) | ![Calendar after](../apps/web/e2e/visual/__screenshots__/after/calendar-week-1440-light.jpg) |
+
+### Calendar, dark
+
+| Before | After |
+| --- | --- |
+| ![Calendar, dark before](../apps/web/e2e/visual/__screenshots__/before/calendar-week-1440-dark.jpg) | ![Calendar, dark after](../apps/web/e2e/visual/__screenshots__/after/calendar-week-1440-dark.jpg) |
+
+### Calendar on a phone
+
+| Before | After |
+| --- | --- |
+| ![Calendar on a phone before](../apps/web/e2e/visual/__screenshots__/before/calendar-week-375-light.jpg) | ![Calendar on a phone after](../apps/web/e2e/visual/__screenshots__/after/calendar-week-375-light.jpg) |
+
+### Calendar on a phone, dark
+
+| Before | After |
+| --- | --- |
+| ![Calendar on a phone, dark before](../apps/web/e2e/visual/__screenshots__/before/calendar-week-375-dark.jpg) | ![Calendar on a phone, dark after](../apps/web/e2e/visual/__screenshots__/after/calendar-week-375-dark.jpg) |
 
 ### Dashboard
 

@@ -24,13 +24,26 @@ const VIEWPORTS = [
 ] as const;
 const SCHEMES = ["light", "dark"] as const;
 
+/**
+ * `VISUAL_WEEK=2026-11-18` shows the timesheet, calendar and dashboard for the
+ * week of that day instead of this one. The seeded entries are in the days
+ * before the seed ran, so early in a week this week is empty; a set shot then
+ * is compared with one that had time in it.
+ */
+const WEEK = /^\d{4}-\d{2}-\d{2}$/.test(process.env.VISUAL_WEEK ?? "")
+  ? process.env.VISUAL_WEEK
+  : undefined;
+
 /** The signed-in screens: a name for the file and where it lives. */
 const SCREENS: { name: string; path: string }[] = [
   { name: "tracker-idle", path: `/w/${SLUG}/tracker` },
-  { name: "timesheet", path: `/w/${SLUG}/timesheet` },
-  { name: "calendar-week", path: `/w/${SLUG}/calendar` },
-  { name: "dashboard-me", path: `/w/${SLUG}/dashboard` },
-  { name: "dashboard-team", path: `/w/${SLUG}/dashboard?tab=team` },
+  { name: "timesheet", path: `/w/${SLUG}/timesheet${WEEK ? `?week=${WEEK}` : ""}` },
+  { name: "calendar-week", path: `/w/${SLUG}/calendar${WEEK ? `?date=${WEEK}` : ""}` },
+  { name: "dashboard-me", path: `/w/${SLUG}/dashboard${WEEK ? "?preset=last-week" : ""}` },
+  {
+    name: "dashboard-team",
+    path: `/w/${SLUG}/dashboard?tab=team${WEEK ? "&preset=last-week" : ""}`,
+  },
   { name: "reports-summary", path: `/w/${SLUG}/reports/summary` },
   { name: "reports-detailed", path: `/w/${SLUG}/reports/detailed` },
   { name: "projects", path: `/w/${SLUG}/projects` },
