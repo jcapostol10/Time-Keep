@@ -338,4 +338,31 @@ test.describe("tracking UI", () => {
       375,
     );
   });
+  test("the calendar opens on now, with a live now-line and lighter working hours", async ({
+    page,
+    freshUser,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 500 });
+    await page.goto(`/w/${freshUser.slug}/calendar`);
+    const calendar = page.locator("[data-calendar]");
+    await expect(calendar).toHaveAttribute("data-hydrated", "true");
+
+    // Now is in the middle of what the calendar shows, not wherever 07:00 leaves it.
+    const line = calendar.getByTestId("now-line");
+    await expect(line).toBeVisible();
+    const scroller = await box(calendar.locator("[data-scroll]"));
+    await expect
+      .poll(async () => Math.abs((await box(line)).y - (scroller.y + scroller.height / 2)))
+      .toBeLessThan(24);
+    expect(await style(line, "border-top-color")).toBe(await tokenColour(page, "--live-line"));
+    await expect(line.locator("span")).toHaveCount(1);
+
+    // 08:00 to 18:00 is the working day; the hours around it are a shade darker.
+    const day = calendar.locator("[data-day]").filter({ has: page.getByTestId("now-line") });
+    const off = day.locator("[data-off-hours]");
+    await expect(off).toHaveCount(2);
+    expect(await off.first().evaluate((el) => [el.offsetTop, el.offsetHeight])).toEqual([0, 512]);
+    expect(await off.nth(1).evaluate((el) => [el.offsetTop, el.offsetHeight])).toEqual([1152, 384]);
+    expect(await style(off.first(), "background-color")).not.toBe("rgba(0, 0, 0, 0)");
+  });
 });

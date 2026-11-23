@@ -108,6 +108,10 @@ This is where the design spends its boldness: the running clock.
 
 Today's column has a faint primary tint and a primary date label. Cells are 44px tall with tabular figures; the totals row and column are 600. The grid scrolls inside its own frame, both ways, with the header row and the first column pinned (solid fills, so nothing shows through); on a phone the first column narrows to leave the days most of the width.
 
+### Calendar
+
+An entry is a block with a 3px left edge in its project's colour and a fill tinted with it. The now-line is `live-line` with a dot, and the calendar opens with it in the middle of the view. The working day (08:00–18:00 for everyone until there is a working-hours setting) is a shade lighter than the hours around it.
+
 ## Empty states
 
 `EmptyState` (`components/empty-state.tsx`) is for a page's main list when it has nothing: a title that says what to do, one line of why, and a primary button that does it. No icon.

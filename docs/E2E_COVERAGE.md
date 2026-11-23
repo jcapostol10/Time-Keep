@@ -217,6 +217,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Drags past the edges of the day (above 00:00, below 24:00, out of the column) stay inside it — `calendar.spec.ts` › "drags past the edges of the day stay inside it"
 - [x] A block dropped where it no longer fits the day is pulled back inside it — `calendar.spec.ts` › "a block dropped where it no longer fits the day is pulled back inside it"
 - [x] The current time line shows on today — `calendar.spec.ts` › "the current time line shows on today"
+- [x] The calendar opens with now in the middle of the view, the now-line in the live colour with a dot, and 08:00–18:00 lighter than the hours around it — `tracking-ui.spec.ts` › "the calendar opens on now, with a live now-line and lighter working hours"
 
 ## Entry views
 
