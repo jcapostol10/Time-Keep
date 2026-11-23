@@ -22,7 +22,8 @@ function todayIn(timezone: string): string {
 
 /** Opens the dialog, uploads `csv` and runs the check. */
 async function checkImport(page: Page, csv: string) {
-  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("button", { name: "List actions" }).click();
+  await page.getByRole("menuitem", { name: "Import…" }).click();
   const dialog = page.getByRole("dialog", { name: "Import time entries" });
   await dialog.getByLabel("CSV file").setInputFiles({
     name: "entries.csv",

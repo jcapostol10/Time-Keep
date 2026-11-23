@@ -153,7 +153,7 @@ export function TimesheetCell({
             setText(null);
           }
         }}
-        className="h-8 w-full min-w-20 text-center tabular-nums"
+        className="h-9 w-full min-w-20 text-center tabular-nums"
       />
       {choosing ? (
         <CellEntriesDialog

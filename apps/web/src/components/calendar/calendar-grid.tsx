@@ -5,6 +5,7 @@ import {
   formatClock,
   layoutColumns,
   MINUTES_PER_DAY,
+  minutesSinceMidnight,
   SLOT_MINUTES,
   zonedDateTimeToInstant,
 } from "@timekeep/core";
@@ -24,6 +25,14 @@ import { useCalendarDrag } from "./use-calendar-drag";
 export const SLOT_PX = 16;
 const DAY_PX = (MINUTES_PER_DAY / SLOT_MINUTES) * SLOT_PX;
 const OPEN_AT_MINUTES = 7 * 60;
+/**
+ * The working day, drawn a shade lighter than the hours around it: the card
+ * fill on the page's, which is the lighter of the two in both themes. There is
+ * no working-hours setting yet (only working days), so it is 08:00 to 18:00
+ * for everyone; a setting would replace these two numbers.
+ */
+const WORK_START_MINUTES = 8 * 60;
+const WORK_END_MINUTES = 18 * 60;
 
 export function CalendarGrid({
   days,
@@ -52,11 +61,21 @@ export function CalendarGrid({
   const scrollRef = useRef<HTMLDivElement>(null);
   const { ghost, handlers } = useCalendarDrag({ entries, onCreate, onMove, onResize, onEdit });
 
-  // Open the day on the morning rather than on midnight.
+  // Open on now, in the middle of the view, when today is shown; otherwise on
+  // the morning rather than on midnight. Once: paging weeks keeps the scroll.
+  const showsToday = today !== null && days.includes(today);
+  const opened = useRef(false);
   useEffect(() => {
     const el = scrollRef.current;
-    if (el && el.scrollTop === 0) el.scrollTop = minutesToPx(OPEN_AT_MINUTES) - 8;
-  }, []);
+    // Before hydration there is no "today" to look for.
+    if (!el || !hydrated || opened.current) return;
+    opened.current = true;
+    // Someone already scrolled: leave them where they are.
+    if (el.scrollTop !== 0) return;
+    el.scrollTop = showsToday
+      ? Math.max(0, minutesToPx(minutesSinceMidnight(new Date(), tz)) - el.clientHeight / 2)
+      : minutesToPx(OPEN_AT_MINUTES) - 8;
+  }, [hydrated, showsToday, tz]);
 
   const hours = Array.from({ length: 24 }, (_, h) => h);
   const hourLabel = (h: number) =>
@@ -149,6 +168,18 @@ export function CalendarGrid({
                       "repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 1px, transparent 1px, transparent 64px)",
                   }}
                 >
+                  <div
+                    data-working-hours
+                    aria-hidden
+                    className="bg-card pointer-events-none absolute inset-x-0"
+                    style={{
+                      top: minutesToPx(WORK_START_MINUTES),
+                      height: minutesToPx(WORK_END_MINUTES - WORK_START_MINUTES),
+                      // The hour lines stay on top of the fill.
+                      backgroundImage:
+                        "repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 1px, transparent 1px, transparent 64px)",
+                    }}
+                  />
                   {blocks.map((b) => (
                     <CalendarBlock
                       key={b.id}

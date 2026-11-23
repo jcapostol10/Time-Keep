@@ -12,16 +12,25 @@ import {
 } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import { Checkbox } from "@timekeep/ui/components/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@timekeep/ui/components/dropdown-menu";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Loader2Icon, Trash2Icon, XIcon, PencilIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { EllipsisIcon, FileUpIcon, Loader2Icon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { fetchJson } from "@/lib/fetch-json";
 import type { EntriesPage, TimeEntryDTO } from "@/lib/tracker-types";
 
 import { BulkEditDialog } from "./bulk-edit-dialog";
+import { DayRibbon } from "./day-ribbon";
 import { EntryGroupRow, EntryRow } from "./entry-row";
+import { ImportDialog } from "./import-dialog";
 import { trackerKeys, trackerUrls } from "./query-keys";
 import { useTargetKey } from "./target-context";
 import { useTracker, useTrackerClock } from "./tracker-provider";
@@ -68,9 +77,9 @@ function BlockTotal({
     return t >= Date.parse(from) && (to === null || t < Date.parse(to));
   });
   return (
-    <span className="text-sm">
-      <span className="text-muted-foreground">{label}: </span>
-      <span className="font-semibold tabular-nums">
+    <span className="flex items-baseline gap-2">
+      <span className="text-muted-foreground text-sm">{label}</span>
+      <span className="font-display text-xl font-semibold tabular-nums">
         {formatDuration(sumDuration(entries) + live, viewer.durationFormat)}
       </span>
     </span>
@@ -127,11 +136,9 @@ function DayTotal({ dateKey, seconds }: { dateKey: string; seconds: number }) {
     (start) => localDateKey(new Date(start), viewer.timezone) === dateKey,
   );
   return (
-    <span className="text-sm">
-      <span className="text-muted-foreground">Total: </span>
-      <span className="font-semibold tabular-nums">
-        {formatDuration(seconds + live, viewer.durationFormat)}
-      </span>
+    <span data-day-total className="font-display text-xl font-semibold tabular-nums">
+      <span className="sr-only">Total: </span>
+      {formatDuration(seconds + live, viewer.durationFormat)}
     </span>
   );
 }
@@ -152,6 +159,7 @@ function DaySection({
   dateKey,
   todayKey,
   entries,
+  allEntries,
   totalSeconds,
   selection,
   expandedGroups,
@@ -160,6 +168,8 @@ function DaySection({
   dateKey: string;
   todayKey: string;
   entries: TimeEntryDTO[];
+  /** Every loaded entry: the ribbon also draws what crosses midnight into this day. */
+  allEntries: readonly TimeEntryDTO[];
   totalSeconds: number;
   selection: ReturnType<typeof useSelection>;
   expandedGroups: ReadonlySet<string>;
@@ -171,19 +181,19 @@ function DaySection({
   const rows = collapseConsecutive(entries);
 
   return (
-    <section aria-label={heading} className="bg-card overflow-hidden rounded-lg border">
-      <header className="bg-muted/50 flex items-center gap-3 border-b px-3 py-2">
+    <section aria-label={heading} className="pb-1">
+      {/* The date, the shape of the day, its total. */}
+      <header className="flex items-center gap-3 px-3 pb-1 pt-3">
         <Checkbox
           aria-label={`Select all entries for ${heading}`}
           checked={count === 0 ? false : count === ids.length ? true : "indeterminate"}
           onCheckedChange={(v) => selection.set(ids, v === true)}
         />
-        <h3 className="text-sm font-semibold">{heading}</h3>
-        <span className="ml-auto">
-          <DayTotal dateKey={dateKey} seconds={totalSeconds} />
-        </span>
+        <h3 className="w-24 shrink-0 text-sm font-semibold">{heading}</h3>
+        <DayRibbon dateKey={dateKey} todayKey={todayKey} entries={allEntries} className="flex-1" />
+        <DayTotal dateKey={dateKey} seconds={totalSeconds} />
       </header>
-      <div className="divide-y">
+      <div>
         {rows.map((row) => {
           if (row.kind === "single") {
             return (
@@ -213,11 +223,54 @@ function DaySection({
   );
 }
 
-export function EntryList() {
+/**
+ * The head of the list: whose entries these are on the left, and one menu on
+ * the right for what is done to the list as a whole.
+ */
+function ListHeader({
+  children,
+  selectedCount,
+  onImport,
+  onBulkEdit,
+}: {
+  children: ReactNode;
+  selectedCount: number;
+  onImport: () => void;
+  onBulkEdit: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      {children}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label="List actions" className="ml-auto">
+            <EllipsisIcon />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={onImport}>
+            <FileUpIcon /> Import…
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={selectedCount === 0} onSelect={onBulkEdit}>
+            <PencilIcon /> Bulk edit…
+          </DropdownMenuItem>
+          {selectedCount === 0 ? (
+            <DropdownMenuLabel className="text-muted-foreground max-w-56 text-xs font-normal">
+              Tick entries to edit them together.
+            </DropdownMenuLabel>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+export function EntryList({ header }: { header?: ReactNode }) {
   const { slug, viewer, running, focusDescription } = useTracker();
   const { remove, bulkUpdate } = useEntryMutations();
   const selection = useSelection();
   const [editing, setEditing] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(new Set());
   const sentinel = useRef<HTMLDivElement | null>(null);
 
@@ -253,35 +306,73 @@ export function EntryList() {
     });
   }, []);
 
-  const pages = query.data?.pages ?? [];
+  const pages = useMemo(() => query.data?.pages ?? [], [query.data]);
+  const allEntries = useMemo(() => pages.flatMap((p) => p.entries), [pages]);
   const hasEntries = pages.some((p) => p.entries.length > 0);
   const tz = viewer.timezone;
   const todayKey = localDateKey(new Date(), tz);
   const selectedIds = [...selection.selected];
 
+  const listHeader = (
+    <>
+      <ListHeader
+        selectedCount={selectedIds.length}
+        onImport={() => setImporting(true)}
+        onBulkEdit={() => setEditing(true)}
+      >
+        {header}
+      </ListHeader>
+      <ImportDialog open={importing} onOpenChange={setImporting} />
+      <BulkEditDialog
+        count={selectedIds.length}
+        open={editing}
+        onOpenChange={setEditing}
+        onApply={async (patch) => {
+          const ok = await bulkUpdate(selectedIds, patch);
+          if (ok) selection.clear();
+          return ok;
+        }}
+      />
+    </>
+  );
+
   if (query.isPending) {
     return (
-      <div className="text-muted-foreground flex justify-center py-12">
-        <Loader2Icon className="animate-spin" aria-label="Loading entries" />
+      <div className="space-y-6">
+        {listHeader}
+        <div className="text-muted-foreground flex justify-center py-12">
+          <Loader2Icon className="animate-spin" aria-label="Loading entries" />
+        </div>
       </div>
     );
   }
 
   if (!hasEntries && !hasNextPage) {
-    return running ? null : (
-      <EmptyState
-        title="Track your first entry"
-        description="Type what you're working on and start the timer, or switch to manual mode to add time you already worked."
-        action={<Button onClick={focusDescription}>Start timer</Button>}
-      />
+    return (
+      <div className="space-y-6">
+        {listHeader}
+        {running ? null : (
+          <EmptyState
+            title="Track your first entry"
+            description="Type what you're working on and start the timer, or switch to manual mode to add time you already worked."
+            // Outline: the timer bar's Start is the only filled button on this page.
+            action={
+              <Button variant="outline" onClick={focusDescription}>
+                Start timer
+              </Button>
+            }
+          />
+        )}
+      </div>
     );
   }
 
   return (
     <div className="space-y-8 pb-20">
+      {listHeader}
       {toBlocks(pages, tz, viewer.weekStart).map((block) => (
         <div key={block.key} className="space-y-3">
-          <div className="flex items-baseline justify-between gap-2 px-1">
+          <div className="flex items-baseline justify-between gap-2 px-3">
             <h2 className="text-muted-foreground text-sm font-medium">{block.label}</h2>
             <BlockTotal
               entries={block.entries}
@@ -290,18 +381,22 @@ export function EntryList() {
               label={block.totalLabel}
             />
           </div>
-          {groupByDay(block.entries, tz).map((day) => (
-            <DaySection
-              key={day.dateKey}
-              dateKey={day.dateKey}
-              todayKey={todayKey}
-              entries={day.entries}
-              totalSeconds={day.totalSeconds}
-              selection={selection}
-              expandedGroups={expandedGroups}
-              onToggleGroup={toggleGroup}
-            />
-          ))}
+          {/* One frame per week; a hairline between its days, none between rows. */}
+          <div className="bg-card divide-y overflow-hidden rounded-lg border">
+            {groupByDay(block.entries, tz).map((day) => (
+              <DaySection
+                key={day.dateKey}
+                dateKey={day.dateKey}
+                todayKey={todayKey}
+                entries={day.entries}
+                allEntries={allEntries}
+                totalSeconds={day.totalSeconds}
+                selection={selection}
+                expandedGroups={expandedGroups}
+                onToggleGroup={toggleGroup}
+              />
+            ))}
+          </div>
         </div>
       ))}
 
@@ -347,16 +442,6 @@ export function EntryList() {
           </Button>
         </div>
       ) : null}
-      <BulkEditDialog
-        count={selectedIds.length}
-        open={editing}
-        onOpenChange={setEditing}
-        onApply={async (patch) => {
-          const ok = await bulkUpdate(selectedIds, patch);
-          if (ok) selection.clear();
-          return ok;
-        }}
-      />
     </div>
   );
 }

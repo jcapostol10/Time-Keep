@@ -26,6 +26,7 @@ export function DescriptionInput({
   onEnter,
   inputRef,
   className,
+  inputClassName,
   invalid,
 }: {
   slug: string;
@@ -38,6 +39,8 @@ export function DescriptionInput({
   onEnter?: () => void;
   inputRef?: (el: HTMLInputElement | null) => void;
   className?: string;
+  /** For the input itself (the timer bar's is larger). */
+  inputClassName?: string;
   /** The server refused a save for this field (required fields). */
   invalid?: boolean;
 }) {
@@ -79,7 +82,7 @@ export function DescriptionInput({
         aria-autocomplete="list"
         aria-activedescendant={showList && active >= 0 ? `${listId}-${active}` : undefined}
         autoComplete="off"
-        className="border-transparent shadow-none"
+        className={cn("border-transparent shadow-none", inputClassName)}
         onChange={(e) => {
           onChange(e.target.value);
           setOpen(true);

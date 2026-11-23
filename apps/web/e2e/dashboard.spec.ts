@@ -24,6 +24,37 @@ test.describe("dashboard", () => {
     await expect(most.getByRole("listitem").nth(1)).toContainText("Email");
   });
 
+  test("the dashboard's figures are one summary strip, not a card each", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Strip", start: "00:05", duration: "1" });
+    await page.goto(`/w/${freshUser.slug}/dashboard`);
+    await waitForApp(page);
+    const strip = page.getByRole("group", { name: "Summary" });
+    await expect(strip.getByRole("term")).toHaveText([
+      "Total time",
+      "Billable",
+      "Amount",
+      "Top project",
+      "Top client",
+    ]);
+    // One frame around the figures, and no stat tiles anywhere on the page.
+    await expect(page.getByRole("main").locator('[data-slot="card"]')).toHaveCount(0);
+    expect(
+      await strip.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return [style.borderTopWidth, style.borderRadius];
+      }),
+    ).toEqual(["1px", "10px"]);
+    // The total leads, in the display face.
+    const total = page.getByTestId("dashboard-total");
+    await expect(total).toHaveText("1:00:00");
+    expect(await total.evaluate((el) => getComputedStyle(el).fontSize)).toBe("32px");
+  });
+
   test("a most tracked item opens the detailed report for it", async ({
     page,
     freshUser,

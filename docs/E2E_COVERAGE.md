@@ -67,6 +67,11 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Description autocomplete fills project, tags and billable from a recent entry — `timer-bar.spec.ts` › "autocomplete fills project, tags and billable from a recent entry"
 - [x] N focuses the description and Esc leaves it — `timer-bar.spec.ts` › "N focuses the description and Esc leaves it"
 - [x] S starts and stops the timer from another workspace page — `timer-bar.spec.ts` › "S starts and stops the timer from another workspace page"
+- [x] The timer bar stays under the top bar while the entry list scrolls — `tracking-ui.spec.ts` › "the timer bar stays under the top bar while the list scrolls"
+- [x] A running timer shows in the bar: Stop in the live colour, a 2px live top border, an ink clock with a dot — `tracking-ui.spec.ts` › "a running timer turns the bar live: an amber Stop, a top border and a dot by the clock"
+- [x] The timer bar's Start is the only filled button on the tracker — `tracking-ui.spec.ts` › "the timer bar's Start is the only filled button on the tracker"
+- [x] At 375px the description has the first row; pickers, clock and Start share the second, with a timer running and a long project name — `tracking-ui.spec.ts` › "on a phone the description has the first row; pickers, clock and Start share the second"
+- [x] Import and Bulk edit are in the list's "⋯" menu, also on an empty tracker — `tracking-ui.spec.ts` › "Import and Bulk edit live in the list's menu, also on an empty tracker"
 
 ## Time Tracker: manual mode
 
@@ -80,6 +85,10 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [ ] The week header shows the week total — gap
 - [ ] An entry that crosses midnight is listed under its start day — gap
 - [ ] Older weeks load when scrolling or pressing Load more — gap
+- [x] Each day header has a 4px day ribbon with a block per entry placed by the clock, a spoken summary, a tooltip per block, the day total at 20px, and a live block for the running timer — `tracking-ui.spec.ts` › "a day is drawn as a ribbon, with a summary for people who do not see it"
+- [x] Entry rows have no line between them and 12px padding, share their columns at 1440px, show the duration at 14/600 and their actions on hover or focus — `tracking-ui.spec.ts` › "entry rows have no lines between them, share their columns and show actions on hover or focus"
+- [x] On a touch screen the row actions are always shown — `tracking-ui.spec.ts` › "on a touch screen the row actions are always there"
+- [x] Another person's day ribbon never shows the viewer's own running timer — `tracking-ui.spec.ts` › "another person's day ribbon does not show the viewer's own running timer"
 
 ## Time Tracker: row actions and inline edits
 
@@ -189,6 +198,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A row added by hand with no time can be removed — `timesheet.spec.ts` › "a row added by hand can be removed"
 - [x] Move between cells with the keyboard — `timesheet.spec.ts` › "move between cells with the keyboard"
 - [x] Navigate weeks and back to today — `timesheet.spec.ts` › "navigate weeks"
+- [x] Today's column is tinted with a primary date label, cells are 44px tall, totals are 600, the header row and first column stay put, and at 375px the grid scrolls inside its frame — `tracking-ui.spec.ts` › "the timesheet marks today, keeps 44px cells and bold totals, and pins its header and first column"
 
 ## Calendar
 
@@ -208,6 +218,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Drags past the edges of the day (above 00:00, below 24:00, out of the column) stay inside it — `calendar.spec.ts` › "drags past the edges of the day stay inside it"
 - [x] A block dropped where it no longer fits the day is pulled back inside it — `calendar.spec.ts` › "a block dropped where it no longer fits the day is pulled back inside it"
 - [x] The current time line shows on today — `calendar.spec.ts` › "the current time line shows on today"
+- [x] The calendar opens with now in the middle of the view, the now-line in the live colour with a dot, and 08:00–18:00 lighter than the hours around it — `tracking-ui.spec.ts` › "the calendar opens on now, with a live now-line and lighter working hours"
 
 ## Entry views
 
@@ -250,6 +261,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Dashboard
 
 - [x] The dashboard shows this week's total, top project and most tracked — `dashboard.spec.ts` › "the dashboard shows this week's total, top project and most tracked"
+- [x] The dashboard's figures are one summary strip with the total leading, not a card each — `dashboard.spec.ts` › "the dashboard's figures are one summary strip, not a card each"
 - [x] A most tracked item opens the detailed report for it — `dashboard.spec.ts` › "a most tracked item opens the detailed report for it"
 - [x] The Team tab shows who is tracking now within a poll — `dashboard.spec.ts` › "the Team tab shows who is tracking now within a poll"
 - [x] A member has no Team tab — `dashboard.spec.ts` › "a member has no Team tab"

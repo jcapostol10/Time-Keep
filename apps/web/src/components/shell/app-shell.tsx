@@ -69,7 +69,8 @@ export function AppShell({ user, workspace, workspaces, hiddenNav, children }: A
 
           <WorkspaceSwitcher current={workspace} workspaces={workspaces} />
 
-          <div className="ml-auto flex min-w-0 items-center gap-1">
+          {/* Never shrinks: the workspace name gives way first, so the chip pushes nothing off a phone. */}
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             <TimerChip slug={workspace.slug} />
             <HelpMenu />
             <ThemeToggle />

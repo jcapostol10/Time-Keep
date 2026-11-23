@@ -22,6 +22,18 @@ import { movesHorizontally } from "./grid-keys";
 import { dayHeading, type NameLookup, projectPart } from "./model";
 import { TimesheetCell } from "./timesheet-cell";
 
+/**
+ * What stays put while the grid scrolls inside its frame: the header row and
+ * the first column. Their fills are solid (a see-through one would show the
+ * cells passing beneath), mixed from the tokens to match the rows they head.
+ */
+const FIRST_COL = "sticky left-0 z-10 w-36 min-w-36 md:w-56 md:min-w-56";
+const HEAD = "bg-muted sticky top-0 z-20";
+const BAND_FILL = "bg-[color-mix(in_srgb,var(--muted)_20%,var(--background))]";
+/** Today's column: a faint tint of the primary, cell by cell. */
+const TODAY = "bg-primary/5";
+const TODAY_HEAD = "bg-[color-mix(in_srgb,var(--primary)_8%,var(--muted))] text-primary";
+
 /** Moves focus between cell inputs with the arrow keys (Left and Right only at the text's edge). */
 function onGridKeyDown(event: KeyboardEvent<HTMLTableElement>) {
   const target = event.target as HTMLElement;
@@ -95,7 +107,12 @@ export function TimesheetGrid({
   }));
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    // The frame scrolls both ways, so the header can stay at its top: a table
+    // that only scrolled sideways would let the page carry its header away.
+    <div
+      data-timesheet-scroller
+      className="max-h-[calc(100svh-9rem)] overflow-auto rounded-lg border"
+    >
       <table
         role="grid"
         aria-label="Timesheet"
@@ -103,12 +120,9 @@ export function TimesheetGrid({
         onKeyDown={onGridKeyDown}
         className="w-full min-w-[56rem] border-collapse text-sm"
       >
-        <thead className="bg-muted/40">
+        <thead>
           <tr>
-            <th
-              scope="col"
-              className="bg-muted/40 sticky left-0 z-10 w-56 min-w-56 px-3 py-2 text-left font-medium"
-            >
+            <th scope="col" className={cn(HEAD, FIRST_COL, "z-30 px-3 py-2 text-left font-medium")}>
               Row
             </th>
             {headings.map((h) => (
@@ -118,14 +132,15 @@ export function TimesheetGrid({
                 data-day={h.day}
                 data-today={today === h.day ? "true" : undefined}
                 className={cn(
+                  HEAD,
                   "px-2 py-2 text-center font-medium",
-                  today === h.day && "text-primary",
+                  today === h.day && TODAY_HEAD,
                 )}
               >
                 <span data-day-label>{h.label}</span>
               </th>
             ))}
-            <th scope="col" className="px-3 py-2 text-right font-medium">
+            <th scope="col" className={cn(HEAD, "px-3 py-2 text-right font-semibold")}>
               Total
             </th>
           </tr>
@@ -133,8 +148,11 @@ export function TimesheetGrid({
         <tbody>
           {sheet.rows.length === 0 ? (
             <tr>
-              <td colSpan={9} className="text-muted-foreground px-3 py-10 text-center">
-                No time this week. Add a row, copy last week or apply a template.
+              <td colSpan={9} className="text-muted-foreground px-3 py-10 md:text-center">
+                {/* On a phone the grid is wider than the screen: the line stays where it can be read. */}
+                <span className="sticky left-3 inline-block max-w-[calc(100vw-4rem)]">
+                  No time this week. Add a row, copy last week or apply a template.
+                </span>
               </td>
             </tr>
           ) : (
@@ -145,7 +163,10 @@ export function TimesheetGrid({
                 <tr key={row.key} className="border-t">
                   <th
                     scope="row"
-                    className="bg-background sticky left-0 z-10 w-56 min-w-56 px-3 py-1.5 pr-8 text-left font-normal"
+                    className={cn(
+                      FIRST_COL,
+                      "bg-background px-3 py-0.5 pr-8 text-left font-normal",
+                    )}
                   >
                     <div className="flex items-center gap-2 truncate">
                       {project ? <ColorDot color={project.color} /> : null}
@@ -172,7 +193,11 @@ export function TimesheetGrid({
                     ) : null}
                   </th>
                   {sheet.days.map((day, colIndex) => (
-                    <td key={day} className="p-1">
+                    <td
+                      key={day}
+                      data-today={today === day ? "true" : undefined}
+                      className={cn("h-11 px-1 pb-1 pt-[3px]", today === day && TODAY)}
+                    >
                       <TimesheetCell
                         row={row}
                         day={day}
@@ -187,7 +212,10 @@ export function TimesheetGrid({
                       />
                     </td>
                   ))}
-                  <td aria-label={`Total ${label}`} className="px-3 py-1.5 text-right tabular-nums">
+                  <td
+                    aria-label={`Total ${label}`}
+                    className="px-3 py-1.5 text-right font-semibold tabular-nums"
+                  >
                     {fmt(row.totalSeconds)}
                   </td>
                 </tr>
@@ -198,14 +226,17 @@ export function TimesheetGrid({
             <tr key={band.key} className="bg-muted/20 border-t">
               <th
                 scope="row"
-                className="bg-muted/20 sticky left-0 z-10 w-56 min-w-56 truncate px-3 py-1.5 text-left font-medium"
+                className={cn(FIRST_COL, BAND_FILL, "truncate px-3 py-1.5 text-left font-medium")}
               >
                 {band.label}
               </th>
               {sheet.days.map((day) => (
                 <td
                   key={day}
-                  className="text-muted-foreground px-2 py-1.5 text-center tabular-nums"
+                  className={cn(
+                    "text-muted-foreground h-11 px-2 py-1.5 text-center tabular-nums",
+                    today === day && TODAY,
+                  )}
                 >
                   {band.days[day] ?? ""}
                 </td>
@@ -214,19 +245,19 @@ export function TimesheetGrid({
             </tr>
           ))}
         </tbody>
-        <tfoot className="bg-muted/40 border-t">
+        <tfoot className="bg-muted border-t">
           <tr>
-            <th
-              scope="row"
-              className="bg-muted/40 sticky left-0 z-10 px-3 py-2 text-left font-medium"
-            >
+            <th scope="row" className={cn(FIRST_COL, "bg-muted px-3 py-2 text-left font-semibold")}>
               Total
             </th>
             {headings.map((h) => (
               <td
                 key={h.day}
                 aria-label={`Total ${h.label}`}
-                className="px-2 py-2 text-center tabular-nums"
+                className={cn(
+                  "h-11 px-2 py-2 text-center font-semibold tabular-nums",
+                  today === h.day && TODAY_HEAD,
+                )}
               >
                 {fmt(sheet.dayTotals[h.day] ?? 0)}
               </td>

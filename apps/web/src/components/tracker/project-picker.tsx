@@ -93,6 +93,7 @@ export function ProjectPicker({
   canCreate = false,
   invalid = false,
   current = null,
+  className,
 }: {
   slug: string;
   value: ProjectSelection;
@@ -104,6 +105,8 @@ export function ProjectPicker({
   /** The server refused a save for the project or task (required fields). */
   invalid?: boolean;
   current?: CurrentSelection | null;
+  /** For the trigger (the timer bar lets it shrink on a phone). */
+  className?: string;
 }) {
   const { rules } = useTracker();
   const { data } = useTrackerOptions(slug, useTargetKey());
@@ -196,6 +199,7 @@ export function ProjectPicker({
             "max-w-56 justify-start",
             !project && "text-muted-foreground",
             invalid && "ring-destructive ring-2",
+            className,
           )}
         >
           {project ? (

@@ -12,8 +12,11 @@ export async function cookieNames(context: BrowserContext): Promise<string[]> {
   return cookies.map((cookie) => cookie.name);
 }
 
-/** The app's own cookies: Vercel's deployment-protection cookies are dropped. */
+/** Cookies a Vercel deployment sets by itself: protection (`_vercel…`, `vercel-…`) and routing (`_vcrr_<id>`, first seen 2026-11-23). */
+const PLATFORM_COOKIE = /^(_vercel|vercel-|_vcrr_)/;
+
+/** The app's own cookies: the platform's are dropped. */
 export async function appCookieNames(context: BrowserContext): Promise<string[]> {
   const names = await cookieNames(context);
-  return names.filter((name) => !name.startsWith("_vercel") && !name.startsWith("vercel-"));
+  return names.filter((name) => !PLATFORM_COOKIE.test(name));
 }

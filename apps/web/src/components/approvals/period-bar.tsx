@@ -116,7 +116,7 @@ function PeriodRow({
           </Button>
         ) : null}
         {p.canSubmit ? (
-          <Button size="sm" disabled={busy} onClick={submit}>
+          <Button size="sm" variant="outline" disabled={busy} onClick={submit}>
             {status === "REJECTED" ? "Resubmit" : "Submit for approval"}
           </Button>
         ) : null}

@@ -39,18 +39,38 @@ function detailsOf(s: RecentDescription): EntryDraft {
   };
 }
 
-function LiveClock() {
+/**
+ * The clock is the one bold element of the page: muted while nothing runs,
+ * ink with a beating amber dot while time does.
+ */
+function LiveClock({ running }: { running: boolean }) {
   const { elapsedSeconds } = useTrackerClock();
   return (
-    <span
-      role="timer"
-      aria-label="Elapsed time"
-      className="min-w-[5.5rem] px-2 text-right text-xl font-semibold tabular-nums"
-    >
-      {formatClock(elapsedSeconds)}
+    <span className="flex items-center gap-2 px-1 md:px-2">
+      {running ? (
+        <span
+          data-live-dot
+          aria-hidden
+          className="bg-live-line animate-live-pulse size-1.5 shrink-0 rounded-full"
+        />
+      ) : null}
+      <span
+        role="timer"
+        aria-label="Elapsed time"
+        className={cn(
+          "font-display text-display font-semibold tabular-nums leading-none",
+          running ? "text-foreground" : "text-muted-foreground",
+        )}
+      >
+        {formatClock(elapsedSeconds)}
+      </span>
     </span>
   );
 }
+
+/** The bar's description: no border, body text one size up. */
+const DESCRIPTION = "basis-full md:flex-1 md:basis-auto";
+const DESCRIPTION_INPUT = "h-10 text-base md:text-base dark:bg-transparent";
 
 /** Running entry's description: local text, saved on blur. Keyed by id + saved text. */
 function RunningDescription({
@@ -86,7 +106,8 @@ function RunningDescription({
       }}
       inputRef={inputRef}
       invalid={invalid}
-      className="basis-full md:flex-1 md:basis-auto"
+      className={DESCRIPTION}
+      inputClassName={DESCRIPTION_INPUT}
     />
   );
 }
@@ -129,7 +150,13 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
       <section
         aria-label="Timer"
         data-hydrated={hydrated}
-        className="bg-card flex flex-wrap items-center gap-1 rounded-lg border p-2 md:flex-nowrap"
+        data-running={Boolean(running)}
+        className={cn(
+          // Stays under the top bar (h-14) while the list scrolls beneath it.
+          "bg-card sticky top-14 z-20 flex flex-wrap items-center gap-1 rounded-lg border p-2 md:flex-nowrap",
+          // Time is running: a 2px amber top edge; the padding gives the pixel back.
+          running && "border-t-live-line border-t-2 pt-[7px]",
+        )}
       >
         {running ? (
           <RunningDescription
@@ -151,11 +178,12 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
               if (mode === "timer") void tracker.start();
             }}
             inputRef={tracker.registerDescriptionInput}
-            className="basis-full md:flex-1 md:basis-auto"
+            className={DESCRIPTION}
+            inputClassName={DESCRIPTION_INPUT}
           />
         )}
 
-        <div className="flex min-w-0 flex-wrap items-center gap-1 md:flex-nowrap">
+        <div className="flex min-w-0 flex-1 items-center md:flex-initial md:gap-1">
           {rules.allowBreaks ? (
             <Button
               type="button"
@@ -172,10 +200,11 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
                 )
               }
               className={cn(
+                "max-md:px-2",
                 values.type === "break" ? "text-primary bg-primary/10" : "text-muted-foreground",
               )}
             >
-              <CoffeeIcon /> Break
+              <CoffeeIcon /> <span className="max-md:sr-only">Break</span>
             </Button>
           ) : null}
           {values.type === "break" ? null : (
@@ -184,6 +213,8 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
                 slug={slug}
                 value={{ projectId: values.projectId, taskId: values.taskId }}
                 current={running ? { project: running.project, task: running.task } : null}
+                compact
+                className="min-w-0 shrink"
                 canCreate={canCreate.project}
                 invalid={stopProblem?.field === "project" || stopProblem?.field === "task"}
                 onChange={(sel) => change({ projectId: sel.projectId, taskId: sel.taskId })}
@@ -195,6 +226,7 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
                 current={running?.tags ?? []}
                 canCreate={canCreate.tag}
                 invalid={stopProblem?.field === "tag"}
+                className="min-w-0 shrink"
                 onChange={(tagIds) => change({ tagIds })}
               />
               <BillableToggle
@@ -205,16 +237,20 @@ export function TimerBar({ autoFocus = false }: { autoFocus?: boolean }) {
           )}
         </div>
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className={cn("ml-auto flex items-center gap-1", mode === "timer" && "shrink-0")}>
           {mode === "timer" ? (
             <>
-              <LiveClock />
+              <LiveClock running={Boolean(running)} />
+              {/* The only filled button on the page; while time runs it is the live colour. */}
               <Button
                 type="button"
                 onClick={() => void tracker.toggle()}
                 disabled={pending}
-                variant={running ? "destructive" : "default"}
-                className="min-w-24"
+                className={cn(
+                  // A phone's second row has no room for the icon.
+                  "max-md:px-3 md:min-w-24 [&_svg]:max-md:hidden",
+                  running && "bg-live text-live-foreground hover:bg-live/90",
+                )}
               >
                 {pending ? (
                   <Loader2Icon className="animate-spin" />
