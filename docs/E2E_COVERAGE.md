@@ -67,6 +67,11 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Description autocomplete fills project, tags and billable from a recent entry — `timer-bar.spec.ts` › "autocomplete fills project, tags and billable from a recent entry"
 - [x] N focuses the description and Esc leaves it — `timer-bar.spec.ts` › "N focuses the description and Esc leaves it"
 - [x] S starts and stops the timer from another workspace page — `timer-bar.spec.ts` › "S starts and stops the timer from another workspace page"
+- [x] The timer bar stays under the top bar while the entry list scrolls — `tracking-ui.spec.ts` › "the timer bar stays under the top bar while the list scrolls"
+- [x] A running timer shows in the bar: Stop in the live colour, a 2px live top border, an ink clock with a dot — `tracking-ui.spec.ts` › "a running timer turns the bar live: an amber Stop, a top border and a dot by the clock"
+- [x] The timer bar's Start is the only filled button on the tracker — `tracking-ui.spec.ts` › "the timer bar's Start is the only filled button on the tracker"
+- [x] At 375px the description has the first row; pickers, clock and Start share the second, with a timer running and a long project name — `tracking-ui.spec.ts` › "on a phone the description has the first row; pickers, clock and Start share the second"
+- [x] Import and Bulk edit are in the list's "⋯" menu, also on an empty tracker — `tracking-ui.spec.ts` › "Import and Bulk edit live in the list's menu, also on an empty tracker"
 
 ## Time Tracker: manual mode
 

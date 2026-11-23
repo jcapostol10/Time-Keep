@@ -49,7 +49,7 @@ A new token pair that carries text goes into the script's list.
 
 `--live` means **time is running**, and nothing else. It appears in exactly these places:
 
-- the running timer: the chip in the top bar (`components/shell/timer-chip.tsx`). The timer bar (`components/tracker/timer-bar.tsx`) is on the list and does not use it yet; that is the next piece of work;
+- the running timer: the chip in the top bar (`components/shell/timer-chip.tsx`), and the timer bar (`components/tracker/timer-bar.tsx`): a 2px `live-line` top edge, a 6px dot beside the clock that beats once a second (still under reduced motion), and Stop as a `live` fill;
 - the calendar's now-line (`components/calendar/now-line.tsx`), as `live-line`;
 - the dot beside "Tracking now" on Team activity (`components/dashboard/live-dot.tsx`).
 
@@ -90,13 +90,23 @@ The scale is closed. These are the only sizes; Tailwind's other names (`text-lg`
 - `PageHeader` (`components/page-header.tsx`) is the head of every workspace page: the title at 20/600, at most one line saying what the page is for, actions on the right (under the title on a phone). `mark` and `meta` sit beside the title, outside the heading. Pages do not write their own `h1`.
 - While a timer runs, the top bar shows an amber chip with its clock and description on every page; it opens the tracker.
 
+## The tracker
+
+This is where the design spends its boldness: the running clock.
+
+- **The timer bar** stays under the top bar while the list scrolls. Its clock is the hero: `font-display` at 32, muted while nothing runs, ink while time does.
+- **One filled button.** Start/Stop is the only filled button on the page; while time runs it reads Stop in the live colour. Everything else on the tracker (the empty state's button, "Submit for approval") is an outline.
+- The description has no border and is 16px. Project, tags and billable are quiet icon buttons that show their value once set (a project as its colour dot and name).
+- What is done to the list as a whole (Import, Bulk edit) is in one "⋯" menu at the right end of the list's header.
+- On a phone the description has the first row; pickers, clock and Start share the second.
+
 ## Empty states
 
 `EmptyState` (`components/empty-state.tsx`) is for a page's main list when it has nothing: a title that says what to do, one line of why, and a primary button that does it. No icon.
 
 | Page | Title | Button |
 | --- | --- | --- |
-| Tracker | Track your first entry | Start timer (puts the cursor in the description) |
+| Tracker | Track your first entry | Start timer (puts the cursor in the description; an outline button, see The tracker) |
 | Projects | Create a project | Create project |
 | Clients | Add a client | Add client |
 | Tags | Create a tag | Create tag |

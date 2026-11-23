@@ -34,6 +34,7 @@ export function TagPicker({
   canCreate = false,
   invalid = false,
   current = [],
+  className,
 }: {
   slug: string;
   value: string[];
@@ -45,6 +46,8 @@ export function TagPicker({
   invalid?: boolean;
   /** The entry's own tags, shown when the picker no longer lists them (archived). */
   current?: EntryTag[];
+  /** For the trigger (the timer bar lets it shrink on a phone). */
+  className?: string;
 }) {
   const { data } = useTrackerOptions(slug, useTargetKey());
   const cache = useTrackerCache(slug, useTargetKey());
@@ -125,6 +128,7 @@ export function TagPicker({
             "max-w-48 justify-start",
             selectedTags.length === 0 && "text-muted-foreground",
             invalid && "ring-destructive ring-2",
+            className,
           )}
         >
           <TagIcon />

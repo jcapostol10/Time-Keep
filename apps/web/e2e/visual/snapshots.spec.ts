@@ -40,6 +40,10 @@ const SCREENS: { name: string; path: string }[] = [
   { name: "invoices", path: `/w/${SLUG}/invoices` },
 ];
 
+/** `VISUAL_ONLY=tracker,timesheet` shoots only the screens whose name starts with one of these. */
+const ONLY = (process.env.VISUAL_ONLY ?? "").split(",").filter(Boolean);
+const wanted = (name: string) => ONLY.length === 0 || ONLY.some((o) => name.startsWith(o));
+
 async function settle(page: Page) {
   await expect(page.locator('main[data-hydrated="true"]')).toBeVisible({ timeout: 90_000 });
   await page.waitForLoadState("networkidle");
@@ -115,24 +119,30 @@ test("screenshots of the main screens", async ({ browser }) => {
       await page.goto("/sign-in");
       await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
       await page.waitForLoadState("networkidle");
-      await shoot(page, "sign-in", viewport.width, scheme);
+      if (wanted("sign-in")) await shoot(page, "sign-in", viewport.width, scheme);
 
       await signIn(page);
-      for (const screen of SCREENS) {
+      for (const screen of SCREENS.filter((s) => wanted(s.name))) {
         await page.goto(screen.path);
         await settle(page);
         await shoot(page, screen.name, viewport.width, scheme);
       }
 
       // A project's page: the first one in the list.
-      await page.goto(`/w/${SLUG}/projects`);
-      await settle(page);
-      await page.getByRole("table").getByRole("link").first().click();
-      await expect(page).toHaveURL(new RegExp(`/w/${SLUG}/projects/[^/]+`));
-      await settle(page);
-      await shoot(page, "project-detail", viewport.width, scheme);
+      if (wanted("project-detail")) {
+        await page.goto(`/w/${SLUG}/projects`);
+        await settle(page);
+        await page.getByRole("table").getByRole("link").first().click();
+        await expect(page).toHaveURL(new RegExp(`/w/${SLUG}/projects/[^/]+`));
+        await settle(page);
+        await shoot(page, "project-detail", viewport.width, scheme);
+      }
 
       // The tracker with a timer running; the timer and its entry are removed after.
+      if (!wanted("tracker-running")) {
+        await context.close();
+        continue;
+      }
       try {
         await page.goto(`/w/${SLUG}/tracker`);
         await settle(page);

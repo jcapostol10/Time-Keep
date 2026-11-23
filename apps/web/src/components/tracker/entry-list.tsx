@@ -12,9 +12,16 @@ import {
 } from "@timekeep/core";
 import { Button } from "@timekeep/ui/components/button";
 import { Checkbox } from "@timekeep/ui/components/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@timekeep/ui/components/dropdown-menu";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Loader2Icon, Trash2Icon, XIcon, PencilIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { EllipsisIcon, FileUpIcon, Loader2Icon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { fetchJson } from "@/lib/fetch-json";
@@ -22,6 +29,7 @@ import type { EntriesPage, TimeEntryDTO } from "@/lib/tracker-types";
 
 import { BulkEditDialog } from "./bulk-edit-dialog";
 import { EntryGroupRow, EntryRow } from "./entry-row";
+import { ImportDialog } from "./import-dialog";
 import { trackerKeys, trackerUrls } from "./query-keys";
 import { useTargetKey } from "./target-context";
 import { useTracker, useTrackerClock } from "./tracker-provider";
@@ -213,11 +221,54 @@ function DaySection({
   );
 }
 
-export function EntryList() {
+/**
+ * The head of the list: whose entries these are on the left, and one menu on
+ * the right for what is done to the list as a whole.
+ */
+function ListHeader({
+  children,
+  selectedCount,
+  onImport,
+  onBulkEdit,
+}: {
+  children: ReactNode;
+  selectedCount: number;
+  onImport: () => void;
+  onBulkEdit: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      {children}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label="List actions" className="ml-auto">
+            <EllipsisIcon />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={onImport}>
+            <FileUpIcon /> Import…
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={selectedCount === 0} onSelect={onBulkEdit}>
+            <PencilIcon /> Bulk edit…
+          </DropdownMenuItem>
+          {selectedCount === 0 ? (
+            <DropdownMenuLabel className="text-muted-foreground max-w-56 text-xs font-normal">
+              Tick entries to edit them together.
+            </DropdownMenuLabel>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+export function EntryList({ header }: { header?: ReactNode }) {
   const { slug, viewer, running, focusDescription } = useTracker();
   const { remove, bulkUpdate } = useEntryMutations();
   const selection = useSelection();
   const [editing, setEditing] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(new Set());
   const sentinel = useRef<HTMLDivElement | null>(null);
 
@@ -259,26 +310,53 @@ export function EntryList() {
   const todayKey = localDateKey(new Date(), tz);
   const selectedIds = [...selection.selected];
 
+  const listHeader = (
+    <>
+      <ListHeader
+        selectedCount={selectedIds.length}
+        onImport={() => setImporting(true)}
+        onBulkEdit={() => setEditing(true)}
+      >
+        {header}
+      </ListHeader>
+      <ImportDialog open={importing} onOpenChange={setImporting} />
+    </>
+  );
+
   if (query.isPending) {
     return (
-      <div className="text-muted-foreground flex justify-center py-12">
-        <Loader2Icon className="animate-spin" aria-label="Loading entries" />
+      <div className="space-y-6">
+        {listHeader}
+        <div className="text-muted-foreground flex justify-center py-12">
+          <Loader2Icon className="animate-spin" aria-label="Loading entries" />
+        </div>
       </div>
     );
   }
 
   if (!hasEntries && !hasNextPage) {
-    return running ? null : (
-      <EmptyState
-        title="Track your first entry"
-        description="Type what you're working on and start the timer, or switch to manual mode to add time you already worked."
-        action={<Button onClick={focusDescription}>Start timer</Button>}
-      />
+    return (
+      <div className="space-y-6">
+        {listHeader}
+        {running ? null : (
+          <EmptyState
+            title="Track your first entry"
+            description="Type what you're working on and start the timer, or switch to manual mode to add time you already worked."
+            // Outline: the timer bar's Start is the only filled button on this page.
+            action={
+              <Button variant="outline" onClick={focusDescription}>
+                Start timer
+              </Button>
+            }
+          />
+        )}
+      </div>
     );
   }
 
   return (
     <div className="space-y-8 pb-20">
+      {listHeader}
       {toBlocks(pages, tz, viewer.weekStart).map((block) => (
         <div key={block.key} className="space-y-3">
           <div className="flex items-baseline justify-between gap-2 px-1">
