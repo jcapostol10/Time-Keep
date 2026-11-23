@@ -61,6 +61,17 @@ The cleanup of 2026-11-17 (`docs/superpowers/specs/2026-11-17-backlog-cleanup-de
 - [ ] `hasBillableRate` picks each target's latest row and then checks the currency, while `rateEntriesSql` filters by currency first: they differ only when one target holds rows in two currencies.
 - [ ] Untested: `setRate` passing its kind to the job (only `requestRateRecalc` is tested with kinds), `uploadExportStream` itself (part sizes, abort), and the zip's size limits (65,000 files or 4 GB, where it now fails instead of writing a corrupt archive).
 
+### Tracking UI review minors (final review, 2026-11-23)
+
+- [ ] The day ribbon's summary counts the part of an entry inside the day, the day total beside it counts whole entries by start day: for an entry crossing midnight the two differ. A day that ends at midnight reads "between 22:00 and 00:00", and a day of only zero-length entries says "No entries".
+- [ ] The timesheet's frame is its own vertical scroller (`max-h-[calc(100svh-9rem)]`): with the page head above it, reaching the Total row can need both the page's scroll and the frame's, most of all on a phone. Measure the real offset or drop the limit under `md`.
+- [ ] On a phone the sticky top bar and timer bar hold about 160px; in landscape that is near half the screen, and keyboard focus can land under the bar (no `scroll-margin-top` on rows).
+- [ ] `DayTotal` and `BlockTotal` add the viewer's running seconds to another person's totals (`useRunningContribution`, on `main` before this branch); the ribbon no longer draws the timer there, the totals still count it.
+- [ ] The ribbon's day tooltip is a Radix Tooltip around per-block Tooltips: entering directly on a block arms both timers. Not seen failing; a plain focus-driven popover for the day list would remove the question.
+- [ ] Not checked: the sticky timesheet header in WebKit (`border-collapse` inside `overflow-auto`), the 375px timer bar with Break enabled plus tags and a long project, and whether `bg-primary/5` reads as a tint on today's timesheet column in the dark theme.
+- [ ] A project colour that is dark (the seed's "Euro launch" slate) is hard to read as a project name on the dark theme; colours are data, so this needs a lightness floor when printing a name, not a palette change.
+- [ ] Entry rows wrap onto two lines between 768px and 1400px; fixed columns there need a narrower date control.
+
 ### UI foundation review minors (final review, 2026-11-21)
 
 - [ ] `e2e/visual/snapshots.spec.ts` leaves soft-deleted "Visual snapshot timer" rows in the demo workspace and does not refuse a non-local base URL.

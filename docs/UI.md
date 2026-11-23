@@ -100,9 +100,9 @@ This is where the design spends its boldness: the running clock.
 - The description has no border and is 16px. Project, tags and billable are quiet icon buttons that show their value once set (a project as its colour dot and name).
 - What is done to the list as a whole (Import, Bulk edit) is in one "⋯" menu at the right end of the list's header.
 - On a phone the description has the first row; pickers, clock and Start share the second.
-- **The day ribbon** (`components/tracker/day-ribbon.tsx`, maths in core `day-ribbon.ts`) is the shape of a day: a 4px strip for 00:00–24:00 in the viewer's timezone on every day header, between the date and the day's total (`font-display` at 20). Each entry is a block in its project's colour (muted without one), placed by the wall clock as on the calendar, so 12:00 is the middle on a 23- or 25-hour day too; an entry that crosses midnight is clipped to each day it touches; overlapping blocks are see-through. The running timer is a `live-line` block that grows. The strip is `aria-hidden` and the ribbon carries a summary in words ("6 entries, 7:30 tracked between 08:10 and 18:40"). A pointer on a block opens its description, project and times; the keyboard stops once per day, on the ribbon, and opens the day's list.
+- **The day ribbon** (`components/tracker/day-ribbon.tsx`, maths in core `day-ribbon.ts`) is the shape of a day: a 4px strip for 00:00–24:00 in the viewer's timezone on every day header, between the date and the day's total (`font-display` at 20). Each entry is a block in its project's colour (muted without one), placed by the wall clock as on the calendar, so 12:00 is the middle on a 23- or 25-hour day too; an entry that crosses midnight is clipped to each day it touches; overlapping blocks are see-through. The running timer is a `live-line` block that grows. The viewer's timer is never drawn on another person's days. The strip is `aria-hidden` and the ribbon's accessible name is a summary in words ("6 entries, 7:30 tracked between 08:10 and 18:40"). A pointer on a block opens its description, project and times; the keyboard stops once per day, on the ribbon, and opens the day's list.
 - A week's header is its label and its total, with no box.
-- **Entry rows** have no line of their own: a week is one frame, a hairline separates its days, and a row has 12px above and below. From 1280px every row keeps the same columns (description, project, tags, billable, start–end, duration at 14/600); narrower, a row wraps. Continue and the row menu appear on hover or focus, and always on a touch screen.
+- **Entry rows** have no line of their own: a week is one frame, a hairline separates its days, and a row has 12px above and below. From 1400px every row keeps the same columns (description, project, tags, billable, start–end, duration at 14/600); narrower, a row wraps. Continue and the row menu appear on hover or focus; they hide only where a pointer can hover, so on touch they are always shown.
 
 ### Timesheet
 
@@ -110,7 +110,7 @@ Today's column has a faint primary tint and a primary date label. Cells are 44px
 
 ### Calendar
 
-An entry is a block with a 3px left edge in its project's colour and a fill tinted with it. The now-line is `live-line` with a dot, and the calendar opens with it in the middle of the view. The working day (08:00–18:00 for everyone until there is a working-hours setting) is a shade lighter than the hours around it.
+An entry is a block with a 3px left edge in its project's colour and a fill tinted with it. The now-line is `live-line` with a dot, and the calendar opens with it in the middle of the view. The working day (08:00–18:00 for everyone until there is a working-hours setting) is a shade lighter than the hours around it: the card fill on the page's, the lighter of the two in both themes.
 
 ### Dashboard
 

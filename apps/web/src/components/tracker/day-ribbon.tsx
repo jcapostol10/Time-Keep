@@ -15,6 +15,7 @@ import { useMemo, useState } from "react";
 import type { TimeEntryDTO } from "@/lib/tracker-types";
 
 import { ColorDot } from "./project-picker";
+import { useTarget } from "./target-context";
 import { useTracker, useTrackerClock } from "./tracker-provider";
 
 /** Stopped entries never read the clock; any instant will do. */
@@ -83,7 +84,7 @@ function RunningBlock({ dateKey }: { dateKey: string }) {
  * with a block per entry in its project's colour (muted without one), placed
  * by its start and end. Overlapping blocks are see-through, so they read as
  * denser. The strip is hidden from assistive technology and summed up in
- * words instead; a pointer on a block, or the keyboard on the ribbon, opens
+ * words instead (the ribbon's accessible name); a pointer on a block, or the keyboard on the ribbon, opens
  * what it stands for.
  *
  * `entries` is the whole list, not the day's: an entry that crosses midnight
@@ -120,8 +121,13 @@ export function DayRibbon({
 
   // The timer touches every day from the one it started on up to today.
   // (How long it is belongs to the running block; this must not tick.)
+  // It is the viewer's timer: never drawn on another person's days.
+  const ownDays = useTarget() === null;
   const runningHere =
-    running !== null && localDateKey(new Date(running.start), tz) <= dateKey && dateKey <= todayKey;
+    ownDays &&
+    running !== null &&
+    localDateKey(new Date(running.start), tz) <= dateKey &&
+    dateKey <= todayKey;
 
   const summary =
     ribbonSummary(
@@ -131,7 +137,13 @@ export function DayRibbon({
     ) + (runningHere ? ", timer running" : "");
 
   return (
-    <Tooltip open={focused}>
+    <Tooltip
+      open={focused}
+      onOpenChange={(open) => {
+        // Escape, or the pointer taking over: closing is always allowed.
+        if (!open) setFocused(false);
+      }}
+    >
       <TooltipTrigger asChild>
         {/* One stop for the keyboard per day, not one per entry. */}
         <div
@@ -139,7 +151,8 @@ export function DayRibbon({
           role="img"
           aria-label={summary}
           tabIndex={0}
-          onFocus={() => setFocused(true)}
+          // The keyboard opens the day's list; a click on the strip does not pin it open.
+          onFocus={(event) => setFocused(event.currentTarget.matches(":focus-visible"))}
           onBlur={() => setFocused(false)}
           className={cn("relative h-4 min-w-0 rounded-sm", className)}
         >
@@ -175,11 +188,9 @@ export function DayRibbon({
             ))}
             {runningHere ? <RunningBlock dateKey={dateKey} /> : null}
           </div>
-          <span className="sr-only">{summary}</span>
         </div>
       </TooltipTrigger>
       <TooltipContent className="max-w-72 space-y-2 text-left">
-        <span className="block">{summary}</span>
         {blocks.slice(0, 8).map(({ block, entry }) => (
           <EntryLine key={block.id} entry={entry} times={times(block)} />
         ))}

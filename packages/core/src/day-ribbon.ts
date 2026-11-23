@@ -50,6 +50,8 @@ export function ribbonBlocks(
     const start = new Date(entry.start);
     const end = entry.end === null ? now : new Date(entry.end);
     if (end <= start) continue;
+    // Most entries are not on this day: say so before any timezone maths.
+    if (end <= dayStart || start >= dayEnd) continue;
     const block = blockOnDay({ start: entry.start, end: end.toISOString() }, dayKey, tz);
     if (!block) continue;
     const from = block.clippedStart ? dayStart : start;

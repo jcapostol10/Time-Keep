@@ -323,6 +323,16 @@ export function EntryList({ header }: { header?: ReactNode }) {
         {header}
       </ListHeader>
       <ImportDialog open={importing} onOpenChange={setImporting} />
+      <BulkEditDialog
+        count={selectedIds.length}
+        open={editing}
+        onOpenChange={setEditing}
+        onApply={async (patch) => {
+          const ok = await bulkUpdate(selectedIds, patch);
+          if (ok) selection.clear();
+          return ok;
+        }}
+      />
     </>
   );
 
@@ -432,16 +442,6 @@ export function EntryList({ header }: { header?: ReactNode }) {
           </Button>
         </div>
       ) : null}
-      <BulkEditDialog
-        count={selectedIds.length}
-        open={editing}
-        onOpenChange={setEditing}
-        onApply={async (patch) => {
-          const ok = await bulkUpdate(selectedIds, patch);
-          if (ok) selection.clear();
-          return ok;
-        }}
-      />
     </div>
   );
 }

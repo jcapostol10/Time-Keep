@@ -2,6 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
 import { overflowingElements } from "./helpers/app";
+import { addTeammate } from "./helpers/team";
 import { addManualEntry, createProject, entry, timer, today } from "./helpers/tracker";
 
 /**
@@ -20,6 +21,12 @@ async function tokenColour(page: Page, token: string): Promise<string> {
     probe.remove();
     return colour;
   }, token);
+}
+
+/** Relative lightness of an `rgb()` colour: enough to say which of two surfaces is lighter. */
+function luminance(colour: string): number {
+  const [r = 0, g = 0, b = 0] = (colour.match(/[\d.]+/g) ?? []).map(Number);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 const style = (locator: Locator, property: string) =>
@@ -184,16 +191,25 @@ test.describe("tracking UI", () => {
 
     // The strip is hidden from assistive technology; the summary speaks for it.
     await expect(ribbon.locator("[data-ribbon-track]")).toHaveAttribute("aria-hidden", "true");
-    await expect(
-      ribbon.getByText(
-        /^2 entries, 0:15(:00)? tracked between (00:10|12:10 AM) and (00:40|12:40 AM)$/,
-      ),
-    ).toHaveCount(1);
+    await expect(ribbon).toHaveAccessibleName(
+      /^2 entries, 0:15(:00)? tracked between (00:10|12:10 AM) and (00:40|12:40 AM)$/,
+    );
 
     // Pointing at a block says what it is.
     await blocks.first().hover();
     await expect(page.getByRole("tooltip")).toContainText("Early");
     await page.mouse.move(0, 0);
+
+    // A click on the ribbon pins nothing open; the keyboard opens the day's list.
+    await ribbon.click({ position: { x: 300, y: 8 } });
+    await page.mouse.move(0, 0);
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
+    await day.getByRole("checkbox", { name: /^Select all entries/ }).focus();
+    await page.keyboard.press("Tab");
+    await expect(ribbon).toBeFocused();
+    await expect(page.getByRole("tooltip")).toContainText("Later");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("tooltip")).toHaveCount(0);
 
     // The day's total sits at the right of the header in the display face.
     const total = day.locator("[data-day-total]");
@@ -208,7 +224,7 @@ test.describe("tracking UI", () => {
     expect(await style(running.locator("span"), "background-color")).toBe(
       await tokenColour(page, "--live-line"),
     );
-    await expect(ribbon.getByText(/, timer running$/)).toHaveCount(1);
+    await expect(ribbon).toHaveAccessibleName(/, timer running$/);
     await timer(page).getByRole("button", { name: "Stop" }).click();
     await expect(running).toHaveCount(0);
   });
@@ -217,6 +233,7 @@ test.describe("tracking UI", () => {
     freshUser: _user,
     trackerPage,
   }) => {
+    test.setTimeout(120_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     await trackerPage();
     await addManualEntry(page, { description: "Short", start: "00:10", duration: "0:05" });
@@ -249,6 +266,38 @@ test.describe("tracking UI", () => {
     ] as const) {
       expect(await x(short, role, name), String(name)).toBe(await x(long, role, name));
     }
+    // A group row (two identical entries in a row) keeps the same time and duration columns.
+    await timer(page)
+      .getByRole("button", { name: /^Project:/ })
+      .click();
+    await page.getByRole("option", { name: "No project" }).click();
+    await addManualEntry(page, { description: "Twice", start: "01:00", duration: "0:05" });
+    await addManualEntry(page, { description: "Twice", start: "01:10", duration: "0:05" });
+    const group = today(page).getByRole("group", { name: "Group Twice", exact: true });
+    const centre = async (locator: Locator) => {
+      const rect = await box(locator);
+      return Math.round(rect.x + rect.width / 2);
+    };
+    expect(
+      Math.abs(
+        (await centre(group.locator("[data-range-start]"))) -
+          (await centre(short.getByRole("textbox", { name: "Start time" }))),
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        (await centre(group.locator("[data-group-total]"))) -
+          (await centre(short.getByRole("textbox", { name: "Duration" }))),
+      ),
+    ).toBeLessThanOrEqual(1);
+
+    // The description is never squeezed out by the columns: here, and on a narrower screen.
+    const description = long.getByRole("textbox", { name: "Description" });
+    expect((await box(description)).width).toBeGreaterThanOrEqual(160);
+    await page.setViewportSize({ width: 1300, height: 900 });
+    expect((await box(description)).width).toBeGreaterThanOrEqual(200);
+    await page.setViewportSize({ width: 1440, height: 900 });
+
     const duration = short.getByRole("textbox", { name: "Duration" });
     expect(await style(duration, "font-size")).toBe("14px");
     expect(await style(duration, "font-weight")).toBe("600");
@@ -357,20 +406,49 @@ test.describe("tracking UI", () => {
     expect(await style(line, "border-top-color")).toBe(await tokenColour(page, "--live-line"));
     await expect(line.locator("span")).toHaveCount(1);
 
-    // 08:00 to 18:00 is the working day; the hours around it are a shade darker.
+    // 08:00 to 18:00 is the working day: lighter than the hours around it, in both themes.
     const day = calendar.locator("[data-day]").filter({ has: page.getByTestId("now-line") });
-    const off = day.locator("[data-off-hours]");
-    await expect(off).toHaveCount(2);
+    const working = day.locator("[data-working-hours]");
+    await expect(working).toHaveCount(1);
     expect(
-      await off
-        .first()
-        .evaluate((el) => [(el as HTMLElement).offsetTop, (el as HTMLElement).offsetHeight]),
-    ).toEqual([0, 512]);
-    expect(
-      await off
-        .nth(1)
-        .evaluate((el) => [(el as HTMLElement).offsetTop, (el as HTMLElement).offsetHeight]),
-    ).toEqual([1152, 384]);
-    expect(await style(off.first(), "background-color")).not.toBe("rgba(0, 0, 0, 0)");
+      await working.evaluate((el) => [
+        (el as HTMLElement).offsetTop,
+        (el as HTMLElement).offsetHeight,
+      ]),
+    ).toEqual([512, 640]);
+    for (const scheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await expect
+        .poll(async () => luminance(await style(working, "background-color")), { message: scheme })
+        .toBeGreaterThan(luminance(await tokenColour(page, "--background")));
+    }
+  });
+  test("another person's day ribbon does not show the viewer's own running timer", async ({
+    page,
+    freshUser,
+    browser,
+    baseURL,
+  }) => {
+    const mia = await addTeammate(page, browser, baseURL, freshUser.slug, "Mia Member", "Member");
+    await mia.context.close();
+    await page.goto(`/w/${freshUser.slug}/tracker`);
+    await expect(timer(page)).toHaveAttribute("data-hydrated", "true");
+    await page.getByRole("combobox", { name: "Person", exact: true }).click();
+    await page.getByRole("option", { name: "Mia Member", exact: true }).click();
+    await expect(page).toHaveURL(/user=/);
+    await expect(timer(page)).toHaveAttribute("data-hydrated", "true");
+    await addManualEntry(page, { description: "For Mia", start: "00:05", duration: "0:10" });
+    const ribbon = today(page).locator("[data-ribbon]");
+    await expect(ribbon).toHaveCount(1);
+
+    // The timer in the bar is the viewer's; Mia's day has nothing running.
+    await timer(page).getByRole("combobox", { name: "Description" }).fill("Mine");
+    await timer(page).getByRole("button", { name: "Start" }).click();
+    await expect(timer(page).getByRole("button", { name: "Stop" })).toBeVisible();
+    await expect(ribbon.locator("[data-ribbon-block]")).toHaveCount(1);
+    await expect(ribbon.locator("[data-ribbon-running]")).toHaveCount(0);
+    await expect(ribbon).not.toHaveAccessibleName(/timer running/);
+    await timer(page).getByRole("button", { name: "Stop" }).click();
+    await expect(timer(page).getByRole("button", { name: "Start" })).toBeVisible();
   });
 });
