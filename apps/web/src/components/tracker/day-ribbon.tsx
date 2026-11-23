@@ -26,8 +26,8 @@ const place = (block: RibbonBlock) => ({
   width: `max(${block.width}%, 2px)`,
 });
 
-/** A block is 4px tall; what the pointer can hit is 16px. */
-const HIT = "absolute -inset-y-1.5";
+/** A block is 4px tall, on the track; what the pointer can hit is the ribbon's 16px. */
+const HIT = "absolute inset-y-0";
 const BAR = "absolute inset-x-0 top-1.5 block h-1 rounded-[1px]";
 
 function useTimes() {

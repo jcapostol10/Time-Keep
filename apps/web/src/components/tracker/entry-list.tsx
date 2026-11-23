@@ -181,9 +181,9 @@ function DaySection({
   const rows = collapseConsecutive(entries);
 
   return (
-    <section aria-label={heading} className="bg-card overflow-hidden rounded-lg border">
+    <section aria-label={heading} className="pb-1">
       {/* The date, the shape of the day, its total. */}
-      <header className="flex items-center gap-3 border-b px-3 py-2">
+      <header className="flex items-center gap-3 px-3 pb-1 pt-3">
         <Checkbox
           aria-label={`Select all entries for ${heading}`}
           checked={count === 0 ? false : count === ids.length ? true : "indeterminate"}
@@ -193,7 +193,7 @@ function DaySection({
         <DayRibbon dateKey={dateKey} todayKey={todayKey} entries={allEntries} className="flex-1" />
         <DayTotal dateKey={dateKey} seconds={totalSeconds} />
       </header>
-      <div className="divide-y">
+      <div>
         {rows.map((row) => {
           if (row.kind === "single") {
             return (
@@ -371,19 +371,22 @@ export function EntryList({ header }: { header?: ReactNode }) {
               label={block.totalLabel}
             />
           </div>
-          {groupByDay(block.entries, tz).map((day) => (
-            <DaySection
-              key={day.dateKey}
-              dateKey={day.dateKey}
-              todayKey={todayKey}
-              entries={day.entries}
-              allEntries={allEntries}
-              totalSeconds={day.totalSeconds}
-              selection={selection}
-              expandedGroups={expandedGroups}
-              onToggleGroup={toggleGroup}
-            />
-          ))}
+          {/* One frame per week; a hairline between its days, none between rows. */}
+          <div className="bg-card divide-y overflow-hidden rounded-lg border">
+            {groupByDay(block.entries, tz).map((day) => (
+              <DaySection
+                key={day.dateKey}
+                dateKey={day.dateKey}
+                todayKey={todayKey}
+                entries={day.entries}
+                allEntries={allEntries}
+                totalSeconds={day.totalSeconds}
+                selection={selection}
+                expandedGroups={expandedGroups}
+                onToggleGroup={toggleGroup}
+              />
+            ))}
+          </div>
         </div>
       ))}
 

@@ -52,21 +52,44 @@ import { useFavorites } from "./use-favorites";
 import { useCanWriteTimes, useTracker } from "./tracker-provider";
 import { useEntryMutations } from "./use-entry-mutations";
 
+/**
+ * A row has no line of its own: 12px above and below, and a hairline only
+ * between days. From 1280px every row keeps the same columns (description,
+ * project, tags, billable, start–end, duration), whatever it holds, so the
+ * eye can run down one of them; narrower, a row wraps onto a second line.
+ */
 const ROW =
-  "flex flex-wrap items-center gap-x-1 gap-y-1 px-3 py-2 md:flex-nowrap hover:bg-muted/40";
+  "group/row flex flex-wrap items-center gap-x-1 gap-y-1 px-3 py-3 xl:flex-nowrap hover:bg-muted/40";
+/** The columns' widths, shared by entry rows and group rows. */
+const DETAILS = "flex min-w-0 items-center gap-1 xl:w-[23rem] xl:shrink-0";
+const PROJECT = "min-w-0 xl:w-52 xl:shrink-0";
+const TAGS = "min-w-0 xl:w-32 xl:shrink-0";
+const BILLABLE = "flex size-8 shrink-0 items-center justify-center";
+const TIMES =
+  "ml-auto flex flex-wrap items-center justify-end gap-0.5 xl:w-[31rem] xl:shrink-0 xl:flex-nowrap";
+const DURATION = "w-[6rem] shrink-0 text-center text-sm font-semibold tabular-nums";
+/**
+ * Continue and the menu wait for the pointer or the keyboard, and for an open
+ * menu; a touch screen has no hover, so there they are always shown.
+ */
+const ACTIONS =
+  "flex items-center opacity-0 transition-opacity group-focus-within/row:opacity-100 group-hover/row:opacity-100 has-[[data-state=open]]:opacity-100 [@media(hover:none)]:opacity-100";
 
 function entryName(entry: TimeEntryDTO) {
   return entry.description || "(no description)";
 }
 
+/** A group's first start and last end, in the columns an entry's two time fields have. */
 function TimeRange({ start, end, tz }: { start: string; end: string; tz: string }) {
   const { viewer } = useTracker();
   const nextDay = localDateKey(new Date(end), tz) !== localDateKey(new Date(start), tz);
+  const slot = "w-[5.25rem] shrink-0 text-center";
   return (
-    <span className="text-muted-foreground text-sm tabular-nums">
-      {formatTimeOfDay(new Date(start), tz, viewer.timeFormat)} –{" "}
-      {formatTimeOfDay(new Date(end), tz, viewer.timeFormat)}
-      {nextDay ? <sup className="ml-0.5">+1</sup> : null}
+    <span className="text-muted-foreground flex items-center gap-0.5 text-sm tabular-nums xl:mr-auto">
+      <span className={slot}>{formatTimeOfDay(new Date(start), tz, viewer.timeFormat)}</span>
+      <span aria-hidden>–</span>
+      <span className={slot}>{formatTimeOfDay(new Date(end), tz, viewer.timeFormat)}</span>
+      {nextDay ? <sup>+1</sup> : null}
     </span>
   );
 }
@@ -229,41 +252,49 @@ export function EntryRow({
           value={entry.description}
           placeholder="Add description"
           onCommit={(description) => save({ description })}
-          className="hover:border-input min-w-0 flex-1 basis-[calc(100%-2rem)] border-transparent text-left shadow-none md:basis-auto"
+          className="hover:border-input min-w-0 flex-1 basis-[calc(100%-2rem)] border-transparent text-left shadow-none xl:basis-auto dark:bg-transparent"
         />
-        {entry.type === "break" ? (
-          <Badge variant="secondary">
-            <CoffeeIcon /> Break
-          </Badge>
-        ) : (
-          <>
-            <ProjectPicker
-              slug={slug}
-              value={{ projectId: entry.projectId, taskId: entry.taskId }}
-              current={{ project: entry.project, task: entry.task }}
-              compact
-              canCreate={canCreate.project}
-              onChange={(sel) => save({ projectId: sel.projectId, taskId: sel.taskId })}
-            />
-            <TagPicker
-              slug={slug}
-              value={entry.tagIds}
-              current={entry.tags}
-              canCreate={canCreate.tag}
-              onChange={(tagIds) => save({ tagIds })}
-            />
-            <BillableToggle value={entry.billable} onChange={(billable) => save({ billable })} />
-          </>
-        )}
+        <div className={DETAILS}>
+          {entry.type === "break" ? (
+            <Badge variant="secondary">
+              <CoffeeIcon /> Break
+            </Badge>
+          ) : (
+            <>
+              <div className={PROJECT}>
+                <ProjectPicker
+                  slug={slug}
+                  value={{ projectId: entry.projectId, taskId: entry.taskId }}
+                  current={{ project: entry.project, task: entry.task }}
+                  compact
+                  canCreate={canCreate.project}
+                  className="max-w-full"
+                  onChange={(sel) => save({ projectId: sel.projectId, taskId: sel.taskId })}
+                />
+              </div>
+              <div className={TAGS}>
+                <TagPicker
+                  slug={slug}
+                  value={entry.tagIds}
+                  current={entry.tags}
+                  canCreate={canCreate.tag}
+                  className="max-w-full"
+                  onChange={(tagIds) => save({ tagIds })}
+                />
+              </div>
+              <BillableToggle value={entry.billable} onChange={(billable) => save({ billable })} />
+            </>
+          )}
+        </div>
       </fieldset>
-      <div className="ml-auto flex flex-wrap items-center justify-end gap-0.5 md:shrink-0 md:flex-nowrap">
+      <div className={TIMES}>
         <fieldset disabled={locked} className="contents">
           <CommitInput
             label="Start time"
             value={formatTimeOfDay(times.start, tz, viewer.timeFormat)}
             onCommit={(t) => editTime("start", t)}
             disabled={!canWriteTimes}
-            className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none"
+            className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none dark:bg-transparent"
           />
           <span className="text-muted-foreground" aria-hidden>
             –
@@ -273,7 +304,7 @@ export function EntryRow({
             value={formatTimeOfDay(times.end, tz, viewer.timeFormat)}
             onCommit={(t) => editTime("end", t)}
             disabled={!canWriteTimes}
-            className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none"
+            className="hover:border-input w-[5.25rem] shrink-0 border-transparent shadow-none dark:bg-transparent"
           />
           <sup
             className={cn("text-muted-foreground w-4", !crossesMidnight && "invisible")}
@@ -294,18 +325,20 @@ export function EntryRow({
                 save({ start: next.start.toISOString(), end: next.end.toISOString() });
               }
             }}
-            className="hover:border-input h-8 w-[9rem] shrink-0 border-transparent px-2 shadow-none"
+            className="hover:border-input h-8 w-[9rem] shrink-0 border-transparent px-2 shadow-none dark:bg-transparent"
           />
           <CommitInput
             label="Duration"
             value={formatDuration(entry.durationSeconds ?? 0, viewer.durationFormat)}
             onCommit={editDuration}
             disabled={!canWriteTimes}
-            className="hover:border-input w-[6rem] shrink-0 border-transparent font-semibold shadow-none"
+            className="hover:border-input w-[6rem] shrink-0 border-transparent font-semibold shadow-none dark:bg-transparent"
           />
         </fieldset>
-        <ContinueButton entry={entry} />
-        <RowActions entry={entry} />
+        <div data-row-actions className={ACTIONS}>
+          <ContinueButton entry={entry} />
+          <RowActions entry={entry} />
+        </div>
       </div>
     </div>
   );
@@ -363,36 +396,44 @@ export function EntryGroupRow({
             {entries.length}
           </Badge>
         </Button>
-        <span className="min-w-0 flex-1 basis-[calc(100%-6rem)] truncate px-2 text-sm md:basis-auto">
+        <span className="min-w-0 flex-1 basis-[calc(100%-6rem)] truncate px-2 text-sm xl:basis-auto">
           {first.description || <span className="text-muted-foreground">(no description)</span>}
         </span>
-        {first.project ? (
+        {/* The same columns as an entry's row, read-only. */}
+        <div className={DETAILS}>
+          <span className={cn(PROJECT, "flex items-center gap-1.5 px-2.5 text-sm font-medium")}>
+            {first.project ? (
+              <>
+                <ColorDot color={first.project.color} />
+                <span className="truncate" style={{ color: first.project.color }}>
+                  {first.project.name}
+                </span>
+              </>
+            ) : null}
+          </span>
           <span
-            className="flex items-center gap-1.5 px-2 text-sm"
-            style={{ color: first.project.color }}
+            className={cn(TAGS, "text-muted-foreground flex items-center gap-1.5 px-2.5 text-sm")}
           >
-            <ColorDot color={first.project.color} />
-            {first.project.name}
+            {first.tags.length > 0 ? (
+              <>
+                <TagIcon className="size-4 shrink-0" />
+                <span className="truncate">{first.tags.map((t) => t.name).join(", ")}</span>
+              </>
+            ) : null}
           </span>
-        ) : null}
-        {first.tags.length > 0 ? (
-          <span className="text-muted-foreground flex items-center gap-1 px-2 text-sm">
-            <TagIcon className="size-3.5" />
-            {first.tags.map((t) => t.name).join(", ")}
+          <span className={BILLABLE}>
+            {first.billable ? (
+              <DollarSignIcon className="text-primary size-4" aria-label="Billable" />
+            ) : null}
           </span>
-        ) : null}
-        {first.billable ? (
-          <DollarSignIcon className="text-primary size-4" aria-label="Billable" />
-        ) : null}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-0.5 md:shrink-0 md:flex-nowrap">
-          <span className="px-2">
-            <TimeRange start={earliest} end={latest} tz={tz} />
-          </span>
-          <span className="w-[6rem] text-center text-sm font-semibold tabular-nums">
-            {formatDuration(totalSeconds, viewer.durationFormat)}
-          </span>
-          <ContinueButton entry={first} />
-          <span className="size-8" aria-hidden />
+        </div>
+        <div className={TIMES}>
+          <TimeRange start={earliest} end={latest} tz={tz} />
+          <span className={DURATION}>{formatDuration(totalSeconds, viewer.durationFormat)}</span>
+          <div data-row-actions className={ACTIONS}>
+            <ContinueButton entry={first} />
+            <span className="size-8" aria-hidden />
+          </div>
         </div>
       </div>
       {expanded

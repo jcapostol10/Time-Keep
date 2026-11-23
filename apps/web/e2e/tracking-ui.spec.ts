@@ -2,7 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
 import { overflowingElements } from "./helpers/app";
-import { addManualEntry, createProject, timer, today } from "./helpers/tracker";
+import { addManualEntry, createProject, entry, timer, today } from "./helpers/tracker";
 
 /**
  * How time tracking looks (docs/UI.md): the running clock is the one bold
@@ -211,5 +211,77 @@ test.describe("tracking UI", () => {
     await expect(ribbon.getByText(/, timer running$/)).toHaveCount(1);
     await timer(page).getByRole("button", { name: "Stop" }).click();
     await expect(running).toHaveCount(0);
+  });
+  test("entry rows have no lines between them, share their columns and show actions on hover or focus", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await trackerPage();
+    await addManualEntry(page, { description: "Short", start: "00:10", duration: "0:05" });
+    await createProject(page, "Website redesign");
+    await addManualEntry(page, {
+      description: "A much longer description of the work that was done",
+      start: "00:30",
+      duration: "0:10",
+    });
+    const short = entry(page, "Short");
+    const long = entry(page, "A much longer description of the work that was done");
+
+    // No line between rows, 12px above and below.
+    for (const row of [short, long]) {
+      expect(await style(row, "border-top-width")).toBe("0px");
+      expect(await style(row, "border-bottom-width")).toBe("0px");
+      expect(await style(row, "padding-top")).toBe("12px");
+      expect(await style(row, "padding-bottom")).toBe("12px");
+    }
+
+    // Columns line up whatever the rows hold.
+    const x = async (row: Locator, role: "button" | "textbox", name: string | RegExp) =>
+      Math.round((await box(row.getByRole(role, { name }))).x);
+    for (const [role, name] of [
+      ["button", /^Project:/],
+      ["button", /^Tags:/],
+      ["button", "Billable"],
+      ["textbox", "Start time"],
+      ["textbox", "Duration"],
+    ] as const) {
+      expect(await x(short, role, name), String(name)).toBe(await x(long, role, name));
+    }
+    const duration = short.getByRole("textbox", { name: "Duration" });
+    expect(await style(duration, "font-size")).toBe("14px");
+    expect(await style(duration, "font-weight")).toBe("600");
+
+    // Actions wait for the pointer or the keyboard.
+    const actions = short.locator("[data-row-actions]");
+    await page.mouse.move(0, 0);
+    await expect.poll(() => style(actions, "opacity")).toBe("0");
+    await short.hover();
+    await expect.poll(() => style(actions, "opacity")).toBe("1");
+    await page.mouse.move(0, 0);
+    await expect.poll(() => style(actions, "opacity")).toBe("0");
+    await short.getByRole("textbox", { name: "Description" }).focus();
+    await expect.poll(() => style(actions, "opacity")).toBe("1");
+  });
+
+  test("on a touch screen the row actions are always there", async ({
+    browser,
+    page: signedIn,
+    freshUser,
+  }) => {
+    // A phone: no hover to wait for. Same account, its own context.
+    const context = await browser.newContext({
+      hasTouch: true,
+      isMobile: true,
+      viewport: { width: 375, height: 812 },
+      storageState: await signedIn.context().storageState(),
+    });
+    const page = await context.newPage();
+    await page.goto(`/w/${freshUser.slug}/tracker`);
+    await expect(timer(page)).toHaveAttribute("data-hydrated", "true");
+    await addManualEntry(page, { description: "Touch", start: "00:10", duration: "0:05" });
+    expect(await style(entry(page, "Touch").locator("[data-row-actions]"), "opacity")).toBe("1");
+    await context.close();
   });
 });
