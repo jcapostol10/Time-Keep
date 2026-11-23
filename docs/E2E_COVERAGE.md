@@ -197,6 +197,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] A row added by hand with no time can be removed — `timesheet.spec.ts` › "a row added by hand can be removed"
 - [x] Move between cells with the keyboard — `timesheet.spec.ts` › "move between cells with the keyboard"
 - [x] Navigate weeks and back to today — `timesheet.spec.ts` › "navigate weeks"
+- [x] Today's column is tinted with a primary date label, cells are 44px tall, totals are 600, the header row and first column stay put, and at 375px the grid scrolls inside its frame — `tracking-ui.spec.ts` › "the timesheet marks today, keeps 44px cells and bold totals, and pins its header and first column"
 
 ## Calendar
 

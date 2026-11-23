@@ -284,4 +284,58 @@ test.describe("tracking UI", () => {
     expect(await style(entry(page, "Touch").locator("[data-row-actions]"), "opacity")).toBe("1");
     await context.close();
   });
+  test("the timesheet marks today, keeps 44px cells and bold totals, and pins its header and first column", async ({
+    page,
+    freshUser,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Sheet", start: "00:10", duration: "0:05" });
+    await page.goto(`/w/${freshUser.slug}/timesheet`);
+    const sheet = page.getByRole("grid", { name: "Timesheet" });
+    await expect(sheet).toHaveAttribute("data-hydrated", "true");
+
+    // Today: a primary date label and a faint tint down the column.
+    const todayHead = sheet.locator('thead th[data-today="true"]');
+    await expect(todayHead).toHaveCount(1);
+    expect(await style(todayHead, "color")).toBe(await tokenColour(page, "--primary"));
+    const clear = "rgba(0, 0, 0, 0)";
+    const todayCell = sheet.locator('tbody td[data-today="true"]').first();
+    expect(await style(todayCell, "background-color")).not.toBe(clear);
+    expect(
+      await style(sheet.locator("tbody td:not([data-today])").first(), "background-color"),
+    ).toBe(clear);
+
+    // Cells are 44px tall; totals are 600.
+    expect(Math.round((await box(todayCell)).height)).toBe(44);
+    const weights = await sheet
+      .locator('td[aria-label^="Total "]')
+      .evaluateAll((cells) => cells.map((c) => getComputedStyle(c).fontWeight));
+    expect(weights.length).toBeGreaterThan(7);
+    expect(new Set(weights)).toEqual(new Set(["600"]));
+
+    // The header row and the first column are pinned inside the grid's own scroller.
+    const head = sheet.locator("thead th").nth(1);
+    expect(await style(head, "position")).toBe("sticky");
+    expect(await style(head, "top")).toBe("0px");
+    const rowHead = sheet.locator("tbody th[scope=row]").first();
+    expect(await style(rowHead, "position")).toBe("sticky");
+
+    // On a phone the grid scrolls sideways in its frame and the row's name stays put.
+    await page.setViewportSize({ width: 375, height: 812 });
+    const scroller = page.locator("[data-timesheet-scroller]");
+    const before = await box(rowHead);
+    const scrolled = await scroller.evaluate((el) => {
+      el.scrollLeft = 300;
+      return { left: el.scrollLeft, overflowY: getComputedStyle(el).overflowY };
+    });
+    expect(scrolled.left).toBeGreaterThan(100);
+    expect(scrolled.overflowY).toBe("auto");
+    expect(Math.round((await box(rowHead)).x)).toBe(Math.round(before.x));
+    // The name leaves most of the phone's width to the days.
+    expect(before.width).toBeLessThanOrEqual(150);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      375,
+    );
+  });
 });

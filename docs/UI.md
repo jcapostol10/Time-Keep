@@ -104,6 +104,10 @@ This is where the design spends its boldness: the running clock.
 - A week's header is its label and its total, with no box.
 - **Entry rows** have no line of their own: a week is one frame, a hairline separates its days, and a row has 12px above and below. From 1280px every row keeps the same columns (description, project, tags, billable, start–end, duration at 14/600); narrower, a row wraps. Continue and the row menu appear on hover or focus, and always on a touch screen.
 
+### Timesheet
+
+Today's column has a faint primary tint and a primary date label. Cells are 44px tall with tabular figures; the totals row and column are 600. The grid scrolls inside its own frame, both ways, with the header row and the first column pinned (solid fills, so nothing shows through); on a phone the first column narrows to leave the days most of the width.
+
 ## Empty states
 
 `EmptyState` (`components/empty-state.tsx`) is for a page's main list when it has nothing: a title that says what to do, one line of why, and a primary button that does it. No icon.
