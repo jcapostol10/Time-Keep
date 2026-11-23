@@ -228,91 +228,91 @@ test.describe("tracking UI", () => {
     await timer(page).getByRole("button", { name: "Stop" }).click();
     await expect(running).toHaveCount(0);
   });
-  test("entry rows have no lines between them, share their columns and show actions on hover or focus", async ({
-    page,
-    freshUser: _user,
-    trackerPage,
-  }) => {
-    test.setTimeout(120_000);
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await trackerPage();
-    await addManualEntry(page, { description: "Short", start: "00:10", duration: "0:05" });
-    await createProject(page, "Website redesign");
-    await addManualEntry(page, {
-      description: "A much longer description of the work that was done",
-      start: "00:30",
-      duration: "0:10",
-    });
-    const short = entry(page, "Short");
-    const long = entry(page, "A much longer description of the work that was done");
+  test(
+    "entry rows have no lines between them, share their columns and show actions on hover or focus",
+    { tag: "@nightly" },
+    async ({ page, freshUser: _user, trackerPage }) => {
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await trackerPage();
+      await addManualEntry(page, { description: "Short", start: "00:10", duration: "0:05" });
+      await createProject(page, "Website redesign");
+      await addManualEntry(page, {
+        description: "A much longer description of the work that was done",
+        start: "00:30",
+        duration: "0:10",
+      });
+      const short = entry(page, "Short");
+      const long = entry(page, "A much longer description of the work that was done");
 
-    // No line between rows, 12px above and below.
-    for (const row of [short, long]) {
-      expect(await style(row, "border-top-width")).toBe("0px");
-      expect(await style(row, "border-bottom-width")).toBe("0px");
-      expect(await style(row, "padding-top")).toBe("12px");
-      expect(await style(row, "padding-bottom")).toBe("12px");
-    }
+      // No line between rows, 12px above and below.
+      for (const row of [short, long]) {
+        expect(await style(row, "border-top-width")).toBe("0px");
+        expect(await style(row, "border-bottom-width")).toBe("0px");
+        expect(await style(row, "padding-top")).toBe("12px");
+        expect(await style(row, "padding-bottom")).toBe("12px");
+      }
 
-    // Columns line up whatever the rows hold.
-    const x = async (row: Locator, role: "button" | "textbox", name: string | RegExp) =>
-      Math.round((await box(row.getByRole(role, { name }))).x);
-    for (const [role, name] of [
-      ["button", /^Project:/],
-      ["button", /^Tags:/],
-      ["button", "Billable"],
-      ["textbox", "Start time"],
-      ["textbox", "Duration"],
-    ] as const) {
-      expect(await x(short, role, name), String(name)).toBe(await x(long, role, name));
-    }
-    // A group row (two identical entries in a row) keeps the same time and duration columns.
-    await timer(page)
-      .getByRole("button", { name: /^Project:/ })
-      .click();
-    await page.getByRole("option", { name: "No project" }).click();
-    await addManualEntry(page, { description: "Twice", start: "01:00", duration: "0:05" });
-    await addManualEntry(page, { description: "Twice", start: "01:10", duration: "0:05" });
-    const group = today(page).getByRole("group", { name: "Group Twice", exact: true });
-    const centre = async (locator: Locator) => {
-      const rect = await box(locator);
-      return Math.round(rect.x + rect.width / 2);
-    };
-    expect(
-      Math.abs(
-        (await centre(group.locator("[data-range-start]"))) -
-          (await centre(short.getByRole("textbox", { name: "Start time" }))),
-      ),
-    ).toBeLessThanOrEqual(1);
-    expect(
-      Math.abs(
-        (await centre(group.locator("[data-group-total]"))) -
-          (await centre(short.getByRole("textbox", { name: "Duration" }))),
-      ),
-    ).toBeLessThanOrEqual(1);
+      // Columns line up whatever the rows hold.
+      const x = async (row: Locator, role: "button" | "textbox", name: string | RegExp) =>
+        Math.round((await box(row.getByRole(role, { name }))).x);
+      for (const [role, name] of [
+        ["button", /^Project:/],
+        ["button", /^Tags:/],
+        ["button", "Billable"],
+        ["textbox", "Start time"],
+        ["textbox", "Duration"],
+      ] as const) {
+        expect(await x(short, role, name), String(name)).toBe(await x(long, role, name));
+      }
+      // A group row (two identical entries in a row) keeps the same time and duration columns.
+      await timer(page)
+        .getByRole("button", { name: /^Project:/ })
+        .click();
+      await page.getByRole("option", { name: "No project" }).click();
+      await addManualEntry(page, { description: "Twice", start: "01:00", duration: "0:05" });
+      await addManualEntry(page, { description: "Twice", start: "01:10", duration: "0:05" });
+      const group = today(page).getByRole("group", { name: "Group Twice", exact: true });
+      const centre = async (locator: Locator) => {
+        const rect = await box(locator);
+        return Math.round(rect.x + rect.width / 2);
+      };
+      expect(
+        Math.abs(
+          (await centre(group.locator("[data-range-start]"))) -
+            (await centre(short.getByRole("textbox", { name: "Start time" }))),
+        ),
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(
+          (await centre(group.locator("[data-group-total]"))) -
+            (await centre(short.getByRole("textbox", { name: "Duration" }))),
+        ),
+      ).toBeLessThanOrEqual(1);
 
-    // The description is never squeezed out by the columns: here, and on a narrower screen.
-    const description = long.getByRole("textbox", { name: "Description" });
-    expect((await box(description)).width).toBeGreaterThanOrEqual(160);
-    await page.setViewportSize({ width: 1300, height: 900 });
-    expect((await box(description)).width).toBeGreaterThanOrEqual(200);
-    await page.setViewportSize({ width: 1440, height: 900 });
+      // The description is never squeezed out by the columns: here, and on a narrower screen.
+      const description = long.getByRole("textbox", { name: "Description" });
+      expect((await box(description)).width).toBeGreaterThanOrEqual(160);
+      await page.setViewportSize({ width: 1300, height: 900 });
+      expect((await box(description)).width).toBeGreaterThanOrEqual(200);
+      await page.setViewportSize({ width: 1440, height: 900 });
 
-    const duration = short.getByRole("textbox", { name: "Duration" });
-    expect(await style(duration, "font-size")).toBe("14px");
-    expect(await style(duration, "font-weight")).toBe("600");
+      const duration = short.getByRole("textbox", { name: "Duration" });
+      expect(await style(duration, "font-size")).toBe("14px");
+      expect(await style(duration, "font-weight")).toBe("600");
 
-    // Actions wait for the pointer or the keyboard.
-    const actions = short.locator("[data-row-actions]");
-    await page.mouse.move(0, 0);
-    await expect.poll(() => style(actions, "opacity")).toBe("0");
-    await short.hover();
-    await expect.poll(() => style(actions, "opacity")).toBe("1");
-    await page.mouse.move(0, 0);
-    await expect.poll(() => style(actions, "opacity")).toBe("0");
-    await short.getByRole("textbox", { name: "Description" }).focus();
-    await expect.poll(() => style(actions, "opacity")).toBe("1");
-  });
+      // Actions wait for the pointer or the keyboard.
+      const actions = short.locator("[data-row-actions]");
+      await page.mouse.move(0, 0);
+      await expect.poll(() => style(actions, "opacity")).toBe("0");
+      await short.hover();
+      await expect.poll(() => style(actions, "opacity")).toBe("1");
+      await page.mouse.move(0, 0);
+      await expect.poll(() => style(actions, "opacity")).toBe("0");
+      await short.getByRole("textbox", { name: "Description" }).focus();
+      await expect.poll(() => style(actions, "opacity")).toBe("1");
+    },
+  );
 
   test("on a touch screen the row actions are always there", async ({
     browser,
@@ -418,37 +418,42 @@ test.describe("tracking UI", () => {
     ).toEqual([512, 640]);
     for (const scheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme: scheme });
+      // Both read in one poll: the theme switches a moment after the media does.
       await expect
-        .poll(async () => luminance(await style(working, "background-color")), { message: scheme })
-        .toBeGreaterThan(luminance(await tokenColour(page, "--background")));
+        .poll(
+          async () =>
+            luminance(await style(working, "background-color")) -
+            luminance(await tokenColour(page, "--background")),
+          { message: scheme },
+        )
+        .toBeGreaterThan(0);
     }
   });
-  test("another person's day ribbon does not show the viewer's own running timer", async ({
-    page,
-    freshUser,
-    browser,
-    baseURL,
-  }) => {
-    const mia = await addTeammate(page, browser, baseURL, freshUser.slug, "Mia Member", "Member");
-    await mia.context.close();
-    await page.goto(`/w/${freshUser.slug}/tracker`);
-    await expect(timer(page)).toHaveAttribute("data-hydrated", "true");
-    await page.getByRole("combobox", { name: "Person", exact: true }).click();
-    await page.getByRole("option", { name: "Mia Member", exact: true }).click();
-    await expect(page).toHaveURL(/user=/);
-    await expect(timer(page)).toHaveAttribute("data-hydrated", "true");
-    await addManualEntry(page, { description: "For Mia", start: "00:05", duration: "0:10" });
-    const ribbon = today(page).locator("[data-ribbon]");
-    await expect(ribbon).toHaveCount(1);
+  test(
+    "another person's day ribbon does not show the viewer's own running timer",
+    { tag: "@nightly" },
+    async ({ page, freshUser, browser, baseURL }) => {
+      const mia = await addTeammate(page, browser, baseURL, freshUser.slug, "Mia Member", "Member");
+      await mia.context.close();
+      await page.goto(`/w/${freshUser.slug}/tracker`);
+      await expect(timer(page)).toHaveAttribute("data-hydrated", "true");
+      await page.getByRole("combobox", { name: "Person", exact: true }).click();
+      await page.getByRole("option", { name: "Mia Member", exact: true }).click();
+      await expect(page).toHaveURL(/user=/);
+      await expect(timer(page)).toHaveAttribute("data-hydrated", "true");
+      await addManualEntry(page, { description: "For Mia", start: "00:05", duration: "0:10" });
+      const ribbon = today(page).locator("[data-ribbon]");
+      await expect(ribbon).toHaveCount(1);
 
-    // The timer in the bar is the viewer's; Mia's day has nothing running.
-    await timer(page).getByRole("combobox", { name: "Description" }).fill("Mine");
-    await timer(page).getByRole("button", { name: "Start" }).click();
-    await expect(timer(page).getByRole("button", { name: "Stop" })).toBeVisible();
-    await expect(ribbon.locator("[data-ribbon-block]")).toHaveCount(1);
-    await expect(ribbon.locator("[data-ribbon-running]")).toHaveCount(0);
-    await expect(ribbon).not.toHaveAccessibleName(/timer running/);
-    await timer(page).getByRole("button", { name: "Stop" }).click();
-    await expect(timer(page).getByRole("button", { name: "Start" })).toBeVisible();
-  });
+      // The timer in the bar is the viewer's; Mia's day has nothing running.
+      await timer(page).getByRole("combobox", { name: "Description" }).fill("Mine");
+      await timer(page).getByRole("button", { name: "Start" }).click();
+      await expect(timer(page).getByRole("button", { name: "Stop" })).toBeVisible();
+      await expect(ribbon.locator("[data-ribbon-block]")).toHaveCount(1);
+      await expect(ribbon.locator("[data-ribbon-running]")).toHaveCount(0);
+      await expect(ribbon).not.toHaveAccessibleName(/timer running/);
+      await timer(page).getByRole("button", { name: "Stop" }).click();
+      await expect(timer(page).getByRole("button", { name: "Start" })).toBeVisible();
+    },
+  );
 });
