@@ -88,6 +88,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [x] Each day header has a 4px day ribbon with a block per entry placed by the clock, a spoken summary, a tooltip per block, the day total at 20px, and a live block for the running timer — `tracking-ui.spec.ts` › "a day is drawn as a ribbon, with a summary for people who do not see it"
 - [x] Entry rows have no line between them and 12px padding, share their columns at 1440px, show the duration at 14/600 and their actions on hover or focus — `tracking-ui.spec.ts` › "entry rows have no lines between them, share their columns and show actions on hover or focus"
 - [x] On a touch screen the row actions are always shown — `tracking-ui.spec.ts` › "on a touch screen the row actions are always there"
+- [x] Another person's day ribbon never shows the viewer's own running timer — `tracking-ui.spec.ts` › "another person's day ribbon does not show the viewer's own running timer"
 
 ## Time Tracker: row actions and inline edits
 
