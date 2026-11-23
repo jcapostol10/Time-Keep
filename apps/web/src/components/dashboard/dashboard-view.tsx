@@ -1,7 +1,6 @@
 "use client";
 
 import { formatDuration, formatTimeOfDay } from "@timekeep/core";
-import { Card, CardContent, CardHeader, CardTitle } from "@timekeep/ui/components/card";
 import { Skeleton } from "@timekeep/ui/components/skeleton";
 import {
   Table,
@@ -12,6 +11,7 @@ import {
   TableRow,
 } from "@timekeep/ui/components/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@timekeep/ui/components/tabs";
+import { cn } from "@timekeep/ui/lib/utils";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -37,6 +37,26 @@ const tooltipStyle = {
   fontSize: 12,
 };
 
+const FIGURE = "font-display text-2xl font-semibold tabular-nums";
+
+/** One figure of the summary strip: a quiet label above what it measures. */
+function Stat({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn("bg-card min-w-0 px-4 py-3", className)}>
+      <dt className="text-muted-foreground text-meta mb-1">{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
 function MeTab({ data }: { data: DashboardMe | undefined }) {
   const { slug, viewer } = useTracker();
   const fmt = (s: number) => formatDuration(s, viewer.durationFormat);
@@ -51,72 +71,65 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
   }));
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">Total time</CardTitle>
-          </CardHeader>
-          <CardContent
-            className="font-display text-2xl font-semibold tabular-nums"
-            data-testid="dashboard-total"
-          >
-            {fmt(data.totals.durationSeconds)}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">Billable</CardTitle>
-          </CardHeader>
-          <CardContent className="font-display text-2xl font-semibold tabular-nums">
-            {billableShare}%
-          </CardContent>
-        </Card>
-        {data.money ? (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-muted-foreground text-sm font-medium">Amount</CardTitle>
-            </CardHeader>
-            <CardContent
-              className="font-display text-2xl font-semibold tabular-nums"
-              data-testid="dashboard-amount"
+      {/*
+        One frame for the figures, with hairlines between them, as on a time
+        card's summary row: not a tile each. The total leads.
+      */}
+      <div
+        role="group"
+        aria-label="Summary"
+        className="bg-border overflow-hidden rounded-lg border"
+      >
+        <dl
+          className={cn(
+            "grid grid-cols-2 gap-px",
+            data.money ? "lg:grid-cols-5" : "lg:grid-cols-4",
+          )}
+        >
+          <Stat label="Total time" className={data.money ? "max-lg:col-span-2" : undefined}>
+            <span
+              className="font-display text-display font-semibold tabular-nums"
+              data-testid="dashboard-total"
             >
-              <MoneyCell amounts={data.totals} currency={data.money.currency} />
-            </CardContent>
-          </Card>
-        ) : null}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">Top project</CardTitle>
-          </CardHeader>
-          <CardContent data-testid="dashboard-top-project">
-            <p className="truncate text-base font-semibold">{data.topProject?.label ?? "—"}</p>
-            {data.topProject ? (
-              <p className="text-muted-foreground text-sm tabular-nums">
-                {fmt(data.topProject.seconds)}
-              </p>
-            ) : null}
-            {data.topProject?.progress ? (
-              <ProgressBar
-                progress={data.topProject.progress}
-                durationFormat={viewer.durationFormat}
-                className="mt-2"
-              />
-            ) : null}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-muted-foreground text-sm font-medium">Top client</CardTitle>
-          </CardHeader>
-          <CardContent>
+              {fmt(data.totals.durationSeconds)}
+            </span>
+          </Stat>
+          <Stat label="Billable">
+            <span className={FIGURE}>{billableShare}%</span>
+          </Stat>
+          {data.money ? (
+            <Stat label="Amount">
+              <span className={FIGURE} data-testid="dashboard-amount">
+                <MoneyCell amounts={data.totals} currency={data.money.currency} />
+              </span>
+            </Stat>
+          ) : null}
+          <Stat label="Top project">
+            <div data-testid="dashboard-top-project">
+              <p className="truncate text-base font-semibold">{data.topProject?.label ?? "—"}</p>
+              {data.topProject ? (
+                <p className="text-muted-foreground text-sm tabular-nums">
+                  {fmt(data.topProject.seconds)}
+                </p>
+              ) : null}
+              {data.topProject?.progress ? (
+                <ProgressBar
+                  progress={data.topProject.progress}
+                  durationFormat={viewer.durationFormat}
+                  className="mt-2"
+                />
+              ) : null}
+            </div>
+          </Stat>
+          <Stat label="Top client">
             <p className="truncate text-base font-semibold">{data.topClient?.label ?? "—"}</p>
             {data.topClient ? (
               <p className="text-muted-foreground text-sm tabular-nums">
                 {fmt(data.topClient.seconds)}
               </p>
             ) : null}
-          </CardContent>
-        </Card>
+          </Stat>
+        </dl>
       </div>
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
         <div className="bg-card h-64 rounded-lg border p-3">
@@ -143,11 +156,9 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Most tracked</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <section className="bg-card rounded-lg border p-4">
+          <h2 className="mb-3 text-sm font-medium">Most tracked</h2>
+          <div>
             {data.mostTracked.length === 0 ? (
               <p className="text-muted-foreground text-sm">No time in this range.</p>
             ) : (
@@ -171,8 +182,8 @@ function MeTab({ data }: { data: DashboardMe | undefined }) {
                 ))}
               </ol>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
     </div>
   );

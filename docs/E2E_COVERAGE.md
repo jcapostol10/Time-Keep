@@ -260,6 +260,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 ## Dashboard
 
 - [x] The dashboard shows this week's total, top project and most tracked — `dashboard.spec.ts` › "the dashboard shows this week's total, top project and most tracked"
+- [x] The dashboard's figures are one summary strip with the total leading, not a card each — `dashboard.spec.ts` › "the dashboard's figures are one summary strip, not a card each"
 - [x] A most tracked item opens the detailed report for it — `dashboard.spec.ts` › "a most tracked item opens the detailed report for it"
 - [x] The Team tab shows who is tracking now within a poll — `dashboard.spec.ts` › "the Team tab shows who is tracking now within a poll"
 - [x] A member has no Team tab — `dashboard.spec.ts` › "a member has no Team tab"

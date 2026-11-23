@@ -112,6 +112,10 @@ Today's column has a faint primary tint and a primary date label. Cells are 44px
 
 An entry is a block with a 3px left edge in its project's colour and a fill tinted with it. The now-line is `live-line` with a dot, and the calendar opens with it in the middle of the view. The working day (08:00–18:00 for everyone until there is a working-hours setting) is a shade lighter than the hours around it.
 
+### Dashboard
+
+The Me tab's figures are one summary strip: a single frame with hairlines between the figures, a quiet label above each, the total leading in `font-display` at 32. Not a card per figure: identical tiles say nothing about which number matters.
+
 ## Empty states
 
 `EmptyState` (`components/empty-state.tsx`) is for a page's main list when it has nothing: a title that says what to do, one line of why, and a primary button that does it. No icon.
