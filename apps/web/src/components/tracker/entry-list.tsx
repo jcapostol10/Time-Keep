@@ -21,13 +21,14 @@ import {
 } from "@timekeep/ui/components/dropdown-menu";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { EllipsisIcon, FileUpIcon, Loader2Icon, PencilIcon, Trash2Icon, XIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { EmptyState } from "@/components/empty-state";
 import { fetchJson } from "@/lib/fetch-json";
 import type { EntriesPage, TimeEntryDTO } from "@/lib/tracker-types";
 
 import { BulkEditDialog } from "./bulk-edit-dialog";
+import { DayRibbon } from "./day-ribbon";
 import { EntryGroupRow, EntryRow } from "./entry-row";
 import { ImportDialog } from "./import-dialog";
 import { trackerKeys, trackerUrls } from "./query-keys";
@@ -76,9 +77,9 @@ function BlockTotal({
     return t >= Date.parse(from) && (to === null || t < Date.parse(to));
   });
   return (
-    <span className="text-sm">
-      <span className="text-muted-foreground">{label}: </span>
-      <span className="font-semibold tabular-nums">
+    <span className="flex items-baseline gap-2">
+      <span className="text-muted-foreground text-sm">{label}</span>
+      <span className="font-display text-xl font-semibold tabular-nums">
         {formatDuration(sumDuration(entries) + live, viewer.durationFormat)}
       </span>
     </span>
@@ -135,11 +136,9 @@ function DayTotal({ dateKey, seconds }: { dateKey: string; seconds: number }) {
     (start) => localDateKey(new Date(start), viewer.timezone) === dateKey,
   );
   return (
-    <span className="text-sm">
-      <span className="text-muted-foreground">Total: </span>
-      <span className="font-semibold tabular-nums">
-        {formatDuration(seconds + live, viewer.durationFormat)}
-      </span>
+    <span data-day-total className="font-display text-xl font-semibold tabular-nums">
+      <span className="sr-only">Total: </span>
+      {formatDuration(seconds + live, viewer.durationFormat)}
     </span>
   );
 }
@@ -160,6 +159,7 @@ function DaySection({
   dateKey,
   todayKey,
   entries,
+  allEntries,
   totalSeconds,
   selection,
   expandedGroups,
@@ -168,6 +168,8 @@ function DaySection({
   dateKey: string;
   todayKey: string;
   entries: TimeEntryDTO[];
+  /** Every loaded entry: the ribbon also draws what crosses midnight into this day. */
+  allEntries: readonly TimeEntryDTO[];
   totalSeconds: number;
   selection: ReturnType<typeof useSelection>;
   expandedGroups: ReadonlySet<string>;
@@ -180,16 +182,16 @@ function DaySection({
 
   return (
     <section aria-label={heading} className="bg-card overflow-hidden rounded-lg border">
-      <header className="bg-muted/50 flex items-center gap-3 border-b px-3 py-2">
+      {/* The date, the shape of the day, its total. */}
+      <header className="flex items-center gap-3 border-b px-3 py-2">
         <Checkbox
           aria-label={`Select all entries for ${heading}`}
           checked={count === 0 ? false : count === ids.length ? true : "indeterminate"}
           onCheckedChange={(v) => selection.set(ids, v === true)}
         />
-        <h3 className="text-sm font-semibold">{heading}</h3>
-        <span className="ml-auto">
-          <DayTotal dateKey={dateKey} seconds={totalSeconds} />
-        </span>
+        <h3 className="w-24 shrink-0 text-sm font-semibold">{heading}</h3>
+        <DayRibbon dateKey={dateKey} todayKey={todayKey} entries={allEntries} className="flex-1" />
+        <DayTotal dateKey={dateKey} seconds={totalSeconds} />
       </header>
       <div className="divide-y">
         {rows.map((row) => {
@@ -304,7 +306,8 @@ export function EntryList({ header }: { header?: ReactNode }) {
     });
   }, []);
 
-  const pages = query.data?.pages ?? [];
+  const pages = useMemo(() => query.data?.pages ?? [], [query.data]);
+  const allEntries = useMemo(() => pages.flatMap((p) => p.entries), [pages]);
   const hasEntries = pages.some((p) => p.entries.length > 0);
   const tz = viewer.timezone;
   const todayKey = localDateKey(new Date(), tz);
@@ -359,7 +362,7 @@ export function EntryList({ header }: { header?: ReactNode }) {
       {listHeader}
       {toBlocks(pages, tz, viewer.weekStart).map((block) => (
         <div key={block.key} className="space-y-3">
-          <div className="flex items-baseline justify-between gap-2 px-1">
+          <div className="flex items-baseline justify-between gap-2 px-3">
             <h2 className="text-muted-foreground text-sm font-medium">{block.label}</h2>
             <BlockTotal
               entries={block.entries}
@@ -374,6 +377,7 @@ export function EntryList({ header }: { header?: ReactNode }) {
               dateKey={day.dateKey}
               todayKey={todayKey}
               entries={day.entries}
+              allEntries={allEntries}
               totalSeconds={day.totalSeconds}
               selection={selection}
               expandedGroups={expandedGroups}

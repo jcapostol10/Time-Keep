@@ -2,7 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
 import { overflowingElements } from "./helpers/app";
-import { addManualEntry, createProject, timer } from "./helpers/tracker";
+import { addManualEntry, createProject, timer, today } from "./helpers/tracker";
 
 /**
  * How time tracking looks (docs/UI.md): the running clock is the one bold
@@ -162,5 +162,54 @@ test.describe("tracking UI", () => {
       .locator('button[data-variant="default"]')
       .evaluateAll((els) => els.map((el) => el.textContent?.trim()));
     expect(filled).toEqual(["Start"]);
+  });
+  test("a day is drawn as a ribbon, with a summary for people who do not see it", async ({
+    page,
+    freshUser: _user,
+    trackerPage,
+  }) => {
+    await trackerPage();
+    await addManualEntry(page, { description: "Early", start: "00:10", duration: "0:05" });
+    await addManualEntry(page, { description: "Later", start: "00:30", duration: "0:10" });
+    const day = today(page);
+    const ribbon = day.locator("[data-ribbon]");
+    await expect(ribbon).toHaveCount(1);
+    expect(await style(ribbon.locator("[data-ribbon-track]"), "height")).toBe("4px");
+
+    // Two blocks, placed by the clock: 00:10 is 10/1440 of the day from its left edge.
+    const blocks = ribbon.locator("[data-ribbon-block]");
+    await expect(blocks).toHaveCount(2);
+    expect(await blocks.first().evaluate((el) => (el as HTMLElement).style.left)).toBe("0.694%");
+    expect(await blocks.nth(1).evaluate((el) => (el as HTMLElement).style.left)).toBe("2.083%");
+
+    // The strip is hidden from assistive technology; the summary speaks for it.
+    await expect(ribbon.locator("[data-ribbon-track]")).toHaveAttribute("aria-hidden", "true");
+    await expect(
+      ribbon.getByText(
+        /^2 entries, 0:15(:00)? tracked between (00:10|12:10 AM) and (00:40|12:40 AM)$/,
+      ),
+    ).toHaveCount(1);
+
+    // Pointing at a block says what it is.
+    await blocks.first().hover();
+    await expect(page.getByRole("tooltip")).toContainText("Early");
+    await page.mouse.move(0, 0);
+
+    // The day's total sits at the right of the header in the display face.
+    const total = day.locator("[data-day-total]");
+    await expect(total).toHaveText(/0:15(:00)?/);
+    expect(await style(total, "font-size")).toBe("20px");
+
+    // A running timer is a live block on today.
+    await timer(page).getByRole("combobox", { name: "Description" }).fill("Now");
+    await timer(page).getByRole("button", { name: "Start" }).click();
+    const running = ribbon.locator("[data-ribbon-running]");
+    await expect(running).toBeVisible();
+    expect(await style(running.locator("span"), "background-color")).toBe(
+      await tokenColour(page, "--live-line"),
+    );
+    await expect(ribbon.getByText(/, timer running$/)).toHaveCount(1);
+    await timer(page).getByRole("button", { name: "Stop" }).click();
+    await expect(running).toHaveCount(0);
   });
 });

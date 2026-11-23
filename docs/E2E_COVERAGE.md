@@ -85,6 +85,7 @@ Rules (see `docs/superpowers/specs/2026-10-18-e2e-suite-design.md`):
 - [ ] The week header shows the week total — gap
 - [ ] An entry that crosses midnight is listed under its start day — gap
 - [ ] Older weeks load when scrolling or pressing Load more — gap
+- [x] Each day header has a 4px day ribbon with a block per entry placed by the clock, a spoken summary, a tooltip per block, the day total at 20px, and a live block for the running timer — `tracking-ui.spec.ts` › "a day is drawn as a ribbon, with a summary for people who do not see it"
 
 ## Time Tracker: row actions and inline edits
 

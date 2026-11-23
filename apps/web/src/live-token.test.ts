@@ -17,6 +17,7 @@ const UI = path.resolve(__dirname, "../../../packages/ui/src");
 const ALLOWED = new Set([
   "components/shell/timer-chip.tsx",
   "components/tracker/timer-bar.tsx",
+  "components/tracker/day-ribbon.tsx",
   "components/calendar/now-line.tsx",
   "components/dashboard/live-dot.tsx",
 ]);

@@ -1,5 +1,6 @@
 export * from "./approvals";
 export * from "./calendar";
+export * from "./day-ribbon";
 export * from "./catalog";
 export * from "./colors";
 export * from "./csv-parse";
